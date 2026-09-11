@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { afterAll, expect, it, vi } from 'vitest';
-import * as horseModule from './public';
+import { afterAll,expect,it,vi } from 'vitest';
+import { createWorld } from '../world';
 import type { HumanoidRenderState } from './humanoid/animation';
+import * as horseModule from './public';
 
 // Every fixture load calibrates real skinned pure/blend geometry. This file
 // belongs to the resource-heavy lane; keep its CPU budget local to the suite.
@@ -105,7 +106,7 @@ it('runtime validates and owns the horse, sampling before callbacks and restorin
   horse.root.scale.setScalar(1);
   const duplicateResult = await HumanoidRuntime.create({...options,vehicles:[vehicle,{...vehicle,instanceId:'horse-copy'}]},new T.PerspectiveCamera()).then(()=>'accepted',error=>String(error));
   expect(duplicateResult).toContain('HORSE_INSTANCE_INVALID');
-  const runtime=await HumanoidRuntime.create({...options,vehicles:[vehicle]},new T.PerspectiveCamera());
+  const world=await createWorld({camera:new T.PerspectiveCamera(),assetDefinitions:{},navigation:false,humanoid:{...options,vehicles:[vehicle]}}),runtime=world.humanoid!;
   try {
     const sample=vi.spyOn(horse,'sample');
     runtime.onVisualUpdate(()=>expect(sample).toHaveBeenCalled());
@@ -114,7 +115,7 @@ it('runtime validates and owns the horse, sampling before callbacks and restorin
     const restore=humanoidHost(runtime).present(.5,0);
     restore();
     expect(body.matrixWorld.elements).toEqual(before);
-  } finally {runtime.dispose();}
+  } finally {world.dispose();}
   expect(horse.loaded).toBe(false);
 }, 30000);
 
@@ -180,33 +181,32 @@ it('rejects load/dispose races and invalid anchor transforms without reusing old
 
 it('uses the real horse sample and Source101 pelvis in a mounted display transaction',async()=>{
   const { Character }=await import('./character');
-  const { HumanoidRuntime }=await import('./runtime');
   const { humanoidHost }=await import('./host-access');
   const { createMountedFixture }=await import('./mounted-test-fixture');
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character(),horse=createHorse();
   const fixture=await createMountedFixture();const options=fixture.humanoid!.options;fixture.dispose();
-  let runtime:import('./runtime').HumanoidRuntime|undefined;
+  let runtime:import('./runtime').HumanoidRuntime|undefined,world:import('../world').ThreeWorld|undefined;
   try {
     await rider.load(path=>new URL(`../../../../assets/three-creator/presets/${path}`,import.meta.url).href);
     await horse.load(resolveFixtureResource);
     const seatAnchor={nodeName:'Body',maximumOffsetMeters:.145579,maximumRotationRadians:.122951};
-    runtime=await HumanoidRuntime.create({...options,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{...options.vehicles[0]!,object:horse.root,visual:horse,seatAnchor}]},new T.PerspectiveCamera());
+    world=await createWorld({camera:new T.PerspectiveCamera(),assetDefinitions:{},navigation:false,humanoid:{...options,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{...options.vehicles[0]!,object:horse.root,visual:horse,seatAnchor}]}});runtime=world.humanoid!;
     for(const yaw of [-Math.PI/2,Math.PI/2]) {
       runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,.025,0],facingYawRadians:yaw-Math.PI,humanoid:{vehicleInstanceId:'horse-1',mounted:true}});
       for(let i=0;i<3;i++)runtime.advance({moveZRatio:-1},1/60);
-      const logical=runtime.simulation.player.position.clone();
+      const logical=runtime.simulation.controlledActor.player.position.clone();
       horse.root.updateMatrixWorld(true);const canonicalBody=horse.content.getObjectByName('Body')!.matrixWorld.elements.slice();
       for(let n=0;n<2;n++) {
         const restore=humanoidHost(runtime).present(.5,3);
         const anchor=horse.root.matrixWorld.clone().multiply(horse.readSeatAnchor([0,1.65,0],seatAnchor));
         expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(anchor))).toBeLessThan(1e-9);
-        expect(runtime.simulation.player.position).toEqual(logical);
+        expect(runtime.simulation.controlledActor.player.position).toEqual(logical);
         restore();horse.root.updateMatrixWorld(true);
         expect(horse.content.getObjectByName('Body')!.matrixWorld.elements).toEqual(canonicalBody);
       }
     }
-  }finally{runtime?.dispose();rider.dispose();horse.dispose();fetchTransport.mockRestore();}
+  }finally{world?.dispose();rider.dispose();horse.dispose();fetchTransport.mockRestore();}
 },30000);
 
 it('rejects mirrored local transforms even when their determinant is positive',async()=>{

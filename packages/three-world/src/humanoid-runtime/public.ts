@@ -4,12 +4,10 @@ export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families
 export {SUBMERSIBLE_WATER} from './motion-families/underwater/submersible';
 export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolveMotionFamilyMovement} from './motion-families/registry';
 export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
-export * as surfaceVessel from './motion-families/surface-vessel/public';
-// Preserve flat SDK imports used by existing Creator and Episode consumers.
 export * from './motion-families/surface-vessel/public';
 export { Character as HumanoidCharacter } from './character';
 export { FollowCamera } from './camera';
-export { Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
+export { type Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
 export type { VehicleSpec } from './config';
 export * from '../config/control';
 export type * from './environment/types';
@@ -22,6 +20,7 @@ export type { SkillRequest } from './humanoid/action-schema';
 export { SKILL_DEFINITIONS } from './humanoid/action-schema';
 export { ACTION_TUNING } from './humanoid/action-schema';
 export { CHARACTER_CAPABILITIES, ANIMATION_ONLY_CLIP_IDS, characterCapabilities, type CharacterCapability, type CharacterCapabilityState, type CharacterCapabilityAvailability } from './character-capabilities';
+export type {InteractionVisualTarget} from './humanoid/interaction-visuals';
 export { readInteractionTargets } from './humanoid/render-state';
 export { updateVehicleWheels, resetVehicleWheels, type WheelPose, type WheelFrame } from './vehicle-animation';
 export type { HumanoidRuntimeOptions, HumanoidProfile, HumanoidRuntime, VehicleInstance, HumanoidSnapshot, HumanoidConfiguration, HumanoidInputObservation, BoardingObservation } from './runtime';

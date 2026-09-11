@@ -4,6 +4,30 @@ const finite = (value: unknown): number | null => typeof value === 'number' && N
 const text = (value: unknown, limit = 160): string | null => typeof value === 'string' ? value.length > limit ? value.slice(0, limit - 1) + '…' : value : null;
 const vector = (value: unknown): [number, number, number] | null => Array.isArray(value) && value.length === 3 && value.every(n => finite(n) !== null) ? [...value] as [number, number, number] : null;
 
+/** Actual dispatch and last observed operation states; task intent decides whether rejection was expected. */
+export function summarizePlaytestActions(events: readonly unknown[], operations: readonly unknown[]) {
+  const dispatchCounts = {applied:0, accepted:0, rejected:0};
+  const operationCounts = {queued:0, running:0, succeeded:0, failed:0, cancelled:0, missing:0, unobserved:0};
+  const details: Record<string, unknown>[] = [];
+  const error = (value: unknown) => { const e=object(value); return Object.keys(e).length ? {code:text(e.code),message:text(e.message,400)} : null; };
+  const commands = events.map(object).filter(event => event.type === 'world-command');
+  commands.forEach((event,commandIndex) => {
+    const receipt=object(event.worldCommandReceipt), command=object(event.command);
+    if(Object.hasOwn(dispatchCounts,receipt.status)) dispatchCounts[receipt.status as keyof typeof dispatchCounts]++;
+    if(receipt.status==='rejected') details.push({kind:'command',commandIndex,status:'rejected',commandType:text(command.type),
+      actorId:text(command.actorId??command.entityId),wallSeconds:finite(event.wallSeconds),error:error(receipt.error)});
+  });
+  for(const value of operations) {
+    const operation=object(value);
+    const status=Object.hasOwn(operationCounts,operation.status) ? operation.status as keyof typeof operationCounts : 'unobserved';
+    operationCounts[status]++;
+    if(['failed','cancelled','missing','unobserved'].includes(status)) details.push({kind:'operation',operationId:text(operation.id),status,error:error(operation.error)});
+  }
+  return {scope:'recorded-command-outcomes',commandCount:commands.length,dispatchCounts,operationCounts,
+    details:details.slice(0,8),omittedDetails:Math.max(0,details.length-8),
+    qualification:'Observed outcomes, not task acceptance. Rejection may be expected. Accepted is not completed; queued, running and unobserved outcomes remain unresolved. Full receipts and sampled operations are retained in hostActionEvents and worldOperations.'};
+}
+
 export function validatePlaytestTraceQuery(query: PlaytestTraceQuery) {
   const {fromSeconds = 0, toSeconds, maxSamples = 12} = query;
   if (finite(fromSeconds) === null || fromSeconds < 0 ||

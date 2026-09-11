@@ -1,0 +1,238 @@
+{
+  "id": "vehicle.tank",
+  "displayName": "履带坦克 / TANK",
+  "path": "vehicles/tank.glb",
+  "uri": "./assets/subjects/6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf.glb",
+  "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
+  "byteLength": 106580,
+  "sourcePath": "assets/three-creator/presets/vehicles/tank.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation.",
+    "No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-tank.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.tank"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "tank",
+      "name": "履带坦克",
+      "en": "TANK",
+      "mode": "tank",
+      "archetype": "tank",
+      "kernel": "K16",
+      "color": "#7c8061",
+      "spawn": [
+        -240,
+        0,
+        64
+      ],
+      "yaw": 0,
+      "speed": 12,
+      "accel": 3,
+      "grip": 10,
+      "steer": 0.75,
+      "maxSpeed": 18,
+      "reverseSpeed": 4,
+      "coastDeceleration": 1.4,
+      "brakeDeceleration": 7,
+      "steeringResponse": 3,
+      "steeringReturn": 5,
+      "throttleResponse": 2,
+      "pitchResponse": 5,
+      "rollResponse": 5,
+      "radius": 5.4,
+      "seat": [
+        0,
+        1.45,
+        2.1
+      ],
+      "characterPose": "tank",
+      "camera": 14,
+      "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
+      "bodyPhysics": {
+        "kind": "tracks",
+        "mass": 30000,
+        "centerOfMassHeight": 1.4,
+        "driveRadius": 0.72,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              1560
+            ],
+            [
+              1800,
+              2160
+            ],
+            [
+              3200,
+              2400
+            ],
+            [
+              4500,
+              2280
+            ],
+            [
+              6200,
+              1560
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 8,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 360,
+          "dragArea": 8,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.9,
+          2.08,
+          4.65
+        ],
+        "offset": [
+          0,
+          2.08,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        1.45,
+        2.1
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0.213968,
+        1.735009,
+        2.518638
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        -0.194585,
+        1.743792,
+        2.495255
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.169582,
+        0.948443,
+        2.590657
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.169582,
+        0.948443,
+        2.590659
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        3.25,
+        0.025,
+        0
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -3.25,
+        0.025,
+        0
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0.000542,
+        2.083,
+        2.330046
+      ]
+    },
+    {
+      "id": "muzzle",
+      "node": "socket.muzzle",
+      "positionMetersXYZ": [
+        0,
+        0,
+        5
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      2.9,
+      2.08,
+      4.65
+    ],
+    "offset": [
+      0,
+      2.08,
+      0
+    ]
+  }
+}

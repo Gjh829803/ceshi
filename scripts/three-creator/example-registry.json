@@ -1,0 +1,131 @@
+{
+  "getting-started": {
+    "root": "examples/three-creator/vehicle-sandbox",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "extensions": {
+    "root": "examples/three-creator/vehicle-sandbox",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "independent-world": {
+    "root": "examples/three-creator/vehicle-sandbox",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "custom-vehicle": {
+    "root": "examples/three-creator/custom-vehicle",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "presentation-ui": {
+    "root": "examples/three-creator/custom-vehicle",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "custom-aircraft": {
+    "root": "examples/three-creator/custom-aircraft",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "character-actions": {
+    "root": "examples/three-creator/character-actions",
+    "files": [
+      "index.html",
+      "main.ts",
+      "map.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "preset-assets": {
+    "root": "shared/preset-content",
+    "files": [
+      "config.ts",
+      "models.ts",
+      "assets/resources.ts",
+      "creatures/specs.ts",
+      "creatures/manifest.ts"
+    ]
+  },
+  "environment-maps": {
+    "root": "shared/preset-content",
+    "files": [
+      "environment/maps.ts",
+      "environment/modules.ts",
+      "humanoid/workshop.ts"
+    ]
+  },
+  "mounted-interaction": {
+    "root": "examples/three-creator/horse-riding",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "nonhuman-subject": {
+    "root": "examples/three-creator/nonhuman-subject",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "vehicle-camera": {
+    "root": "examples/three-creator/vehicle-camera",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json",
+      "whitebox-materials.ts"
+    ]
+  },
+  "shared-physics": {
+    "root": "examples/three-creator/shared-physics",
+    "files": [
+      "index.html",
+      "main.ts",
+      "project.json",
+      "episode.json"
+    ]
+  },
+  "multiple-actors": {
+    "root": "examples/three-creator/multiple-actors",
+    "files": [
+      "index.html",
+      "main.ts",
+      "interactions.ts",
+      "project.json",
+      "episode.json"
+    ]
+  }
+}

@@ -100,6 +100,12 @@ export class MountedRiderPose {
   }
 }
 
+function cleanupCharacter(steps:(()=>void)[]):void {
+  const failures:unknown[]=[];
+  for(const step of steps)try{step();}catch(error){failures.push(error);}
+  if(failures.length)throw new AggregateError(failures,'CHARACTER_CLEANUP_FAILED');
+}
+
 const emptyFrame = (): SourceCharacterFrame => ({
   position: new T.Vector3(), facing: new T.Vector3(0, 0, 1), motionSerial: 0,
   traversal: null, completedMotion: null, speed: 0, vertical: 0,
@@ -117,6 +123,8 @@ export class Character {
   loaded = false;
   carriedAttachment: { id: string; position: T.Vector3 } | null = null;
   private source?: SourceCharacter;
+  private disposed=false;
+  private loading?:Promise<void>;
   private attachments?: CharacterAttachments;
   private firstPersonBody?: FirstPersonBody;
   private readonly eyeOffset = new T.Vector3();
@@ -177,16 +185,46 @@ export class Character {
     return true;
   }
   private adopt(source: SourceCharacter) {
-    this.source = source; this.actor.add(source.root);
-    this.presentationNodes=new Set([this.actor]);
-    source.root.traverse(node=>this.presentationNodes.add(node));
-    this.attachments=new CharacterAttachments(source.root);
-    this.previousPose=[];this.currentPose=[];this.snapPose=true;
-    this.overlay = new MountedRiderPose(source.root); this.loaded = true;
-    this.firstPersonBody = new FirstPersonBody(source.root);
+    let attachments:CharacterAttachments|undefined,overlay:MountedRiderPose|undefined,firstPersonBody:FirstPersonBody|undefined;
+    try{
+      attachments=new CharacterAttachments(source.root);
+      overlay=new MountedRiderPose(source.root);
+      firstPersonBody=new FirstPersonBody(source.root);
+      const nodes=new Set<T.Object3D>([this.actor]);source.root.traverse(node=>nodes.add(node));
+      this.actor.add(source.root);
+      this.source=source;this.attachments=attachments;this.overlay=overlay;this.firstPersonBody=firstPersonBody;
+      this.presentationNodes=nodes;this.previousPose=[];this.currentPose=[];this.snapPose=true;this.loaded=true;
+    }catch(error){
+      try{cleanupCharacter([()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source.dispose()]);}catch{/* Preserve binding failure. */}
+      throw error;
+    }
   }
-  async load(assetBaseUrl?:string|((logicalPath:string)=>string)) { if (!this.source) this.adopt(await SourceCharacter.load(assetBaseUrl)); }
-  dispose():void{this.firstPersonBody?.dispose();this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];this.overlay?.restore();this.attachments?.dispose();delete this.attachments;this.source?.dispose();delete this.source;delete this.overlay;this.loaded=false;this.root.removeFromParent();}
+  async load(assetBaseUrl?:string|((logicalPath:string)=>string)) {
+    if(this.disposed)throw new Error('CHARACTER_DISPOSED');
+    if(this.source)return;
+    if(this.loading)return this.loading;
+    const loading=SourceCharacter.load(assetBaseUrl).then(source=>{
+      if(this.disposed){source.dispose();throw new Error('CHARACTER_LOAD_STALE');}
+      this.adopt(source);
+    });
+    this.loading=loading;
+    try{await loading;}finally{if(this.loading===loading)delete this.loading;}
+  }
+  /** Captures source identity without retaining this actor's model or mixer. */
+  createFactory():(()=>Promise<Character>)|undefined{
+    if(this.disposed||!this.loaded||!this.source)throw new Error('CHARACTER_NOT_LOADED');
+    const factory=this.source.createFactory();return factory?async()=>new Character(await factory()):undefined;
+  }
+  async createInstance():Promise<Character>{
+    const factory=this.createFactory();if(!factory)throw new Error('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');return factory();
+  }
+  dispose():void{
+    if(this.disposed)return;this.disposed=true;this.loaded=false;
+    const firstPersonBody=this.firstPersonBody,overlay=this.overlay,attachments=this.attachments,source=this.source;
+    delete this.firstPersonBody;delete this.overlay;delete this.attachments;delete this.source;
+    this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];
+    cleanupCharacter([()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source?.dispose(),()=>this.root.removeFromParent()]);
+  }
 
   /** Internal presentation correction. Physics and the managed root stay untouched. */
   alignMountedPelvis(anchorWorld: T.Matrix4): void {

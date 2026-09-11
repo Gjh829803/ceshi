@@ -30,6 +30,7 @@ Only procedural vehicle exports create that named socket.
 [`import-preset-content.ts`](../../scripts/three-creator/import-preset-content.ts)
 regenerates resource identities and structural metadata, while preserving each
 existing preset asset's `limitations` and `integrationMetadata` from this catalog.
-Those fields remain the maintained guidance source. The importer also overwrites
-donor-derived Playground source modules, so a full historical reimport requires
-reviewing those changes separately; it is not a routine catalog repair command.
+Those fields remain the maintained guidance source. The importer reads the pinned
+donor to export resource bytes; SDK and Playground TypeScript modules are maintained
+in this repository and are never copied back from that historical source. Use
+`pnpm content:sync` for routine catalog regeneration.

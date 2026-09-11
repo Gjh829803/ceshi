@@ -24,13 +24,12 @@ export async function verifyFile(file: EpisodeFile): Promise<void> {
 async function verifyCarriedAssetPolicy(options: {
   expectedHash: unknown; sourceRoot: string; playableRoot: string;
   sourceFiles: Record<string, string>; playableFiles: Record<string, string>;
-}): Promise<string | undefined> {
+}): Promise<string> {
   let snapshotExists = false;
   try { await lstat(path.join(options.playableRoot, 'asset-policy.json')); snapshotExists = true; }
   catch (error: any) { if (error.code !== 'ENOENT') throw error; }
   const snapshotListed = Object.hasOwn(options.playableFiles, 'asset-policy.json');
   const hashPresent = options.expectedHash !== undefined;
-  if (!hashPresent && !snapshotExists && !snapshotListed) return undefined; // Explicit historical compatibility.
   if (!hashPresent || !snapshotExists || !snapshotListed || typeof options.expectedHash !== 'string' || !/^[a-f0-9]{64}$/.test(options.expectedHash)) {
     throw new Error('EPISODE_ASSET_POLICY_PAIR_REQUIRED');
   }
@@ -203,7 +202,7 @@ export async function prepareEpisodeSource(options: { payloadRoot: string; outpu
     sourceHash: delivery.sourceHash, worldBuildHash, runtimeHash, runtimeSourceHash: delivery.runtimeSourceHash ?? null,
     sourceWorldBuildHash: delivery.worldBuildHash, sourceRuntimeHash: delivery.runtimeHash,
     sourceDeliveryManifestSha256: sha(manifestBytes), sourceRoot, playableRoot, sourceFiles,
-    ...(assetPolicySha256 ? { assetPolicySha256 } : {}),
+    assetPolicySha256,
     ...(referenceImage ? { referenceImage } : {}),
     playableFiles, opening: await imageFile(openingEntry),
     targets: await Promise.all(targetCaptures.map(async (entry: any) => {

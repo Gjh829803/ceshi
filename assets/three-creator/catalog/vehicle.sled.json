@@ -1,0 +1,135 @@
+{
+  "id": "vehicle.sled",
+  "displayName": "木座雪橇 / SLED",
+  "path": "vehicles/sled.glb",
+  "uri": "./assets/subjects/6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3.glb",
+  "sha256": "6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3",
+  "byteLength": 68180,
+  "sourcePath": "assets/three-creator/presets/vehicles/sled.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Unpowered packed-snow approximation; no deep-snow deformation or rollover simulation.",
+    "W pushes only below groundSpeed; downhill speed comes from gravity."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-sled.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.sled"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "sled",
+      "name": "木座雪橇",
+      "en": "SLED",
+      "mode": "sled",
+      "archetype": "sled",
+      "kernel": "K14",
+      "color": "#b89465",
+      "spawn": [
+        -198,
+        0,
+        64
+      ],
+      "yaw": 0,
+      "speed": 24,
+      "accel": 4,
+      "grip": 2.2,
+      "steer": 0.9,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.63,
+        -0.22
+      ],
+      "camera": 5.8,
+      "characterPose": "sled",
+      "hint": "W 蹬地起步 · A / D 单侧拖脚转向 · S / Space 双脚制动 · 松键顺坡滑行 · F 上下雪橇",
+      "bodyPhysics": {
+        "kind": "sled",
+        "mass": 100,
+        "centerOfMassHeight": 0.35
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.78,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.78,
+          0
+        ]
+      },
+      "maxSpeed": 24,
+      "reverseSpeed": 0,
+      "slowSpeed": 2.5,
+      "groundSpeed": 3,
+      "coastDeceleration": 0.22,
+      "brakeDeceleration": 6,
+      "brakeDamping": 0,
+      "groundDeceleration": 4,
+      "directionChangeDeceleration": 8,
+      "steeringResponse": 4,
+      "steeringReturn": 6,
+      "verticalAcceleration": 3.2,
+      "linearDamping": 2.2,
+      "verticalDamping": 1.8,
+      "drag": 0.25,
+      "dragQuadratic": 0.006,
+      "pitchResponse": 12,
+      "rollResponse": 10,
+      "throttleResponse": 0.38,
+      "minimumSpeed": 0,
+      "launchSpeed": 22,
+      "jumpSpeed": 6.3
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.63,
+        -0.22
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.65,
+      0.78,
+      1.05
+    ],
+    "offset": [
+      0,
+      0.78,
+      0
+    ]
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "id": "vehicle.kayak",
+  "displayName": "单人皮划艇 / KAYAK",
+  "path": "vehicles/kayak.glb",
+  "uri": "./assets/subjects/457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7.glb",
+  "sha256": "457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7",
+  "byteLength": 49508,
+  "sourcePath": "assets/three-creator/presets/vehicles/kayak.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation.",
+    "W paddles, S back-paddles, A/D sweep, Space braces to slow; propulsion requires immersion."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-kayak.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.kayak"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "kayak",
+      "name": "单人皮划艇",
+      "en": "KAYAK",
+      "mode": "paddled_boat",
+      "archetype": "kayak",
+      "kernel": "K17",
+      "color": "#b84047",
+      "spawn": [
+        205,
+        -1.93,
+        -124
+      ],
+      "yaw": 1.5707963267948966,
+      "speed": 4.6,
+      "accel": 2.7,
+      "grip": 1.8,
+      "steer": 3,
+      "radius": 0.48,
+      "seat": [
+        0,
+        0.23,
+        -0.35
+      ],
+      "camera": 6,
+      "characterPose": "paddling",
+      "maxSpeed": 4.6,
+      "reverseSpeed": 1.8,
+      "coastDeceleration": 0.16,
+      "dragQuadratic": 0.08,
+      "brakeDamping": 2.1,
+      "steeringResponse": 5,
+      "steeringReturn": 5,
+      "pitchResponse": 4,
+      "rollResponse": 4,
+      "hint": "W 交替划桨 · S 倒划 · A / D 单侧转向 · Space 压桨制动 · F 上下艇 · T 切换视角",
+      "bodyPhysics": {
+        "kind": "paddle",
+        "mass": 105,
+        "centerOfMassHeight": 0.15,
+        "water": {
+          "displacement": 0.23,
+          "depth": 0.35,
+          "bottom": 0.23,
+          "damping": 5.5
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.4,
+          0.24,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ]
+      },
+      "slowSpeed": 2.5,
+      "groundSpeed": 5,
+      "brakeDeceleration": 4.86,
+      "groundDeceleration": 2.7,
+      "directionChangeDeceleration": 5.4,
+      "verticalAcceleration": 2.16,
+      "linearDamping": 1.8,
+      "verticalDamping": 1.8,
+      "drag": 0.25,
+      "throttleResponse": 0.38,
+      "minimumSpeed": 0,
+      "launchSpeed": 22,
+      "jumpSpeed": 6.3
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.23,
+        -0.35
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.4,
+      0.24,
+      2.2
+    ],
+    "offset": [
+      0,
+      0.01,
+      0
+    ]
+  }
+}

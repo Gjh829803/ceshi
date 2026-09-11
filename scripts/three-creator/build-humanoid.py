@@ -10,6 +10,7 @@ import json
 import math
 from pathlib import Path
 import struct
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'assets/three-creator/presets/humanoid/source'
@@ -128,9 +129,8 @@ def main():
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     model, provenance = build()
-    catalog_path = ROOT / 'assets/three-creator/asset-catalog.json'
-    catalog = json.loads(catalog_path.read_bytes())
-    source = next(a for a in catalog['assets'] if a['id'] == 'humanoid.source-101')
+    catalog_path = ROOT / 'assets/three-creator/catalog/humanoid.source-101.json'
+    source = json.loads(catalog_path.read_bytes())
     entry = {**source,
              'uri': f'./assets/subjects/{digest(model)}.glb', 'sha256': digest(model), 'byteLength': len(model),
              'sourcePath': str((DEST / 'model.glb').relative_to(ROOT)),
@@ -147,8 +147,8 @@ def main():
         DEST.mkdir(parents=True, exist_ok=True)
         (DEST / 'model.glb').write_bytes(model)
         (DEST / 'provenance.json').write_bytes(provenance)
-        catalog['assets'] = [entry if a['id'] == entry['id'] else a for a in catalog['assets']]
-        catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+        catalog_path.write_text(json.dumps(entry, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+        subprocess.run(['pnpm', 'content:sync'], cwd=ROOT, check=True)
     print(f'Source101 verified: {len(model)} bytes, sha256 {digest(model)}')
 
 

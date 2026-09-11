@@ -1,6 +1,7 @@
+import {writeCatalogSources,syncAssetCatalog} from './catalog-sources.js';
 /** Rebuild only the local kayak asset; never re-import the donor project. */
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildKayakModel } from '../../shared/preset-content/kayak-model';
@@ -18,7 +19,6 @@ const sha256=createHash('sha256').update(bytes).digest('hex');
 const sourcePath='assets/three-creator/presets/vehicles/kayak.glb';
 await mkdir('assets/three-creator/presets/vehicles',{recursive:true});
 await writeFile(sourcePath,bytes);
-const file='assets/three-creator/asset-catalog.json',catalog=JSON.parse(await readFile(file,'utf8'));
 const asset={id:'vehicle.kayak',displayName:'单人皮划艇 / KAYAK',path:'vehicles/kayak.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
@@ -26,7 +26,6 @@ const asset={id:'vehicle.kayak',displayName:'单人皮划艇 / KAYAK',path:'vehi
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-kayak.ts'},resources:[],
   locomotionBindingIds:['vehicle.kayak'],vehicle:{schemaVersion:1,spec:{...KAYAK_SPEC,...defaultMovementSettings('paddled_boat',KAYAK_SPEC)}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:KAYAK_SPEC.seat}],collision:KAYAK_SPEC.envelope};
-const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
-if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;
-await writeFile(file,JSON.stringify(catalog,null,2)+'\n');
+await writeCatalogSources(process.cwd(),[asset]);
+await syncAssetCatalog(process.cwd());
 console.log(JSON.stringify({sourcePath,sha256,byteLength:bytes.length}));

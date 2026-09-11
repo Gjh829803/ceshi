@@ -16,9 +16,15 @@ async function fixture(t, behavior = {}) {
   const runtime = { launcherPath: '/fsx/pinned/cloud-launcher.mjs', codexBinary: '/fsx/pinned/codex', outputS3Root: 's3://test-bucket/three-episode', ...behavior.runtime };
   const client = createCloudClient({ repoRoot: root, runtime, assertActive:behavior.assertActive, trackRemote:behavior.trackRemote, config: { baseUrl: 'https://unit.invalid', token: 'never-log-synthetic', userId: 'unit' }, request: async (url, options) => {
     calls.push({ url, method: options.method ?? 'GET' });
+    if (url.endsWith('/cancel')) { if (behavior.cancelError) throw behavior.cancelError; return {job_id: 'gen_abc123', status: behavior.cancelStatus ?? 'cancelled'}; }
     if (options.method === 'POST') { payload = options.body; if (behavior.postError) throw behavior.postError; return { job: { job_id: 'gen_abc123' } }; }
     if (url.includes('by-request-id')) { if (behavior.lookupError) throw behavior.lookupError; return { job_id: 'gen_abc123' }; }
-    if (url.endsWith('/config')) return { config: { ...payload, options: { ...payload.defaults, ...payload.options } } };
+    if (url.endsWith('/config')) {
+      const options = {...payload.defaults, ...payload.options};
+      if (behavior.dropAccountRoot) delete options.codex_account_root;
+      if (behavior.overrideAccountRoot) options.codex_account_root = behavior.overrideAccountRoot;
+      return {config: {...payload, options: behavior.emptyOptions ? {} : options}};
+    }
     if (url.includes('/items')) return { items: (payload.tasks ?? payload.items).map(row => ({ item_id: row.id, status: behavior.failed ? 'failed' : 'succeeded', error: behavior.failed ? 'test terminal' : '' })) };
     throw new Error(`Unexpected URL ${url}`);
   }, poll: async () => { if (behavior.pollError) throw behavior.pollError; return { status: behavior.pollStatus ?? (behavior.failed ? 'failed' : 'succeeded') }; }, transfer: async (source, destination) => {
@@ -35,6 +41,58 @@ test('cloud GPT-6 outputs have durable identity and repeated calls use exact cac
   assert.equal(f.payload().defaults.model, 'gpt-6-astra'); assert.equal(f.payload().defaults.reasoning_effort, 'xhigh');
   assert.equal(f.payload().tasks[0].outputs[0].path, 'plan.json');
   assert(!JSON.stringify(f.payload()).includes('never-log-synthetic'));
+});
+test('Codex requests retain an explicitly isolated account pool and its request identity', async t => {
+  const f = await fixture(t);
+  f.runtime.codexAccountIds = ['approved-account'];
+  f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/acceptance/account-pool';
+  await f.client.runCodex(f.args);
+  assert.equal(f.payload().options.codex_account_root, f.runtime.codexAccountRoot);
+  assert.deepEqual(f.payload().options.codex_account_ids, ['approved-account']);
+});
+test('invalid isolated account roots fail before submission', async t => {
+  for (const root of ['/outside', '/fsx/pipeline/worldkit-three-creator-experiments/a/../other', '/fsx/pipeline/worldkit-three-creator-experiments/a/']) {
+    const f = await fixture(t); f.runtime.codexAccountIds = ['approved-account']; f.runtime.codexAccountRoot = root;
+    await assert.rejects(f.client.runCodex(f.args), /ACCOUNT_ROOT_INVALID/);
+    assert.equal(f.calls.length, 0);
+  }
+});
+test('account root drift cancels only the submitted job and latches its terminal result', async t => {
+  for (const behavior of [{dropAccountRoot: true}, {overrideAccountRoot: '/unapproved/pool'}]) {
+    const f = await fixture(t, behavior);
+    f.runtime.codexAccountIds = ['approved-account'];
+    f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/acceptance/account-pool';
+    await assert.rejects(f.client.runCodex(f.args), error => error.code === 'EPISODE_CODEX_ACCOUNT_ROOT_NOT_RETAINED' && error.state.isTerminal === true && error.state.status === 'cancelled');
+    await assert.rejects(f.client.runCodex(f.args), {code: 'EPISODE_CODEX_ACCOUNT_ROOT_NOT_RETAINED'});
+    assert.equal(f.calls.filter(call => call.method === 'POST' && !call.url.endsWith('/cancel')).length, 1);
+    assert.deepEqual(f.calls.filter(call => call.url.endsWith('/cancel')).map(call => call.url), ['/api/v1/generation/jobs/gen_abc123/cancel']);
+  }
+});
+test('missing all echoed options cannot bypass approved-account cancellation', async t => {
+  const f = await fixture(t, {emptyOptions: true});
+  f.runtime.codexAccountIds = ['approved-account'];
+  f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/acceptance/account-pool';
+  await assert.rejects(f.client.runCodex(f.args), error => error.code === 'EPISODE_CODEX_ACCOUNT_POOL_NOT_RETAINED' && error.state.isTerminal === true);
+  assert.equal(f.calls.filter(call => call.url === '/api/v1/generation/jobs/gen_abc123/cancel').length, 1);
+});
+test('unconfirmed account-root cancellation stays actionable without another model submission', async t => {
+  const f = await fixture(t, {dropAccountRoot: true, cancelError: new Error('cancel transport unavailable')});
+  f.runtime.codexAccountIds = ['approved-account'];
+  f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/acceptance/account-pool';
+  await assert.rejects(f.client.runCodex(f.args), error => error.code === 'EPISODE_CODEX_ACCOUNT_ROOT_NOT_RETAINED' && error.state.isTerminal === false && error.state.status === 'cancellation-unconfirmed' && error.state.cancellation.attentionRequired === true);
+  await assert.rejects(f.client.runCodex(f.args), {code: 'EPISODE_CODEX_ACCOUNT_ROOT_NOT_RETAINED'});
+  assert.equal(f.calls.filter(call => call.method === 'POST' && !call.url.endsWith('/cancel')).length, 1);
+});
+test('changing an account root cannot replace pending work and root selection requires account IDs', async t => {
+  const f = await fixture(t, {pollError: new Error('pending')});
+  f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/acceptance/account-pool';
+  await assert.rejects(f.client.runCodex(f.args), /ACCOUNT_ROOT_INVALID/);
+  assert.equal(f.calls.length, 0);
+  f.runtime.codexAccountIds = ['approved-account'];
+  await assert.rejects(f.client.runCodex(f.args), {code:'EPISODE_REMOTE_PENDING'});
+  f.runtime.codexAccountRoot = '/fsx/pipeline/worldkit-three-creator-experiments/other/account-pool';
+  await assert.rejects(f.client.runCodex(f.args), /IMMUTABLE_REQUEST_CHANGED/);
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 1);
 });
 test('POST timeout resolves by exact request ID without a second POST', async t => {
   const f = await fixture(t, { postError: new Error('network timeout') }); const state = await f.client.runCodex(f.args);

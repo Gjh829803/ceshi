@@ -11,7 +11,7 @@ import { PresentationState } from './presentation';
 function instrumentedCharacter() {
   const root=new Group(),bone=new Group();root.add(bone);
   const update=vi.fn((dt:number)=>{bone.position.x+=dt;bone.rotation.y+=dt;});
-  const source={root,bones:{pelvis:bone},actions:{},weights:{},motionSources:[],update,dispose:vi.fn()} as unknown as SourceCharacter;
+  const source={root,bones:{pelvis:bone},actions:{},weights:{},motionSources:[],createFactory:()=>undefined,update,dispose:vi.fn()} as unknown as SourceCharacter;
   return {animation:new Character(source),bone,update,source};
 }
 
@@ -23,9 +23,9 @@ describe('mounted presentation', () => {
       const runtime = world.humanoid!, engine = engineOf(world);
       expect(runtime.enter('horse-1')).toBe(true);
       world.step({}, 31); world.step({ humanoid: { ...emptyInput(), forward: 1 } }, 20);
-      const previous = runtime.simulation.vehicle!.position.clone();
+      const previous = runtime.simulation.controlledActor.vehicle!.position.clone();
       world.step({ humanoid: { ...emptyInput(), forward: 1 } }, 1);
-      const current = runtime.simulation.vehicle!.position.clone();
+      const current = runtime.simulation.controlledActor.vehicle!.position.clone();
       expect(previous.distanceTo(current)).toBeGreaterThan(0);
       const root = runtime.options.vehicles[0]!.object;
       const before = world.snapshot();
@@ -33,7 +33,7 @@ describe('mounted presentation', () => {
         expect(root.position.distanceTo(previous.clone().lerp(current, .5))).toBeLessThan(1e-9);
         expect(world.getEntityState('horse-1').positionWorldMetersXYZ).toEqual(current.toArray());
         expect(engine.snapshot().entities.find(e => e.id === 'horse-1')!.positionMetersXYZ).toEqual(current.toArray());
-        const seat=new Vector3(...runtime.simulation.vehicle!.spec.seat).applyQuaternion(root.quaternion).add(root.position);
+        const seat=new Vector3(...runtime.simulation.controlledActor.vehicle!.spec.seat).applyQuaternion(root.quaternion).add(root.position);
         expect(runtime.options.character.object.position.distanceTo(seat)).toBeLessThan(1e-9);
         expect(world.getEntityState('person').positionWorldMetersXYZ).toEqual(runtime.logicalPose('person')!.position.toArray());
       });
@@ -42,7 +42,7 @@ describe('mounted presentation', () => {
       expect(render).toHaveBeenCalledTimes(2);
       expect(root.position).toEqual(current);
       expect(world.snapshot().simulationTick).toBe(before.simulationTick);
-      expect(runtime.simulation.vehicle!.position).toEqual(current);
+      expect(runtime.simulation.controlledActor.vehicle!.position).toEqual(current);
     } finally { world.dispose(); }
   });
   it('samples copied motion without changing history', async () => {
@@ -50,8 +50,8 @@ describe('mounted presentation', () => {
     try {
       const history = new PresentationState(world.humanoid!.simulation);
       const sample = history.sample(.5, 1, 0, 1);
-      sample.player.position.set(100, 100, 100);
-      expect(history.sample(.5, 1, 0, 1).player.position).not.toEqual(new Vector3(100, 100, 100));
+      sample.actors.person!.position.set(100, 100, 100);
+      expect(history.sample(.5, 1, 0, 1).actors.person!.position).not.toEqual(new Vector3(100, 100, 100));
     } finally { world.dispose(); }
   });
   it('evaluates generic visuals once per changed sample, restores roots after a visual failure', async () => {
@@ -79,14 +79,14 @@ it('keeps one interaction edge and canonical camera/actors identical at 30, 60 a
   for (const hz of [30, 60, 120]) {
     const world = await createMountedFixture();
     try {
-      const engine = engineOf(world), runtime = world.humanoid!, entered = vi.spyOn(runtime.simulation, 'interact');
+      const engine = engineOf(world), runtime = world.humanoid!, entered = vi.spyOn(runtime.simulation.controlledActor, 'interact');
       for (let frame = 0; frame < hz * 2; frame++) {
         engine.advance(1 / hz, { humanoid: { ...emptyInput(), forward: 1 }, interactPressed: frame === 0, cameraYawRatio: .2 });
         engine.render(hz === 120 && frame % 2 === 0 ? .5 : 1);
       }
       expect(entered).toHaveBeenCalledTimes(1);
-      expect(runtime.simulation.vehicle?.spec.id).toBe('horse-1');
-      results.push({ tick: world.simulationTick, horse: runtime.simulation.vehicle!.position.toArray(), rider: runtime.simulation.player.position.toArray(), yaw: runtime.followCamera.yaw, collision:runtime.followCamera.collisionState });
+      expect(runtime.simulation.controlledActor.vehicle?.spec.id).toBe('horse-1');
+      results.push({ tick: world.simulationTick, horse: runtime.simulation.controlledActor.vehicle!.position.toArray(), rider: runtime.simulation.controlledActor.player.position.toArray(), yaw: runtime.followCamera.yaw, collision:runtime.followCamera.collisionState });
     } finally { world.dispose(); }
   }
   expect(results[1]).toEqual(results[0]);
@@ -106,7 +106,7 @@ it('renders without changing canonical camera orbit, timers, or the following fi
     for (const world of [a,b])world.step({humanoid:{...emptyInput(),forward:1}},1);
     expect(a.humanoid!.camera.position).toEqual(b.humanoid!.camera.position);
     expect(a.humanoid!.followCamera.yaw).toBe(b.humanoid!.followCamera.yaw);
-    expect(a.humanoid!.simulation.vehicle!.position).toEqual(b.humanoid!.simulation.vehicle!.position);
+    expect(a.humanoid!.simulation.controlledActor.vehicle!.position).toEqual(b.humanoid!.simulation.controlledActor.vehicle!.position);
   } finally {a.dispose();b.dispose();}
 });
 
@@ -122,11 +122,8 @@ it('preserves authored opening camera through repeated display and fixed steps',
 });
 
 it('keeps the fixed character local pose and animation clock across display interpolation', async () => {
-  const world=await createMountedFixture();
+  const {animation,bone,update}=instrumentedCharacter(),world=await createMountedFixture({animation});update.mockClear();
   try {
-    const {animation,bone,update}=instrumentedCharacter();
-    world.humanoid!.options.character.object.add(animation.root);
-    Object.defineProperty(world.humanoid!.options.character,'animation',{value:animation});
     world.step({},2);const current=bone.position.x;
     engineOf(world).withPresentation(()=>expect(bone.position.x).toBeCloseTo(current-1/120),.5);
     expect(bone.position.x).toBe(current);expect(update).toHaveBeenCalledTimes(2);
@@ -141,7 +138,7 @@ it('handles catch-up, pause/resume and history cuts without advancing repeated v
     const engine=engineOf(world),runtime=world.humanoid!,deltas:number[]=[];
     runtime.onVisualUpdate(dt=>deltas.push(dt));
     engine.advance(.25,{interactPressed:true,humanoid:{...emptyInput(),forward:1}});
-    expect(world.simulationTick).toBe(15);expect(runtime.simulation.transition).toBeGreaterThan(0);
+    expect(world.simulationTick).toBe(15);expect(runtime.simulation.controlledActor.transition).toBeGreaterThan(0);
     engine.render();const before=runtime.snapshot();engine.stop();engine.render();engine.render();
     expect(runtime.snapshot()).toEqual(before);expect(deltas).toEqual([0]);
     engine.start();engine.advance(.25,{humanoid:{...emptyInput(),forward:1}});engine.stop();engine.render();
@@ -149,24 +146,24 @@ it('handles catch-up, pause/resume and history cuts without advancing repeated v
     for(const phase of ['enter','exit'] as const){
       await world.reset();expect(runtime.enter('horse-1')).toBe(true);
       if(phase==='exit'){world.step({},31);expect(runtime.exit()).toBe(true);}
-      expect(runtime.simulation.transitionKind).toBe(phase);
+      expect(runtime.simulation.controlledActor.transitionKind).toBe(phase);
       await world.reset();engine.render(.2);
-      expect(runtime.simulation.vehicle).toBeUndefined();expect(runtime.simulation.transition).toBe(0);expect(deltas.at(-1)).toBe(0);
+      expect(runtime.simulation.controlledActor.vehicle).toBeUndefined();expect(runtime.simulation.controlledActor.transition).toBe(0);expect(deltas.at(-1)).toBe(0);
     }
   }finally{world.dispose();}
 });
 
 it('preserves the supplied opening transform when authored mode is selected after runtime creation',async()=>{
- const {HumanoidRuntime}=await import('./runtime');
+ const {createWorld}=await import('../world');
  const {PerspectiveCamera}=await import('three');
  const fixture=await createMountedFixture();
  const camera=new PerspectiveCamera(64);camera.position.set(7,9,11);camera.rotation.set(.2,.5,.1);
  const before=camera.clone();
- const runtime=await HumanoidRuntime.create(fixture.humanoid!.options,camera);
+ const world=await createWorld({camera,assetDefinitions:{},navigation:false,humanoid:fixture.humanoid!.options}),runtime=world.humanoid!;
  try {
   runtime.useAuthoredCamera();
   expect(camera.position).toEqual(before.position);expect(camera.quaternion.toArray()).toEqual(before.quaternion.toArray());expect(camera.fov).toBe(64);
- }finally{runtime.dispose();fixture.dispose();}
+ }finally{world.dispose();fixture.dispose();}
 });
 
 it('opens exact current capture samples and restores after synchronous callback failures',async()=>{
@@ -175,7 +172,7 @@ it('opens exact current capture samples and restores after synchronous callback 
   const engine=engineOf(world),runtime=world.humanoid!;
   runtime.enter('horse-1');world.step({},31);world.step({humanoid:{...emptyInput(),forward:1}},20);
   engine.render(.5);
-  const canonical=runtime.simulation.vehicle!.position.clone();
+  const canonical=runtime.simulation.controlledActor.vehicle!.position.clone();
   engine.withPresentation(()=>{expect(runtime.options.vehicles[0]!.object.position).toEqual(canonical);});
   expect(()=>engine.withPresentation(()=>{runtime.options.vehicles[0]!.object.position.set(100,100,100);throw new Error('capture failure');})).toThrow('capture failure');
   expect(runtime.options.vehicles[0]!.object.position).toEqual(canonical);
@@ -183,11 +180,9 @@ it('opens exact current capture samples and restores after synchronous callback 
 });
 
 it('keeps character and camera at the common cut sample after exact capture then same-tick rewind',async()=>{
- const world=await createMountedFixture();
+ const {animation,bone,update}=instrumentedCharacter(),world=await createMountedFixture({animation});update.mockClear();
  try {
-  const runtime=world.humanoid!,engine=engineOf(world),{animation,bone,update}=instrumentedCharacter();
-  runtime.options.character.object.add(animation.root);
-  Object.defineProperty(runtime.options.character,'animation',{value:animation});
+  const runtime=world.humanoid!,engine=engineOf(world);
   runtime.enter('horse-1');world.step({},31);world.step({humanoid:{...emptyInput(),forward:1}},20);
   engine.render(1);
   const canonical={horse:runtime.options.vehicles[0]!.object.position.clone(),bone:bone.position.x,camera:runtime.camera.position.clone()};
@@ -206,11 +201,10 @@ it('keeps character and camera at the common cut sample after exact capture then
 });
 
 it('retains a permitted author child local transform on a repeated Character sample',async()=>{
- const world=await createMountedFixture();
+ const {animation}=instrumentedCharacter(),world=await createMountedFixture({animation});
  try {
-  const runtime=world.humanoid!,engine=engineOf(world),{animation}=instrumentedCharacter(),authorChild=new Group();
-  animation.actor.add(authorChild);runtime.options.character.object.add(animation.root);
-  Object.defineProperty(runtime.options.character,'animation',{value:animation});
+  const runtime=world.humanoid!,engine=engineOf(world),authorChild=new Group();
+  animation.actor.add(authorChild);
   world.step({},2);
   let evaluated=false;
   const visual=vi.fn((dt:number)=>{

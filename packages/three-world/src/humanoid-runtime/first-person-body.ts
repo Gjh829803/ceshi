@@ -5,7 +5,7 @@ export class FirstPersonBody {
   private readonly meshes: { mesh: SkinnedMesh; original: BufferGeometry; local: BufferGeometry }[] = [];
   private active = false;
   constructor(root: Object3D) {
-    root.traverse(object => {
+    try{root.traverse(object => {
       if (!(object instanceof SkinnedMesh)) return;
       const geometry = object.geometry, indices = geometry.index;
       const joints = geometry.getAttribute('skinIndex'), weights = geometry.getAttribute('skinWeight');
@@ -23,6 +23,7 @@ export class FirstPersonBody {
         return weight > .2;
       };
       const local = geometry.clone(), kept: number[] = [];
+      this.meshes.push({ mesh: object, original: geometry, local });
       local.clearGroups();
       const groups = geometry.groups.length ? geometry.groups : [{ start: 0, count: indices?.count ?? joints.count, materialIndex: 0 }];
       for (const group of groups) {
@@ -34,8 +35,7 @@ export class FirstPersonBody {
         local.addGroup(start, kept.length - start, group.materialIndex);
       }
       local.setIndex(kept);
-      this.meshes.push({ mesh: object, original: geometry, local });
-    });
+    });}catch(error){try{this.dispose();}catch{/* Preserve construction failure. */}throw error;}
   }
   setActive(active: boolean): void {
     if (active === this.active) return;
@@ -47,5 +47,9 @@ export class FirstPersonBody {
     const previous=this.active;this.setActive(active);
     return ()=>this.setActive(previous);
   }
-  dispose(): void { this.setActive(false); for (const { local } of this.meshes) local.dispose(); }
+  dispose(): void {
+    this.setActive(false);const failures:unknown[]=[];
+    for(const {local} of this.meshes.splice(0))try{local.dispose();}catch(error){failures.push(error);}
+    if(failures.length)throw new AggregateError(failures,'FIRST_PERSON_BODY_CLEANUP_FAILED');
+  }
 }

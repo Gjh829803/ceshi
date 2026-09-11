@@ -39,7 +39,6 @@ export function creatorToolDiagnostic(error: unknown): CreatorToolDiagnostic {
   let nextSteps: RecoveryStep[];
   switch (code) {
     case 'ENVIRONMENT_INVALID':
-    case 'HUMANOID_CONTENT_REGISTER_IN_OPTIONS':
     case 'DECORATION_CANNOT_HAVE_PHYSICS':
       nextSteps = [{ instruction: original.suggestedAction ?? 'Check the reported environment field or entity registration against the current Humanoid contract. Preserve required collision geometry.', tool: 'creator_get_authoring_schema', arguments: { topic: 'humanoid', sections: ['guide','humanoid'] } }];
       break;

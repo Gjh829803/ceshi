@@ -75,7 +75,7 @@ it('preserves the pinned policy and runtime through capture preparation, export 
 
 it.each(['hash', 'snapshot', 'inventory'])('rejects delivery with missing policy %s before copying', async missing => {
   const f = await fixture();
-  if (missing === 'hash') delete f.source.assetPolicySha256;
+  if (missing === 'hash') delete (f.source as Partial<EpisodeSourceManifest>).assetPolicySha256;
   if (missing === 'snapshot') await rm(path.join(f.source.playableRoot, 'asset-policy.json'));
   await f.delivery();
   if (missing === 'inventory') {
@@ -118,7 +118,7 @@ it.each(['snapshot', 'renamed-source', 'renamed-playable', 'definitions', 'model
 
 it.each(['hash', 'snapshot'])('rejects transport missing policy %s after hashes are rewritten', async missing => {
   const f = await fixture();
-  if (missing === 'hash') delete f.source.assetPolicySha256;
+  if (missing === 'hash') delete (f.source as Partial<EpisodeSourceManifest>).assetPolicySha256;
   else await rm(path.join(f.source.playableRoot, 'asset-policy.json'));
   await f.save(); await expect(loadEpisodeSource(f.manifest)).rejects.toThrow(/ASSET_POLICY/);
 });
@@ -133,20 +133,16 @@ it('rejects an unlisted resource added to the received source tree', async () =>
   await expect(loadEpisodeSource(f.manifest)).rejects.toThrow('ASSET_POLICY_INVENTORY_CHANGED');
 });
 
-it('keeps historical policy-less deliveries compatible without applying current Host policy', async () => {
-  const f = await fixture(); delete f.source.assetPolicySha256;
+it('rejects a delivery and transported source without the current policy contract', async () => {
+  const f = await fixture(); delete (f.source as Partial<EpisodeSourceManifest>).assetPolicySha256;
   await rm(path.join(f.source.playableRoot, 'asset-policy.json'));
-  await put(f.input, 'source/historical-character.glb', denied);
-  await f.delivery();
-  const output = path.join(f.root, 'legacy');
-  const source = await prepareEpisodeSource({ payloadRoot: f.input, outputRoot: output, worldId: 'legacy' });
-  expect(source).not.toHaveProperty('assetPolicySha256');
-  await expect(loadEpisodeSource(path.join(output, 'source.json'))).resolves.toMatchObject({ worldId: 'legacy' });
+  await f.save(); await f.delivery();
+  await expect(prepareEpisodeSource({ payloadRoot: f.input, outputRoot: path.join(f.root, 'rejected'), worldId: 'old-source' })).rejects.toThrow('EPISODE_ASSET_POLICY_PAIR_REQUIRED');
+  await expect(loadEpisodeSource(f.manifest)).rejects.toThrow('EPISODE_ASSET_POLICY_PAIR_REQUIRED');
 });
 
-it.each([true, false])('derives policy-aware=%s inputs while current Host policy and catalog are unavailable', async policyAware => {
+it('derives carried-policy inputs while current Host policy and catalog are unavailable', async () => {
   const f = await fixture();
-  if (!policyAware) { delete f.source.assetPolicySha256; await rm(path.join(f.source.playableRoot, 'asset-policy.json')); }
   await f.delivery();
   const read = fs.readFileSync;
   vi.spyOn(fs, 'readFileSync').mockImplementation((file, options) => {

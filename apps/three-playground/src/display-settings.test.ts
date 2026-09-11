@@ -22,7 +22,7 @@ describe('independent display controls', () => {
   });
   it('toggles anchor, climb and water geometry independently', () => {
     const scene = new T.Scene(), map = {...getMap('campus'), boxes:[{id:'wall',position:[0,1,0] as const,size:[2,2,1] as const}], climbSurfaces:[{id:'wall-top',colliderId:'wall',kind:'wall' as const,center:[0,1,0] as [number,number,number],normal:[0,0,1] as [number,number,number],width:2,minY:0,maxY:2}]};
-    const overlay = createDisplayOverlays(scene,()=>({physics:undefined,map,targets:[{id:'seat',kind:'seat',position:new T.Vector3(),state:'available'}]}));
+    const overlay = createDisplayOverlays(scene,()=>({physics:undefined,map,targets:[{id:'seat',kind:'seat',slotId:'seat',position:new T.Vector3(),state:'available'}]}));
     const visible = (name:string) => {let o:T.Object3D|null=scene.getObjectByName(name)??null; if(!o)return false;while(o&&o!==overlay.root){if(!o.visible)return false;o=o.parent;}return true;};
     try {
       overlay.update(resolveDisplaySettings({...defaultDisplaySettings(),anchors:true}));

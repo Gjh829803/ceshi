@@ -1,10 +1,9 @@
 import { AnimationAction, AnimationClip, AnimationMixer, Group, LoopOnce, Mesh, Object3D, PropertyBinding, Quaternion, Vector3 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {disposeSourceGraphs,leaseSourceCharacter,type SourceCharacterLease} from './source-character-assets';
 import type { SourceCharacterFrame as Simulation } from './animation';
 import type { MotionSource } from './motion';
-import { CHARACTER_ASSET_IDS, SWIMMING_ASSET_IDS, ACTION_NAMES, ANIMATION_LABELS as LABELS } from './catalog';
+import { SWIMMING_ASSET_IDS, ACTION_NAMES, ANIMATION_LABELS as LABELS } from './catalog';
 import { SWIM_ROOT_DEPTH, SWIM_SPEED } from './water-physics';
-import { ACTION_CLIP_IDS,SURFACE_CLIP_IDS } from './action-schema';
 export { CHARACTER_ASSET_IDS } from './catalog';
 
 const smooth = (value: number) => {
@@ -60,12 +59,13 @@ function authoredSpeed(entry: CharacterClipEntry) {
 }
 
 export class Character {
+  private disposed=false;
+  private createResourceInstance:(()=>Promise<Character>)|undefined;
+  private releaseResources:()=>void;
   dispose():void{
-    this.mixer.stopAllAction();this.mixer.uncacheRoot(this.root);
-    const geometries=new Set<import('three').BufferGeometry>(),materials=new Set<import('three').Material>(),textures=new Set<import('three').Texture>();
-    this.root.traverse(object=>{if(object instanceof Mesh){geometries.add(object.geometry);for(const material of Array.isArray(object.material)?object.material:[object.material])materials.add(material);}const skeleton=(object as import('three').SkinnedMesh).skeleton;if(skeleton)skeleton.dispose();});
-    for(const material of materials){for(const value of Object.values(material))if(value&&typeof value==='object'&&(value as import('three').Texture).isTexture)textures.add(value as import('three').Texture);material.dispose();}
-    for(const texture of textures)texture.dispose();for(const geometry of geometries)geometry.dispose();this.root.removeFromParent();
+    if(this.disposed)return;this.disposed=true;
+    try{this.mixer.stopAllAction();this.mixer.uncacheRoot(this.mixer.getRoot());}
+    finally{try{this.releaseResources();}finally{this.root.removeFromParent();}}
   }
   root = new Group();
   mixer: AnimationMixer;
@@ -73,10 +73,6 @@ export class Character {
   bones: Record<string, Object3D> = {};
   weights: Record<string, number> = {};
   motionSources: MotionSource[] = [];
-  handError: number | null = null;
-  // Kept for the inspector API. Generic arm/leg IK is deliberately not applied
-  // to authored traversal poses; contact correction needs a GASP-specific rig.
-  ik = false;
   smoothing = true;
   phase = 0;
   clipLabel = LABELS.idle!;
@@ -92,42 +88,22 @@ export class Character {
   private traversalEntry: {serial: number; weights: Record<string, number>; duration: number} | null = null;
 
   static async load(assetBaseUrl:string|((logicalPath:string)=>string) = './assets/humanoid/source/') {
-    const url = (relative:string) => typeof assetBaseUrl==='function'?assetBaseUrl(`humanoid/source/${relative}`):`${assetBaseUrl.replace(/\/$/,'')}/${relative}`;
-    const loader = new GLTFLoader();
-    const entries = await Promise.all(CHARACTER_ASSET_IDS.map(async id => {
-      const [gltf, metadataResponse] = await Promise.all([
-        loader.loadAsync(url(`gasp-research/${id}.experimental.glb`)),
-        fetch(url(`gasp-research/${id}.metadata.json`)),
-      ]);
-      if (!metadataResponse.ok) throw new Error(`GASP 元数据加载失败: ${id}`);
-      const clip = gltf.animations[0];
-      if (!clip) throw new Error(`GASP 动画加载失败: ${id}`);
-      const metadata = await metadataResponse.json() as CharacterClipEntry['metadata'];
-      return { id, clip, metadata, model: gltf.scene };
-    }));
-    const model = entries.find(e => e.id === 'climb-2m5')!.model;
-    const swimming = await Promise.all(SWIMMING_ASSET_IDS.map(async id => {
-      const response = await fetch(url(`swimming/${id}.clip.json`));
-      if (!response.ok) throw new Error(`游泳动画加载失败: ${id}`);
-      return {id, clip: AnimationClip.parse(await response.json())};
-    }));
-    const skills = await Promise.all([...ACTION_CLIP_IDS,...SURFACE_CLIP_IDS].map(async id => {
-      const response=await fetch(url(`actions/${id}.clip.json`));
-      if(!response.ok)throw new Error(`动作加载失败: ${id}`);
-      return {id,clip:AnimationClip.parse(await response.json())};
-    }));
-    const character = new Character(model, [...entries, ...swimming, ...skills]);
-    // The other GLBs are animation containers; release their duplicate meshes.
-    for (const entry of entries) if (entry.model !== model) entry.model.traverse(o => {
-      if (o instanceof Mesh) {
-        o.geometry.dispose();
-        for (const material of Array.isArray(o.material) ? o.material : [o.material]) material.dispose();
-      }
-    });
-    return character;
+    return Character.fromLease(await leaseSourceCharacter(assetBaseUrl));
+  }
+  private static fromLease(lease:SourceCharacterLease):Character {
+    try{
+      const instance=new Character(lease.model,lease.entries,lease.dispose);
+      const factory=lease.factory;instance.createResourceInstance=async()=>Character.fromLease(await factory());
+      return instance;
+    }catch(error){try{lease.dispose();}catch{/* Preserve binding failure. */}throw error;}
+  }
+  /** The immutable source factory survives the lifetime of any individual model. */
+  createFactory():(()=>Promise<Character>)|undefined{
+    if(this.disposed)throw new Error('SOURCE_CHARACTER_DISPOSED');return this.createResourceInstance;
   }
 
-  constructor(model: Group, entries: CharacterClipEntry[]) {
+  constructor(model: Group, entries: CharacterClipEntry[],releaseResources?:()=>void) {
+    this.releaseResources=releaseResources??(()=>disposeSourceGraphs([model]));
     // GLBs contain raw root tracks plus an origin-normalizing parent offset.
     // Physics owns translation in the playable scene, so remove that offset
     // and only root.position in cloned clips. Do not resize or rebind the rig.
@@ -389,6 +365,5 @@ export class Character {
       if(sim.skills.active?.id!=='pickup')left.lerp(this.bones.hand_r!.getWorldPosition(new Vector3()),.5);
       sim.skills.syncCarried(left);
     }
-    this.handError = null;
   }
 }

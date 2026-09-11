@@ -61,7 +61,7 @@ describe('vehicle camera geometry',()=>{
   const root=new Group(),world=await fixture(root);try{
    root.add(openCabin());approachAndOrbit(world);
    const r=world.humanoid!,c=r.followCamera,state=c.collisionState;
-   const pose={position:r.simulation.player.position.clone(),rotation:new Quaternion(),velocity:new Vector3(),yaw:r.simulation.player.yaw,speed:0,steering:0,cameraHeight:1.68*.655};
+   const pose={position:r.simulation.controlledActor.player.position.clone(),rotation:new Quaternion(),velocity:new Vector3(),yaw:r.simulation.controlledActor.player.yaw,speed:0,steering:0,cameraHeight:1.68*.655};
    c.present(pose,.75);const eye=world.camera.position.clone();c.present(pose,.25);c.present(pose,.75);
    expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-8);expect(c.collisionState).toEqual(state);
    expect(world.camera.position.distanceTo(c.presentationTarget)).toBeGreaterThan(10.9);

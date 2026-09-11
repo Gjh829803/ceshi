@@ -1,4 +1,5 @@
 export * from './contracts.js';
+export {INTERACTION_SLOT_SCHEMA} from './interaction-contracts.js';
 export type * from './episode-contracts.js';
 export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
 export { DEFAULT_SHADOW_SETTINGS, resolveShadowSettings } from './config/presentation.js';

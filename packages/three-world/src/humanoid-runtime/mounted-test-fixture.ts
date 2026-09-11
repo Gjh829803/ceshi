@@ -18,6 +18,8 @@ const source = catalog.assets.find(
 export async function createMountedFixture(
   options: {
     boxes?: EnvironmentDefinition["boxes"];
+    animation?:import("./character").Character;
+    playerSpawn?:[number,number,number];
     secondHorsePosition?: [number, number, number];
   } = {},
 ): Promise<ThreeWorld> {
@@ -54,7 +56,7 @@ export async function createMountedFixture(
       yaw: 0,
       regionId: "mount",
     })),
-    playerSpawn: [1.45, 0.025, 0],
+    playerSpawn: options.playerSpawn??[1.45, 0.025, 0],
   };
   const world = await createWorld({
     camera: new PerspectiveCamera(),
@@ -62,7 +64,7 @@ export async function createMountedFixture(
     assetDefinitions: {},
     humanoid: {
       map,
-      character: { instanceId: "person", object: new Group() },
+      character: { instanceId: "person", object: options.animation?.root??new Group(),...(options.animation?{animation:options.animation}:{}) },
       vehicles: positions.map((spawn, n) => ({
         instanceId: `horse-${n + 1}`,
         assetId: "creature.horse",
@@ -71,6 +73,6 @@ export async function createMountedFixture(
       })),
     },
   });
-  world.humanoid!.prepareCharacter([1.45, 0.025, 0]);
+  world.humanoid!.prepareCharacter(options.playerSpawn??[1.45, 0.025, 0]);
   return world;
 }

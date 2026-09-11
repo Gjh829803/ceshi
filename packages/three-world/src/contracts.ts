@@ -50,8 +50,26 @@ export interface EntityMetadata {
 }
 export type SolidPhysics =
  | {readonly kind:'fixed'|'kinematic';readonly shape?:'mesh'|'box'|'convex-hull'}
- | {readonly kind:'dynamic';readonly shape:'box'|'convex-hull';readonly massKilograms:number};
-export type EntityOptions = EntityMetadata & {readonly object:THREE.Object3D} & (
+ | {readonly kind:'dynamic';readonly shape:'box'|'convex-hull';readonly massKilograms:number;readonly lockRotations?:boolean};
+/** Entity-local metres and XYZ Euler radians; +Y up and +Z interaction facing. */
+export interface InteractionSlot {
+ readonly slotId:string;
+ readonly label:string;
+ readonly kind:'pickup'|'seat';
+ readonly positionLocalMetersXYZ:Vec3;
+ readonly approachLocalMetersXYZ:Vec3;
+ readonly rotationLocalRadiansXYZ:Vec3;
+ readonly capacity:1;
+}
+export interface InteractionClaimState {
+ readonly actorId:string|null;
+ readonly requestId:string;
+ readonly state:'reserved'|'held'|'occupied';
+ readonly generation:number;
+ readonly expiresAtSimulationSeconds:number|null;
+}
+
+export type EntityOptions = EntityMetadata & {readonly object:THREE.Object3D;readonly interactions?:readonly InteractionSlot[]} & (
  | {readonly role:'terrain'|'obstacle';readonly physics?:SolidPhysics}
  | {readonly role:'decoration';readonly physics?:never}
 );
@@ -64,9 +82,10 @@ export interface GroundMovement {
  readonly maximumStepHeightMeters?:number;
  readonly maximumSlopeRadians?:number;
 }
-export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMovement|{readonly kind:'custom';readonly movementId:string};readonly locomotionBindingId?:string} & (
- | {readonly asset:AssetInstance;readonly object?:never;readonly body?:CharacterBody}
- | {readonly object:THREE.Object3D;readonly asset?:never;readonly body:CharacterBody}
+export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMovement|{readonly kind:'custom';readonly movementId:string}} & (
+ | {readonly asset:AssetInstance;readonly object?:never;readonly humanoid?:never;readonly body?:CharacterBody}
+ | {readonly object:THREE.Object3D;readonly asset?:never;readonly humanoid?:never;readonly body:CharacterBody}
+ | {readonly humanoid:import('./humanoid-runtime/character').Character;readonly movement?:Pick<GroundMovement,'kind'|'walkSpeedMetersPerSecond'|'runSpeedMetersPerSecond'|'jumpSpeedMetersPerSecond'>;readonly asset?:never;readonly object?:never;readonly body?:never}
 );
 export type CameraPerspective='first-person'|'third-person';
 export interface CameraFollowViewOptions {
@@ -77,11 +96,12 @@ export interface CameraFollowViewOptions {
  /** Defaults to false; programmatic switching is independent of this shortcut permission. */
  readonly keyboardToggleEnabled?:boolean;
 }
+/** Full humanoid targets accept only targetEntityId; use humanoid.applyProfile/setCameraMode for their camera configuration. */
 export interface CameraFollowOptions {
  /** Optional first-person eye in the target object's local coordinates. */
  readonly view?:CameraFollowViewOptions;
  readonly targetEntityId?:string;
- /** With no orbit override, continue the authored pose and framing. */
+ /** Ordinary targets: with no orbit override, continue the authored pose and framing. */
  readonly framingMode?:'preserve-opening'|'target';
  /** Translation damping for inherited opening framing; zero follows immediately. */
  readonly followHalfLifeSeconds?:number;
@@ -121,10 +141,11 @@ export type PrimitiveCommand =
  | {readonly type:'actor.stop';readonly entityId:string}
  | {readonly type:'actor.resume-autonomy';readonly entityId:string}
  | {readonly type:'actor.set-movement';readonly entityId:string;readonly movementId:string}
+ | {readonly type:'entity.set-interactions';readonly entityId:string;readonly slots:readonly InteractionSlot[]}
  | {readonly type:'entity.set-geometry';readonly entityId:string;readonly geometryId:string};
 export type PropertyCommand = Extract<PrimitiveCommand,{type:'entity.set-visible'|'entity.set-scale'|'entity.set-position'|'entity.set-rotation'}>;
 export type PropertyChannel = 'position'|'rotation'|'scale'|'visibility';
-export type EntityWriteChannel = PropertyChannel|'locomotion'|'animation'|'parentage'|'lifecycle'|'impulse'|'geometry';
+export type EntityWriteChannel = PropertyChannel|'locomotion'|'animation'|'parentage'|'lifecycle'|'impulse'|'geometry'|'interactions';
 export interface PropertyWriteClaim {readonly kind:'entity';readonly entityId:string;readonly channels:readonly PropertyChannel[]}
 export type WriteClaim =
  | {readonly kind:'entity';readonly entityId:string;readonly channels:readonly EntityWriteChannel[]}
@@ -166,6 +187,7 @@ export interface OperationStatus {
 export interface TerminalOperationStatus extends OperationStatus {readonly status:'succeeded'|'failed'|'cancelled'}
 export interface Operations {
  get(operationId:string):OperationStatus;
+ /** Requests cancellation; a running operation may remain in phase cancelling until safe cleanup finishes. */
  cancel(operationId:string):void;
  /** Observes terminal state without stepping/starting the world. Abort only cancels this wait. */
  wait(operationId:string,options?:{readonly signal?:AbortSignal}):Promise<TerminalOperationStatus>;
@@ -252,7 +274,7 @@ export interface EntityState {
  readonly parentEntityId?:string;
  readonly motion?:{readonly phase:'grounded'|'jumping'|'falling';readonly velocityWorldMetersPerSecondXYZ:Vec3;readonly isGrounded:boolean;readonly collisionEntityIds:readonly string[]};
  readonly animation?:{readonly actionId:string;readonly clipName:string;readonly timeSeconds:number};
- readonly controlOwners:readonly {readonly channel:string;readonly ownerKind:'player-input'|'user-command'|'autonomy'|'parameter'|'physics';readonly ownerId?:string}[];
+ readonly controlOwners:readonly {readonly channel:string;readonly ownerKind:'player-input'|'user-command'|'autonomy'|'parameter'|'physics'|'action'|'relationship'|'animation';readonly ownerId?:string}[];
 }
 export interface CommandDescriptor {
  readonly type:WorldCommand['type'];
@@ -442,7 +464,7 @@ export interface WorldObservation {
  readonly renderer:THREE.WebGLRenderer;
  /** Live object for the current controlled entity; available for human and nonhuman subjects. */
  readonly controlledObject:THREE.Object3D;
- /** Same active presentation for application transport/UI integration; absent for raw/legacy worlds. */
+ /** Same active presentation for application transport/UI integration; absent when no presentation layer is installed. */
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;

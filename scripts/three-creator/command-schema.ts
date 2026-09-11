@@ -1,3 +1,4 @@
+import {INTERACTION_SLOT_SCHEMA} from '@worldkit/three';
 import type { WorldCommand } from '@worldkit/three';
 import {humanoid} from '@worldkit/three';
 import { objectSchema } from './schema-helpers.js';
@@ -17,11 +18,11 @@ const humanoidProfile=objectSchema({character:objectSchema(humanoid.CONTROL_SCHE
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
- command('vehicle.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
- {...command('vehicle.approach',{instanceId:string}),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string}),command('vehicle.exit',{}),command('vehicle.recover',{}),
- command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{input:{anyOf:[humanoidInput,{type:'null'}]}}),
+ command('vehicle.prepare',{actorId:string,instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])},['actorId']),
+ {...command('vehicle.approach',{instanceId:string,actorId:string},['actorId']),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string,actorId:string},['actorId']),command('vehicle.exit',{actorId:string},['actorId']),command('vehicle.recover',{actorId:string},['actorId']),
+ command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{actorId:string,input:{anyOf:[humanoidInput,{type:'null'}]}},['actorId']),
  command('humanoid.apply-profile',{profile:humanoidProfile}),
- command('humanoid.perform-action',{request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string},['requestId','action'])}),
+ command('humanoid.perform-action',{actorId:string,request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string,slotId:string},['requestId','action'])},['actorId']),
  command('entity.set-visible',{entityId:string,isVisible:boolean}),
  command('entity.set-scale',{entityId:string,scaleLocalXYZ:vec3,durationSeconds:duration},['durationSeconds']),
  command('entity.set-position',{entityId:string,positionWorldMetersXYZ:vec3,durationSeconds:duration},['durationSeconds']),
@@ -37,6 +38,7 @@ export const WORLD_COMMAND_SCHEMA={oneOf:[
  command('actor.stop',{entityId:string}),
  command('actor.resume-autonomy',{entityId:string}),
  command('actor.set-movement',{entityId:string,movementId:string}),
+ command('entity.set-interactions',{entityId:string,slots:{type:'array',items:INTERACTION_SLOT_SCHEMA}}),
  command('entity.set-geometry',{entityId:string,geometryId:string}),
  command('parameter.set',{parameterId:string,value:scalar}),
  command('action.invoke',{actionId:string,arguments:{type:'object',additionalProperties:scalar}}),

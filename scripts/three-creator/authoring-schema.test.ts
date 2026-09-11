@@ -196,6 +196,7 @@ it('exposes the actual humanoid factory options and signature without runtime im
 it('publishes Player runtime methods as declarations consumable beside their real source imports',()=>{
  const runtimeUrl=new URL('../../packages/three-world/src/humanoid-runtime/runtime.ts',import.meta.url);
  const runtimeSource=readFileSync(runtimeUrl,'utf8');
+ expect(runtimeContractSource(runtimeSource)).toContain('createCharacter(): Promise<Character>');
  const parsed=ts.createSourceFile('runtime.ts',runtimeSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  const imports=parsed.statements.filter(ts.isImportDeclaration).map(node=>node.getText(parsed)).join('\n');
  const filename=fileURLToPath(new URL('../../packages/three-world/src/humanoid-runtime/.authoring-runtime-contract.ts',import.meta.url));
@@ -285,6 +286,14 @@ it('publishes portable humanoid namespace references for generated authoring con
  const selected=publicContractTopic(contracts,'humanoid');
  expect(selected).toContain("import('@worldkit/three').humanoid.HumanoidRuntime");
  expect(selected).not.toContain("import('./humanoid-runtime/");
+});
+
+it('publishes interaction slot definitions with their real entity and command consumers',()=>{
+ const selected=publicContractTopic(contracts,'character-actions');
+ expect(selected).toContain('addEntity(');expect(selected).toContain('registerPrototype(');
+ expect(selected).toContain('export interface InteractionSlot');
+ for(const field of ['positionLocalMetersXYZ','approachLocalMetersXYZ','rotationLocalRadiansXYZ','capacity'])expect(selected).toContain(field);
+ expect(selected).not.toContain("from './interaction-contracts'");
 });
 
 it('keeps shared conventions at the entry point and returns every matching topic section',()=>{

@@ -1,3 +1,4 @@
+import {readCatalogSources,writeCatalogSources,syncAssetCatalog} from './catalog-sources.js';
 /** Reproducible content import. No donor code executes in the deployed Host. */
 import { readFile, readdir, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -12,7 +13,6 @@ const donor = path.resolve(process.argv[2] ?? '');
 const expected = 'c293622a63716b8473cc2a95cb485c515265945e';
 if (execFileSync('git', ['rev-parse', 'HEAD'], { cwd: donor, encoding: 'utf8' }).trim() !== expected) throw new Error('PRESET_DONOR_VERSION_MISMATCH');
 const destination = path.join(REPOSITORY_ROOT, 'assets/three-creator/presets');
-const content = path.join(REPOSITORY_ROOT, 'shared/preset-content');
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 async function walk(dir: string): Promise<string[]> {
   const result: string[] = [];
@@ -42,29 +42,14 @@ for (const relative of imports) {
   const target = path.join(destination, relative); await mkdir(path.dirname(target), { recursive: true });
   await copyFile(path.join(donor, 'public/assets', relative), target);
 }
-// Content modules remain authored source; runtime algorithms are separately migrated to the SDK.
-const contentModules = ['config.ts','models.ts','world.ts','vehicle-animation.ts',
-  'environment/maps.ts','environment/types.ts','environment/modules.ts','environment/indoor.ts','environment/campus.ts',
-  'creatures/specs.ts','creatures/manifest.ts','creatures/visual.ts',
-  'platform/catalog.ts','platform/profiles.ts','platform/profile-runtime.ts','platform/scenarios.ts',
-  'humanoid/workshop.ts','humanoid/interaction-visuals.ts','humanoid/demo.ts',
-  'ui/shortcuts.ts','ui/thumbnails.ts'];
-for (const relative of contentModules) {
-  const source = path.join(donor, 'src', relative);
-  try {
-    const bytes = await readFile(source), target = path.join(content, relative);
-    await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, bytes);
-  } catch (error: any) { if (error.code !== 'ENOENT') throw error; }
-}
 // GLTFExporter only needs canvas for donor's presentation labels, which are excluded from model export.
 Object.assign(globalThis, { document: { createElement: () => ({ width: 768, height: 128, getContext: () => new Proxy({}, { get: () => () => undefined, set: () => true }) }) },
   FileReader: class { result: unknown; onloadend?: () => void; readAsArrayBuffer(blob: Blob) { void blob.arrayBuffer().then(value => { this.result = value; this.onloadend?.(); }); } } });
 const { SPECS } = await import(pathToFileURL(path.join(donor, 'src/config.ts')).href);
 const { buildVehicle } = await import(pathToFileURL(path.join(donor, 'src/models.ts')).href);
-const catalogFile = path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json');
-const catalog = JSON.parse(await readFile(catalogFile, 'utf8'));
+const catalog = {schemaVersion:1,assets:await readCatalogSources(REPOSITORY_ROOT)};
 const previousAssets = new Map<string, Parameters<typeof presetImportDetails>[1]>(
-  catalog.assets.map((asset: { id: string }) => [asset.id, asset]),
+  catalog.assets.map(asset => [asset.id, asset as Parameters<typeof presetImportDetails>[1]]),
 );
 catalog.assets = catalog.assets.filter((asset: any) => asset.provenance?.repository !== 'vehicle-training-ground' && asset.id !== 'humanoid.source-101');
 const provenance = { repository: 'vehicle-training-ground', commit: expected, notices: 'resources', importedWithoutChangingAssetBytes: true };
@@ -96,9 +81,10 @@ for (const spec of SPECS) {
     ...details, collision: spec.envelope,
   }));
 }
-await writeFile(catalogFile, JSON.stringify(catalog, null, 2) + '\n');
+await writeCatalogSources(REPOSITORY_ROOT,catalog.assets,true);
+await syncAssetCatalog(REPOSITORY_ROOT);
 await writeFile(path.join(destination, 'import-manifest.json'), JSON.stringify({ schemaVersion: 1, provenance,
   character: { boneCount: 101, runtimeClipCount: sourceManifest.runtimeClipCount }, vehicleIds: SPECS.map((s: any) => s.id),
-  maps: ['campus','indoor-lab','character-workshop'], resources: await Promise.all(imports.map(resource)) }, null, 2) + '\n');
+  resources: await Promise.all(imports.map(resource)) }, null, 2) + '\n');
 execFileSync('python3', [path.join(REPOSITORY_ROOT,'scripts/three-creator/build-humanoid.py')], {cwd:REPOSITORY_ROOT,stdio:'inherit'});
 console.log(JSON.stringify({ importedResources: imports.length, vehicles: SPECS.length, runtimeClips: sourceManifest.runtimeClipCount }));

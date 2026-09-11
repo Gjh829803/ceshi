@@ -16,7 +16,7 @@ index a70139024f58d4076ee93ecb09cedbaae6383707..8ea0a754e503b8b9fb7be5db598cb89d
  export type OffMeshConnectionParams = {
      startPosition: Vector3;
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee9039ffcabe9 100644
+index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..731833f634146be451f1d6365f9af9867dd50fc7 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -560,9 +560,52 @@ class DetourMeshTile {
@@ -74,7 +74,144 @@ index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee903
    };
  };
  class NavMeshCreateParams {
-@@ -2483,8 +2526,12 @@ class RecastBuildContext {
+@@ -1594,18 +1637,22 @@ class CrowdAgent {
+       ...crowdAgentParams
+     };
+     const dtCrowdAgentParams = new Raw.Module.dtCrowdAgentParams();
+-    dtCrowdAgentParams.radius = params.radius;
+-    dtCrowdAgentParams.height = params.height;
+-    dtCrowdAgentParams.maxAcceleration = params.maxAcceleration;
+-    dtCrowdAgentParams.maxSpeed = params.maxSpeed;
+-    dtCrowdAgentParams.collisionQueryRange = params.collisionQueryRange;
+-    dtCrowdAgentParams.pathOptimizationRange = params.pathOptimizationRange;
+-    dtCrowdAgentParams.separationWeight = params.separationWeight;
+-    dtCrowdAgentParams.updateFlags = params.updateFlags;
+-    dtCrowdAgentParams.obstacleAvoidanceType = params.obstacleAvoidanceType;
+-    dtCrowdAgentParams.queryFilterType = params.queryFilterType;
+-    dtCrowdAgentParams.userData = params.userData;
+-    this.crowd.raw.updateAgentParameters(this.agentIndex, dtCrowdAgentParams);
++    try {
++      dtCrowdAgentParams.radius = params.radius;
++      dtCrowdAgentParams.height = params.height;
++      dtCrowdAgentParams.maxAcceleration = params.maxAcceleration;
++      dtCrowdAgentParams.maxSpeed = params.maxSpeed;
++      dtCrowdAgentParams.collisionQueryRange = params.collisionQueryRange;
++      dtCrowdAgentParams.pathOptimizationRange = params.pathOptimizationRange;
++      dtCrowdAgentParams.separationWeight = params.separationWeight;
++      dtCrowdAgentParams.updateFlags = params.updateFlags;
++      dtCrowdAgentParams.obstacleAvoidanceType = params.obstacleAvoidanceType;
++      dtCrowdAgentParams.queryFilterType = params.queryFilterType;
++      dtCrowdAgentParams.userData = params.userData;
++      this.crowd.raw.updateAgentParameters(this.agentIndex, dtCrowdAgentParams);
++    } finally {
++      Raw.destroy(dtCrowdAgentParams);
++    }
+   }
+   /**
+    * Returns whether the agent is over an off-mesh connection.
+@@ -1615,6 +1662,16 @@ class CrowdAgent {
+     return Raw.CrowdUtils.overOffMeshConnection(this.crowd.raw, this.agentIndex);
+   }
+ }
++function releaseCrowdResources(crowd, query, filter) {
++  const errors = [];
++  // query wraps the dtNavMeshQuery owned by Crowd. Delete only this wrapper.
++  for (const release of [
++    () => { if (query) Raw.destroy(query); },
++    () => { if (filter) Raw.destroy(filter); },
++    () => { if (!Raw.isNull(crowd)) Raw.Detour.freeCrowd(crowd); },
++  ]) { try { release(); } catch (error) { errors.push(error); } }
++  if (errors.length) throw new AggregateError(errors, 'RECAST_CROWD_RESOURCE_CLEANUP_FAILED');
++}
+ class Crowd {
+   /**
+    * The agents in the crowd.
+@@ -1650,9 +1707,22 @@ class Crowd {
+     maxAgentRadius
+   }) {
+     this.navMesh = navMesh;
++    this.destroyed = false;
+     this.raw = Raw.Detour.allocCrowd();
+-    this.raw.init(maxAgents, maxAgentRadius, navMesh.raw.getNavMesh());
+-    this.navMeshQuery = new NavMeshQuery(new Raw.Module.NavMeshQuery(this.raw.getNavMeshQuery()));
++    let query, filter;
++    try {
++      if (Raw.isNull(this.raw) || !this.raw.init(maxAgents, maxAgentRadius, navMesh.raw.getNavMesh())) throw new Error('RECAST_CROWD_INIT_FAILED');
++      query = new Raw.Module.NavMeshQuery(this.raw.getNavMeshQuery());
++      filter = new QueryFilter();
++      filter.includeFlags = 0xffff;
++      filter.excludeFlags = 0;
++      this.navMeshQuery = new NavMeshQuery(query, { defaultQueryFilter: filter });
++    } catch (error) {
++      this.destroyed = true;
++      try { releaseCrowdResources(this.raw, query, filter?.raw); }
++      catch (cleanupError) { throw new AggregateError([error, cleanupError], 'RECAST_CROWD_CONSTRUCTION_FAILED'); }
++      throw error;
++    }
+   }
+   /**
+    * Steps the crowd forward in time with a fixed time step.
+@@ -1708,26 +1778,32 @@ class Crowd {
+    * Adds a new agent to the crowd.
+    */
+   addAgent(position, crowdAgentParams) {
++    if (this.destroyed) throw new Error('RECAST_CROWD_DISPOSED');
+     const params = {
+       ...crowdAgentParamsDefaults,
+       ...crowdAgentParams
+     };
+     const dtCrowdAgentParams = new Raw.Module.dtCrowdAgentParams();
+-    dtCrowdAgentParams.radius = params.radius;
+-    dtCrowdAgentParams.height = params.height;
+-    dtCrowdAgentParams.maxAcceleration = params.maxAcceleration;
+-    dtCrowdAgentParams.maxSpeed = params.maxSpeed;
+-    dtCrowdAgentParams.collisionQueryRange = params.collisionQueryRange;
+-    dtCrowdAgentParams.pathOptimizationRange = params.pathOptimizationRange;
+-    dtCrowdAgentParams.separationWeight = params.separationWeight;
+-    dtCrowdAgentParams.updateFlags = params.updateFlags;
+-    dtCrowdAgentParams.obstacleAvoidanceType = params.obstacleAvoidanceType;
+-    dtCrowdAgentParams.queryFilterType = params.queryFilterType;
+-    dtCrowdAgentParams.userData = params.userData;
+-    const agentIndex = this.raw.addAgent(vec3.toArray(position), dtCrowdAgentParams);
+-    const agent = new CrowdAgent(this, agentIndex);
+-    this.agents[agentIndex] = agent;
+-    return agent;
++    try {
++      dtCrowdAgentParams.radius = params.radius;
++      dtCrowdAgentParams.height = params.height;
++      dtCrowdAgentParams.maxAcceleration = params.maxAcceleration;
++      dtCrowdAgentParams.maxSpeed = params.maxSpeed;
++      dtCrowdAgentParams.collisionQueryRange = params.collisionQueryRange;
++      dtCrowdAgentParams.pathOptimizationRange = params.pathOptimizationRange;
++      dtCrowdAgentParams.separationWeight = params.separationWeight;
++      dtCrowdAgentParams.updateFlags = params.updateFlags;
++      dtCrowdAgentParams.obstacleAvoidanceType = params.obstacleAvoidanceType;
++      dtCrowdAgentParams.queryFilterType = params.queryFilterType;
++      dtCrowdAgentParams.userData = params.userData;
++      const agentIndex = this.raw.addAgent(vec3.toArray(position), dtCrowdAgentParams);
++      if (agentIndex < 0) throw new Error('RECAST_CROWD_AGENT_CAPACITY');
++      const agent = new CrowdAgent(this, agentIndex);
++      this.agents[agentIndex] = agent;
++      return agent;
++    } finally {
++      Raw.destroy(dtCrowdAgentParams);
++    }
+   }
+   /**
+    * Gets the agent for the specified index, or null if no agent has the given index.
+@@ -1779,7 +1855,10 @@ class Crowd {
+    * Destroys the crowd.
+    */
+   destroy() {
+-    Raw.Detour.freeCrowd(this.raw);
++    if (this.destroyed) return;
++    this.destroyed = true;
++    this.agents = {};
++    releaseCrowdResources(this.raw, this.navMeshQuery.raw, this.navMeshQuery.defaultFilter.raw);
+   }
+ }
+ 
+@@ -2483,8 +2562,12 @@ class RecastBuildContext {
    logs = [];
    startTimes = {};
    accumulatedTimes = {};
@@ -87,7 +224,7 @@ index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee903
      impl.log = (category, msg, len) => {
        if (!this.raw.logEnabled()) return;
        // type is string, but webidl binder passes us a pointer
-@@ -2515,10 +2562,32 @@ class RecastBuildContext {
+@@ -2515,10 +2598,32 @@ class RecastBuildContext {
        this.startTimes = {};
        this.accumulatedTimes = {};
      };
@@ -121,7 +258,7 @@ index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee903
    }
    log(category, msg) {
      this.logs.push({
-@@ -2550,6 +2619,24 @@ class RecastBuildContext {
+@@ -2550,6 +2655,24 @@ class RecastBuildContext {
        this.accumulatedTimes[i] = -1;
      }
    }
@@ -146,7 +283,7 @@ index 460c184cce8b96988ed4f90a3415fd3161ca2d6b..c65085c6a9c7bc2cc9300565d97ee903
  }
  class RecastChunkyTriMesh {
    constructor(raw) {
-@@ -2914,7 +3001,23 @@ const calcBounds = (verts, nv) => {
+@@ -2914,7 +3037,23 @@ const calcBounds = (verts, nv) => {
    return Raw.Recast.calcBounds(verts.raw, nv);
  };
  const calcGridSize = (bmin, bmax, cs) => {

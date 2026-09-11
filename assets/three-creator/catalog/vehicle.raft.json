@@ -1,0 +1,223 @@
+{
+  "id": "vehicle.raft",
+  "displayName": "橡皮艇 / INFLATABLE BOAT",
+  "path": "vehicles/raft.glb",
+  "uri": "./assets/subjects/24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd.glb",
+  "sha256": "24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd",
+  "byteLength": 59988,
+  "sourcePath": "assets/three-creator/presets/vehicles/raft.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Unpowered inflatable boat; paddle propulsion on water, gravity sliding on land and damped contact restitution. Single active driver; passenger anchors reserved.",
+    "W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-raft.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.raft"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "speed": 6.944444444444445,
+      "accel": 7.5,
+      "grip": 1.4,
+      "steer": 1.8,
+      "maxSpeed": 6.944444444444445,
+      "reverseSpeed": 2,
+      "slowSpeed": 2.5,
+      "groundSpeed": 5,
+      "coastDeceleration": 0.08,
+      "brakeDeceleration": 5,
+      "brakeDamping": 7,
+      "groundDeceleration": 7.5,
+      "directionChangeDeceleration": 15,
+      "steeringResponse": 3.5,
+      "steeringReturn": 4,
+      "verticalAcceleration": 6,
+      "linearDamping": 1.4,
+      "verticalDamping": 1.8,
+      "drag": 0.25,
+      "dragQuadratic": 0.045,
+      "pitchResponse": 6,
+      "rollResponse": 6,
+      "throttleResponse": 0.38,
+      "minimumSpeed": 0,
+      "launchSpeed": 22,
+      "jumpSpeed": 6.3,
+      "id": "raft",
+      "name": "橡皮艇",
+      "en": "INFLATABLE BOAT",
+      "mode": "paddled_boat",
+      "archetype": "raft",
+      "kernel": "K17",
+      "color": "#343b40",
+      "spawn": [
+        201,
+        -1.88,
+        -176
+      ],
+      "yaw": 1.5707963267948966,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "camera": 7,
+      "characterPose": "paddling",
+      "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
+      "bodyPhysics": {
+        "kind": "paddle",
+        "mass": 160,
+        "centerOfMassHeight": 0.22,
+        "restitution": 0.36,
+        "water": {
+          "displacement": 0.55,
+          "depth": 0.5,
+          "bottom": 0.32,
+          "damping": 6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.84,
+          0.34,
+          2.15
+        ],
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        -0.45
+      ]
+    },
+    {
+      "id": "seat.passenger.1",
+      "node": "seat.passenger.1",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        0.85
+      ]
+    },
+    {
+      "id": "seat.passenger.2",
+      "node": "seat.passenger.2",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        -1.25
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1.4,
+        0.05,
+        -0.45
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1.4,
+        0.05,
+        -0.45
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0,
+        1.08,
+        -0.3
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.123174,
+        0.389302,
+        0.52132
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.122625,
+        0.391087,
+        0.496006
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        0,
+        -0.56,
+        0
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.84,
+      0.34,
+      2.15
+    ],
+    "offset": [
+      0,
+      0,
+      0
+    ]
+  }
+}

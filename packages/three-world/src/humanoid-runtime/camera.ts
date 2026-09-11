@@ -4,7 +4,9 @@ import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-world/camera-collision';
 import { probeHumanoidCamera } from './camera-queries';
-import { Simulation, angleDelta, clamp, damp } from './simulation';
+import { angleDelta, clamp, damp } from './simulation';
+import type {HumanoidActor} from './humanoid/actor';
+export type CameraSubject=Pick<HumanoidActor,'controller'|'player'|'vehicle'|'time'|'teleportRevision'|'vehicleIndex'>;
 import type { MotionPose } from './presentation';
 import { DEFAULT_CAMERA_TUNING, HUMANOID_CAMERA_DEFAULTS, CHARACTER_CAMERA_DISTANCE_METERS, parseCameraTuning, type CameraTuning } from '../config/camera';
 import type { EnvironmentQueries } from './environment/queries';
@@ -26,7 +28,7 @@ export class FollowCamera {
   private previousPresentation:CameraPresentationPose|undefined;
   private currentPresentation:CameraPresentationPose|undefined;
   private presentationCreature=false;
-  private presentationHumanoid:Simulation['humanoid']|undefined;
+  private presentationHumanoid:CameraSubject['controller']|undefined;
   /** Rendering keeps the displayed camera; fixed damping starts from this saved pose. */
   beforeFixedUpdate():void {
     this.displayedHead=undefined;
@@ -42,14 +44,14 @@ export class FollowCamera {
     }
     this.previousPresentation=pose;
   }
-  capturePresentationPose(sim:Simulation,snap=false):void {
+  capturePresentationPose(sim:CameraSubject,snap=false):void {
     this.presentationCreature=!!sim.vehicle?.motion.flyingCreature;
-    this.presentationHumanoid=sim.vehicle?undefined:sim.humanoid;
+    this.presentationHumanoid=sim.vehicle?undefined:sim.controller;
     const head=new T.Vector3();let headSource:CameraPresentationPose['headSource']='posture-eye';
     if(sim.vehicle){
       if(this.eyePosition?.(head))headSource='driver-eye';
       else {headSource='seat-eye-fallback';head.set(...sim.vehicle.spec.seat).add(new T.Vector3(0,sim.vehicle.spec.characterPose==='stand'?1.55:.72,.08)).applyQuaternion(sim.vehicle.rotation).add(sim.vehicle.position);}
-    }else head.copy(sim.player.position).add(new T.Vector3(0,sim.humanoid?(sim.humanoid.swimming?1.35:Math.max(.25,sim.humanoid.capsuleHeight-.12)):1.5,0));
+    }else head.copy(sim.player.position).add(new T.Vector3(0,sim.controller?(sim.controller.swimming?1.35:Math.max(.25,sim.controller.capsuleHeight-.12)):1.5,0));
     this.displayedHead=undefined;
     this.currentPresentation={
       position:this.camera.position.clone(), rotation:this.camera.quaternion.clone(),
@@ -101,8 +103,8 @@ export class FollowCamera {
   private humanoidTuning:CameraTuning={...HUMANOID_CAMERA_DEFAULTS};
   private vehicleTuning:CameraTuning={...DEFAULT_CAMERA_TUNING};
   private activeSubject:'character'|'vehicle'='character';
-  private selectTuning(sim:Simulation):CameraTuning{return sim.vehicle?this.vehicleTuning:this.humanoidTuning;}
-  getEffectiveTuning(sim:Simulation):CameraTuning{return {...this.selectTuning(sim)};}
+  private selectTuning(sim:CameraSubject):CameraTuning{return sim.vehicle?this.vehicleTuning:this.humanoidTuning;}
+  getEffectiveTuning(sim:CameraSubject):CameraTuning{return {...this.selectTuning(sim)};}
   /** Explicit overrides apply independently; distance never selects unrelated defaults. */
   configureTuning(overrides:Partial<CameraTuning>):void {
     const tuning=parseCameraTuning({...DEFAULT_CAMERA_TUNING,...overrides});
@@ -120,7 +122,7 @@ export class FollowCamera {
   eyePosition:((target:T.Vector3)=>boolean)|undefined;
   private shoulderDistance=2;
   private readonly originalNear:number;
-  private collisionHumanoid:Simulation['humanoid']|undefined;
+  private collisionHumanoid:CameraSubject['controller']|undefined;
   private readonly vehicleQueries:VehicleCameraQueries;
   private cameraFilter:((collider:RAPIER.Collider)=>boolean)|undefined;
   private mountedId:string|undefined;
@@ -144,43 +146,32 @@ export class FollowCamera {
   get desiredPosition():T.Vector3{return this.desired.clone();}
   dispose():void{this.vehicleQueries.dispose();}
   /** Canonical angular input. Pixel adapters keep their own sensitivity. */
-  orbitRadians(yawDelta:number,pitchDelta:number,time:number,sim?:Simulation){
+  orbitRadians(yawDelta:number,pitchDelta:number,time:number,sim?:CameraSubject){
     if(this.mode===1||this.mode===2){
       if(sim?.vehicle)this.seatLookYaw=clamp(this.seatLookYaw+yawDelta,-Math.PI*5/6,Math.PI*5/6);
       else this.yaw+=yawDelta;
       this.pitch=clamp(this.pitch+pitchDelta,this.mode===2?-.65:-1.35,this.mode===2?1.05:1.4);
     }else{
-      const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
+      const character=sim?!!sim.controller&&!sim.vehicle:this.sourceCharacter;
       this.yaw+=yawDelta;this.pitch=clamp(this.pitch+pitchDelta,character ? .12 : -.6,character ? 1.1 : 1.25);
     }
     this.lastOrbit=time;
   }
   /** Changes the nominal arm in meters; collision, speed pullback and smoothing remain separate. */
-  zoomByMeters(delta:number,sim:Simulation){
+  zoomByMeters(delta:number,sim:CameraSubject){
     if(this.mode===1)return;
     if(this.mode===2){this.shoulderDistance=clamp(this.shoulderDistance+delta,1.3,3.2);return;}
-    if(sim.humanoid&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+delta,3.2,12)/base;}
+    if(sim.controller&&!sim.vehicle){const base=this.characterDistance();this.zoom=clamp(base*this.zoom+delta,3.2,12)/base;}
     else{
       const base=this.baseDistance??sim.vehicle?.spec.camera??5.5;
       // A configured zero arm stays collapsed; never divide by zero.
       if(base>0)this.zoom=clamp(this.zoom+delta/base,.45,2.5);
     }
   }
-  /** Legacy pointer pixels, retained for direct integrations. */
-  orbit(dx:number,dy:number,time:number,sim?:Simulation){
-    const character=sim?!!sim.humanoid&&!sim.vehicle:this.sourceCharacter;
-    this.orbitRadians(-dx*.004,dy*((this.mode===1||this.mode===2||character) ? .004 : .003),time,sim);
-  }
-  scroll(deltaY:number,sim:Simulation){
-    if(this.mode===1)return;
-    if(this.mode===2){this.zoomByMeters(deltaY*.003,sim);return;}
-    if(sim.humanoid&&!sim.vehicle)this.zoomByMeters(deltaY*.007,sim);
-    else this.zoom=clamp(this.zoom+deltaY*.0007,.45,2.5);
-  }
-  reset(sim: Simulation) {
+  reset(sim: CameraSubject) {
     this.activeSubject = sim.vehicle ? 'vehicle' : 'character';
     this.tuning = this.selectTuning(sim);
-    this.sourceCharacter = !!sim.humanoid && !sim.vehicle;
+    this.sourceCharacter = !!sim.controller && !sim.vehicle;
     this.yaw = sim.vehicle?.yaw ?? sim.player.yaw;
 
     this.pitch =
@@ -204,19 +195,19 @@ export class FollowCamera {
     this.collision.reset();
     this.collisionTick = 0;
   }
-  update(sim:Simulation,dt:number,pose?:MotionPose){
+  update(sim:CameraSubject,dt:number,pose?:MotionPose){
     this.activeSubject=sim.vehicle?'vehicle':'character';this.tuning=this.selectTuning(sim);
-    this.collisionHumanoid=sim.vehicle?undefined:sim.humanoid;
+    this.collisionHumanoid=sim.vehicle?undefined:sim.controller;
     this.mountedId=sim.vehicle?.spec.id;this.syncVehicleQueries();
     const v=sim.vehicle,body=pose??v??sim.player,speed=body.velocity.length(),position=body.position,yaw=pose?.yaw??v?.yaw??sim.player.yaw,rotation=pose?.rotation??v?.rotation;
     if(this.revision!==sim.teleportRevision){this.revision=sim.teleportRevision;this.reset(sim);}
     if(this.previousMode!==this.mode){this.previousMode=this.mode;this.reset(sim);}
-    const subjectChanged=this.lastActive!==sim.active;
-    if(subjectChanged){this.lastActive=sim.active;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=this.mode===1?((v?.spec.archetype==='atv'||v?.spec.archetype==='jetski')?.34:0):this.mode===2?.12:!v&&sim.humanoid?.35:.3;this.seatLookYaw=0;this.initialized=false;}
+    const subjectChanged=this.lastActive!==sim.vehicleIndex;
+    if(subjectChanged){this.lastActive=sim.vehicleIndex;this.lastOrbit=sim.time;this.yaw=yaw;this.pitch=this.mode===1?((v?.spec.archetype==='atv'||v?.spec.archetype==='jetski')?.34:0):this.mode===2?.12:!v&&sim.controller?.35:.3;this.seatLookYaw=0;this.initialized=false;}
     if(!this.initialized||subjectChanged)this.collision.reset();
     if(this.mode===1){this.updateFirstPerson(sim,pose);return;}
     if(this.mode===2){this.updateShoulder(sim,dt,pose);return;}
-    if(!v&&sim.humanoid){
+    if(!v&&sim.controller){
       if(!this.sourceCharacter||subjectChanged){this.zoom=1;this.initialized=false;}
       this.sourceCharacter=true;this.updateHumanoid(sim,dt,pose);return;
     }
@@ -263,8 +254,8 @@ export class FollowCamera {
     // unchanged 8.8 m asset baseline; non-default user tuning takes precedence.
     return configured===CHARACTER_CAMERA_DISTANCE_METERS?this.environment.map.characterCameraDistanceMeters??configured:configured;
   }
-  private updateShoulder(sim:Simulation,dt:number,pose?:MotionPose):void {
-    const v=sim.vehicle,h=sim.humanoid,position=pose?.position??v?.position??sim.player.position;
+  private updateShoulder(sim:CameraSubject,dt:number,pose?:MotionPose):void {
+    const v=sim.vehicle,h=sim.controller,position=pose?.position??v?.position??sim.player.position;
     const speed=(pose?.velocity??v?.velocity??sim.player.velocity).length();
     const pace=clamp(speed/(v?Math.max(8,v.spec.speed):5.8),0,1);
     const rotation=pose?.rotation??v?.rotation;
@@ -305,7 +296,7 @@ export class FollowCamera {
     const fov=damp(this.camera.fov,this.tuning.baseFovDegrees+pace*4,5,dt);
     this.camera.fov=fov;this.camera.near=.05;this.camera.updateProjectionMatrix();
   }
-  private updateFirstPerson(sim:Simulation,pose?:MotionPose):void {
+  private updateFirstPerson(sim:CameraSubject,pose?:MotionPose):void {
     const v=sim.vehicle,rotation=pose?.rotation??v?.rotation;
     if(v&&rotation){
       // 眼位来自驾驶员，缺少人物骨架时才使用明确的座位姿态回退。
@@ -316,7 +307,7 @@ export class FollowCamera {
       this.up.set(0,1,0).applyQuaternion(rotation);
       applyVehicleCameraRoll(this.up,this.direction);
     }else{
-      const h=sim.humanoid;
+      const h=sim.controller;
       // 稳定眼位随真实胶囊蹲伏/匍匐变化，不继承翻滚动画的旋转或头部摆动。
       const eyeHeight=h?(h.swimming?1.35:Math.max(.18,h.capsuleHeight-.12)):1.55;
       this.desired.copy(pose?.position??sim.player.position).add(this.offset.set(0,eyeHeight,0));
@@ -353,7 +344,7 @@ export class FollowCamera {
     }
     return false;
   }
-  private humanoidCollisionRequest(humanoid:NonNullable<Simulation['humanoid']>,position:T.Vector3,origin:T.Vector3,target:T.Vector3,eye:T.Vector3,sweepFrom?:T.Vector3,current=this.camera.position):CameraCollisionRequest {
+  private humanoidCollisionRequest(humanoid:NonNullable<CameraSubject['controller']>,position:T.Vector3,origin:T.Vector3,target:T.Vector3,eye:T.Vector3,sweepFrom?:T.Vector3,current=this.camera.position):CameraCollisionRequest {
     return {target:target.toArray(),eye:eye.toArray(),current:current.toArray(),
       radius:this.humanoidTuning.collisionRadiusMeters,
       pivotOrigin:origin.toArray(),preserveArmDirection:true,armClearance:.04,
@@ -361,8 +352,8 @@ export class FollowCamera {
       ...(sweepFrom?{sweepFrom:sweepFrom.toArray()}:{}),
     };
   }
-  private updateHumanoid(sim:Simulation,dt:number,pose?:MotionPose){
-    const humanoid=sim.humanoid!;
+  private updateHumanoid(sim:CameraSubject,dt:number,pose?:MotionPose){
+    const humanoid=sim.controller!;
     // The source camera follows its posture at 7/s. Feed it the same interpolated
     // position and capsule height as the renderer, never a second fixed-tick pose.
     const height=pose?.cameraHeight??(pose?1.68*.655:humanoid.swimming?1.4:humanoid.capsuleHeight*.655);

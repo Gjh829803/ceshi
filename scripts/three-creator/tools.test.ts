@@ -358,6 +358,8 @@ describe('v2 command and discovery boundary', () => {
       expect(openingExample.files['opening-camera.ts']).toContain('world.getKeyBindings()');
       expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
       expect(initial.cameraAuthoring.verify.selectView).toEqual({tool:'world_execute_command',arguments:{command:{type:'humanoid.set-camera-mode',mode:2}}});
+      expect(initial.cameraAuthoring.followTarget).toContain('only targetEntityId');
+      expect(initial.cameraAuthoring.followTarget).toContain('WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED');
       expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
       for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
       expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.humanoid.configuration.effective.camera.framing'});

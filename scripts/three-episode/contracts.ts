@@ -24,6 +24,7 @@ export interface EpisodeActionGoal {
   id: string;
   trigger: { waypointIndex: number; radiusMeters: number };
   targetId?: string;
+  slotId?: string;
   intent: EpisodeActionIntent;
   /** The intent's actual state (and terminal operation for skills) must match first. */
   completion: { kind: 'settled'; holdSeconds: number } | { kind: 'displacement'; minimumMeters: number };
@@ -34,8 +35,6 @@ export interface EpisodeSegmentPlan {
   start: EpisodeStart;
   waypoints: EpisodeWaypoint[];
   endBehavior: 'stop' | 'reverse' | 'loop';
-  /** Legacy annotation only; does not steer or measure visibility. */
-  coverageTargetIds?: string[];
   purpose: string;
   actionGoals?: EpisodeActionGoal[];
 }
@@ -53,8 +52,8 @@ export interface EpisodeSourceManifest {
   worldId: string; sourceHash: string; worldBuildHash: string; runtimeHash: string;
   sourceWorldBuildHash: string; sourceRuntimeHash: string; sourceDeliveryManifestSha256: string;
   runtimeSourceHash?: string | null;
-  /** Pinned Creator policy; absent only for historical policy-less deliveries. */
-  assetPolicySha256?: string;
+  /** Hash of the Creator asset policy snapshot carried by every source bundle. */
+  assetPolicySha256: string;
   sourceRoot: string; playableRoot: string; sourceFiles: Record<string, string>;
   playableFiles: Record<string, string>; opening: EpisodeFile;
   targets: EpisodeVisualTarget[]; referenceImage?: EpisodeFile; worldPlan?: EpisodeFile;
@@ -66,6 +65,7 @@ export const ACTION_GOAL_SCHEMA = object({
   id: { type: 'string', minLength: 1, maxLength: 80 },
   trigger: object({ waypointIndex: { type: 'integer', minimum: 0, maximum: 255 }, radiusMeters: { type: 'number', minimum: 0.2, maximum: 2 } }),
   targetId: { type: 'string', minLength: 1, maxLength: 256 },
+  slotId: { type: 'string', minLength: 1, maxLength: 256 },
   intent: { oneOf: [
     object({ kind: { const: 'skill' }, action: { enum: ['roll', 'slide', 'pickup', 'putDown', 'sit', 'standUp'] } }),
     object({ kind: { const: 'posture' }, stance: { enum: ['stand', 'crouch', 'prone'] } }),
@@ -89,7 +89,6 @@ export const SEGMENT_SCHEMA = object({
   start: EPISODE_START_SCHEMA,
   waypoints: { type: 'array', minItems: 1, maxItems: 256, items: object({ positionWorldMetersXYZ: vec3, gait: { enum: ['walk', 'run'] } }) },
   endBehavior: { enum: ['stop', 'reverse', 'loop'] },
-  coverageTargetIds: { description: 'Optional annotation only; does not steer the camera or validate target visibility.', type: 'array', maxItems: 128, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 256 } },
   purpose: { type: 'string', minLength: 1, maxLength: 2000 },
   actionGoals: { type: 'array', minItems: 1, maxItems: 32, items: ACTION_GOAL_SCHEMA },
 }, ['id', 'start', 'waypoints', 'endBehavior', 'purpose']);
@@ -113,6 +112,7 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
     const goals = segment.actionGoals ?? [];
     if (new Set(goals.map(g => g.id)).size !== goals.length) throw new Error('EPISODE_ACTION_GOAL_ID_DUPLICATED');
     goals.forEach((goal, index) => {
+      if (goal.slotId && (!goal.targetId || goal.intent.kind !== 'skill' || !['pickup', 'sit', 'putDown', 'standUp'].includes(goal.intent.action))) throw new Error('EPISODE_ACTION_SLOT_INVALID');
       if (goal.trigger.waypointIndex >= segment.waypoints.length || (index && goal.trigger.waypointIndex < goals[index - 1]!.trigger.waypointIndex)) throw new Error('EPISODE_ACTION_GOAL_ORDER_INVALID');
       if (goal.intent.kind === 'skill' && ['pickup', 'sit'].includes(goal.intent.action) && !goal.targetId) throw new Error('EPISODE_ACTION_TARGET_REQUIRED');
       if (goal.intent.kind === 'mount' && goal.intent.action === 'enter' && !goal.targetId) throw new Error('EPISODE_ACTION_TARGET_REQUIRED');

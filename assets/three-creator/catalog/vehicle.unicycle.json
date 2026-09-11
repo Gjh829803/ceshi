@@ -1,0 +1,149 @@
+{
+  "id": "vehicle.unicycle",
+  "displayName": "独轮车 / UNICYCLE",
+  "path": "vehicles/unicycle.glb",
+  "uri": "./assets/subjects/9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0.glb",
+  "sha256": "9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0",
+  "byteLength": 112688,
+  "sourcePath": "assets/three-creator/presets/vehicles/unicycle.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Direct-drive single wheel with original humanoid balance and terrain-checked left-foot support.",
+    "Assisted balance, not a free-falling single-wheel rigid-body simulation. No aerial tricks."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-unicycle.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.unicycle"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "unicycle",
+      "name": "独轮车",
+      "en": "UNICYCLE",
+      "mode": "unicycle",
+      "archetype": "unicycle",
+      "kernel": "K02",
+      "color": "#d9bd36",
+      "spawn": [
+        -170,
+        0,
+        64
+      ],
+      "yaw": 0,
+      "speed": 4.2,
+      "maxSpeed": 5.5,
+      "reverseSpeed": 1.8,
+      "accel": 2.2,
+      "grip": 12,
+      "steer": 1.3,
+      "coastDeceleration": 2.8,
+      "brakeDeceleration": 4.5,
+      "steeringResponse": 5,
+      "steeringReturn": 7,
+      "throttleResponse": 5,
+      "pitchResponse": 8,
+      "rollResponse": 7,
+      "radius": 0.55,
+      "seat": [
+        0,
+        0.94,
+        0
+      ],
+      "characterPose": "unicycle",
+      "camera": 4.6,
+      "bodyPhysics": {
+        "kind": "unicycle",
+        "mass": 90,
+        "centerOfMassHeight": 0.6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.34,
+          0.49,
+          0.39
+        ],
+        "offset": [
+          0,
+          0.49,
+          0
+        ]
+      },
+      "hint": "W 前进 · S 制动后倒骑 · A / D 平衡转向 · 松开自动减速、单脚撑地 · 再按 W 收脚踩踏 · Space 制动 · F 上下车"
+    }
+  },
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.94,
+        0
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0,
+        1.6,
+        0.05
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.34,
+      0.49,
+      0.39
+    ],
+    "offset": [
+      0,
+      0.49,
+      0
+    ]
+  }
+}

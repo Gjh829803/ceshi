@@ -92,7 +92,6 @@ export default defineConfig({
   build: {
     rollupOptions: { input: {
       main: path.join(import.meta.dirname, "index.html"),
-      dragonTraining: path.join(import.meta.dirname, "dragon-training.html"),
     } },
     target: "es2022",
     outDir: "../../.codex-tmp/react-playground-dist",

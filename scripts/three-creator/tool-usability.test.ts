@@ -505,7 +505,6 @@ it('retains the real addEntity role failure before start without inventing a sta
 
 it.each([
   {code:'ENVIRONMENT_INVALID',entityId:'yard',action:`map.regions=[{id:'yard',name:'Yard',description:'Driving area',center:[0,24],size:[40,40],color:'#eee',modes:['character']}]; await createHumanoidWorld({scene,camera,canvas,map});`,diagnosticPath:'regions[0].center',actual:[0,24]},
-  {code:'HUMANOID_CONTENT_REGISTER_IN_OPTIONS',entityId:'ramp-marker',action:`const world=await createHumanoidWorld({scene,camera,canvas,map});world.addEntity({id:'ramp-marker',object:new THREE.Group(),role:'terrain'});`,diagnosticPath:'world.addEntity',actual:'physical entity registration after Humanoid creation'},
   {code:'DECORATION_CANNOT_HAVE_PHYSICS',entityId:'ramp-marker',action:`const world=await createWorld({scene,camera,canvas,navigation:false});world.addEntity({id:'ramp-marker',object:new THREE.Group(),role:'decoration',physics:{kind:'none'}});`,diagnosticPath:'physics',actual:'present'},
 ])('returns actionable $code from real browser initialization through the tool contract',async({code,entityId,action,diagnosticPath,actual})=>{
   const tools=await service(['humanoid.source-101']);

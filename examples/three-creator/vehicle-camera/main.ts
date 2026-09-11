@@ -76,7 +76,7 @@ world.onDispose(() => {
 world.onDispose(applyWhiteboxMaterials(rover));
 world.humanoid!.onVisualUpdate((dt,sample)=>{
   const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;
-  humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision});
+  humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:sample.epoch});
 });
 world.setCaptureTargets(['person', 'rover']);
 

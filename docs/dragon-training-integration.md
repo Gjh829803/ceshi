@@ -1,6 +1,6 @@
 # 原生飞龙训练场
 
-顶部“飞龙 · 空中训练场”现在调用当前 Three Session 的地图切换。直接入口为 `/?map=flying-creature-training`；旧 `/dragon-training.html` 书签转到该入口。没有 iframe，也不再启动 Babylon/Havok。
+顶部“飞龙 · 空中训练场”调用当前 Three Session 的地图切换。直接入口为 `/#/scenes/flying-creature-training`。训练场与人物和载具共用当前 SDK 会话。
 
 ## 运行与构建
 

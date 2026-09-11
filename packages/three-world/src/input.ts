@@ -24,7 +24,7 @@ export class WorldKeyboard {
   getKeyBindings():KeyBindings{return createKeyBindings({},this.bindings);}
   setKeyBindings(overrides:Partial<KeyBindings>):void{const next=createKeyBindings(overrides,this.bindings);this.clear();this.bindings=next;}
   private bound(action:ControlAction,code:string):boolean{return this.bindings[action].includes(code);}
-  setHumanoidMode(mounted:()=>boolean):void{this.humanoidMounted=mounted;}
+  setHumanoidMode(mounted:(()=>boolean)|undefined):void{this.humanoidMounted=mounted;}
   private admittedKey(code:string):boolean{return Object.values(this.bindings).some(codes=>codes.includes(code));}
   readonly held = new Set<string>();
   private jumpQueued = false;

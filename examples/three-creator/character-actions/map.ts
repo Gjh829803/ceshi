@@ -21,8 +21,8 @@ export const map:EnvironmentDefinition={
   bounds:{min:[-25,-5,-20],max:[40,30,20]},
   boxes,
   interactions:[
-    {id:'parcel',label:'小包裹',kind:'pickup',position:[-5.051,.914,-6.363],approach:[-5,.02,-6],yaw:Math.PI,size:[.13,.13,.13],massKg:.3},
-    {id:'chair',label:'椅子',kind:'seat',position:[1,.46,-5.51],approach:[1,.02,-6],yaw:Math.PI,colliderIds:chairColliders},
+    {id:'parcel',label:'小包裹',kind:'pickup',slotId:'pickup',position:[-5.051,.914,-6.363],approach:[-5,.02,-6],yaw:Math.PI,size:[.13,.13,.13],massKg:.3},
+    {id:'chair',label:'椅子',kind:'seat',slotId:'seat',position:[1,.46,-5.51],approach:[1,.02,-6],yaw:Math.PI,colliderIds:chairColliders},
   ],
   climbSurfaces:[{id:'climb-wall',colliderId:'wall',kind:'wall',center:[-16,0,-6.1],normal:[0,0,1],width:5,minY:0,maxY:3}],
   water:[{id:'pool',min:[5,-2,-20],max:[16,0,20],surface:0}],

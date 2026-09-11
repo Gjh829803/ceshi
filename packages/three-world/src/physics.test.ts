@@ -2,11 +2,28 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { ThreePhysics } from './physics.js';
+import {physicsHost} from './physics-host';
 import { extractWorldTriangles, geometrySignature, setEntityBoundary } from './geometry.js';
 import type { CharacterDrive, PhysicsOptions } from './engine-contracts.js';
 
 const retained: ThreePhysics[] = [];
 const dt = 1 / 60;
+
+it('retains explicit dynamic rotation locks across rebuild, interaction suspension and release',async()=>{
+ const physics=await create({gravityMetersPerSecondSquared:[0,0,0]}),object=box(0,2,0,.2,.2,.2);
+ physics.addRigid('locked',object,{kind:'dynamic',shape:'box',massKilograms:1,lockRotations:true});
+ const native=physics as unknown as {entries:Map<string,{body:RAPIER.RigidBody}>};
+ const spin=()=>{native.entries.get('locked')!.body.applyTorqueImpulse({x:1,y:1,z:1},true);ticks(physics,20);};
+ spin();expect(object.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-5);
+ object.scale.setScalar(2);physics.refresh('locked');ticks(physics,1);spin();
+ expect(object.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-5);
+ const control=physicsHost(physics).interactionBody('locked'),owner={};expect(control.hold(owner)).toBe(true);
+ expect(control.release(owner,{reason:'place',position:new THREE.Vector3(0,2,0)})).toBe(true);
+ spin();expect(object.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-5);
+ physics.addRigid('free',box(2,2,0,.2,.2,.2),{kind:'dynamic',shape:'box',massKilograms:1});
+ native.entries.get('free')!.body.applyTorqueImpulse({x:1,y:1,z:1},true);ticks(physics,20);
+ expect(new THREE.Quaternion().copy(native.entries.get('free')!.body.rotation()).angleTo(new THREE.Quaternion())).toBeGreaterThan(.1);
+});
 async function create(options?: PhysicsOptions) { const physics = await ThreePhysics.create(options); retained.push(physics); return physics; }
 function box(x: number, y: number, z: number, width: number, height: number, depth: number) { const object = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth)); object.position.set(x, y, z); return object; }
 function floor(width = 120, depth = 100) { return new THREE.Mesh(new THREE.PlaneGeometry(width, depth).rotateX(-Math.PI / 2)); }
@@ -660,4 +677,50 @@ describe('First movement tick after geometry publication', () => {
     expect(physics.state('player')!.positionMetersXYZ[1]).toBeGreaterThanOrEqual(bridgeY - .001); expect(physics.state('player')!.isGrounded).toBe(true);
     ticks(physics, 30); expect(physics.state('player')!.positionMetersXYZ[1]).toBeGreaterThanOrEqual(bridgeY - .001); expect(physics.state('player')!.isGrounded).toBe(true);
   });
+});
+
+
+describe('interaction physical ownership',()=>{
+ it('holds the original rigid body across ticks and releases it through its own physics owner',async()=>{
+  const physics=await create(),object=box(0,2,0,.2,.2,.2);physics.addRigid('parcel',object,{kind:'dynamic',shape:'box',massKilograms:2,frictionRatio:.23});
+  const before=physics.audit(),binding=physicsHost(physics).interactionBody('parcel'),owner={};
+  expect(binding.hold(owner)).toBe(true);expect(binding.hold({})).toBe(false);
+  expect(binding.moveHeld(owner,new THREE.Vector3(2,3,1))).toBe(true);physics.setEnabled('parcel',false);physics.setEnabled('parcel',true);ticks(physics,120);
+  expect(physics.probe([2,5,1],[0,-1,0],5)).toBeNull();
+  expect(physics.audit()).toEqual(before);expect(physics.state('parcel')!.positionMetersXYZ).toEqual([2,3,1]);expect(object.position.toArray()).toEqual([2,3,1]);
+  expect(binding.read()).toMatchObject({collisionEnabled:false,entityEnabled:true,massKg:2});expect(binding.release({}, {reason:'place',position:new THREE.Vector3(2,3,1)})).toBe(false);
+  expect(binding.release(owner,{reason:'water',position:new THREE.Vector3(2,3,1),velocity:new THREE.Vector3()})).toBe(true);expect(physics.probe([2,5,1],[0,-1,0],5)?.entityId).toBe('parcel');ticks(physics,30);
+  expect(physics.state('parcel')!.positionMetersXYZ[1]).toBeLessThan(2);expect(binding.read().massKg).toBeCloseTo(2);expect(binding.isHeld).toBe(false);
+ });
+ it('does not let an old physical capability acquire a later entity with the same id',async()=>{
+  const physics=await create();physics.addRigid('parcel',box(0,2,0,.2,.2,.2),{kind:'dynamic',shape:'box'});
+  const binding=physicsHost(physics).interactionBody('parcel'),owner={};expect(binding.hold(owner)).toBe(true);physics.remove('parcel');
+  physics.addRigid('parcel',box(4,3,0,.2,.2,.2),{kind:'dynamic',shape:'box'});
+  expect(binding.isValid).toBe(false);expect(binding.hold(owner)).toBe(false);expect(binding.moveHeld(owner,new THREE.Vector3())).toBe(false);expect(binding.release(owner,{reason:'drop',position:new THREE.Vector3()})).toBe(false);
+  expect(physics.state('parcel')!.positionMetersXYZ).toEqual([4,3,0]);
+ });
+ it('refreshes actual dimensions without replacing entity identity and rejects held body rebuilds',async()=>{
+  const physics=await create(),object=box(0,2,0,.2,.2,.2);physics.addRigid('parcel',object,{kind:'dynamic',shape:'box'});
+  const binding=physicsHost(physics).interactionBody('parcel'),owner={};object.scale.setScalar(2);physics.refresh('parcel');
+  expect(binding.isValid).toBe(true);expect(binding.read().sizeMetersXYZ[0]).toBeCloseTo(.4);
+  expect(binding.hold(owner)).toBe(true);expect(()=>physics.teleport('parcel',[9,9,9])).toThrow('PHYSICS_ENTITY_HELD');expect(()=>physics.applyImpulse('parcel',[1,0,0])).toThrow('PHYSICS_ENTITY_HELD');object.scale.setScalar(3);expect(()=>physics.refresh('parcel')).toThrow('PHYSICS_ENTITY_HELD');object.scale.setScalar(2);
+  expect(binding.isHeld).toBe(true);expect(binding.read().sizeMetersXYZ[0]).toBeCloseTo(.4);
+ });
+});
+
+
+it('does not overwrite a held pose produced after ordinary physics preparation',async()=>{
+ await RAPIER.init();const world=new RAPIER.World({x:0,y:-9.81,z:0}),physics=ThreePhysics.borrow({world});
+ try{
+  physics.addRigid('parcel',box(0,2,0,.2,.2,.2),{kind:'dynamic',shape:'box'});const host=physicsHost(physics),binding=host.interactionBody('parcel'),owner={};
+  expect(binding.hold(owner)).toBe(true);host.prepareStep(dt,{});expect(binding.moveHeld(owner,new THREE.Vector3(2,3,1))).toBe(true);
+  host.prepareSubstep(1);world.timestep=dt;world.step();host.finishStep();expect(physics.state('parcel')!.positionMetersXYZ).toEqual([2,3,1]);
+ }finally{physics.dispose();world.free();}
+});
+
+it('retains a non-executable capability while an existing rigid group temporarily has no collision geometry',async()=>{
+ const physics=await create(),root=new THREE.Group(),mesh=box(0,0,0,.2,.2,.2);root.position.y=2;root.add(mesh);physics.addRigid('prop',root,{kind:'dynamic',shape:'box'});
+ const body=physicsHost(physics).interactionBody('prop');root.remove(mesh);physics.step(dt,{});
+ expect(body.isValid).toBe(true);expect(body.read()).toMatchObject({entityEnabled:false,collisionEnabled:false});expect(body.hold({})).toBe(false);
+ root.add(mesh);physics.step(dt,{});expect(body.isValid).toBe(true);expect(body.read()).toMatchObject({entityEnabled:true,collisionEnabled:true});
 });

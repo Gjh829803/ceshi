@@ -69,6 +69,10 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
   try {
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
+    const nativeBuild = JSON.parse(readFileSync(path.join(repositoryRoot, 'vendor/rapier-query-refresh/build.json'), 'utf8'));
+    const nativeArchive = readFileSync(path.join(sourceRoot, 'vendor/rapier-query-refresh', nativeBuild.archive));
+    assert.equal(sha256(nativeArchive), `sha256:${nativeBuild.sha256}`, 'Cloud install must include the current SDK native archive');
+    assert.equal(JSON.parse(readFileSync(path.join(sourceRoot, 'packages/three-world/package.json'), 'utf8')).dependencies['@dimforge/rapier3d-compat'], `file:../../vendor/rapier-query-refresh/${nativeBuild.archive}`);
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
       for (const example of ['vehicle-sandbox','character-actions','horse-riding','custom-vehicle','vehicle-camera','nonhuman-subject']) {
         const relative = `examples/three-creator/${example}/${name}`;

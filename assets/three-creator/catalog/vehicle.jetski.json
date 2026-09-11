@@ -1,0 +1,249 @@
+{
+  "id": "vehicle.jetski",
+  "displayName": "水上摩托 / JET SKI",
+  "path": "vehicles/jetski.glb",
+  "uri": "./assets/subjects/d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707.glb",
+  "sha256": "d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707",
+  "byteLength": 30336,
+  "sourcePath": "assets/three-creator/presets/vehicles/jetski.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Jet propelled personal watercraft with buoyancy, independent handlebars and world-space water spray.",
+    "Single original straddle rider; no fuel, damage or ocean wave simulation."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-jetski.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.jetski"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "jetski",
+      "name": "水上摩托",
+      "en": "JET SKI",
+      "mode": "boat",
+      "archetype": "jetski",
+      "kernel": "K06",
+      "color": "#bad43e",
+      "spawn": [
+        220,
+        -1.98,
+        -145
+      ],
+      "yaw": 0,
+      "speed": 23,
+      "maxSpeed": 29,
+      "reverseSpeed": 5,
+      "accel": 6.5,
+      "grip": 4,
+      "steer": 1.15,
+      "coastDeceleration": 0.65,
+      "brakeDeceleration": 8,
+      "steeringResponse": 7,
+      "steeringReturn": 9,
+      "throttleResponse": 5,
+      "pitchResponse": 6,
+      "rollResponse": 6,
+      "radius": 1.8,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "characterPose": "atv",
+      "camera": 6.2,
+      "bodyPhysics": {
+        "kind": "jet",
+        "mass": 330,
+        "centerOfMassHeight": 0.3,
+        "driveRadius": 0.35,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              195
+            ],
+            [
+              1800,
+              270
+            ],
+            [
+              3200,
+              300
+            ],
+            [
+              4500,
+              285
+            ],
+            [
+              6200,
+              195
+            ]
+          ],
+          "forwardRatios": [
+            1.5
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 2,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 45,
+          "dragArea": 0.6,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        },
+        "water": {
+          "displacement": 0.7,
+          "depth": 0.6,
+          "bottom": 0.3,
+          "damping": 6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.72,
+          0.84,
+          1.65
+        ],
+        "offset": [
+          0,
+          0.54,
+          0
+        ]
+      },
+      "hint": "W 推进 · S 制动后倒船 · A / D 喷口转向 · Shift 加速 · Space 水阻制动 · F 上下车 · T 视角"
+    }
+  },
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        1,
+        -0.15
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.420507,
+        0.309005,
+        0.012058
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.420509,
+        0.309004,
+        0.012058
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1.4,
+        0.05,
+        -0.15
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1.4,
+        0.05,
+        -0.15
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0.000542,
+        1.633,
+        0.080046
+      ]
+    },
+    {
+      "id": "water.intake",
+      "node": "water.intake",
+      "positionMetersXYZ": [
+        0,
+        -0.25,
+        -0.85
+      ]
+    },
+    {
+      "id": "water.jet",
+      "node": "water.jet",
+      "positionMetersXYZ": [
+        0,
+        -0.02,
+        -1.5
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0.29,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        -0.29,
+        0,
+        0
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.72,
+      0.84,
+      1.65
+    ],
+    "offset": [
+      0,
+      0.54,
+      0
+    ]
+  }
+}

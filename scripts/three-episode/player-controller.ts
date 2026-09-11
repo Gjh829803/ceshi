@@ -197,5 +197,3 @@ export function playerBehaviorFeedback(frames: readonly {snapshot:WorldSnapshot;
   }
   return {evidence,diagnostics};
 }
-/** @deprecated Use playerBehaviorFeedback; enrichment does not reject valid recordings. */
-export function assertPlayerBehavior(frames: readonly {snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[],capabilities:EpisodeCapabilities,hasActionGoals=false){playerBehaviorFeedback(frames,capabilities,hasActionGoals);}

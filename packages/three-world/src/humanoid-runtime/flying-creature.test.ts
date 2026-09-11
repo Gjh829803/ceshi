@@ -5,6 +5,7 @@ import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {creatureBodies} from './creatures/controller';
+import {CREATURE_SPECS} from '../../../../shared/preset-content/creatures/specs';
 import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
@@ -54,13 +55,28 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const descriptors=JSON.stringify(runtime.commandDescriptors('person'));
     expect(descriptors).toContain('松键减速度');expect(descriptors).toContain('振翅加速度');
-    const originalSpeed=runtime.simulation.vehicle!.spec.speed;
+    const originalSpeed=runtime.simulation.controlledActor.vehicle!.spec.speed;
     expect(()=>runtime.applyProfile({vehicles:{dragon:{speed:40,maxSpeed:20}}})).toThrow('CREATURE_FEEL_SPEED_ORDER_INVALID');
-    expect(runtime.simulation.vehicle!.spec.speed).toBe(originalSpeed);
+    expect(runtime.simulation.controlledActor.vehicle!.spec.speed).toBe(originalSpeed);
     const release=runtime.setInput({...emptyInput(),primary:true});world.step({},60);release();
-    expect(runtime.simulation.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.vehicle!.speed).toBe(0);
+    expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.controlledActor.vehicle!.speed).toBe(0);
     runtime.applyProfile({view:{keyboardToggleEnabled:true}});world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
-    const snapshot=structuredClone(runtime.simulation.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.motion.flyingCreature).toEqual(snapshot);
-    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
+    const snapshot=structuredClone(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature).toEqual(snapshot);
+    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);
   }finally{world.dispose();}
+});
+
+it('keeps the catalog grounded-flight mount walking, taking off and landing with its own envelope',()=>{
+  const map=createDragonTrainingMap();map.boxes=map.boxes.filter(box=>box.id==='dragon-ground');
+  const q=new EnvironmentQueries(map),v=createVehicle(CREATURE_SPECS.find(spec=>spec.mode==='dragon')!);
+  v.position.set(0,.225,0);v.grounded=true;
+  const step=(input:Partial<Input>,count:number)=>{for(let n=0;n<count;n++){stepVehicle(v,{...emptyInput(),...input},1/60,n/60,q);q.stepPhysics(1/60);}};
+  try{
+    expect(v.motion.flyingCreature).toBeUndefined();step({forward:1},120);
+    expect(v.position.z).toBeGreaterThan(2);expect(v.grounded).toBe(true);expect(v.motion.creature!.gait).toBe('walk');
+    step({lift:1},120);expect(v.position.y).toBeGreaterThan(8);expect(v.motion.creature!.flying).toBe(true);
+    step({},120);expect(v.velocity.y).toBeCloseTo(0);step({lift:-1},240);
+    expect(v.grounded).toBe(true);expect(v.motion.creature!.flying).toBe(false);expect(v.position.y).toBeLessThan(.3);
+    const reset=createVehicle(v.spec);expect(reset.motion.creature!.gait).toBe('rest');expect(reset.motion.creature!.flying).toBe(false);
+  }finally{q.dispose();}
 });

@@ -367,7 +367,7 @@ skinned body identity and renderability; rigid equipment is excluded. The playte
 changes even if the author restores the person before the last frame. It is
 advisory, with no change to v0.2 technical admission. It cannot prove preset
 provenance, detect every extra rider, or measure seat/hand/foot fit; use relevant
-frames when such a problem needs investigation. Legacy/raw worlds without Humanoid
+frames when such a problem needs investigation. Worlds without Humanoid
 telemetry are explicitly unobserved, not passed.
 
 ## Verify and deliver
@@ -390,6 +390,13 @@ active time.
 `world_playtest` returns `status:passed` when technical recording checks pass;
 read `executionMode` and `isCompleteEpisode` separately. Target `reached` means a
 sample entered its XYZ tolerance, not that a gameplay goal was independently verified.
+`feedback.actions` summarizes actual command dispatch and last observed operation
+states. Rejected commands and failed operations remain in `hostActionEvents` and
+`worldOperations`; they do not interrupt the remaining input plan. A rejection
+can be an expected contention outcome. Judge it against the requested behavior,
+and repair unexpected failures. Accepted, pending and unobserved outcomes are not
+completed actions. Browser/runtime errors, invalid recording evidence and changed
+source identities still block technical acceptance.
 If the requested outcome is moving a prop by impact, identify that prop and compare
 its actual physical pose before and after real contact; player proximity, a blocked
 character or technical `passed` status is not evidence of prop displacement.
@@ -398,6 +405,11 @@ a longer value keeps waiting after all steps, with unreleased keys held until cl
 `framesPerSecond` requests video capture samples, not simulation or display FPS.
 `actualWallSeconds` measures this input/recording interval and its finalization;
 it excludes browser startup and subsequent transcoding, and is not whole-task time.
+
+For SDK/content integration, run affected tests and representative Creator/Episode
+inputs against the same runtime bytes. A full six-segment Episode is a production
+profile, not a mandatory asset-integration or SDK-release check. Report an individual
+generated world's task acceptance separately from SDK regression and recording health.
 
 For a question about an already recorded interval, use the playtest result's
 `readTrace` link, or query the same service session directly:

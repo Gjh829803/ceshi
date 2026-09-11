@@ -28,12 +28,15 @@ function fixture(degrees=0, wall=false) {
   return {q,v,run};
 }
 it('rests without thrust, cannot pivot at rest, pushes only to walking speed, and coasts after release',()=>{
-  const {q,v,run}=fixture();try{
-    run(2,{steer:1,boost:true});expect(v.speed).toBeLessThan(.01);expect(v.yaw).toBeCloseTo(0,3);
+  const {q,v,run}=fixture(),neutral=fixture();try{
+    neutral.run(2);run(2,{steer:1,boost:true});expect(v.speed).toBeLessThan(.01);
+    // Isolate input-driven pivot from the same native body's contact settling.
+    expect(v.yaw-neutral.v.yaw).toBeCloseTo(0,3);
+    expect(v.position.distanceTo(neutral.v.position)).toBeLessThan(.01);
     run(10,{forward:1});expect(v.speed).toBeGreaterThan(1);expect(v.speed).toBeLessThanOrEqual(3.01);
     const speed=v.speed,z=v.position.z;run(1);expect(v.position.z-z).toBeGreaterThan(.5);expect(v.speed).toBeLessThan(speed);
     run(3,{forward:-1});expect(v.speed).toBeLessThan(.01);const stop=v.position.clone();run(2,{forward:-1});expect(v.position.distanceTo(stop)).toBeLessThan(.02);
-  }finally{q.dispose();}
+  }finally{q.dispose();neutral.q.dispose();}
 });
 it('accelerates downhill without W, brakes against gravity, then slides again when released',()=>{
   const {q,v,run}=fixture(12);try{

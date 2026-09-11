@@ -2,7 +2,7 @@ import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
 import {CANOE_SPEC} from '../../../../shared/preset-content/canoe';
 import {buildCanoeModel} from '../../../../shared/preset-content/canoe-model';
-import {CANOE_WATER,paddleGrip} from './kayak';
+import {CANOE_WATER,paddleGrip} from './motion-families/surface-vessel/paddling';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -11,7 +11,7 @@ import {createWorld} from '../world';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
-import {createKayakState,KAYAK_WATER,kayakPaddlePose,KAYAK_GEOMETRY} from './kayak';
+import {createKayakState,KAYAK_WATER,kayakPaddlePose,KAYAK_GEOMETRY} from './motion-families/surface-vessel/paddling';
 import {Character} from './character';
 import {KAYAK_SPEC} from '../../../../shared/preset-content/kayak';
 import {buildKayakModel} from '../../../../shared/preset-content/kayak-model';
@@ -71,7 +71,7 @@ describe('kayak water and paddle mechanics',()=>{
    const boat=spec.id==='raft'?buildRaftModel():spec.id==='canoe'?buildCanoeModel():buildKayakModel(),world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'kayak',assetId:'vehicle.kayak',object:boat,spec:{...spec,spawn:[0,.07,0],yaw:Math.PI/2}}]}});
    try{world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.07,0],facingYawRadians:Math.PI/2,humanoid:{vehicleInstanceId:'kayak',mounted:true}});world.step({humanoid:{...emptyInput(),forward:1}},90);
     expect(world.humanoid!.inputGuide().family).toBe('paddled_boat');
-    const v=world.humanoid!.simulation.vehicle!,p=kayakPaddlePose(v.motion.kayak!);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(v.motion.kayak!,side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3()).distanceTo(target)).toBeLessThan(.035);}
+    const v=world.humanoid!.simulation.controlledActor.vehicle!,p=kayakPaddlePose(v.motion.kayak!);for(const [suffix,side] of [['l',1],['r',-1]] as const){const target=paddleGrip(v.motion.kayak!,side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);expect(rider.root.getObjectByName(`hand_${suffix}`)!.getWorldPosition(new Vector3()).distanceTo(target)).toBeLessThan(.035);}
    }finally{world.dispose();}
   }finally{rider.dispose();loader.mockRestore();transport.mockRestore();}
  });

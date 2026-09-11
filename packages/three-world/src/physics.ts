@@ -1,4 +1,7 @@
-import {DEFAULT_CHARACTER_OPTIONS} from './config/physics';
+import {registerPhysicsHost,type BorrowedPhysicsWorld} from './physics-host';
+import {InteractionBodyControl} from './interaction-body';
+import {contactColliderVolume} from './physics-box';
+import {DEFAULT_CHARACTER_OPTIONS,DYNAMIC_PROP_COLLISION_GROUPS,MAXIMUM_BOX_CELL_EDGE_METERS} from './config/physics';
 import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
 import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
@@ -18,12 +21,20 @@ type CharacterState = { driveMode: DriveMode; needsClearance: boolean; controlle
 type Entity = {
   id: string; object: THREE.Object3D; enabled: boolean; kind: RigidPhysics['kind'] | 'character'; body: RigidBody; colliders: Collider[];
   geometry?: GeometrySnapshot; options?: RigidPhysics; character?: CharacterState;
+  interaction?:InteractionBodyControl;interactionSize?:Vec3;interactionCenter?:Vec3;
   fixedQueryPose?: WorldPose;
   sourceObjects?: readonly THREE.Object3D[];
   initial: { local: LocalPose; pose: WorldPose; geometry?: GeometrySnapshot };
 };
 type CharacterProposal = { entry: Entity; driveMode: DriveMode; desired: THREE.Vector3; correction: THREE.Vector3; movement: THREE.Vector3; supportNeedsRefresh: boolean; verticalVelocity: number; grounded: boolean; collisions: Set<string> };
-type QueryShape = { id: string; character: boolean; changed: boolean; shape: RAPIER.Shape; position: THREE.Vector3; rotation: THREE.Quaternion; settings?: Required<CharacterOptions> };
+type QueryShape = { id: string; character: boolean; changed: boolean; shape: RAPIER.Shape; collider?:Collider; position: THREE.Vector3; rotation: THREE.Quaternion; settings?: Required<CharacterOptions> };
+/** Prospective geometry uses shape queries; committed geometry keeps its native shared shape. */
+function queryContact(a:QueryShape,b:QueryShape,at=a.position,bt=b.position):RAPIER.ShapeContact|null{
+  const nativeA=at.equals(a.position)?a.collider:undefined,nativeB=bt.equals(b.position)?b.collider:undefined;
+  if(nativeB){const hit=contactColliderVolume(nativeB,a.shape,at,a.rotation,0);return hit?{distance:hit.distance,point1:hit.point2,point2:hit.point1,normal1:hit.normal2,normal2:hit.normal1}:null;}
+  if(nativeA)return contactColliderVolume(nativeA,b.shape,bt,b.rotation,0);
+  return a.shape.contactShape(at,a.rotation,b.shape,bt,b.rotation,0);
+}
 type KinematicQueryState = { entry: Entity; type: RAPIER.RigidBodyType; linearVelocity: THREE.Vector3; angularVelocity: THREE.Vector3; nextPosition: THREE.Vector3; nextRotation: THREE.Quaternion; sleeping: boolean; enabled: boolean };
 type Plan = { pose: WorldPose; descriptors: ColliderDesc[]; sourceObjects?: THREE.Object3D[]; triangleCount: number; geometry?: GeometrySnapshot; settings?: Required<CharacterOptions>; scale?: THREE.Vector3 };
 const vec = (value: THREE.Vector3 | Readonly<{ x: number; y: number; z: number }>): Vec3 => Object.freeze([value.x, value.y, value.z]);
@@ -49,19 +60,45 @@ export class ThreePhysics implements PhysicsPort {
   private readonly maximumColliders: number;
   private readonly maximumTriangles: number;
   private disposed = false;
+  private pendingProposals: CharacterProposal[] | undefined;
+  private substepTargets: {body:RigidBody;from:THREE.Vector3;to:THREE.Vector3;rotationFrom:THREE.Quaternion;rotationTo:THREE.Quaternion}[] = [];
+  static borrow(binding:BorrowedPhysicsWorld,options:PhysicsOptions={}):ThreePhysics {return new ThreePhysics(options,binding);}
+
 
   static async create(options: PhysicsOptions = {}): Promise<ThreePhysics> {
     initialization ??= RAPIER.init();
     await initialization;
     return new ThreePhysics(options);
   }
-  private constructor(options: PhysicsOptions) {
+  private constructor(options: PhysicsOptions,private readonly borrowed?:BorrowedPhysicsWorld) {
     this.gravity = Object.freeze([...(options.gravityMetersPerSecondSquared ?? [0, -9.81, 0])]) as Vec3;
     validateVec(this.gravity, 'gravityMetersPerSecondSquared');
     this.maximumColliders = options.maximumColliderCount ?? 4096;
     this.maximumTriangles = options.maximumTriangleCount ?? 1_000_000;
     if (!Number.isSafeInteger(this.maximumColliders) || this.maximumColliders < 1 || !Number.isSafeInteger(this.maximumTriangles) || this.maximumTriangles < 1) geometryError('PHYSICS_BUDGET_INVALID', 'Physics budgets must be positive integers.');
-    this.world = new RAPIER.World({ x: this.gravity[0], y: this.gravity[1], z: this.gravity[2] });
+    if(borrowed && (this.gravity[0]!==0 || this.gravity[2]!==0 || borrowed.world.gravity.x!==0 || borrowed.world.gravity.z!==0 || borrowed.world.gravity.y===0))throw new Error('PHYSICS_SHARED_GRAVITY_UNSUPPORTED');
+    this.world = borrowed?.world ?? new RAPIER.World({ x: this.gravity[0], y: this.gravity[1], z: this.gravity[2] });
+    registerPhysicsHost(this,{
+      prepareStep:(dt,drives)=>this.prepareStep(dt,drives),
+      prepareSubstep:fraction=>{for(const target of this.substepTargets){target.body.setNextKinematicTranslation(target.from.clone().lerp(target.to,fraction));target.body.setNextKinematicRotation(target.rotationFrom.clone().slerp(target.rotationTo,fraction));}},
+      finishStep:()=>this.finishStep(),
+      fork:binding=>this.fork(binding),
+      interactionBody:id=>this.interactionBody(id),
+    });
+  }
+  private interactionBody(id:string):InteractionBodyControl{
+    const entry=this.entry(id);if(entry.kind==='character')throw new Error('INTERACTION_RIGID_ENTITY_REQUIRED');
+    const identity=entry.initial;
+    return entry.interaction??=new InteractionBodyControl(()=>{
+      const current=this.disposed?undefined:this.entries.get(id);if(!current||current.initial!==identity)return;
+      if(!current.interactionSize){
+        const bounds=new THREE.Box3(),point=new THREE.Vector3();
+        for(const geometry of current.geometry!.geometries)for(let i=0;i<geometry.vertices.length;i+=3)bounds.expandByPoint(point.fromArray(geometry.vertices,i));
+        current.interactionSize=vec(bounds.getSize(new THREE.Vector3()));current.interactionCenter=vec(bounds.getCenter(new THREE.Vector3()));
+      }
+      return {body:current.body,colliders:current.colliders,enabled:current.enabled&&current.colliders.length>0,massKg:current.colliders.reduce((sum,collider)=>sum+collider.mass(),0),scale:current.geometry!.pose.scale,sizeMetersXYZ:current.interactionSize,centerOffsetMetersXYZ:current.interactionCenter!,
+        project:()=>this.project(current),changed:()=>{if(this.borrowed?.colliderChanged)this.borrowed.colliderChanged(id,current.colliders);else this.world.updateSceneQueries(current.colliders.map(collider=>collider.handle));}};
+    });
   }
   private live(): void { if (this.disposed) geometryError('PHYSICS_DISPOSED', 'The physics world has been disposed.'); }
   private entry(id: string): Entity { this.live(); const entry = this.entries.get(id); if (!entry) geometryError('PHYSICS_ENTITY_UNKNOWN', `Unknown physics entity: ${id}`); return entry; }
@@ -95,6 +132,7 @@ export class ThreePhysics implements PhysicsPort {
     const shape = options.shape ?? (options.kind === 'dynamic' ? 'convex-hull' : 'trimesh');
     if (options.kind === 'dynamic') { this.validateDynamicParent(object); if (shape === 'trimesh') geometryError('PHYSICS_DYNAMIC_TRIMESH_UNSUPPORTED', 'Use convex-hull or box for a dynamic body.'); }
     const friction = options.frictionRatio ?? .7, restitution = options.restitutionRatio ?? 0, mass = options.massKilograms ?? 1;
+    if(options.lockRotations!==undefined&&(options.kind!=='dynamic'||typeof options.lockRotations!=='boolean'))geometryError('PHYSICS_ROTATION_LOCK_INVALID','lockRotations is a boolean option for dynamic bodies.');
     validateNumber(friction, 0, 'frictionRatio'); validateNumber(restitution, 0, 'restitutionRatio'); validateNumber(mass, 0, 'massKilograms', options.kind !== 'dynamic');
     if (friction > 1 || restitution > 1) geometryError('PHYSICS_OPTION_INVALID', 'Friction and restitution ratios must be between zero and one.');
     let geometry = retained;
@@ -115,6 +153,7 @@ export class ThreePhysics implements PhysicsPort {
       const append = (descriptor: ColliderDesc | null): void => {
         if (!descriptor) geometryError('PHYSICS_CONVEX_HULL_INVALID', 'The visible mesh does not define a convex volume.');
         descriptor.setFriction(friction).setRestitution(restitution);
+        if(this.borrowed&&options.kind==='dynamic')descriptor.setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS);
         if (options.kind === 'dynamic') descriptor.setMass(mass / geometry.geometries.length);
         descriptors.push(descriptor); sourceObjects.push(mesh.sourceObject);
       };
@@ -126,7 +165,7 @@ export class ThreePhysics implements PhysicsPort {
         // Large cuboid faces make native KCC contact normals numerically
         // unstable. These smaller native cuboids partition the exact same
         // volume, retaining the original visible mesh and collider ownership.
-        const cells = options.kind === 'dynamic' ? new THREE.Vector3(1, 1, 1) : size.clone().divideScalar(4).ceil();
+        const cells = options.kind === 'dynamic' ? new THREE.Vector3(1, 1, 1) : size.clone().divideScalar(MAXIMUM_BOX_CELL_EDGE_METERS).ceil();
         if (cells.x * cells.y * cells.z + descriptors.length > this.maximumColliders) geometryError('PHYSICS_COLLIDER_BUDGET_EXCEEDED', `Exact box subdivision exceeds the collider budget: requiredColliderCount=${cells.x * cells.y * cells.z + descriptors.length} (lower bound), maximumColliderCount=${this.maximumColliders}. Current mesh in the rigid-body frame: sizeMetersXYZ=${JSON.stringify(size.toArray())}, cellsXYZ=${JSON.stringify(cells.toArray())}. Counts exclude remaining meshes and other world entities.`, [id]);
         const cellSize = size.clone().divide(cells);
         for (let x = 0; x < cells.x; x++) for (let y = 0; y < cells.y; y++) for (let z = 0; z < cells.z; z++) append(RAPIER.ColliderDesc.cuboid(cellSize.x / 2, cellSize.y / 2, cellSize.z / 2)
@@ -146,14 +185,17 @@ export class ThreePhysics implements PhysicsPort {
     return { pose, descriptors: [RAPIER.ColliderDesc.capsule((height - 2 * radius) / 2, radius).setTranslation(0, height / 2, 0)], triangleCount: 0, settings, scale };
   }
   private construct(id: string, object: THREE.Object3D, kind: Entity['kind'], plan: Plan, options: RigidPhysics | undefined, initial: Entity['initial'], previous?: Entity): Entity {
+    if(previous?.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Release the interaction owner before rebuilding this body.',[id]);
     const bodyDescriptor = kind === 'fixed' ? RAPIER.RigidBodyDesc.fixed() : kind === 'dynamic' ? RAPIER.RigidBodyDesc.dynamic().setCcdEnabled(true) : RAPIER.RigidBodyDesc.kinematicPositionBased();
     bodyDescriptor.setTranslation(plan.pose.position.x, plan.pose.position.y, plan.pose.position.z).setEnabled(false);
     if (kind !== 'character') bodyDescriptor.setRotation(plan.pose.rotation);
+    if(kind==='dynamic' && this.borrowed)bodyDescriptor.setGravityScale(this.gravity[1]/this.world.gravity.y);
+    if(kind==='dynamic'&&options?.lockRotations)bodyDescriptor.lockRotations();
     let body: RigidBody | undefined, controller: KinematicCharacterController | undefined;
     try {
       body = this.world.createRigidBody(bodyDescriptor);
       const colliders = plan.descriptors.map(descriptor => this.world.createCollider(descriptor, body));
-      const entry: Entity = { id, object, enabled: previous?.enabled ?? true, kind, body, colliders, initial,
+      const entry: Entity = { id, object, enabled: previous?.enabled ?? true, kind, body, colliders, initial,...(previous?.interaction?{interaction:previous.interaction}:{}),
         ...(plan.geometry ? { geometry: plan.geometry } : {}), ...(plan.sourceObjects ? { sourceObjects: plan.sourceObjects } : {}), ...(options ? { options } : {}), ...(kind === 'fixed' ? { fixedQueryPose: copyPose(plan.pose) } : {}) };
       if (plan.settings && plan.scale) {
         controller = this.world.createCharacterController(plan.settings.collisionOffsetMeters);
@@ -174,7 +216,7 @@ export class ThreePhysics implements PhysicsPort {
   }
   private destroy(entry: Entity): void {
     this.queryDirty.delete(entry.id);
-    for (const collider of entry.colliders) { this.colliderOwners.delete(collider.handle); this.colliderSources.delete(collider.handle); }
+    for (const collider of entry.colliders) { this.borrowed?.colliderRemoved?.(entry.id,collider); this.colliderOwners.delete(collider.handle); this.colliderSources.delete(collider.handle); }
     if (entry.character) this.world.removeCharacterController(entry.character.controller);
     this.world.removeRigidBody(entry.body);
   }
@@ -184,10 +226,12 @@ export class ThreePhysics implements PhysicsPort {
     for (let i = 0; i < entry.colliders.length; i++) {
       const collider = entry.colliders[i]!;
       this.colliderOwners.set(collider.handle, entry.id);
+      this.borrowed?.colliderAdded?.(entry.id,collider,entry.kind);
       this.colliderSources.set(collider.handle, entry.sourceObjects?.[i] ?? entry.object);
     }
     entry.body.setEnabled(entry.enabled && entry.colliders.length > 0);
     this.queryDirty.add(entry.id);
+    this.borrowed?.colliderChanged?.(entry.id,entry.colliders);
     this.world.propagateModifiedBodyPositionsToColliders();
   }
   addRigid(id: string, object: THREE.Object3D, options: RigidPhysics): void {
@@ -203,7 +247,8 @@ export class ThreePhysics implements PhysicsPort {
     this.live();
     if (!Array.isArray(candidates) || !Array.isArray(removedEntityIds) || new Set(removedEntityIds).size !== removedEntityIds.length) geometryError('PHYSICS_CANDIDATE_BATCH_INVALID', 'Candidate and removal lists must contain each physics id once.');
     const removed = new Set(removedEntityIds), identities = new Set<string>(), objects = new Set<THREE.Object3D>();
-    for (const id of removed) this.entry(id);
+    for (const id of removed) if(!this.entries.has(id)){let found=false;this.world.colliders.forEach(c=>{if(this.borrowed?.colliderOwner?.(c.handle)===id)found=true;});if(!found)this.entry(id);}
+    if(!candidates.length)return;
     for (const candidate of candidates) {
       if (!candidate || !['rigid', 'character'].includes(candidate.kind) || typeof candidate.id !== 'string' || !candidate.id.trim() || candidate.id.length > 128 || identities.has(candidate.id) || removed.has(candidate.id)) geometryError('PHYSICS_CANDIDATE_BATCH_INVALID', 'Each candidate needs a unique id, a body kind, and no conflicting removal.');
       if (!(candidate.object instanceof THREE.Object3D) || objects.has(candidate.object)) geometryError('PHYSICS_OBJECT_INVALID', 'Each candidate needs a distinct Three Object3D.');
@@ -218,23 +263,37 @@ export class ThreePhysics implements PhysicsPort {
     this.budget(plans, removedEntityIds);
     const shapes: QueryShape[] = [];
     for (const entry of this.entries.values()) if (!identities.has(entry.id) && !removed.has(entry.id) && entry.enabled) for (const collider of entry.colliders) {
-      shapes.push({ id: entry.id, character: entry.kind === 'character', changed: false, shape: collider.shape, position: new THREE.Vector3().copy(collider.translation()), rotation: new THREE.Quaternion().copy(collider.rotation()), ...(entry.character ? { settings: entry.character.settings } : {}) });
+      shapes.push({ id: entry.id, character: entry.kind === 'character', changed: false, shape: collider.shape, collider, position: new THREE.Vector3().copy(collider.translation()), rotation: new THREE.Quaternion().copy(collider.rotation()), ...(entry.character ? { settings: entry.character.settings } : {}) });
     }
+    // Borrowed humanoid/map bodies participate in the same candidate scene;
+    // descriptor validation must not silently omit the other physics owners.
+    if(this.borrowed)this.world.colliders.forEach(collider=>{
+      if(this.colliderOwners.has(collider.handle)||!collider.isEnabled()||collider.isSensor()||collider.parent()?.isEnabled()===false)return;
+      const id=this.borrowed!.colliderOwner?.(collider.handle)??`collider-${collider.handle}`;if(identities.has(id)||removed.has(id))return;
+      const settings=this.borrowed!.characterSettings?.(collider.handle);
+      shapes.push({id,character:!!settings,changed:false,shape:collider.shape,collider,position:new THREE.Vector3().copy(collider.translation()),rotation:new THREE.Quaternion().copy(collider.rotation()),...(settings?{settings}:{})});
+    });
     for (const { previous, plan, candidate } of plans) if (previous?.enabled !== false) for (const descriptor of plan.descriptors) {
       const rotation = candidate.kind === 'character' ? new THREE.Quaternion() : plan.pose.rotation.clone();
       shapes.push({ id: candidate.id, character: candidate.kind === 'character', changed: true, shape: descriptor.shape,
         position: new THREE.Vector3().copy(descriptor.translation).applyQuaternion(rotation).add(plan.pose.position), rotation: rotation.multiply(new THREE.Quaternion().copy(descriptor.rotation)), ...(plan.settings ? { settings: plan.settings } : {}) });
     }
-    for (let i = 0; i < shapes.length; i++) for (let j = i + 1; j < shapes.length; j++) {
-      const a = shapes[i]!, b = shapes[j]!;
-      if (a.id === b.id || (!a.character && !b.character) || (!a.changed && !b.changed)) continue;
-      const contact = a.shape.contactShape(a.position, a.rotation, b.shape, b.position, b.rotation, 0);
-      if (contact && contact.distance < -.001) geometryError('PHYSICS_CHARACTER_OVERLAP', `Candidate physics overlaps a character: ${a.id}, ${b.id}. Choose a non-overlapping pose or body size.`);
+    for (let i = 0; i < shapes.length; i++) {
+      const a=shapes[i]!;if(!a.character)continue;
+      for (let j = 0; j < shapes.length; j++) {
+      const b=shapes[j]!;
+      if (a.id === b.id || (b.character&&j<=i) || (!a.changed && !b.changed)) continue;
+      const contact = queryContact(a,b);
+      const coincident=a.character&&b.character&&contact?.distance===0&&a.shape.type===RAPIER.ShapeType.Capsule&&b.shape.type===RAPIER.ShapeType.Capsule;
+      const capsule=a.shape as RAPIER.Capsule;
+      const overlap=coincident&&new RAPIER.Capsule(capsule.halfHeight,capsule.radius-Math.min(1e-5,capsule.radius*.001)).intersectsShape(a.position,a.rotation,b.shape,b.position,b.rotation);
+      if (overlap||contact && contact.distance < -.001) geometryError('PHYSICS_CHARACTER_OVERLAP', `Candidate physics overlaps a character: ${a.id}, ${b.id}. Choose a non-overlapping pose or body size.`);
+    }
     }
     const geometryChanged = shapes.some(shape => shape.changed && !shape.character);
     this.clearanceLifts(shapes, new Set(shapes.filter(shape => shape.character && (shape.changed || geometryChanged)).map(shape => shape.id)));
   }
-  remove(id: string): void { this.live(); const entry = this.entries.get(id); if (entry) { this.destroy(entry); this.entries.delete(id); } }
+  remove(id: string): void { this.live(); const entry = this.entries.get(id); if (entry) { entry.interaction?.retire();this.destroy(entry); this.entries.delete(id); } }
   refresh(id: string): void {
     this.refreshMany([id]);
   }
@@ -254,12 +313,13 @@ export class ThreePhysics implements PhysicsPort {
   setEnabled(id: string, enabled: boolean): void {
     const entry = this.entry(id); if (typeof enabled !== 'boolean') geometryError('PHYSICS_OPTION_INVALID', 'enabled must be boolean.');
     entry.enabled = enabled; entry.body.setEnabled(enabled && entry.colliders.length > 0);
-    this.queryDirty.add(id);
+    this.queryDirty.add(id);this.borrowed?.colliderChanged?.(id,entry.colliders);
     if (enabled && entry.character) entry.character.needsClearance = true;
     if (!enabled && entry.character) { entry.character.verticalVelocity = 0; entry.character.grounded = false; entry.character.collisions = []; }
   }
   teleport(id: string, positionMetersXYZ: Vec3): void {
     const entry = this.entry(id); validateVec(positionMetersXYZ, 'positionMetersXYZ');
+    if(entry.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Move a held body through its interaction owner.',[id]);
     const position = new THREE.Vector3(...positionMetersXYZ);
     let local = position.clone();
     if (entry.object.parent) { worldPose(entry.object.parent); local = entry.object.parent.worldToLocal(local); }
@@ -269,10 +329,11 @@ export class ThreePhysics implements PhysicsPort {
     setLocalPosition(entry.object, local);
     if (entry.character) { entry.character.verticalVelocity = 0; entry.character.grounded = false; entry.character.collisions = []; entry.character.needsClearance = true; }
     this.world.propagateModifiedBodyPositionsToColliders();
-    this.queryDirty.add(id);
+    this.queryDirty.add(id);this.borrowed?.colliderChanged?.(id,entry.colliders);
   }
   applyImpulse(id: string, impulseNewtonSecondsXYZ: Vec3): void {
     const entry = this.entry(id); validateVec(impulseNewtonSecondsXYZ, 'impulseNewtonSecondsXYZ');
+    if(entry.interaction?.isHeld)geometryError('PHYSICS_ENTITY_HELD','Release the held body before applying an impulse.',[id]);
     if (entry.kind !== 'dynamic') geometryError('PHYSICS_IMPULSE_REQUIRES_DYNAMIC', 'Only a dynamic body can receive an impulse.');
     entry.body.applyImpulse(new THREE.Vector3(...impulseNewtonSecondsXYZ), true);
   }
@@ -326,24 +387,25 @@ export class ThreePhysics implements PhysicsPort {
     const shape = new RAPIER.Capsule((height - 2 * settings.radiusMeters) / 2, settings.radiusMeters);
     const rotation = { x: 0, y: 0, z: 0, w: 1 }, velocity = { x: 0, y: -1, z: 0 };
     const origin = new THREE.Vector3(...requested).add(new THREE.Vector3(0, height / 2 + alignment, 0));
+    const ownerOf=(collider:Collider)=>this.colliderOwners.get(collider.handle)??this.borrowed?.colliderOwner?.(collider.handle);
     const include = (collider: Collider): boolean => {
-      const owner = this.colliderOwners.get(collider.handle), candidate = owner ? this.entries.get(owner) : undefined;
-      return Boolean(candidate && owner !== id && candidate.enabled && candidate.body.isEnabled() && !collider.isSensor());
+      const owner=ownerOf(collider),candidate=owner===undefined?undefined:this.entries.get(owner);
+      return owner!==undefined&&owner!==id&&collider.isEnabled()&&collider.parent()?.isEnabled()!==false&&!collider.isSensor()&&(candidate?.enabled??Boolean(this.borrowed));
     };
     const resolved: [number,number,number]=[...requested];
     if(supportMode==='ground'){
       const maximumDistance = alignment * 2;
       const hit = this.world.castShape(origin, rotation, velocity, shape, skin, maximumDistance, false,
         RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
-      let support = hit ? { distanceMeters: hit.time_of_impact, normal: new THREE.Vector3().copy(hit.normal1), entityId: this.colliderOwners.get(hit.collider.handle)! } : undefined;
+      let support = hit ? { collider:hit.collider,distanceMeters: hit.time_of_impact, normal: new THREE.Vector3().copy(hit.normal1), entityId: ownerOf(hit.collider)! } : undefined;
       // Newly created or reset colliders have not reached Rapier's broad phase yet.
       for (const dirtyId of this.queryDirty) for (const collider of this.entries.get(dirtyId)?.colliders ?? []) if (include(collider)) {
         const direct = collider.castShape({ x: 0, y: 0, z: 0 }, shape, origin, rotation, velocity, skin, support?.distanceMeters ?? maximumDistance, false);
         if (direct && (!support || direct.time_of_impact < support.distanceMeters)) support = {
-          distanceMeters: direct.time_of_impact, normal: new THREE.Vector3().copy(direct.normal1).applyQuaternion(collider.rotation()), entityId: dirtyId };
+          collider,distanceMeters: direct.time_of_impact, normal: new THREE.Vector3().copy(direct.normal1).applyQuaternion(collider.rotation()), entityId: dirtyId };
       }
       if (!support) return invalid('EPISODE_START_UNSUPPORTED', 'No character support exists within 0.35 metres vertically of the requested start.');
-      if (this.entries.get(support.entityId)?.kind === 'character') return invalid('EPISODE_START_ACTOR_SUPPORT', 'Another actor cannot provide the start support.', support.entityId);
+      if ((this.entries.get(support.entityId)?.kind==='character'||this.borrowed?.characterSettings?.(support.collider.handle)!==undefined)) return invalid('EPISODE_START_ACTOR_SUPPORT', 'Another actor cannot provide the start support.', support.entityId);
       if (support.normal.y < Math.cos(settings.maximumSlopeRadians) - 1e-5) return invalid('EPISODE_START_SLOPE_OR_OBSTRUCTION', 'The local shape sweep reached a wall, ceiling or unsupported slope.', support.entityId);
       resolved[1] += alignment - support.distanceMeters;
     }
@@ -354,8 +416,8 @@ export class ThreePhysics implements PhysicsPort {
     let overlapping: string | undefined;
     const inspect = (collider: Collider): boolean => {
       if (!include(collider)) return true;
-      const contact = collider.contactShape(shape, center, rotation, 0);
-      if ((contact && contact.distance < -.001) || collider.containsPoint(center) || (interior&&collider.intersectsShape(interior,center,rotation))) overlapping = this.colliderOwners.get(collider.handle)!;
+      const contact = contactColliderVolume(collider,shape,center,rotation,0);
+      if ((contact && contact.distance < -.001) || collider.containsPoint(center) || (interior&&collider.intersectsShape(interior,center,rotation))) overlapping = ownerOf(collider)!;
       return true;
     };
     this.world.intersectionsWithShape(center, rotation, shape, inspect, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
@@ -376,7 +438,7 @@ export class ThreePhysics implements PhysicsPort {
     let overlap: CameraArmHit | undefined;
     const considerOverlap = (collider: Collider): boolean => {
       if (!includeSolid(collider)) return true;
-      const contact = collider.contactShape(shape, target, rotation, 0);
+      const contact = contactColliderVolume(collider,shape,target,rotation,0);
       if (contact && contact.distance <= 0 && -contact.distance >= (overlap?.penetrationDepthMeters ?? -1)) {
         overlap = { distanceMeters: 0, colliderEntityId: this.colliderOwners.get(collider.handle)!,
           normalWorldXYZ: vec(contact.normal1), hitPositionWorldMetersXYZ: vec(contact.point1),
@@ -483,7 +545,7 @@ export class ThreePhysics implements PhysicsPort {
       // Exact touching can produce a degenerate GJK normal. Sweep the same
       // native capsule from outside its skin; never replace support with a ray.
       for (const other of shapes) if (!other.character) {
-        const hit = other.shape.castShape(other.position, other.rotation, { x: 0, y: 0, z: 0 }, capsule.shape, raised, capsule.rotation, { x: 0, y: -2 * skin, z: 0 }, skin, 1, false);
+        const hit = other.collider?other.collider.castShape({x:0,y:0,z:0},capsule.shape,raised,capsule.rotation,{x:0,y:-2*skin,z:0},skin,1,false):other.shape.castShape(other.position, other.rotation, { x: 0, y: 0, z: 0 }, capsule.shape, raised, capsule.rotation, { x: 0, y: -2 * skin, z: 0 }, skin, 1, false);
         if (!hit) continue;
         const normal = new THREE.Vector3().copy(hit.normal1).applyQuaternion(other.rotation), amount = 2 * skin * (1 - hit.time_of_impact);
         if (normal.y >= Math.cos(settings.maximumSlopeRadians) && amount <= skin + 1e-5) lift = Math.max(lift, Math.min(skin, amount));
@@ -495,7 +557,7 @@ export class ThreePhysics implements PhysicsPort {
       const position = capsule.position.clone(); position.y += lift;
       for (const other of shapes) if (other.id !== capsule.id) {
         const otherPosition = other.position.clone(); otherPosition.y += lifts.get(other.id) ?? 0;
-        const contact = capsule.shape.contactShape(position, capsule.rotation, other.shape, otherPosition, other.rotation, 0);
+        const contact = queryContact(capsule,other,position,otherPosition);
         if (contact && contact.distance < -.001) geometryError('PHYSICS_SPAWN_CLEARANCE_BLOCKED', `The initial contact clearance for ${capsule.id} overlaps ${other.id}. Provide enough room for the character body and collision offset.`);
       }
     }
@@ -506,7 +568,7 @@ export class ThreePhysics implements PhysicsPort {
     const targets = new Set([...this.entries.values()].filter(entry => entry.character && entry.enabled && (entry.character.needsClearance || geometryChanged)).map(entry => entry.id));
     if (!targets.size) return;
     const shapes: QueryShape[] = [];
-    for (const entry of this.entries.values()) if (entry.enabled) for (const collider of entry.colliders) shapes.push({ id: entry.id, character: Boolean(entry.character), changed: false, shape: collider.shape,
+    for (const entry of this.entries.values()) if (entry.enabled) for (const collider of entry.colliders) shapes.push({ id: entry.id, character: Boolean(entry.character), changed: false, shape: collider.shape, collider,
       position: new THREE.Vector3().copy(collider.translation()), rotation: new THREE.Quaternion().copy(collider.rotation()), ...(entry.character ? { settings: entry.character.settings } : {}) });
     const lifts = this.clearanceLifts(shapes, targets);
     for (const [id, lift] of lifts) {
@@ -579,6 +641,13 @@ export class ThreePhysics implements PhysicsPort {
     }
   }
   step(deltaSeconds: number, drives: Readonly<Record<string, CharacterDrive>>): void {
+    if(this.borrowed)throw new Error('PHYSICS_SHARED_OWNER_REQUIRED');
+    this.prepareStep(deltaSeconds,drives);
+    if(deltaSeconds===0)return;
+    this.world.step();this.finishStep();
+  }
+  private prepareStep(deltaSeconds: number, drives: Readonly<Record<string, CharacterDrive>>): void {
+    if(this.pendingProposals)throw new Error('PHYSICS_STEP_ALREADY_PREPARED');
     this.live(); validateNumber(deltaSeconds, 0, 'deltaSeconds'); if (deltaSeconds > .1) geometryError('PHYSICS_TIMESTEP_INVALID', 'Use fixed steps of at most 0.1 seconds.');
     if (!drives || typeof drives !== 'object' || Array.isArray(drives)) geometryError('PHYSICS_DRIVE_INVALID', 'drives must be an entity-indexed record.');
     for (const [id, drive] of Object.entries(drives)) {
@@ -588,6 +657,7 @@ export class ThreePhysics implements PhysicsPort {
       } else if (!Array.isArray(drive.velocityMetersPerSecondXZ) || !finiteVector(drive.velocityMetersPerSecondXZ, 2) || (drive.jumpPressed !== undefined && typeof drive.jumpPressed !== 'boolean') || Object.keys(drive).some(key => !['velocityMetersPerSecondXZ', 'jumpPressed'].includes(key))) geometryError('PHYSICS_DRIVE_INVALID', 'Ground drive needs finite XZ velocity and an optional jump edge.');
     }
     if (deltaSeconds === 0) return;
+    if(this.borrowed && this.entries.size===0)return;
     const updates: { previous: Entity; plan: Plan }[] = [];
     const poses = new Map<string, WorldPose>();
     for (const entry of this.entries.values()) {
@@ -605,7 +675,7 @@ export class ThreePhysics implements PhysicsPort {
     try { for (const update of updates) staged.push({ previous: update.previous, entry: this.construct(update.previous.id, update.previous.object, update.previous.kind, update.plan, update.previous.options, update.previous.initial, update.previous) }); }
     catch (error) { for (const { entry } of staged) this.destroy(entry); throw error; }
     for (const { previous, entry } of staged) this.publish(entry, previous);
-    this.world.timestep = deltaSeconds;
+    if(!this.borrowed)this.world.timestep = deltaSeconds;
     for (const entry of this.entries.values()) {
       entry.body.setEnabled(entry.enabled && entry.colliders.length > 0);
       if (!entry.body.isEnabled()) continue;
@@ -662,7 +732,15 @@ export class ThreePhysics implements PhysicsPort {
       const before = proposal.entry.body.translation();
       proposal.entry.body.setNextKinematicTranslation({ x: before.x + proposal.movement.x, y: before.y + proposal.movement.y, z: before.z + proposal.movement.z });
     }
-    this.world.step();
+    this.substepTargets=[...this.entries.values()].filter(entry=>entry.body.isKinematic()&&entry.body.isEnabled()&&!entry.interaction?.isHeld).map(({body})=>({body,
+      from:new THREE.Vector3().copy(body.translation()),to:new THREE.Vector3().copy(body.nextTranslation()),
+      rotationFrom:new THREE.Quaternion().copy(body.rotation()),rotationTo:new THREE.Quaternion().copy(body.nextRotation())}));
+    for(const id of this.queryDirty){const entry=this.entries.get(id);if(entry)this.borrowed?.colliderChanged?.(id,entry.colliders);}
+    this.pendingProposals=proposed;
+  }
+  private finishStep():void {
+    const proposed=this.pendingProposals;if(!proposed)return;
+    this.pendingProposals=undefined;this.substepTargets=[];
     this.queryDirty.clear();
     for (const proposal of proposed) if (proposal.supportNeedsRefresh) {
       const controller = proposal.entry.character!.controller;
@@ -687,7 +765,7 @@ export class ThreePhysics implements PhysicsPort {
   state(id: string): PhysicsEntityState | undefined {
     this.live(); const entry = this.entries.get(id); if (!entry) return undefined;
     const collisions = new Set(entry.character?.collisions ?? []);
-    if (!entry.character) for (const collider of entry.colliders) this.world.contactPairsWith(collider, other => { const owner = this.colliderOwners.get(other.handle); if (owner && owner !== id) collisions.add(owner); });
+    if (!entry.character) for (const collider of entry.colliders) this.world.contactPairsWith(collider, other => { const owner = this.colliderOwners.get(other.handle)??this.borrowed?.colliderOwner?.(other.handle); if (owner && owner !== id) collisions.add(owner); });
     return Object.freeze({ id, positionMetersXYZ: vec(entry.body.translation()), velocityMetersPerSecondXYZ: vec(entry.body.linvel()), isGrounded: entry.body.isEnabled() && (entry.character?.grounded ?? false), collisionEntityIds: Object.freeze([...collisions].sort()) });
   }
   audit(): PhysicsAudit {
@@ -705,5 +783,26 @@ export class ThreePhysics implements PhysicsPort {
     } catch (error) { for (const { entry } of staged) this.destroy(entry); throw error; }
     for (const { previous, entry } of staged) { restoreLocal(entry.object, entry.initial.local); this.publish(entry, previous); }
   }
-  dispose(): void { if (this.disposed) return; this.disposed = true; this.entries.clear(); this.colliderOwners.clear(); this.colliderSources.clear(); this.queryDirty.clear(); this.world.free(); }
+  private fork(binding:BorrowedPhysicsWorld):ThreePhysics {
+    this.live();const next=ThreePhysics.borrow(binding,{gravityMetersPerSecondSquared:this.gravity,maximumColliderCount:this.maximumColliders,maximumTriangleCount:this.maximumTriangles});
+    try {
+      for(const entry of this.entries.values()){
+        if(entry.character)next.addCharacter(entry.id,entry.object,entry.character.settings);else next.addRigid(entry.id,entry.object,entry.options!);
+        const copy=next.entries.get(entry.id)!;copy.initial=entry.initial;copy.enabled=entry.enabled;copy.body.setEnabled(entry.body.isEnabled());
+        if(entry.kind==='dynamic'||entry.kind==='kinematic'){
+          copy.body.setTranslation(entry.body.translation(),false);copy.body.setRotation(entry.body.rotation(),false);
+          if(entry.kind==='kinematic'){copy.body.setNextKinematicTranslation(entry.body.nextTranslation());copy.body.setNextKinematicRotation(entry.body.nextRotation());}
+        }
+        copy.body.setLinvel(entry.body.linvel(),false);copy.body.setAngvel(entry.body.angvel(),false);
+        if(entry.body.isSleeping())copy.body.sleep();
+      }
+      next.world.updateSceneQueries();return next;
+    }catch(error){next.dispose();throw error;}
+  }
+  dispose(): void { if (this.disposed) return;
+    for(const entry of this.entries.values())entry.interaction?.retire();
+    if(this.borrowed)for(const entry of this.entries.values())this.destroy(entry);
+    this.disposed = true; this.entries.clear(); this.colliderOwners.clear(); this.colliderSources.clear(); this.queryDirty.clear();
+    this.pendingProposals=undefined;this.substepTargets=[];if(!this.borrowed)this.world.free();
+  }
 }

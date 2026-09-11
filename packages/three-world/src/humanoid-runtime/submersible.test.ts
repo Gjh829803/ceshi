@@ -8,7 +8,7 @@ import {PerspectiveCamera,Group,Vector3,SkinnedMesh} from 'three';
 import {createWorld} from '../world';
 import {initEnvironmentQueries,EnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
-import {SUBMERSIBLE_WATER,createSubmersibleState} from './submersible';
+import {SUBMERSIBLE_WATER,createSubmersibleState} from './motion-families/underwater/submersible';
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
 import {SUBMERSIBLE_SPEC} from '../../../../shared/preset-content/submersible';
 import {buildSubmersibleModel} from '../../../../shared/preset-content/submersible-model';
@@ -47,9 +47,9 @@ describe('observation submersible',()=>{
   const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),navigation:false,humanoid:{map:{...map,spawns:[{id:'submarine',name:'submarine',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'pool'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.observation-sub',spec,object:buildSubmersibleModel()}],character:{instanceId:'person',object:new Group()}}});
   try{world.step({humanoid:emptyInput()},600);expect(world.humanoid!.simulation.vehicles[0]!.position.y).toBeCloseTo(.12,2);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,-5,0],facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});expect(world.humanoid!.interact()).toBe(false);
-   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:spec.spawn,facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});world.step({humanoid:{...emptyInput(),lift:-1}},420);expect(world.humanoid!.interact()).toBe(false);expect(world.humanoid!.simulation.message).toContain('上浮');
+   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:spec.spawn,facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});world.step({humanoid:{...emptyInput(),lift:-1}},420);expect(world.humanoid!.interact()).toBe(false);expect(world.humanoid!.simulation.controlledActor.message).toContain('上浮');
    world.step({humanoid:{...emptyInput(),lift:1}},900);world.step({humanoid:emptyInput()},600);expect(world.humanoid!.interact()).toBe(true);
-   world.humanoid!.simulation.visit(0);expect(world.humanoid!.simulation.vehicles[0]!.motion.submersible).toEqual(createSubmersibleState());
+   world.humanoid!.simulation.controlledActor.visit(0);expect(world.humanoid!.simulation.vehicles[0]!.motion.submersible).toEqual(createSubmersibleState());
   }finally{world.dispose();}
  // This integrates 42 seconds with the real model, camera and rigid-body world.
  // Match the bounded budget used by the other long physical lifecycle tests.
