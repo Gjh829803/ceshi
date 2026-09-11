@@ -109,9 +109,14 @@ responsibilities and behavior. Use current, established terminology and naming
 conventions from the relevant technical domain so AI maintainers and production
 Agents can interpret and use them correctly. Apply this principle to code,
 APIs, configuration, tools, documentation and production artifacts.
-Use consistent terminology for the same concept across these surfaces and
-distinct names for different concepts. Avoid vague abbreviations, invented
-jargon and names that imply unsupported capabilities or incorrect ownership.
+Keep terminology and naming style consistent throughout the project, following
+the applicable language and file-format conventions. Use consistent terminology
+for the same concept across these surfaces and distinct names for different
+concepts. Existing names are not exempt: rename inconsistent or misleading names
+and update their references, consumers and documentation together. Do not retain
+a nonconforming name merely because it already exists.
+Avoid vague abbreviations, invented jargon and names that imply unsupported
+capabilities or incorrect ownership.
 Make scope, units and lifecycle state explicit where their omission could
 cause confusion. Optimize naming for lower AI maintenance cost and fewer
 Agent misunderstandings, incorrect actions and retries in production.
