@@ -5,6 +5,7 @@ import {ACTION_TUNING} from '../../config/actions';
 import {validateInteractionSlots} from '../../interaction-contracts';
 import type {InteractionSlot,InteractionClaimState} from '../../contracts';
 import type {InteractionTarget} from './action-schema';
+import {ActorResources,actorResources,type ActorResourceChannel} from '../../actor-resources';
 
 export interface TargetRuntime {
  readonly entityId:string;readonly slotId:string;readonly generation:number;
@@ -31,7 +32,7 @@ export class WorldInteractions {
  private readonly entityClaims=new Map<string,Set<Claim>>();
  private readonly ownerClaims=new Map<object,Set<Claim>>();
  private generation=0;private time=0;private disposed=false;
- constructor(map:EnvironmentDefinition,physical:(id:string)=>InteractionBody|undefined,resolveAnchor:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null,contact:(ids:readonly string[],position:Vector3,toleranceMeters:number)=>boolean){
+ constructor(map:EnvironmentDefinition,physical:(id:string)=>InteractionBody|undefined,resolveAnchor:(id:string,point:readonly number[])=>{position:Vector3;rotation:Quaternion;stable:boolean}|null,contact:(ids:readonly string[],position:Vector3,toleranceMeters:number)=>boolean,readonly actorResources:ActorResources){
   for(const source of map.interactions??[]){
    this.mapEntities.add(source.id);
    this.install(source.id,{create:()=>{
@@ -107,9 +108,10 @@ export class WorldInteractions {
   if(!this.isCurrent(target)||!target.enabled||this.claims.has(target))return true;
   const occupied=this.entityClaims.get(target.entityId);return target.definition.kind==='pickup'?!!occupied?.size:[...(occupied??[])].some(claim=>claim.target.definition.kind==='pickup');
  }
- reserve(target:TargetRuntime,owner:object,requestId:string,options:{invalidated?:Claim['invalidated'];actorId?:string|null}={}):boolean{
+ reserve(target:TargetRuntime,owner:object,requestId:string,options:{invalidated?:Claim['invalidated'];actorId?:string|null;channels?:readonly ActorResourceChannel[]}={}):boolean{
   if(this.isCurrent(target))target.sync();
   if(this.unavailable(target)||!['available','placed'].includes(target.state)||this.ownerClaims.get(owner)?.size)return false;
+  if(options.actorId&&options.channels&&!this.actorResources.acquire(owner,actorResources(options.actorId,options.channels),{kind:'action',id:requestId}))return false;
   const claim:Claim={target,actorId:options.actorId??null,owner,requestId,kind:'reserved',expiresAt:this.time+ACTION_TUNING.interactionReservationSeconds,invalidated:options.invalidated};
   this.claims.set(target,claim);const entity=this.entityClaims.get(target.entityId)??new Set<Claim>();entity.add(claim);this.entityClaims.set(target.entityId,entity);
   const actor=this.ownerClaims.get(owner)??new Set<Claim>();actor.add(claim);this.ownerClaims.set(owner,actor);return true;

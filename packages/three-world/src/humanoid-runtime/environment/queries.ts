@@ -1,3 +1,4 @@
+import {ActorResources} from '../../actor-resources';
 import {EnvironmentInteractionProps} from './interaction-props';
 import {readNavigationGeometry} from '../../physics-navigation';
 import {WorldInteractions} from '../humanoid/world-interactions';
@@ -94,7 +95,7 @@ export class EnvironmentQueries {
   // Do not call collider methods from KCC predicates: that reenters a borrowed
   // WASM collider set. Sensor rejection is a native query flag instead.
   private environmentFilter=(collider:RAPIER.Collider)=>this.motionFilter?this.motionFilter(collider):!this.queryExcluded.has(collider.handle);
-  constructor(readonly map:EnvironmentDefinition){
+  constructor(readonly map:EnvironmentDefinition,resources=new ActorResources()){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
     validateEnvironmentIdentities(map);
     this.world=new RAPIER.World({x:0,y:-18,z:0});
@@ -130,7 +131,7 @@ export class EnvironmentQueries {
       }
     }
     let props:EnvironmentInteractionProps|undefined;
-    try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point),(ids,position,tolerance)=>ids.some(id=>(this.staticColliders.get(id)??[]).some(collider=>{const point=collider.isEnabled()?collider.projectPoint(position,true):null;return !!point&&new Vector3().copy(point.point).distanceTo(position)<=tolerance;})));}
+    try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point),(ids,position,tolerance)=>ids.some(id=>(this.staticColliders.get(id)??[]).some(collider=>{const point=collider.isEnabled()?collider.projectPoint(position,true):null;return !!point&&new Vector3().copy(point.point).distanceTo(position)<=tolerance;})),resources);}
     catch(error){props?.dispose();this.world.free();throw error;}
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();

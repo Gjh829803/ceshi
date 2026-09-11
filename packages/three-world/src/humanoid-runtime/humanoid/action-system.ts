@@ -5,6 +5,7 @@ import type {HumanoidActionContext} from './types';
 import {ACTION_TUNING,SKILL_DEFINITIONS,type SkillId,type SkillRequest,type SkillResult} from './action-schema';
 
 import {WorldInteractions,type TargetRuntime} from './world-interactions';
+import {actorResources,FULL_BODY_RESOURCES,type ActorResourceChannel} from '../../actor-resources';
 
 const DT=1/60,UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1},RADIUS=.28;
 export interface ActionCommands {roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean}
@@ -26,11 +27,19 @@ export class ActionSystem {
   private results=new Map<string,SkillResult>();
   private requests=new Map<string,string>();
   constructor(private sim:HumanoidActionContext,readonly interactions:WorldInteractions){}
+  private resourceRequests(channels:readonly ActorResourceChannel[]=FULL_BODY_RESOURCES){return this.sim.actorId?actorResources(this.sim.actorId,channels):[];}
+  private retainRelationshipResources():void{
+    if(this.active)return;
+    const target=this.heldTarget??this.seatedTarget;
+    const channels:readonly ActorResourceChannel[]=this.heldTarget?['left-hand','right-hand']:this.seatedTarget?['locomotion','animation','pose']:[];
+    this.interactions.actorResources.retain(this,this.resourceRequests(channels),{kind:'relationship',id:target?JSON.stringify([target.entityId,target.slotId]):''});
+  }
   /** The shared world retains target bodies after this controller leaves. */
-  dispose(){this.interactions.releaseOwner(this);this.active=null;this.pose=null;this.heldTarget=null;this.seatedTarget=null;}
+  dispose(){this.interactions.releaseOwner(this);this.interactions.actorResources.release(this);this.active=null;this.pose=null;this.heldTarget=null;this.seatedTarget=null;}
   reset(){
     if(this.active)this.finish('cancelled','RESET','测试点已复位');
     this.interactions.releaseOwner(this);
+    this.interactions.actorResources.release(this);
     this.active=null;this.pose=null;this.heldTarget=null;this.seatedTarget=null;this.cooldown=0;
     this.sim.actionCapsuleHalf=null;
   }
@@ -38,13 +47,13 @@ export class ActionSystem {
   releaseIntoWater(){
     if(this.active)this.finish('cancelled','WATER_ENTERED','进入深水，陆地动作中断');
     if(this.seated){this.interactions.release(this.seatedTarget!,this);this.seatedTarget=null;}
-    if(!this.carrying)return;
+    if(!this.carrying){this.retainRelationshipResources();return;}
     const target=this.heldTarget!,size=target.definition.size??[.13,.13,.13],sim=this.sim;
     // The hands are inside the conservative upright movement capsule. Detach
     // immediately beyond that capsule, then let a real dynamic body fall.
     const position=sim.position.clone().addScaledVector(UP,1.057).addScaledVector(sim.facing,RADIUS+Math.max(size[0],size[2])/2+.035);
     this.interactions.releaseHeld(this.heldTarget!,this,{reason:'water',position,velocity:new Vector3(sim.velocity.x,Math.min(0,sim.vertical),sim.velocity.z)});
-    this.heldTarget=null;this.pose=null;
+    this.heldTarget=null;this.pose=null;this.retainRelationshipResources();
     sim.lastResult='进入深水：物件已脱手并按重力下沉；复位可恢复到台面';
   }
   /** Per-actor relationship check against the world's last committed target state. */
@@ -66,6 +75,7 @@ export class ActionSystem {
       this.save({requestId:this.active.requestId,action:this.active.id,targetId:target.entityId,slotId:target.slotId,status:'running',code:'CANCELLING',phase:'target-exit',message:'交互目标失效，等待安全退出后结束动作'});
     }else if(this.active?.target===target)this.finish('cancelled',reason,'交互目标或预约已失效');
     else this.pose=null;
+    this.retainRelationshipResources();
   }
   status(id:string){const result=this.results.get(id);return result?{...result}:null;}
   private save(result:SkillResult){
@@ -125,7 +135,9 @@ export class ActionSystem {
     const owned=action==='standUp'?this.seatedTarget:action==='putDown'?this.heldTarget:null;
     const ambiguous=(action==='pickup'||action==='sit')&&targetId&&slotId===undefined&&!this.interactions.target(targetId)&&this.interactions.hasEntity(targetId);
     const mismatch=owned&&(targetId!==undefined&&targetId!==owned.entityId||slotId!==undefined&&slotId!==owned.slotId);
-    const reason=this.sim.isMounted?['MOUNTED','请先离开载具或坐骑']:missing?['ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`]:mismatch?['TARGET_MISMATCH','请求与角色当前持有或占座关系不一致']:ambiguous?['SLOT_REQUIRED','该目标有多个槽位，请明确 slotId']:this.reason(action,owned??(targetId?this.interactions.target(targetId,slotId):undefined));
+    let reason=this.sim.isMounted?['MOUNTED','请先离开载具或坐骑']:missing?['ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`]:mismatch?['TARGET_MISMATCH','请求与角色当前持有或占座关系不一致']:ambiguous?['SLOT_REQUIRED','该目标有多个槽位，请明确 slotId']:this.reason(action,owned??(targetId?this.interactions.target(targetId,slotId):undefined));
+    const conflict=this.interactions.actorResources.conflict(this,this.resourceRequests());
+    if(!reason&&conflict)reason=['ACTOR_RESOURCE_BUSY',`${conflict.channel} is owned by ${conflict.owner.kind} ${conflict.owner.id}`];
     return {eligible:!reason,reason:reason?.[0]??'READY',message:reason?.[1]??'可执行'};
   }
   listTargets(){return [...this.interactions.targets.values()].map(target=>{
@@ -151,8 +163,10 @@ export class ActionSystem {
     const target=request.action==='standUp'?this.seatedTarget??undefined:request.targetId?this.interactions.target(request.targetId,request.slotId):undefined;
     const eligibility=this.eligibility(request.action,request.targetId,request.slotId);
     if(!eligibility.eligible)return this.save({...request,status:'rejected',code:eligibility.reason,message:eligibility.message});
+    if(target&&(request.action==='pickup'||request.action==='sit')){
+      if(!this.interactions.reserve(target,this,request.requestId,{invalidated:(target,reason)=>this.invalidateTarget(target,reason),actorId:this.sim.actorId,channels:FULL_BODY_RESOURCES}))return this.save({...request,status:'rejected',code:'TARGET_UNAVAILABLE',message:'目标或角色资源已被占用'});
+    }else if(!this.interactions.actorResources.acquire(this,this.resourceRequests(),{kind:'action',id:request.requestId}))return this.save({...request,status:'rejected',code:'ACTOR_RESOURCE_BUSY',message:'角色资源已被占用'});
     if(request.action==='putDown')return this.putDown(request);
-    if(target&&(request.action==='pickup'||request.action==='sit')&&!this.interactions.reserve(target,this,request.requestId,{invalidated:(target,reason)=>this.invalidateTarget(target,reason),actorId:this.sim.actorId}))return this.save({...request,status:'rejected',code:'TARGET_UNAVAILABLE',message:'目标已被占用'});
     const sim=this.sim;
     this.active={id:request.action,requestId:request.requestId,target:target??this.seatedTarget??undefined,elapsed:0,phase:target&&(request.action==='pickup'||request.action==='sit')?'align':'play',direction:sim.velocity.length()>.2?sim.velocity.clone().setY(0).normalize():sim.facing.clone(),initialSpeed:sim.speed,alignTime:0};
     sim.animationEvent=null;sim.completedMotion=null;sim.jumpBuffer=0;
@@ -169,11 +183,11 @@ export class ActionSystem {
   }
   private finish(status:'completed'|'cancelled',code:string,message:string){
     const active=this.active;if(!active)return;
-    this.save({requestId:active.requestId,action:active.id,targetId:active.target?.entityId,slotId:active.target?.slotId,status,code,message});
     this.interactions.finish(this,active.requestId);
-    this.active=null;this.pose=null;this.cooldown=ACTION_TUNING.cooldownSeconds;
     this.setHeight(this.seatedTarget?ACTION_TUNING.seatedHeightMeters:ACTION_TUNING.standingHeightMeters);this.sim.velocity.set(0,0,0);this.sim.speed=0;
     this.sim.controller.enableAutostep(.27,.2,false);this.sim.controller.enableSnapToGround(.18);
+    this.active=null;this.pose=null;this.cooldown=ACTION_TUNING.cooldownSeconds;this.retainRelationshipResources();
+    this.save({requestId:active.requestId,action:active.id,targetId:active.target?.entityId,slotId:active.target?.slotId,status,code,message});
   }
   private stepStandingExit(active:ActiveSkill):void{
     const sim=this.sim;this.move(new Vector3());
@@ -221,10 +235,10 @@ export class ActionSystem {
 
   private putDown(request:SkillRequest){
     const sim=this.sim,target=this.heldTarget!,placement=this.placement();
-    if(placement.reason)return this.save({...request,status:'rejected',code:placement.reason[0],message:placement.reason[1]});
+    if(placement.reason){this.retainRelationshipResources();return this.save({...request,status:'rejected',code:placement.reason[0],message:placement.reason[1]});}
     const position=placement.position!;
-    if(!this.interactions.releaseHeld(this.heldTarget!,this,{reason:'place',position})){this.heldTarget=null;this.pose=null;return this.save({...request,status:'rejected',code:'TARGET_LOST',message:'原持有目标已失效'});}
-    target.setApproach(sim.position,Math.atan2(sim.facing.x,sim.facing.z));this.heldTarget=null;
+    if(!this.interactions.releaseHeld(this.heldTarget!,this,{reason:'place',position})){this.heldTarget=null;this.pose=null;this.retainRelationshipResources();return this.save({...request,status:'rejected',code:'TARGET_LOST',message:'原持有目标已失效'});}
+    target.setApproach(sim.position,Math.atan2(sim.facing.x,sim.facing.z));this.heldTarget=null;this.retainRelationshipResources();
     return this.save({...request,targetId:target.definition.id,status:'completed',code:'PLACED',message:'已放到台面（物件状态切换，暂无专用放下动画）'});
   }
   /** Called at fixed 60 Hz on dry land before ordinary locomotion. */
@@ -305,6 +319,6 @@ export class ActionSystem {
   syncCarried(position?:Vector3){
     if(!this.carrying)return;
     const at=position??this.sim.position.clone().addScaledVector(UP,1.057).addScaledVector(this.sim.facing,.123);
-    if(!this.interactions.moveHeld(this.heldTarget!,this,at)){if(this.active)this.finish('cancelled','TARGET_LOST','原持有目标已失效');this.heldTarget=null;this.pose=null;}
+    if(!this.interactions.moveHeld(this.heldTarget!,this,at)){if(this.active)this.finish('cancelled','TARGET_LOST','原持有目标已失效');this.heldTarget=null;this.pose=null;this.retainRelationshipResources();}
   }
 }

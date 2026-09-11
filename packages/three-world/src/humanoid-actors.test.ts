@@ -72,6 +72,39 @@ it('navigates a complete NPC using map collision even without rendered terrain',
   if(receipt.status==='accepted')expect(world.operations.get(receipt.operationId).status).toBe('succeeded');
 });
 
+it('arbitrates navigation and humanoid actions before either can take the same actor resources',async()=>{
+ const world=await setup(),character=await world.humanoid!.createCharacter();character.root.position.set(0,.04,0);world.addCharacter({id:'npc',humanoid:character});world.step({},30);
+ const move=await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,10]});expect(move.status).toBe('accepted');world.step({},1);
+ const rejected=await world.execute({type:'humanoid.perform-action',actorId:'npc',request:{requestId:'nav-conflict',action:'roll'}});
+ expect(rejected).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
+ expect(await world.execute({type:'humanoid.set-input',actorId:'npc',input:emptyInput()})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
+ if(move.status==='accepted')expect(world.operations.get(move.operationId).status).toBe('running');
+ await world.execute({type:'actor.stop',entityId:'npc'});
+ const roll=await world.execute({type:'humanoid.perform-action',actorId:'npc',request:{requestId:'roll-owner',action:'roll'}});expect(roll.status).toBe('accepted');
+ expect(await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,10]})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
+ expect(world.getEntityState('npc').controlOwners).toContainEqual({channel:'locomotion',ownerKind:'action',ownerId:'roll-owner'});
+ world.step({},90);if(roll.status==='accepted')expect(world.operations.get(roll.operationId).status).toBe('succeeded');
+ expect((await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,10]})).status).toBe('accepted');
+ await world.reset();expect(world.getEntityState('npc').controlOwners.some(owner=>owner.ownerKind==='action')).toBe(false);
+ expect((await world.execute({type:'humanoid.set-input',actorId:'npc',input:emptyInput()})).status).toBe('applied');
+ expect(await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,10]})).toMatchObject({status:'rejected',error:{code:'ACTOR_INPUT_OVERRIDE_ACTIVE'}});
+ await world.execute({type:'humanoid.set-input',actorId:'npc',input:null});
+ expect((await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,10]})).status).toBe('accepted');
+});
+
+it('keeps the surface posture owner after its input pulse ends until exit or reset',async()=>{
+ const world=await setup(undefined,{map:{...map,boxes:Array.from({length:100},(_,i)=>({id:`floor-${i}`,position:[(i%10)*4-18,-.5,Math.floor(i/10)*4-18],size:[4,1,4]}))}}),character=await world.humanoid!.createCharacter();character.root.position.set(0,.04,0);world.addCharacter({id:'npc',humanoid:character});world.step({},30);
+ await world.execute({type:'humanoid.set-input',actorId:'npc',input:{...emptyInput(),actions:{prone:true}}});world.step({},1);
+ await world.execute({type:'humanoid.set-input',actorId:'npc',input:null});
+ expect(world.humanoid!.snapshot('npc').surface.mode).toBe('prone');
+ expect(await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,5]})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
+ world.step({},150);expect(world.getEntityState('npc').positionWorldMetersXYZ[1]).toBeGreaterThanOrEqual(0);expect(world.getEntityState('npc').controlOwners).toContainEqual({channel:'pose',ownerKind:'action',ownerId:'prone'});
+ await world.execute({type:'humanoid.set-input',actorId:'npc',input:{...emptyInput(),actions:{prone:true}}});world.step({},1);await world.execute({type:'humanoid.set-input',actorId:'npc',input:null});world.step({},150);
+ expect(world.humanoid!.snapshot('npc').surface.mode,JSON.stringify({surface:world.humanoid!.snapshot('npc').surface,position:world.getEntityState('npc').positionWorldMetersXYZ,prone:world.humanoid!.snapshot('npc').characterCapabilities.find(value=>value.id==='prone')})).toBe('none');expect(world.getEntityState('npc').controlOwners.some(owner=>owner.ownerKind==='action')).toBe(false);
+ expect((await world.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[0,0,5]})).status).toBe('accepted');
+ await world.reset();expect(world.getEntityState('npc').controlOwners.some(owner=>owner.ownerKind==='action')).toBe(false);
+});
+
 it('releases post-baseline actor instances through 50 spawn/despawn cycles while preserving the player source',async()=>{
   const world=await setup(),runtime=world.humanoid!;world.step({},1);const count=runtime.environment.colliderCount,allocate=vi.spyOn(Raw.Detour,'allocCrowd'),free=vi.spyOn(Raw.Detour,'freeCrowd');
   for(let n=0;n<50;n++){
@@ -337,9 +370,29 @@ it('advances a separately loaded AssetInstance mixer beside the full humanoid co
   const world=await setup(undefined,{assetDefinitions:{[definition.id]:definition}}),asset=await world.assets.load(definition.id);asset.object.position.set(5,.04,0);
   world.addCharacter({id:'asset-actor',asset});await world.start();world.stop();
   const move=await world.execute({type:'actor.move-to',entityId:'asset-actor',targetPositionWorldMetersXYZ:[5,0,5]});expect(move.status).toBe('accepted');world.step({},60);
+  expect(await world.execute({type:'entity.play-action',entityId:'asset-actor',actionId:'jump',playback:'once'})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
   expect(world.getEntityState('asset-actor').positionWorldMetersXYZ[2],JSON.stringify({move,state:world.getEntityState('asset-actor'),operation:move.status==='accepted'?world.operations.get(move.operationId):null})).toBeGreaterThan(1);expect(world.getEntityState('asset-actor').animation).toMatchObject({actionId:'walk'});expect(world.getEntityState('asset-actor').animation!.timeSeconds).toBeGreaterThan(.1);
   await world.execute({type:'actor.stop',entityId:'asset-actor'});expect((await world.execute({type:'entity.play-action',entityId:'asset-actor',actionId:'jump',playback:'once'})).status).toBe('applied');world.step({},10);
+  expect(await world.execute({type:'actor.move-to',entityId:'asset-actor',targetPositionWorldMetersXYZ:[5,0,5]})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
   expect(world.getEntityState('asset-actor').animation?.actionId).toBe('jump');await world.reset();expect(world.getEntityState('asset-actor').animation).toMatchObject({actionId:'idle',timeSeconds:0});
+});
+
+it('prevalidates resource changes in a plan without leaving a partially started animation',async()=>{
+ const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')! as unknown as AssetDefinition;
+ const world=await setup(undefined,{assetDefinitions:{[definition.id]:definition}}),asset=await world.assets.load(definition.id);asset.object.position.set(5,.04,0);world.addCharacter({id:'actor',asset});
+ const register=(id:string,plan:()=>import('./contracts').PrimitiveCommand[])=>world.registerAction({id,description:id,inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'entity',entityId:'actor',channels:['locomotion','animation']}],plan});
+ register('conflict',()=>[{type:'entity.play-action',entityId:'actor',actionId:'jump',playback:'loop'},{type:'actor.move-to',entityId:'actor',targetPositionWorldMetersXYZ:[5,0,5]}]);
+ register('nav-to-animation',()=>[{type:'actor.stop',entityId:'actor'},{type:'entity.play-action',entityId:'actor',actionId:'jump',playback:'loop'}]);
+ register('animation-to-nav',()=>[{type:'entity.stop-action',entityId:'actor'},{type:'actor.move-to',entityId:'actor',targetPositionWorldMetersXYZ:[5,0,5]}]);
+ world.step({},30);const before=world.getEntityState('actor');
+ expect(await world.execute({type:'action.invoke',actionId:'conflict',arguments:{}})).toMatchObject({status:'rejected',error:{code:'ACTOR_RESOURCE_BUSY'}});
+ const unchanged=world.getEntityState('actor');expect(unchanged.animation).toEqual(before.animation);expect(unchanged.controlOwners).toEqual(before.controlOwners);expect(unchanged.positionWorldMetersXYZ).toEqual(before.positionWorldMetersXYZ);
+ unchanged.rotationLocalRadiansXYZ.forEach((value,index)=>expect(value).toBeCloseTo(before.rotationLocalRadiansXYZ[index]!,12));
+ expect((await world.execute({type:'actor.move-to',entityId:'actor',targetPositionWorldMetersXYZ:[5,0,5]})).status).toBe('accepted');
+ expect((await world.execute({type:'action.invoke',actionId:'nav-to-animation',arguments:{}})).status).toBe('applied');
+ expect(world.getEntityState('actor').controlOwners).toContainEqual({channel:'animation',ownerKind:'animation',ownerId:'jump'});
+ expect((await world.execute({type:'action.invoke',actionId:'animation-to-nav',arguments:{}})).status).toBe('accepted');
+ expect(world.getEntityState('actor').controlOwners.some(owner=>owner.ownerKind==='animation')).toBe(false);
 });
 
 it('keeps moving ordinary and full humanoid capsules separated without navigation',async()=>{

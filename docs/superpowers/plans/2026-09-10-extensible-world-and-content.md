@@ -104,7 +104,7 @@ Map 与普通 Entity/prototype 已接入同一个共享槽位和持有关系。�
 SDK、Playground、Creator 能力卡/schema 和 Episode 同步消费 entity/slot/generation。
 实际三角色交互样例与验证见 [动态槽位验收](../../reviews/2026-09-11-dynamic-interaction-slots.md)。
 
-- [ ] 统一角色移动/全身动画/姿态/手部与目标的原子资源仲裁；当前目标/实体预约已原子化，尚不能代替角色跨能力仲裁。
+- [x] 统一角色移动/全身动画/姿态/手部与目标的原子资源仲裁；批量命令预验证模拟按序释放/获取，持续持有、坐姿及攀爬到翻越保留正确 owner。实现和真实消费者证据见 [资源仲裁](../../reviews/2026-09-11-actor-resource-arbitration.md)。
 - [x] 世界持有 target/slot generation 与 reservation；grip/sit 转成持续 heldBy/occupiedBy。普通实体物理与视觉保持原身份。
 - [x] 同 tick 两请求争物仅一方成功；多座位独立占用，目标变更/reset/despawn/低顶退出有回归。真实 Creator/Episode 样例、近景与阶段记录已提供。
 
@@ -157,3 +157,4 @@ SDK、Playground、Creator 能力卡/schema 和 Episode 同步消费 entity/slot
 - [ ] 检查大而多责的模块、重复逻辑、隐藏共享可变状态、时序耦合、魔法常量、过度抽象、无用兼容层、吞错，以及异步失效和资源释放漏洞；每项结论给出具体调用路径和影响，不以文件长度单独判错。
 - [ ] 对照相关引擎和依赖的官方文档、实际实现及本项目需求审视资产身份、共享只读资源、独立实例状态、预约归属、取消/复位/销毁语义；记录适用的实践和必要取舍，不因框架形式相似就认定合理。
 - [ ] 汇总发现的问题、修复及复验结果、剩余风险和验收缺口；证据绑定最终源码/runtime 身份，测试通过不代替架构审查或人工视觉验收。
+- [ ] 修复完整人物在 40×1×40 米地板上的匍匐支撑精度：资源仲裁回归中实测根位置下沉约 0.42 米，导致起身净空检查失败；同一地板按 4×1×4 米等体积分块后正常。诊断日志为 `.codex-tmp/r0/surface-owner-position.log`、`surface-owner-steps.log`、`surface-owner-tiled.log`。需要独立碰撞回归和性能验证，不能把分块测试通过当作运行时修复完成。

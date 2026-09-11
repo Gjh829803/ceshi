@@ -1,3 +1,4 @@
+import {ActorResources} from '../actor-resources';
 import { readCameraWorldPose } from '../camera-observation';
 import {
 DEFAULT_HUMANOID_VIEW,
@@ -252,12 +253,13 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   private readonly characterFactory:(()=>Promise<Character>)|undefined;
   private ordinaryPhysics:ThreePhysics;
+  private readonly executionResources=new ActorResources();
   private releaseOrdinarySubstep:()=>void;
   private constructor(readonly options:HumanoidRuntimeOptions,readonly camera:THREE.PerspectiveCamera,private releaseCharacterOwnership:(()=>void)|undefined){
     this.characterFactory=options.character.animation?.createFactory();
     this.currentMap=options.map;
     this.specs=options.vehicles.map(v=>({...structuredClone(v.spec),id:v.instanceId}));
-    this.environment=new EnvironmentQueries(this.instanceMap(options.map));
+    this.environment=new EnvironmentQueries(this.instanceMap(options.map),this.executionResources);
     this.ordinaryPhysics=ThreePhysics.borrow(this.environment.borrowPhysics());
     this.releaseOrdinarySubstep=this.environment.beforePhysicsSubstep(f=>physicsHost(this.ordinaryPhysics).prepareSubstep(f));
     this.currentSimulation=new Simulation(this.environment,this.specs);
@@ -270,6 +272,7 @@ export class HumanoidRuntime implements PhysicsPort {
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     this.presentation=new PresentationState(this.simulation);
     registerHumanoidHost(this, {
+      resources:this.executionResources,
       setMapValidator:validate=>{this.mapValidator=validate;},
       interactionBody:id=>physicsHost(this.ordinaryPhysics).interactionBody(id),
       claimCharacter:(id,character)=>id===this.options.character.instanceId&&character===this.options.character.animation&&this.releaseCharacterOwnership?this.releaseCharacterOwnership:claimCharacter(character),
@@ -416,6 +419,7 @@ export class HumanoidRuntime implements PhysicsPort {
     return structuredClone({override:override?{source:override.source,input:override.input}:null,lastApplied:this.actorLastInputs.get(actorId)??null});
   }
   private setActorInputOwned(id:string,input:Input|undefined,source:'humanoid.set-input'|'setInput'='setInput'):(()=>void)|void{
+    if(input!==undefined&&this.executionResources.inspect(id).some(claim=>claim.owner.kind==='navigation'))throw new Error('ACTOR_RESOURCE_BUSY: Stop navigation before installing explicit actor input.');
     this.actorController(id);this.actorLastInputs.delete(id);if(input===undefined){this.actorInputs.delete(id);return;}
     this.validateInput(input);const entry={input:structuredClone(input),source};this.actorInputs.set(id,entry);
     return()=>{if(this.disposed||this.actorInputs.get(id)!==entry)return;this.assertExternalMutation();this.actorInputs.delete(id);this.actorLastInputs.delete(id);};
@@ -512,7 +516,7 @@ export class HumanoidRuntime implements PhysicsPort {
   onSimulationReplaced(callback:(reason:'map'|'reset')=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
   switchMap(map:EnvironmentDefinition):void{this.assertExternalMutation();
     const profile=this.prepareProfile(this.profile);validateEnvironment(map);this.mapValidator?.(map);
-    const replacement=new EnvironmentQueries(this.instanceMap(map));
+    const replacement=new EnvironmentQueries(this.instanceMap(map),this.executionResources);
     const previous=this.environment;
     let staged:Simulation|undefined,ordinary:ThreePhysics|undefined;
     try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=new Simulation(replacement,this.simulation.vehicles.map(v=>structuredClone(v.spec)));this.configureSimulation(staged,profile);this.restoreActors(staged,profile);}
@@ -786,7 +790,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   private resetOwned():void{
     const profile=this.prepareProfile(this.baselineProfile);validateEnvironment(this.currentMap);
-    const replacement=new EnvironmentQueries(this.instanceMap(this.currentMap)),previous=this.environment;
+    const replacement=new EnvironmentQueries(this.instanceMap(this.currentMap),this.executionResources),previous=this.environment;
     let staged:Simulation|undefined,ordinary:ThreePhysics|undefined;
     try{this.assertRigidIds(this.ordinaryPhysics.audit().entities.map(entity=>entity.id),replacement);ordinary=physicsHost(this.ordinaryPhysics).fork(replacement.borrowPhysics());staged=new Simulation(replacement,this.simulation.vehicles.map(v=>structuredClone(v.spec)));this.configureSimulation(staged,profile);this.restoreActors(staged,profile);}
     catch(error){staged?.dispose();ordinary?.dispose();replacement.dispose();throw error;}

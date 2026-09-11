@@ -6,6 +6,7 @@ import type { SkillResult } from './humanoid/action-schema';
 
 /** Engine/World capability, deliberately absent from the public barrels. */
 export interface HumanoidHostAccess {
+  readonly resources:import('../actor-resources').ActorResources;
   isDisposed(): boolean;
   setMapValidator(validate:(map:import('./environment/types').EnvironmentDefinition)=>void):void;
   interactionBody(id:string):import('../interaction-body').InteractionBody;

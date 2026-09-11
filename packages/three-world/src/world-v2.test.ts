@@ -2,9 +2,30 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorld, type ThreeWorld } from './world.js';
 import type { CommandReceipt, TaskScope } from './contracts.js';
+import {ActorResources,actorResources} from './actor-resources';
 
 const liveWorlds: ThreeWorld[] = [];
 afterEach(() => { for (const world of liveWorlds.splice(0)) world.dispose(); });
+
+it('acquires actor resources atomically and retains only persistent relationship resources',()=>{
+ const resources=new ActorResources(),nav={},action={},other={};
+ expect(resources.acquire(nav,actorResources('a',['locomotion']),{kind:'navigation',id:'nav'})).toBe(true);
+ expect(resources.acquire(action,[...actorResources('b',['left-hand']),...actorResources('a',['locomotion','right-hand'])],{kind:'action',id:'pickup'})).toBe(false);
+ expect(resources.inspect('b')).toEqual([]);expect(resources.inspect('a')).toHaveLength(1);
+ resources.release(nav);expect(resources.acquire(action,actorResources('a',['locomotion','animation','left-hand','right-hand']),{kind:'action',id:'pickup'})).toBe(true);
+ resources.retain(action,actorResources('a',['left-hand','right-hand']),{kind:'relationship',id:'held'});
+ expect(resources.acquire(other,actorResources('a',['locomotion','animation']),{kind:'navigation',id:'carry'})).toBe(true);
+ expect(resources.inspect('a').filter(claim=>claim.owner.kind==='relationship').map(claim=>claim.channel)).toEqual(['left-hand','right-hand']);
+ const observed=resources.inspect('a');(observed[0]!.owner as {id:string}).id='modified';expect(resources.inspect('a')[0]!.owner.id).toBe('held');
+ resources.release(action);resources.release(other);expect(resources.inspect('a')).toEqual([]);
+ const surface={},traversal={};resources.acquire(surface,actorResources('a',['locomotion','pose']),{kind:'action',id:'climb'});
+ const preview=resources.fork();preview.release(surface);expect(resources.inspect('a')).toHaveLength(2);
+ resources.acquire(other,actorResources('b',['pose']),{kind:'action',id:'other'});
+ expect(resources.transfer(surface,traversal,[...actorResources('a',['locomotion','pose']),...actorResources('b',['pose'])],{kind:'action',id:'top'})).toBe(false);
+ expect(resources.inspect('a')[0]!.owner.id).toBe('climb');
+ expect(resources.transfer(surface,traversal,actorResources('a',['locomotion','pose']),{kind:'action',id:'top'})).toBe(true);
+ resources.release(surface);expect(resources.inspect('a')[0]!.owner.id).toBe('top');resources.clear();expect(resources.inspect('a')).toEqual([]);
+});
 
 describe('shared shadow configuration',()=>{
  it('applies project settings to the renderer and explicitly selected lights, including replacement lights',async()=>{

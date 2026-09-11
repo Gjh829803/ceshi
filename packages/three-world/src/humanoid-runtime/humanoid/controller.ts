@@ -1,3 +1,4 @@
+import {actorResources,FULL_BODY_RESOURCES,type ActorResources} from '../../actor-resources';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Vector3 } from 'three';
 import {type EnvironmentQueries,type HumanoidRig,type QueryBody} from '../environment/queries';
@@ -108,6 +109,7 @@ export class HumanoidController {
   completedMotion:{sourceId:string;sourceTime:number;serial:number}|null=null;
   motionSerial=0;
   lastResult='朝障碍移动 + 空格：翻越 / 攀上';
+  get resources():ActorResources{return this.queries.interactions.actorResources;}
   get canBoard(){return !this.skills.active&&!this.skills.carrying&&!this.skills.seated&&this.surface.mode==='none'&&!this.traversal&&this.stance==='stand';}
   get boardingReason(){return this.skills.carrying?'请先放下手中物件':this.skills.seated?'请先起身':this.surface.mode==='prone'?'请先从匍匐起身':this.surface.mode==='climbing'?'请先退出攀爬':this.traversal||this.skills.active?'请等待当前动作完成':this.stance==='crouch'?'请先站起':'';}
   get isMounted(){return this.mounted;}
@@ -173,6 +175,7 @@ export class HumanoidController {
   /** Synchronize the actor immediately for queries; never integrate world physics here. */
   commitPose(){this.body.setTranslation(this.body.nextTranslation(),true);this.world.updateSceneQueries([this.capsule.handle]);}
   private resetMovement(x:number,z:number,y:number,yaw:number){
+    this.resources.release(this);
     this.traversalRequested=false;
     this.completedMotion=null;this.motionSerial++;this.controller.enableSnapToGround(.18);this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
     this.swimming=false;this.water=null;this.waterEntrySpeed=0;
@@ -409,6 +412,9 @@ export class HumanoidController {
       if(hit){this.lastResult='动画路径被其他障碍阻挡';probe.kind='blocked';probe.reason=this.lastResult;this.cooldown=.2;return false;}
       previous=next;
     }
+    const requests=this.actorId?actorResources(this.actorId,FULL_BODY_RESOURCES):[],identity={kind:'action' as const,id:`traversal:${sourceId}`};
+    const acquired=this.surface.mode==='climbing'?this.resources.transfer(this.surface,this,requests,identity):this.resources.acquire(this,requests,identity);
+    if(!acquired){this.lastResult='ACTOR_RESOURCE_BUSY: 角色资源被其他任务占用';return false;}
     this.traversal={probe,start:this.position.clone(),elapsed:0,duration:motion.duration,progress:0,phase:'reach',motion,safePositions:[...this.positionHistory.map(p=>p.clone()),this.position.clone()],entryVelocity,airborne};
     this.traversalRequested=false;
     this.animationEvent=null;this.inputHeldTime=0;this.runHeldTime=0;this.startEmitted=true;this.lastMoveInput.set(0,0,0);
@@ -467,7 +473,7 @@ export class HumanoidController {
         this.restoreSafePosition(tr);
         this.lastResult='动作被其他碰撞中断';this.events.push({time:this.elapsed,kind:tr.probe.kind,height:tr.probe.height,result:'interrupted'});
         this.completedMotion={sourceId:tr.motion.sourceId,sourceTime:sample.sourceTime,serial:this.motionSerial};
-        this.traversal=null;this.handTargets=[];this.cooldown=.55;this.vertical=tr.airborne?Math.min(-1,tr.entryVelocity?.y??-1):0;
+        this.traversal=null;this.resources.release(this);this.handTargets=[];this.cooldown=.55;this.vertical=tr.airborne?Math.min(-1,tr.entryVelocity?.y??-1):0;
         if(tr.airborne)this.velocity.copy(tr.entryVelocity!).setY(0);
         this.grounded=false;this.controller.enableSnapToGround(.18);return;
       }
@@ -480,7 +486,7 @@ export class HumanoidController {
         this.events.push({time:this.elapsed,kind:tr.probe.kind,height:tr.probe.height,result:complete?'completed':'interrupted'});
         this.completedMotion={sourceId:tr.motion.sourceId,sourceTime:sample.sourceTime,serial:this.motionSerial};
         if(!complete)this.restoreSafePosition(tr);
-        this.traversal=null;this.handTargets=[];this.cooldown=.55;this.vertical=complete?0:Math.min(-1,tr.entryVelocity?.y??-1);this.grounded=complete;this.controller.enableSnapToGround(.18);
+        this.traversal=null;this.resources.release(this);this.handTargets=[];this.cooldown=.55;this.vertical=complete?0:Math.min(-1,tr.entryVelocity?.y??-1);this.grounded=complete;this.controller.enableSnapToGround(.18);
       }
       return;
     }
@@ -569,7 +575,7 @@ export class HumanoidController {
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
-    this.skills.dispose();this.crates=[];
+    this.skills.dispose();this.resources.release(this.surface);this.resources.release(this);this.crates=[];
     this.queries.releaseHumanoidRig(this.rig);
   }
   sync(){const p=this.body.translation();this.position.set(p.x,p.y-this.capsuleCenter,p.z);}

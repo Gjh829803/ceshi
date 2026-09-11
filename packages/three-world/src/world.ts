@@ -365,6 +365,7 @@ export class ThreeWorld implements API.World {
  }
  private validatePreparedScene(prepared:Prepared,applyTimedTransforms:boolean):void{
   const candidates=new Map(this.entries);const physical=new Set<string>();const removed=new Set<string>();
+  const resourcePlan=this.engine.resourcePlanValidator();
   for(const [id,options] of prepared.spawned){
    const isCharacter=!('role' in options);const asset='asset' in options?options.asset:undefined;const humanoid='humanoid' in options?options.humanoid:undefined;const object=humanoid?.root??asset?.object??options.object!;
    const body=humanoid?{heightMeters:1.68,radiusMeters:.28}:isCharacter?(options as API.CharacterOptions).body??asset?.recommendedBody:undefined;if(isCharacter&&!body)throw failure('CHARACTER_BODY_REQUIRED');
@@ -382,6 +383,8 @@ export class ThreeWorld implements API.World {
      if(this.within(parent.object,child.object))throw failure('ATTACHMENT_CYCLE');parent.object.add(child.object);child.object.position.fromArray(command.positionLocalMetersXYZ);continue;
     }
     const entry=entity(command.entityId);if('humanoid' in entry.options&&entry.options.humanoid&&!isHumanoidActorCommand(command.type))throw failure('HUMANOID_USE_RUNTIME_COMMANDS');const duration='durationSeconds' in command?command.durationSeconds??0:0;
+    resourcePlan(command.type,entry.id);
+    if(command.type==='entity.set-position'&&entry.body)resourcePlan('actor.stop',entry.id);
     if((command.type==='entity.set-position'||command.type==='entity.set-rotation')&&duration>0&&entry.physicsKind!=='kinematic'&&entry.physicsKind!=='none')throw failure('KINEMATIC_REQUIRED');
     if(command.type==='entity.set-rotation'&&entry.body)throw failure('ACTOR_ROTATION_OWNED_BY_MOVEMENT');
     if(command.type==='entity.set-scale'&&entry.body&&!(command.scaleLocalXYZ[0]===command.scaleLocalXYZ[1]&&command.scaleLocalXYZ[1]===command.scaleLocalXYZ[2]))throw failure('CHARACTER_UNIFORM_SCALE_REQUIRED');
@@ -401,7 +404,7 @@ export class ThreeWorld implements API.World {
     if(command.type==='entity.apply-impulse'&&entry.physicsKind!=='dynamic')throw failure('IMPULSE_REQUIRES_DYNAMIC');
     if(command.type.startsWith('actor.')&&!entry.body)throw failure('ACTOR_REQUIRED');
     if(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(command.type)&&entry.id===this.engine.controlledEntityId)throw failure('PLAYER_INPUT_OWNS_ACTOR');
-    const navigationRestriction=this.navigationRestriction(command.type,entry);if(navigationRestriction)throw navigationRestriction;
+    const navigationRestriction=this.navigationRestriction(command.type,entry,false);if(navigationRestriction)throw navigationRestriction;
     if(command.type==='actor.follow'){entity(command.targetEntityId);if(command.targetEntityId===command.entityId)throw failure('FOLLOW_SELF');}
     if(command.type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))throw failure('AUTONOMY_NOT_REGISTERED');
     if(command.type==='actor.set-movement'&&command.movementId!=='ground'&&!this.movements.has(command.movementId))throw failure('MOVEMENT_NOT_REGISTERED');
@@ -554,6 +557,7 @@ export class ThreeWorld implements API.World {
   this.pauseMountedNavigation();
   for(const [id,autonomy] of this.autonomies){
    if(autonomy.paused||!this.entries.has(id)||this.entity(id).movementId!=='ground'||id===this.engine.controlledEntityId)continue;
+   if(this.navigationRestriction('actor.move-to',this.entity(id)))continue;
    const current=this.engine.actorTaskState(id);if(current?.status==='running')continue;
    autonomy.delay-=deltaSeconds;if(autonomy.delay>0)continue;
    if(current?.status==='succeeded'){autonomy.index=(autonomy.index+1)%autonomy.behavior.waypointPositionsWorldMetersXYZ.length;autonomy.delay=autonomy.behavior.pauseSeconds??0;this.engineCommand({type:'actor.stop',entityId:id});if(autonomy.delay>0)continue;}
@@ -680,7 +684,9 @@ export class ThreeWorld implements API.World {
   const rotation=logical?new THREE.Euler().setFromQuaternion(logical.rotation):entry.object.rotation;
   const owners:API.EntityState['controlOwners'][number][]=[];
   for(const channel of ['position','rotation','scale','visibility'] as const){const parameter=this.owners.get(`${id}:${channel}`);if(parameter)owners.push({channel,ownerKind:'parameter',ownerId:parameter});}
-  if(entry.body)owners.push({channel:'locomotion',ownerKind:id===this.engine.controlledEntityId?'player-input':this.autonomies.get(id)?.paused===false?'autonomy':'user-command'});
+  const resources=this.engine.resources.inspect(id);
+  for(const resource of resources)owners.push({channel:resource.channel,ownerKind:resource.owner.kind==='navigation'?(this.autonomies.get(id)?.paused===false?'autonomy':'user-command'):resource.owner.kind,ownerId:resource.owner.id});
+  if(entry.body&&!resources.some(resource=>resource.channel==='locomotion'))owners.push({channel:'locomotion',ownerKind:id===this.engine.controlledEntityId?'player-input':this.autonomies.get(id)?.paused===false?'autonomy':'user-command'});
   else if(entry.physicsKind==='dynamic')owners.push({channel:'position',ownerKind:'physics'});
   const internal=entry.asset?this.assets.internal(entry.asset):undefined;
   const humanoidAnimation=this.humanoid?.animationState(id);
@@ -689,11 +695,13 @@ export class ThreeWorld implements API.World {
    ...(physics&&entry.body?{motion:{phase:physics.isGrounded?'grounded' as const:physics.velocityMetersPerSecondXYZ[1]>0?'jumping' as const:'falling' as const,velocityWorldMetersPerSecondXYZ:physics.velocityMetersPerSecondXYZ,isGrounded:physics.isGrounded,collisionEntityIds:physics.collisionEntityIds}}:{}),
    ...(humanoidAnimation?{animation:humanoidAnimation}:internal?.currentActionId&&internal.currentClipName?{animation:{actionId:internal.currentActionId,clipName:internal.currentClipName,timeSeconds:internal.timeSeconds}}:{}),controlOwners:owners};
  }
- private navigationRestriction(type:API.PrimitiveCommand['type'],entry:Registration):API.RuntimeError|undefined{
+ private navigationRestriction(type:API.PrimitiveCommand['type'],entry:Registration,checkResources=true):API.RuntimeError|undefined{
   if(!['actor.move-to','actor.follow','actor.resume-autonomy'].includes(type))return;
   if(this.humanoid?.hasActor(entry.id)&&this.humanoid.actorController(entry.id).isMounted)return failure('MOUNTED_ACTOR_NAVIGATION_UNSUPPORTED','Exit the vehicle before requesting foot navigation; driving requires explicit vehicle input.','unsupported-capability',[entry.id]);
   if(entry.movementId!=='ground')return failure('GROUND_NAVIGATION_REQUIRED','Custom movement can compute intent; built-in navigation currently supports ground.','unsupported-capability');
   if(!this.engine.navigationEnabled)return failure('WORLD_NAVIGATION_DISABLED','Built-in navigation is disabled in this world.','unsupported-capability');
+  if(this.humanoid?.hasActor(entry.id)&&this.humanoid.inspectControls(entry.id).override)return failure('ACTOR_INPUT_OVERRIDE_ACTIVE','Release explicit humanoid input before requesting navigation.','runtime',[entry.id]);
+  const conflict=checkResources&&this.engine.navigationConflict(entry.id);if(conflict)return failure('ACTOR_RESOURCE_BUSY',`${conflict.channel} is owned by ${conflict.owner.kind} ${conflict.owner.id}`,'runtime',[entry.id]);
  }
  private commandDescriptor(type:API.PrimitiveCommand['type'],entry:Registration):API.CommandDescriptor{
   const fields=commandFields[type];const properties:Record<string,API.JsonValue>={type:{const:type}};
@@ -706,6 +714,7 @@ export class ThreeWorld implements API.World {
   if(type==='entity.set-rotation'&&entry.body)reason=failure('ACTOR_ROTATION_OWNED_BY_MOVEMENT');
   if(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(type)&&entry.id===this.engine.controlledEntityId)reason=failure('PLAYER_INPUT_OWNS_ACTOR');
   reason??=this.navigationRestriction(type,entry);
+  if(!reason&&type==='entity.play-action'&&this.engine.animationConflict(entry.id))reason=failure('ACTOR_RESOURCE_BUSY','Animation is owned by another actor task.','runtime',[entry.id]);
   if(!reason&&type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))reason=failure('AUTONOMY_NOT_REGISTERED');
   return {type,schema:{type:'object',properties,required:['type',...fields.filter(field=>!optional.has(field))],additionalProperties:false},isAvailable:!reason,...(reason?{unavailableReason:reason}:{})};
  }

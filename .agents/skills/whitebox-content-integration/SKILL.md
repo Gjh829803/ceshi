@@ -14,6 +14,10 @@ Episode 能使用同一运行时复现。按内容实际需要编辑资源、bin
 共享源资源，不复用同一个 root/mixer。角色输入目标与相机跟随目标分开设置，
 NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `humanoid` topic 与
 `multiple-actors` 示例；自动导航、可执行动作及尚未支持的组合以实际接口为准。
+导航和动作通过 SDK 争用角色资源，冲突返回 `ACTOR_RESOURCE_BUSY`，可用
+`getEntityState(id).controlOwners` 查询占用。接近完成后再拾取/就座；拾取完成后的
+持有允许继续导航，起身安全结束后才恢复导航。显式输入与导航之间先释放前者，
+不要通过直接写位置或额外动画循环绕过占用。
 
 先读取仓库 `AGENTS.md` 与 [架构](../../../docs/three-sdk-architecture.md)。以当前源码和实际
 消费者为准；下面路径均相对仓库根。遵循用户指定 worktree 与修改范围。

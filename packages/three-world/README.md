@@ -74,6 +74,18 @@ A humanoid request without an actor ID requires a controlled full actor; it neve
 selects the previous humanoid silently. Input action edges are `input.humanoid.actions`, while
 movement and vehicle axes share the same `input.humanoid` envelope.
 
+Navigation claims locomotion and animation together. Contextual actions and
+surface/traversal transitions claim the actor's locomotion, animation, pose and
+both hands before starting; conflicts return `ACTOR_RESOURCE_BUSY`. After pickup,
+the held relationship retains both hands while navigation can carry the object.
+An occupied seat retains locomotion, animation and pose until safe exit completes.
+Manual asset playback claims animation until stopped or completed. Read
+`world.getEntityState(id).controlOwners` for current ownership. Stop navigation
+before installing explicit humanoid input; clear that override with
+`humanoid.set-input` and `input:null` before requesting navigation again.
+Batch scene commands validate resource changes in order before committing them,
+so stopping navigation then playing an animation is a valid handoff.
+
 Use `humanoid.perform-action` for contextual humanoid actions, `vehicle.*` for
 boarding and recovery, and `humanoid.set-input`, `humanoid.apply-profile` and
 `humanoid.set-camera-mode` for the controller's input, settings and camera.

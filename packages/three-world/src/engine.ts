@@ -1,3 +1,4 @@
+import {ActorResources,actorResources} from './actor-resources';
 import * as THREE from 'three';
 import { playLocomotion } from './assets.js';
 import { ThreeCameraRig,type CameraRigInput } from './camera.js';
@@ -20,7 +21,7 @@ type Entity = {
   initialParent: THREE.Object3D | null; initialPosition: THREE.Vector3; initialQuaternion: THREE.Quaternion; initialScale: THREE.Vector3; initialVisible: boolean;
   initialMatrix: THREE.Matrix4; initialMatrixAutoUpdate: boolean;
 };
-type ActorGoal = { kind: 'move' | 'follow'; points: Vec3[]; index: number; run: boolean; targetEntityId?: string; distanceMeters: number; lastPosition: THREE.Vector3; stagnantSeconds: number; repathSeconds: number; navigationSignature: string };
+type ActorGoal = { resourceOwner:object; kind: 'move' | 'follow'; points: Vec3[]; index: number; run: boolean; targetEntityId?: string; distanceMeters: number; lastPosition: THREE.Vector3; stagnantSeconds: number; repathSeconds: number; navigationSignature: string };
 export type CameraFollow = Omit<import('./camera.js').CameraRigFollowOptions,'targetEntityId'>&{targetEntityId?:string};
 export type WorldOptions = {
   scene?: THREE.Scene; camera?: THREE.Camera; canvas?: HTMLCanvasElement; renderer?: THREE.WebGLRenderer;
@@ -61,6 +62,8 @@ export class WorldEngine {
   private cameraInitialParent: THREE.Object3D | null = null;
   private controlledInitial: string | undefined;
   readonly cameraRig: ThreeCameraRig;
+  readonly resources:ActorResources;
+  private nextResourceOwner=0;
   private readonly afterUpdates = new Set<() => void>();
   private driveProvider: ((id:string,input:WorldInput,direction:Vec3,dt:number)=>{drive:CharacterDrive;facing?:Vec3;actionId?:string}|undefined)|undefined;
   private pointerInput: CameraRigInput = {};
@@ -96,6 +99,7 @@ export class WorldEngine {
     this.ownsRenderer = options.renderer === undefined;
     this.physics = physics; this.navigation = navigation;
     this.humanoid=physics instanceof HumanoidRuntime?physics:undefined;
+    this.resources=this.humanoid?humanoidHost(this.humanoid).resources:new ActorResources();
     this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius),
       id => this.entities.has(id) ? tuple(position(this.entity(id).object)) : undefined,
       id => { const entity = this.entities.get(id); if (!entity?.character) return undefined;
@@ -201,8 +205,31 @@ export class WorldEngine {
   setDriveProvider(provider:NonNullable<WorldEngine['driveProvider']>):void {this.driveProvider=provider;}
   entityOptions(id:string):EntityOptions {return this.entity(id).options;}
   actorTaskState(id:string):{status:'running'|'succeeded'|'failed';error?:string}|undefined {return this.taskResults.get(id);}
-  stopAction(id:string):void {this.manualActions.delete(id);}
-  playAction(id:string,actionId:string,playback:'once'|'loop'='once'):void {const e=this.entity(id);if(!e.asset)throw new Error('WORLD_ENTITY_HAS_NO_ANIMATIONS');e.asset.play(actionId,{playback});this.manualActions.add(id);}
+  private clearGoal(id:string):void{const goal=this.goals.get(id);if(goal)this.resources.release(goal.resourceOwner);this.goals.delete(id);}
+  navigationConflict(id:string){return this.resources.conflict(this.goals.get(id)?.resourceOwner,actorResources(id,['locomotion','animation']));}
+  animationConflict(id:string){return this.resources.conflict(this.manualActions.get(id),actorResources(id,['animation']));}
+  /** Validate sequential release/acquire intents against a disposable candidate table. */
+  resourcePlanValidator():(type:string,id:string)=>void{
+    const resources=this.resources.fork(),navigation=new Map([...this.goals].map(([id,goal])=>[id,goal.resourceOwner])),animations=new Map(this.manualActions);
+    return(type,id)=>{
+      if(type==='actor.stop'||type==='actor.set-movement'){const owner=navigation.get(id);if(owner)resources.release(owner);navigation.delete(id);return;}
+      if(type==='entity.stop-action'){const owner=animations.get(id);if(owner)resources.release(owner);animations.delete(id);return;}
+      if(type==='entity.play-action'){
+        const owner=animations.get(id)??{};if(!resources.acquire(owner,actorResources(id,['animation']),{kind:'animation',id}))throw new Error('ACTOR_RESOURCE_BUSY');animations.set(id,owner);
+      }
+      if(type==='actor.move-to'||type==='actor.follow'||type==='actor.resume-autonomy'){
+        const owner=navigation.get(id)??{};if(!resources.acquire(owner,actorResources(id,['locomotion','animation']),{kind:'navigation',id}))throw new Error('ACTOR_RESOURCE_BUSY');navigation.set(id,owner);
+      }
+    };
+  }
+  stopAction(id:string):void {const owner=this.manualActions.get(id);if(owner)this.resources.release(owner);this.manualActions.delete(id);}
+  playAction(id:string,actionId:string,playback:'once'|'loop'='once'):void {
+    const e=this.entity(id);if(!e.asset)throw new Error('WORLD_ENTITY_HAS_NO_ANIMATIONS');
+    if(!e.asset.actionIds.includes(actionId)||!['once','loop'].includes(playback))throw new Error('WORLD_ANIMATION_INVALID');
+    const previous=this.manualActions.get(id),owner=previous??{};
+    if(!this.resources.acquire(owner,actorResources(id,['animation']),{kind:'animation',id:actionId}))throw new Error('ACTOR_RESOURCE_BUSY');
+    try{e.asset.play(actionId,{playback});this.manualActions.set(id,owner);}catch(error){if(!previous)this.resources.release(owner);throw error;}
+  }
   setRotation(id:string,rotation:Vec3):void {
     const entity=this.entity(id);const prior=entity.object.quaternion.clone();const matrix=entity.object.matrix.clone();
     entity.object.rotation.set(...rotation);if(!entity.object.matrixAutoUpdate)entity.object.matrix.compose(entity.object.position,entity.object.quaternion,entity.object.scale);
@@ -327,7 +354,7 @@ export class WorldEngine {
         });
       } else this.locomotionAnimations.delete(id);
       const requested = customActions.get(id) ?? automatic;
-      if(entity.asset.isActionComplete)this.manualActions.delete(id);
+      if(entity.asset.isActionComplete)this.stopAction(id);
       if (entity.character && !this.manualActions.has(id) && entity.asset.actionIds.includes(requested)) {
         if (!customActions.has(id) && (requested === 'walk' || requested === 'run')) playLocomotion(entity.asset, requested);
         else entity.asset.play(requested);
@@ -335,7 +362,7 @@ export class WorldEngine {
       entity.asset.update(dt);
     }
   }
-  private readonly manualActions = new Set<string>();
+  private readonly manualActions = new Map<string,object>();
   private interactNearest(): void {
     if (!this.controlled) return; const origin = position(this.entity(this.controlled).object);
     let nearest: string | undefined; let distance = 3;
@@ -376,7 +403,7 @@ export class WorldEngine {
     }),dt);}catch(error){
       steered=new Map(Object.entries(drives).filter(([id,drive])=>id!==this.controlled&&this.goals.has(id)&&'velocityMetersPerSecondXZ' in drive).map(([id])=>[id,{velocityMetersPerSecondXZ:[0,0] as const,error:`NAVIGATION_AVOIDANCE_FAILED: ${String(error)}`} ]));
     }
-    for(const [id,result] of steered){const drive=drives[id];if(drive&&'velocityMetersPerSecondXZ' in drive)drives[id]={...drive,velocityMetersPerSecondXZ:result.velocityMetersPerSecondXZ};if(result.error){this.taskResults.set(id,{status:'failed',error:result.error});this.goals.delete(id);}}
+    for(const [id,result] of steered){const drive=drives[id];if(drive&&'velocityMetersPerSecondXZ' in drive)drives[id]={...drive,velocityMetersPerSecondXZ:result.velocityMetersPerSecondXZ};if(result.error){this.taskResults.set(id,{status:'failed',error:result.error});this.clearGoal(id);}}
   }
   private goalDrive(id: string, goal: ActorGoal, dt: number): CharacterDrive {
     const actor = this.entity(id); const current = position(actor.object); goal.repathSeconds += dt;
@@ -386,10 +413,10 @@ export class WorldEngine {
         this.ensureNavigation(actor); goal.repathSeconds = 0;
         if (goal.navigationSignature !== this.navigationSignature) { goal.points = this.pathFor(id, target); goal.index = 0; goal.navigationSignature = this.navigationSignature; }
       }
-      catch (error) { this.recordError('WORLD_ACTOR_PATH_FAILED', error, id); this.taskResults.set(id,{status:'failed',error:String(error)}); this.goals.delete(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
+      catch (error) { this.recordError('WORLD_ACTOR_PATH_FAILED', error, id); this.taskResults.set(id,{status:'failed',error:String(error)}); this.clearGoal(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
     }
     if (goal.kind === 'follow' && goal.targetEntityId) {
-      if (!this.entities.has(goal.targetEntityId)) { this.goals.delete(id);this.taskResults.set(id,{status:'failed',error:'WORLD_FOLLOW_TARGET_REMOVED'}); return { velocityMetersPerSecondXZ: [0, 0] }; }
+      if (!this.entities.has(goal.targetEntityId)) { this.clearGoal(id);this.taskResults.set(id,{status:'failed',error:'WORLD_FOLLOW_TARGET_REMOVED'}); return { velocityMetersPerSecondXZ: [0, 0] }; }
       const target = position(this.entity(goal.targetEntityId).object);
       if (current.distanceTo(target) <= goal.distanceMeters) return { velocityMetersPerSecondXZ: [0, 0] };
       if (goal.repathSeconds >= 0.5) {
@@ -398,16 +425,16 @@ export class WorldEngine {
           goal.repathSeconds = 0;
           // A moving actor can briefly touch an eroded navmesh boundary. Keep its
           // already verified route until a new route is available; never teleport.
-          if (this.navigationDirty || goal.navigationSignature !== this.navigationSignature || goal.index >= goal.points.length) { this.recordError('WORLD_FOLLOW_PATH_FAILED', error, id); this.taskResults.set(id,{status:'failed',error:String(error)}); this.goals.delete(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
+          if (this.navigationDirty || goal.navigationSignature !== this.navigationSignature || goal.index >= goal.points.length) { this.recordError('WORLD_FOLLOW_PATH_FAILED', error, id); this.taskResults.set(id,{status:'failed',error:String(error)}); this.clearGoal(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
         }
       }
     }
     let next = goal.points[goal.index];
     while (next && Math.hypot(next[0] - current.x, next[2] - current.z) < 0.04 && Math.abs(next[1] - current.y) < 1) next = goal.points[++goal.index];
-    if (!next) { if (goal.kind === 'move') {this.goals.delete(id);this.taskResults.set(id,{status:'succeeded'});} return { velocityMetersPerSecondXZ: [0, 0] }; }
+    if (!next) { if (goal.kind === 'move') {this.clearGoal(id);this.taskResults.set(id,{status:'succeeded'});} return { velocityMetersPerSecondXZ: [0, 0] }; }
     if (current.distanceTo(goal.lastPosition) < 0.001) goal.stagnantSeconds += dt; else goal.stagnantSeconds = 0;
     goal.lastPosition.copy(current);
-    if (goal.stagnantSeconds > 4) { this.recordError('WORLD_ACTOR_BLOCKED', new Error('Actor made no progress along its physical route'), id);this.taskResults.set(id,{status:'failed',error:'WORLD_ACTOR_BLOCKED'}); this.goals.delete(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
+    if (goal.stagnantSeconds > 4) { this.recordError('WORLD_ACTOR_BLOCKED', new Error('Actor made no progress along its physical route'), id);this.taskResults.set(id,{status:'failed',error:'WORLD_ACTOR_BLOCKED'}); this.clearGoal(id); return { velocityMetersPerSecondXZ: [0, 0] }; }
     const delta = new THREE.Vector3(next[0] - current.x, 0, next[2] - current.z); const distance = delta.length(); delta.normalize(); if(!this.humanoid?.hasActor(id))this.faceDirection(actor, delta);
     const speed = Math.min(distance / dt, goal.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4);
     return { velocityMetersPerSecondXZ: [delta.x * speed, delta.z * speed] };
@@ -494,19 +521,22 @@ export class WorldEngine {
         for (let parent: THREE.Object3D | null = this.controlled ? this.entity(this.controlled).object : null; parent; parent = parent.parent) if (parent === entity.object) throw new Error('WORLD_CONTROLLED_ENTITY_CANNOT_DESPAWN');
         this.removeTree(command.entityId); return;
       }
-      case 'entity.play-action': if (!entity.asset) throw new Error('WORLD_ENTITY_HAS_NO_ANIMATIONS'); entity.asset.play(command.actionId); this.manualActions.add(command.entityId); return;
+      case 'entity.play-action': this.playAction(command.entityId,command.actionId); return;
       case 'entity.apply-impulse': this.physics.applyImpulse(command.entityId, finiteVec(command.impulseNewtonSecondsXYZ, 'impulseNewtonSecondsXYZ')); return;
       case 'actor.move-to': case 'actor.follow': {
         if (command.type === 'actor.move-to' && command.run !== undefined && typeof command.run !== 'boolean') throw new Error('WORLD_RUN_INVALID');
         if (command.entityId === this.controlled) throw new Error('WORLD_PLAYER_INPUT_OWNS_CONTROLLED_ACTOR');
         const target = command.type === 'actor.move-to' ? finiteVec(command.targetPositionMetersXYZ, 'targetPositionMetersXYZ') : tuple(position(this.entity(command.targetEntityId).object));
         if (command.type === 'actor.follow' && command.targetEntityId === command.entityId) throw new Error('WORLD_FOLLOW_SELF');
+        if(this.navigationConflict(command.entityId))throw new Error('ACTOR_RESOURCE_BUSY');
         const points = this.pathFor(command.entityId, target);
         const distance = command.type === 'actor.follow' ? command.distanceMeters ?? 2 : 0.5;
         if (!Number.isFinite(distance) || distance <= 0) throw new Error('WORLD_FOLLOW_DISTANCE_INVALID');
-        this.taskResults.set(command.entityId,{status:'running'});this.goals.set(command.entityId, { kind: command.type === 'actor.follow' ? 'follow' : 'move', points, index: 0, run: command.type === 'actor.move-to' ? command.run ?? false : false, distanceMeters: distance, lastPosition: position(entity.object), stagnantSeconds: 0, repathSeconds: 0, navigationSignature: this.navigationSignature, ...(command.type === 'actor.follow' ? { targetEntityId: command.targetEntityId } : {}) }); return;
+        const resourceOwner=this.goals.get(command.entityId)?.resourceOwner??{};
+        if(!this.resources.acquire(resourceOwner,actorResources(command.entityId,['locomotion','animation']),{kind:'navigation',id:`navigation-${++this.nextResourceOwner}`}))throw new Error('ACTOR_RESOURCE_BUSY');
+        this.taskResults.set(command.entityId,{status:'running'});this.goals.set(command.entityId, { resourceOwner, kind: command.type === 'actor.follow' ? 'follow' : 'move', points, index: 0, run: command.type === 'actor.move-to' ? command.run ?? false : false, distanceMeters: distance, lastPosition: position(entity.object), stagnantSeconds: 0, repathSeconds: 0, navigationSignature: this.navigationSignature, ...(command.type === 'actor.follow' ? { targetEntityId: command.targetEntityId } : {}) }); return;
       }
-      case 'actor.stop': this.goals.delete(command.entityId);this.taskResults.delete(command.entityId); return;
+      case 'actor.stop': this.clearGoal(command.entityId);this.taskResults.delete(command.entityId); return;
       default: throw new Error('WORLD_COMMAND_UNKNOWN');
     }
   }
@@ -520,7 +550,7 @@ export class WorldEngine {
   private removeTree(id: string): void {
     const entity = this.entity(id);
     for (const [childId, child] of [...this.entities]) if (childId !== id) { let parent = child.object.parent; while (parent && parent !== entity.object) parent = parent.parent; if (parent === entity.object) this.removeTree(childId); }
-    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.goals.delete(id); this.manualActions.delete(id); this.locomotionAnimations.delete(id); this.jumped.delete(id); this.retireEntity(entity); this.navigationDirty = true;
+    this.physics.remove(id); entity.object.removeFromParent(); setEntityBoundary(entity.object, false); this.entities.delete(id); this.clearGoal(id); this.stopAction(id); this.locomotionAnimations.delete(id); this.jumped.delete(id); this.retireEntity(entity); this.navigationDirty = true;
   }
   private physicalAncestors(object: THREE.Object3D): string[] {
     const ancestors = new Set<THREE.Object3D>(); for (let parent = object.parent; parent; parent = parent.parent) ancestors.add(parent);
@@ -627,7 +657,7 @@ export class WorldEngine {
   inspect(): unknown { return { snapshot: this.snapshot(), physics: this.physics.audit(), inputTranscript: [...this.keyboard.transcript], prototypes: [...this.prototypes.keys()], capabilities: this.capabilities() }; }
   capabilities(): unknown { return [...this.entities].map(([id, e]) => ({ entityId: id, name: e.options.name ?? id, tags: e.options.tags ?? [], commands: ['entity.set-visible', 'entity.set-position', 'entity.set-scale', ...(id === this.controlled ? [] : ['entity.despawn']), ...(this.navigation && e.character && id !== this.controlled ? ['actor.move-to', 'actor.follow', 'actor.stop'] : []), ...(e.asset?.clips.length ? ['entity.play-action'] : []), ...(e.options.physics?.kind === 'dynamic' ? ['entity.apply-impulse'] : [])], actions: e.asset?.clips.map(c => c.name) ?? [] })); }
   reset(): void {
-    this.alive(); this.sealInitialState(); const wasRunning = this.running; this.stop(); this.goals.clear(); this.taskResults.clear();this.jumped.clear();this.manualActions.clear();this.locomotionAnimations.clear();
+    this.alive(); this.sealInitialState(); const wasRunning = this.running; this.stop(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.taskResults.clear();this.jumped.clear();for(const id of [...this.manualActions.keys()])this.stopAction(id);this.locomotionAnimations.clear();
     for (const [id, entity] of this.entities) { this.physics.remove(id); setEntityBoundary(entity.object, false); if (this.baseline!.get(id) !== entity) { entity.object.removeFromParent(); this.retireEntity(entity); } }
     this.entities.clear();
     for (const [id, entity] of this.baseline!) {
@@ -680,8 +710,8 @@ export class WorldEngine {
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for(const entity of [...this.entities.values(),...this.retired])entity.releaseHumanoid?.();
-    this.navigation?.dispose(); this.physics.dispose(); if (this.ownsRenderer) this.renderer?.dispose();
-    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); this.goals.clear(); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.locomotionAnimations.clear();this.jumped.clear();
+    this.navigation?.dispose(); this.physics.dispose();this.manualActions.clear();this.resources.clear(); if (this.ownsRenderer) this.renderer?.dispose();
+    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.locomotionAnimations.clear();this.jumped.clear();
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }
   }
 }

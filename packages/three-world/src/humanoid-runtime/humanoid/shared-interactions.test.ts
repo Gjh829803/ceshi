@@ -16,8 +16,22 @@ const map:EnvironmentDefinition={id:'shared-targets',name:'Shared targets',descr
 beforeAll(initEnvironmentQueries);
 afterEach(()=>{for(const controller of controllers.splice(0))controller.dispose();for(const environment of environments.splice(0))environment.dispose();});
 function setup(){const q=new EnvironmentQueries(map);environments.push(q);return q;}
-function actor(q:EnvironmentQueries,x:number){const actor=new HumanoidController(q);controllers.push(actor);actor.resetAt(new Vector3(x,.04,0),0);actor.setAvailableClips(new Set(ACTION_CLIP_IDS),[]);return actor;}
+function actor(q:EnvironmentQueries,x:number,id?:string){const actor=new HumanoidController(q,id);controllers.push(actor);actor.resetAt(new Vector3(x,.04,0),0);actor.setAvailableClips(new Set(ACTION_CLIP_IDS),[]);return actor;}
 function step(q:EnvironmentQueries,actors:HumanoidController[],ticks:number){for(let i=0;i<ticks;i++){for(const actor of actors)actor.step(new Vector3(),false,false,false);q.stepPhysics(1/60);}}
+
+it('never reserves a target after actor admission fails and retains hands only while held',()=>{
+ const q=setup(),a=actor(q,0,'a'),registry=q.interactions,resources=registry.actorResources,nav={};step(q,[a],30);
+ resources.acquire(nav,[{actorId:'a',channel:'locomotion'}],{kind:'navigation',id:'nav'});
+ expect(a.skills.request({requestId:'busy-actor',action:'pickup',targetId:'cup'}).code).toBe('ACTOR_RESOURCE_BUSY');
+ expect(registry.claimState(registry.target('cup')!)).toBeNull();expect(resources.inspect('a')).toHaveLength(1);
+ resources.release(nav);const other={};expect(registry.reserve(registry.target('cup')!,other,'other')).toBe(true);
+ expect(a.skills.request({requestId:'busy-target',action:'pickup',targetId:'cup'}).code).toBe('TARGET_UNAVAILABLE');expect(resources.inspect('a')).toEqual([]);
+ registry.releaseOwner(other);expect(a.skills.request({requestId:'take',action:'pickup',targetId:'cup'}).status).toBe('running');
+ expect(resources.inspect('a')).toHaveLength(5);step(q,[a],90);
+ expect(a.skills.carrying).toBe('cup');expect(resources.inspect('a').map(claim=>claim.channel)).toEqual(['left-hand','right-hand']);
+ expect(resources.acquire(nav,[{actorId:'a',channel:'locomotion'},{actorId:'a',channel:'animation'}],{kind:'navigation',id:'carry'})).toBe(true);
+ resources.release(nav);expect(a.skills.request({requestId:'place',action:'putDown'}).status).toBe('completed');expect(resources.inspect('a')).toEqual([]);
+});
 
 it('restores world interactions and crates at the simulation reset entry',()=>{
   const q=setup(),simulation=new Simulation(q,[],{id:'player'});controllers.push(simulation.controlledActor.controller);
@@ -238,12 +252,14 @@ it('invalidates removed reservations without allowing an old reference to acquir
 });
 
 it('keeps a safe low capsule after an occupied target disappears under a ceiling',async()=>{
- const {default:RAPIER}=await import('@dimforge/rapier3d-compat');const q=setup(),a=actor(q,3);step(q,[a],30);
+ const {default:RAPIER}=await import('@dimforge/rapier3d-compat');const q=setup(),a=actor(q,3,'low-seat');step(q,[a],30);
  expect(a.skills.request({requestId:'seat-removal',action:'sit',targetId:'seat'}).status).toBe('running');step(q,[a],100);expect(a.skills.seated).toBe('seat');
  const roof=a.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(a.position.x,1.65,a.position.z));a.world.createCollider(RAPIER.ColliderDesc.cuboid(2,.2,2),roof);a.world.updateSceneQueries();
  q.interactions.unregisterEntity('seat');expect(a.skills.seated).toBeNull();step(q,[a],30);
+ expect(q.interactions.actorResources.inspect('low-seat').map(claim=>claim.channel)).toEqual(['locomotion','animation','pose']);
  expect(a.skills.active?.phase).toBe('target-exit');expect(a.capsuleHalf).toBeCloseTo((1.4-.56)/2);expect(a.skills.status('seat-removal')?.status).toBe('completed');
  a.world.removeRigidBody(roof);a.world.updateSceneQueries();step(q,[a],3);expect(a.skills.active).toBeNull();expect(a.capsuleHalf).toBeCloseTo((1.68-.56)/2);
+ expect(q.interactions.actorResources.inspect('low-seat')).toEqual([]);
 });
 
 it('lets two actors occupy separate seats of one authored entity and releases only the selected seat',async()=>{

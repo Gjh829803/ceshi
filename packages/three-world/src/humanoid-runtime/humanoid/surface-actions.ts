@@ -5,6 +5,7 @@ import type {ClimbSurface,SurfaceCommands,SurfacePose} from './surface-types';
 import runtime from './action-runtime.json';
 
 import {SURFACE_TUNING} from '../../config/actions';
+import {actorResources,FULL_BODY_RESOURCES} from '../../actor-resources';
 const DT=1/60,RADIUS=.28,STAND_HEIGHT=SURFACE_TUNING.standingHeightMeters,PRONE_HEIGHT=SURFACE_TUNING.proneHeightMeters,CLIMB_HEIGHT=SURFACE_TUNING.climbHeightMeters;
 const UP=new Vector3(0,1,0),ROT={x:0,y:0,z:0,w:1};
 const META=new Map(runtime.clips.map(clip=>[clip.id,clip]));
@@ -35,11 +36,14 @@ export class SurfaceActions {
   private tangent=new Vector3();
   private target=new Vector3();
   constructor(private sim:HumanoidActionContext){}
+  private resourceRequests(){return this.sim.actorId?actorResources(this.sim.actorId,FULL_BODY_RESOURCES):[];}
+  private acquireResources(id:string){return this.sim.resources.acquire(this,this.resourceRequests(),{kind:'action',id});}
 
   reset(){
     const owned=this.mode!=='none';
-    this.mode='none';this.pose=null;this.surface=null;this.phase='';this.time=0;this.loopTime=0;this.proneMotionGrace=0;
     if(owned){this.setHeight(STAND_HEIGHT);this.restoreController();}
+    this.mode='none';this.pose=null;this.surface=null;this.phase='';this.time=0;this.loopTime=0;this.proneMotionGrace=0;
+    this.sim.resources.release(this);
   }
   private restoreController(){this.sim.controller.enableAutostep(.27,.2,false);this.sim.controller.enableSnapToGround(.18);}
   private clearHeight(height:number){
@@ -104,6 +108,7 @@ export class SurfaceActions {
     if(sim.skills.active||sim.skills.carrying||sim.skills.seated)return reject('BUSY','请先完成动作、放下物件或起身');
     if(action==='prone'&&this.mode==='prone')return this.phase!=='loop'?reject('BUSY','姿态过渡中'):!this.clearHeight(1.72)?reject('HEADROOM_BLOCKED','低顶下不能起身'): {eligible:true,reason:'READY',message:'可起身'};
     if(this.mode!=='none'||sim.traversal||sim.swimming)return reject('INVALID_STATE','请先回到可站立地面');
+    if(sim.resources.conflict(this,this.resourceRequests()))return reject('ACTOR_RESOURCE_BUSY','角色资源被其他任务占用');
     const missing=(action==='prone'?PRONE_CLIPS:CLIMB_CLIPS).find(id=>!this.availableClips.has(id));
     if(missing)return reject('ASSET_UNAVAILABLE',`尚未载入动作 ${missing}`);
     if(action==='prone'){
@@ -119,6 +124,7 @@ export class SurfaceActions {
   private startProne(){
     const sim=this.sim;
     const eligibility=this.eligibility('prone');if(!eligibility.eligible){sim.lastResult=eligibility.message;return false;}
+    if(!this.acquireResources('prone')){sim.lastResult='角色资源被其他任务占用';return false;}
     this.mode='prone';this.phase='enter';this.time=0;this.loopTime=0;
     sim.stance='stand';sim.animationEvent=null;sim.completedMotion=null;sim.jumpBuffer=0;
     sim.controller.disableAutostep();sim.lastResult='匍匐：正在趴下';return true;
@@ -172,6 +178,7 @@ export class SurfaceActions {
   private startClimb(){
     const sim=this.sim;
     const eligibility=this.eligibility('climb');if(!eligibility.eligible){sim.lastResult=eligibility.message;return false;}
+    if(!this.acquireResources('climb')){sim.lastResult='角色资源被其他任务占用';return false;}
     const match=this.chooseSurface()!;
     this.surface=match.surface;this.normal.copy(match.normal);this.tangent.copy(match.tangent);
     this.target.copy(match.center).addScaledVector(match.normal,.30).addScaledVector(match.tangent,match.surface.kind==='ladder'?0:match.lateral);

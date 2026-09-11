@@ -273,7 +273,7 @@ export interface EntityState {
  readonly parentEntityId?:string;
  readonly motion?:{readonly phase:'grounded'|'jumping'|'falling';readonly velocityWorldMetersPerSecondXYZ:Vec3;readonly isGrounded:boolean;readonly collisionEntityIds:readonly string[]};
  readonly animation?:{readonly actionId:string;readonly clipName:string;readonly timeSeconds:number};
- readonly controlOwners:readonly {readonly channel:string;readonly ownerKind:'player-input'|'user-command'|'autonomy'|'parameter'|'physics';readonly ownerId?:string}[];
+ readonly controlOwners:readonly {readonly channel:string;readonly ownerKind:'player-input'|'user-command'|'autonomy'|'parameter'|'physics'|'action'|'relationship'|'animation';readonly ownerId?:string}[];
 }
 export interface CommandDescriptor {
  readonly type:WorldCommand['type'];
