@@ -11,7 +11,9 @@ import sys
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from century_psa import retarget_psa, psa_timing
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--source', required=True)
@@ -28,25 +30,6 @@ models = source / 'Models_glTF/Game/Characters/Dragons'
 compact = source / 'Analysis/Compact/Characters/Dragons'
 material_files = {p.stem: p for p in compact.rglob('MI_*.json')}
 images = {p.stem: p for p in models.rglob('*.png')}
-
-
-def psa_timing(path):
-    data = path.read_bytes()
-    offset, chunks = 0, {}
-    while offset < len(data):
-        key, flags, size, count = struct.unpack_from('<20s3i', data, offset)
-        offset += 32
-        if size < 0 or count < 0 or offset + size * count > len(data):
-            raise RuntimeError('PSA_CHUNK_INVALID: ' + str(path))
-        chunks[key.rstrip(b'\0').decode()] = (offset, size, count)
-        offset += size * count
-    metadata = struct.unpack_from('<64s64s4i3f3i', data, chunks['ANIMINFO'][0])
-    if 'SCALEKEYS' in chunks:
-        start, size, count = chunks['SCALEKEYS']
-        if any(abs(v - 1) > 1e-5 for n in range(count) for v in struct.unpack_from('<3f', data, start + n * size)):
-            raise RuntimeError('PSA_NON_UNIT_SCALE: ' + str(path))
-    return {'sourceFramesPerSecond': metadata[8], 'sourceFrames': metadata[11],
-            'durationSeconds': metadata[11] / metadata[8], 'nonUnitScaleKeys': 0}
 
 
 def parameters(name, seen=None):
@@ -154,7 +137,11 @@ for dragon_id in args.ids.split(','):
     master.scale = (.01, .01, .01)
     bpy.context.view_layer.update()
     socket_file = next((compact / dragon_id).glob('*Ocedar*Skeleton.json'))
-    socket_defs = [entry['data'] for entry in json.loads(socket_file.read_text()) if entry.get('class') == 'SkeletalMeshSocket']
+    skeleton_entries = json.loads(socket_file.read_text(encoding='utf-8-sig'))
+    skeleton = next(entry['data'] for entry in skeleton_entries if entry.get('class') == 'Skeleton')
+    report['skeletonSource'] = str(socket_file.relative_to(source))
+    report['skeletonSha256'] = hashlib.sha256(socket_file.read_bytes()).hexdigest()
+    socket_defs = [entry['data'] for entry in skeleton_entries if entry.get('class') == 'SkeletalMeshSocket']
     for source_name, target_name in [('Fire', 'CenturyFireSocket'), ('LeashLeft', 'CenturyLeashLeft'), ('LeashRight', 'CenturyLeashRight'), ('Seat', 'Seat')]:
         if target_name == 'Seat' and master.pose.bones.get('Seat'):
             continue
@@ -189,8 +176,10 @@ for dragon_id in args.ids.split(','):
             actual = next(n for n in psas if 'tpose' in n.lower() and 'leash' not in n.lower())
         if actual not in psas:
             raise RuntimeError('ANIMATION_MISSING: ' + actual)
+        body_psk = source / report['parts'][0]['source']
+        retargeted, retarget_report = retarget_psa(psas[actual], body_psk, skeleton, dragon_id, source, output)
         if actual not in bpy.data.actions:
-            bpy.ops.psa.import_all(filepath=str(psas[actual]))
+            bpy.ops.psa.import_all(filepath=str(retargeted), should_use_config_file=True)
         action = bpy.data.actions[actual].copy()
         action.name = target + '_export'
         action.use_fake_user = True
@@ -216,8 +205,11 @@ for dragon_id in args.ids.split(','):
         strip = track.strips.new(target, 0, action)
         strip.action_frame_start, strip.action_frame_end = action.frame_range
         track.mute = True
-        report['clips'][target] = {'source': str(psas[actual].relative_to(source)), 'sha256': hashlib.sha256(psas[actual].read_bytes()).hexdigest(), **timing}
+        report['clips'][target] = {'source': str(psas[actual].relative_to(source)), 'sha256': hashlib.sha256(psas[actual].read_bytes()).hexdigest(), 'retarget': retarget_report, **timing}
     master.animation_data.action = None
+    # 未写入动画的骨骼必须保持绑定姿态，不能继承上一条动作残留的属性值。
+    for bone in master.pose.bones:
+        bone.matrix_basis = Matrix.Identity(4)
     scene.frame_set(0)
     bpy.context.view_layer.update()
     bpy.ops.object.select_all(action='SELECT')

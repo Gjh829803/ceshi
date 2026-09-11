@@ -7,8 +7,8 @@
       "sha256": "5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7"
     },
     "__creature-assets/dragon.glb": {
-      "bytes": 15335468,
-      "sha256": "3d67d7eeb8f32dbee048d8124940f298abcaef5691d587280261e62485b374cc"
+      "bytes": 15710552,
+      "sha256": "e2b9494c35643b9f1c292695712e408512c1cceaa7ffefda58ad73b5219fce88"
     },
     "__creature-assets/manifest.json": {
       "bytes": 7158,
@@ -19,52 +19,56 @@
       "sha256": "cb0ac014ae3adb71b4c2753d708de3a406cee102bee867fa06eaa7de1e726f54"
     },
     "__creature-assets/variants.json": {
-      "bytes": 105600,
-      "sha256": "06ba2c28c4c8dbb4f885a78f69c74b727874f34cb0b25a180b4bb21da3d714ec"
+      "bytes": 50268,
+      "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e"
     },
     "__creature-assets/variant-sources.json": {
-      "bytes": 86651,
-      "sha256": "c885652f33e0500416f27b373291e73b9fba965e0c3ba6001feb38918272df86"
+      "bytes": 573950,
+      "sha256": "520d710224bb6461763da7cab3f3753e5f52954a0857b5a30b689ef40e4e4a14"
+    },
+    "__creature-assets/ground-sources.json": {
+      "bytes": 39219,
+      "sha256": "6408d76a6b0d67189a9e15d749bd09e52f66da516f27d3fbfcb59976bcde0faa"
     },
     "__creature-assets/D02.glb": {
-      "bytes": 10558052,
-      "sha256": "712408cedcf39e78c7962ff7747cd81eb7989dde181489c8fb501822f0ad898e"
+      "bytes": 11343864,
+      "sha256": "947d9b47cbd6f1d5cc5ecdf0b91f6b31ead9bda199987db3bfaacb41a0562330"
     },
     "__creature-assets/D03.glb": {
-      "bytes": 9408164,
-      "sha256": "b99e410eed381fa01679726fbad1eab1368205ca35f2efd685ef997db0e4a754"
+      "bytes": 9795892,
+      "sha256": "e9ec6ab6236094c027f29574656613b746d2e5f6ccc8174a35f9e0831bf36f66"
     },
     "__creature-assets/D04.glb": {
-      "bytes": 8624512,
-      "sha256": "7b28b4842b25a9bda0022b268dcac5af4fe7c7d2f3a9742d5a9e2e874e256d1e"
+      "bytes": 9202832,
+      "sha256": "b4b804765d468c64d5cd7e64a56ceda3a1c6b6e8684b1b756092e77d0780b19a"
     },
     "__creature-assets/D05.glb": {
-      "bytes": 9222052,
-      "sha256": "470f19029cc3bfc2424e40b28c80eca948d4c5e24eac24eecfaeaf2a8b9d1213"
+      "bytes": 9752336,
+      "sha256": "4283e795b3f36aeb810b2dd16ff889381415e0edc0fcecf6c83732309d62a938"
     },
     "__creature-assets/D06.glb": {
-      "bytes": 5879340,
-      "sha256": "819193c584c6e5033b46b39793e04cadcd349c7f29a132b097a0e7ba3766b6b3"
+      "bytes": 6447292,
+      "sha256": "358490a9057da00dd8e7b9726cf1ce529b28c254262cd5776255ec0bfd350932"
     },
     "__creature-assets/D07.glb": {
-      "bytes": 9964620,
-      "sha256": "dbb83021e62dac384f416c2ff4c2ee1d32fc73a7719e3a198ca1929856140cda"
+      "bytes": 10590632,
+      "sha256": "0aa9b08737d4d2e41be7f1c97821802a5874eba3017f73364fe2bd5895fb1ad2"
     },
     "__creature-assets/D08.glb": {
-      "bytes": 10380476,
-      "sha256": "c75fb073c682ae41441733cc18b445e1fcb4b708f6463fe927f1cf8ed9be424c"
+      "bytes": 10829320,
+      "sha256": "6b201c045d0fa163fc5f1cad6ed223230e8f081e02a6c9b2f0201ed1633c8ada"
     },
     "__creature-assets/D09.glb": {
-      "bytes": 8627104,
-      "sha256": "9bd7595b6999e34a3681e0ba9e10795cf777c361527cfcfa9a5ba40ad22123cf"
+      "bytes": 9227060,
+      "sha256": "a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833"
     },
     "__creature-assets/D10.glb": {
-      "bytes": 10542588,
-      "sha256": "3bb8b19eeb7bee37166be18ffbca6d5dc67ed13e52acf35d37154e036a630229"
+      "bytes": 11244876,
+      "sha256": "b90e2c6232ff411bcc75f73a1e3e1207946593c5758dc2b08ce88696b0133331"
     },
     "__creature-assets/D11.glb": {
-      "bytes": 10543268,
-      "sha256": "41ee6c7db3c02b87de7f7cfbbfa952a2ae7c8bb2a5329eb006e6315b181f117e"
+      "bytes": 11228852,
+      "sha256": "84b1aefb69d0ea28c721ae2782380e7ca9c8d15a13414bfe1a34205aee04ad92"
     }
   }
 }

@@ -9,6 +9,7 @@ export const INPUT_BINDINGS = Object.freeze({
   prone:binding(['KeyZ'],'匍匐 / 起身'), roll:binding(['KeyQ'],'翻滚'),
   interact:binding(['KeyE'],'拾取 / 坐下 / 起身 / 进入攀爬'),
   putDown:binding(['KeyG'],'放下物件'), vehicle:binding(['KeyF'],'上下载具 / 坐骑'),
+  summonDragon:binding(['KeyH'],'召唤飞龙'),
   swimStyle:binding([],'切换泳姿（动作菜单，可自定义按键）'),
   slow:binding([],'慢走（可自定义按键）'),
   cameraToggle:binding(['KeyT'],'切换视角（需启用）'),

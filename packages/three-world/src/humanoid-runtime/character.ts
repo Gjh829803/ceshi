@@ -1,6 +1,7 @@
 import {fitUnicycleFeet} from './unicycle-rider';
 import {poseKayakHands} from './kayak-visual';
 import {fitAtvHands} from './atv-rider';
+import {fitDragonClimb,type DragonClimbContacts} from './motion-families/flying-creature/mount-ladder';
 import * as T from 'three';
 import {CharacterAttachments,type CharacterAttachmentPoint,type CharacterAttachmentTransform} from './character-attachments';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './character-attachments';
@@ -205,12 +206,15 @@ export class Character {
     this.actor.updateWorldMatrix(false, true);
   }
 
+  fitDragonClimb(contacts:DragonClimbContacts):void{if(this.source)fitDragonClimb(this.source.root,contacts);}
   update(dt: number, pose: HumanoidRenderState) {
     const source = this.source; if (!source) return;
     this.applyPresentationPose(1);
     this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
     const mode = pose.mounted ?? null;
     const mounted = mode !== null;
+    const boarding=pose.dragonMount,progress=boarding?.progress??1;
+    const rideWeight=boarding?T.MathUtils.clamp(boarding.entering?(progress-.65)/.35:1-progress/.25,0,1):1;
     const identity = pose.simulationIdentity;
     if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
@@ -221,6 +225,7 @@ export class Character {
     if (mounted) {
       Object.assign(this.frame, emptyFrame(), { position: this.localPosition, facing: this.localFacing });
       if (mode !== 'stand' && mode !== 'ski') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
+      if(boarding&&rideWeight<.99)this.frame.skills={pose:{key:boarding.entering?'climb-up':'climb-down',time:progress*3},seated:null,carrying:null,active:null,syncCarried:()=>{}};
     } else if (pose.skills) {
       const carrying = pose.skills.carrying;
       this.frame.skills = { ...pose.skills, syncCarried: position => {
@@ -234,7 +239,7 @@ export class Character {
     if(mode==='unicycle'||mode==='submarine'||mode==='tank'||mode==='atv')source.smoothing=false;
     try{source.update(dt,this.frame);}finally{source.smoothing=smoothing;}
     if (mounted && mode !== 'stand') {
-      this.overlay!.apply(1, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
+      this.overlay!.apply(rideWeight, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
       // Align the true source pelvis with the host's seat/saddle attachment.
       this.actor.updateWorldMatrix(true, true);
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);

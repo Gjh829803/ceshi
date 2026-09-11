@@ -23,6 +23,7 @@ export function copyHumanoid(s?:HumanoidRenderState):HumanoidRenderState|undefin
 }
 export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderState|undefined,alpha:number){
   const out=copyHumanoid(b);if(!out||!a||!b||a.simulationIdentity!==b.simulationIdentity)return out;
+  if(a.dragonMount&&b.dragonMount)out.dragonMount={...b.dragonMount,progress:a.dragonMount.progress+(b.dragonMount.progress-a.dragonMount.progress)*alpha};
   if(a.atvSteeringAngle!==undefined&&b.atvSteeringAngle!==undefined)out.atvSteeringAngle=a.atvSteeringAngle+(b.atvSteeringAngle-a.atvSteeringAngle)*alpha;
   out.unicyclePose=blendUnicycleState(a.unicyclePose,b.unicyclePose,alpha);
   out.position.lerpVectors(a.position,b.position,alpha);

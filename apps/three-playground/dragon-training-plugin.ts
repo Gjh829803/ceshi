@@ -18,7 +18,7 @@ export function dragonTrainingPlugin(repository: string): Plugin {
     };
     if (manifest.kind !== "native-flying-creature-assets" || manifest.schemaVersion !== 2 || !manifest.files?.["__creature-assets/dragon.glb"])
       throw new Error("DRAGON_TRAINING_MANIFEST_INVALID");
-    const allowed=new Set(["dragon.glb","rider.glb","manifest.json","FireGenLoop01_8x8.png","variants.json","variant-sources.json",
+    const allowed=new Set(["dragon.glb","rider.glb","manifest.json","FireGenLoop01_8x8.png","variants.json","variant-sources.json","ground-sources.json",
       ...Array.from({length:10},(_,i)=>'D'+String(i+2).padStart(2,'0')+'.glb')].map(name=>'__creature-assets/'+name));
     if(Object.keys(manifest.files).length!==allowed.size||Object.keys(manifest.files).some(name=>!allowed.has(name)))throw new Error("DRAGON_TRAINING_ASSET_LIST_INVALID");
     for (const [name, identity] of Object.entries(manifest.files)) {

@@ -50,6 +50,31 @@ Reusable asset IDs describe the object (`vehicle.rover`, `creature.horse`);
 `asset.vehicle` describes its vehicle controller binding. Source provenance
 remains separate from asset identity and controller capability.
 
+Flying-creature bindings may supply `VehicleSpec.flyingCreatureGround` with measured
+ground-pose support bounds, root height, saddle, core collision probes and transition
+timing. `vehicle.exit` while flying requests landing (or cancels an ongoing descent);
+acceptance does not mean the rider has dismounted. Observe
+`simulation.vehicle.motion.flyingCreature.groundPhase` (`airborne`, `approach`,
+`landing`, `grounded`, `takeoff`) and `groundFailure`. Once grounded, `vehicle.exit`
+starts the dismount transition; `vehicle.enter` requires proximity and a clear route.
+The rider stays mounted until dismount completes, then its walking capsule resumes.
+Grounded `input.humanoid.jump` or `brake` requests takeoff; airborne `brake` remains
+glide. Unsupported, wet, steep or narrow landing sites and blocked boarding routes
+are rejected. The supplied dragon training bindings include all eleven ground
+profiles, their own ground clips and a retractable saddle ladder; this currently
+supports flat-ground parking, not ground locomotion or per-foot terrain IK.
+
+An unmounted character standing on dry ground can send the one-shot
+`input.humanoid.actions.summonDragon` (default H) or call
+`world.humanoid.summonDragon(instanceId?)`. The existing available flying creature
+flies from its current position to a checked landing beside the request position;
+a grounded creature first takes off. Neither the character nor camera is teleported.
+Read `snapshot().vehicleDynamics[].flyingCreature.summon` for `flying`, `landing`,
+`arrived` or `blocked`, the fixed target and a message. Acceptance is not arrival.
+The route checks higher cruise candidates and sweeps live collision geometry;
+it stops on an unexpected obstruction, rather than guaranteeing global pathfinding.
+The character must approach the saddle after arrival and use the normal enter command.
+
 `createWorld` is the general world entry point for human or nonhuman actors.
 `createHumanoidWorld` is a convenience wrapper that loads or receives the supplied
 human and binds its complete controller and actions, optionally with vehicles.

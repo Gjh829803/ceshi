@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as T from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {measureDragonCore} from './dragon-core-collision.mjs';
 import {humanoid} from '@worldkit/three';
 const {FlyingCreatureVisual,createFlyingCreatureStateV1}=humanoid;
 const [source,output]=process.argv.slice(2);
@@ -16,13 +17,14 @@ for(let number=2;number<=11;number++){
   const bytes=await fs.readFile(path.join(source,id+'.glb'));
   const length=bytes.readUInt32LE(12),json=JSON.parse(bytes.subarray(20,20+length)),bin=bytes.subarray(28+length);
   json.buffers=[{byteLength:bin.length,uri:'data:application/octet-stream;base64,'+bin.toString('base64')}];
-  delete json.materials;delete json.images;delete json.textures;
-  for(const mesh of json.meshes)for(const primitive of mesh.primitives)delete primitive.material;
+  delete json.images;delete json.textures;
+  for(const material of json.materials)for(const key of Object.keys(material))if(key!=='name')delete material[key];
   const gltf=await new GLTFLoader().parseAsync(JSON.stringify(json),'');
   gltf.scene.rotation.y=-Math.PI/2;
+  const core=measureDragonCore(gltf,id),probes=core.probes;
   const mixer=new T.AnimationMixer(gltf.scene),meshes=[];
   gltf.scene.traverse(n=>{if(n instanceof T.SkinnedMesh)meshes.push(n);});
-  const cells=new Map(),bounds=new T.Box3(),seatBounds=new T.Box3();
+  const bounds=new T.Box3(),seatBounds=new T.Box3();
   const point=new T.Vector3();
   for(const clip of gltf.animations.filter(c=>!c.name.includes('Shoot_')&&!c.name.includes('TPOSE'))){
     const action=mixer.clipAction(clip);action.play();
@@ -32,8 +34,6 @@ for(let number=2;number<=11;number++){
         mesh.skeleton.update();
         for(let index=0;index<mesh.geometry.attributes.position.count;index++){
           mesh.getVertexPosition(index,point).applyMatrix4(mesh.matrixWorld);bounds.expandByPoint(point);
-          const key=point.toArray().map(v=>Math.floor(v/.4)).join(',');
-          if(!cells.has(key))cells.set(key,point.clone());
         }
       }
       seatBounds.expandByPoint(gltf.scene.getObjectByName('Seat').getWorldPosition(point));
@@ -52,28 +52,15 @@ for(let number=2;number<=11;number++){
     visual.sample(pose,frame/24*2.3);visual.root.updateMatrixWorld(true);
     for(const mesh of meshes){mesh.skeleton.update();for(let index=0;index<mesh.geometry.attributes.position.count;index+=2){
       mesh.getVertexPosition(index,point).applyMatrix4(mesh.matrixWorld);bounds.expandByPoint(point);
-      const key=point.toArray().map(v=>Math.floor(v/.4)).join(',');if(!cells.has(key))cells.set(key,point.clone());
     }}
   }
-  // 最远点布点使细长尾部和翼尖也分配到球；不使用整只龙的单一包围球。
-  const points=[...cells.values()],centers=[points[0]],distances=new Float64Array(points.length).fill(Infinity);
-  for(let index=1;index<64;index++){
-    const last=centers.at(-1);let farthest=0;
-    for(let n=0;n<points.length;n++){distances[n]=Math.min(distances[n],points[n].distanceToSquared(last));if(distances[n]>distances[farthest])farthest=n;}
-    if(distances[farthest]<2.25)break;
-    centers.push(points[farthest]);
-  }
-  const radii=centers.map(()=>0);
-  for(const point of points){let nearest=0;for(let n=1;n<centers.length;n++)if(point.distanceToSquared(centers[n])<point.distanceToSquared(centers[nearest]))nearest=n;radii[nearest]=Math.max(radii[nearest],point.distanceTo(centers[nearest]));}
-  // 量化单元对角线和帧间插值留量；校验另采错开时间的真实混合姿态。
-  const probes=centers.map((center,i)=>({id:`${id}-${i}`,center:center.toArray().map(n=>+n.toFixed(3)),radius:+(radii[i]+1.1).toFixed(3)}));
-  const padded=bounds.clone().expandByScalar(1.1),center=padded.getCenter(new T.Vector3()),half=padded.getSize(new T.Vector3()).multiplyScalar(.5);
+  const half=bounds.clone().expandByScalar(1.1).getSize(new T.Vector3()).multiplyScalar(.5);
   pose.speed=0;pose.flyingCreature=createFlyingCreatureStateV1();visual.sample(pose,0);
   const seat=gltf.scene.getObjectByName('Seat').getWorldPosition(new T.Vector3()).toArray();
   const camera=Math.min(40,Math.max(32,Math.ceil(Math.max(half.x*2.5,half.z*1.5))));
-  const variant={id,name:id+(id==='D09'?' · 长身龙':' · 飞龙'),file:id+'.glb',camera,seat,collisionProbes:probes,envelope:{kind:'box',halfExtents:half.toArray(),offset:center.toArray()}};
+  const variant={id,name:id+(id==='D09'?' · 长身龙':' · 飞龙'),file:id+'.glb',camera,seat,collisionProbes:probes,envelope:core.envelope};
   variants.push(variant);
-  reports.push({...JSON.parse(await fs.readFile(path.join(source,id+'.json'),'utf8')),measurement:{poses:24,bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},seatBounds:{min:seatBounds.min.toArray(),max:seatBounds.max.toArray()},sphereCount:probes.length}});
+  reports.push({...JSON.parse(await fs.readFile(path.join(source,id+'.json'),'utf8')),collisionMeasurement:core.measurement,measurement:{poses:24,bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},seatBounds:{min:seatBounds.min.toArray(),max:seatBounds.max.toArray()},sphereCount:probes.length}});
   await fs.copyFile(path.join(source,id+'.glb'),path.join(output,id+'.glb'));
   console.log(id,bytes.length,'spheres',probes.length,'seat',seat,'bounds',bounds.min.toArray(),bounds.max.toArray());
   visual.dispose();

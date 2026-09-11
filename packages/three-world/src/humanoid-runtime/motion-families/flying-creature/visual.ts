@@ -3,6 +3,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { MotionPose } from '../../presentation';
 import { CreatureFlame } from './flame';
 import type { FlyingCreatureStateV1 } from './state';
+import {DragonMountLadder} from './mount-ladder';
+import type {DragonMountTransition} from './mount';
+import {dragonGroundHeading} from './ground-pose';
 
 export interface FlyingCreatureVisualResources {dragonUrl:string;flameTextureUrl:string;animationPrefix?:string}
 /** 同族骨架的米制模型适配。运动、显示采样和资源释放均由现有 HumanoidRuntime 调用。 */
@@ -20,6 +23,10 @@ export class FlyingCreatureVisual {
   private disposed=false;
   private loading=false;
   private sampleTime=0;
+  private groundHeading=0;
+  private ladder=new DragonMountLadder();
+  constructor(){this.root.add(this.ladder.object);}
+  sampleMount(t:DragonMountTransition|undefined,rider:T.Object3D|null){return this.ladder.sample(this.root,t,rider);}
   private reins=[-1,1].map(()=>{
     const line=new T.Line(new T.BufferGeometry().setAttribute('position',new T.BufferAttribute(new Float32Array(17*3),3)),new T.LineBasicMaterial({color:'#463729'}));
     line.name='dragon-rein';line.frustumCulled=false;line.visible=false;this.root.add(line);return line;
@@ -37,6 +44,7 @@ export class FlyingCreatureVisual {
     this.seat=model.scene.getObjectByName('Seat');this.mouth=model.scene.getObjectByName('CenturyFireSocket');
     if(!this.seat||!this.mouth)throw new Error('FLYING_CREATURE_ATTACHMENT_MISSING');
     model.scene.traverse(node=>{if(node instanceof T.Mesh){node.castShadow=node.receiveShadow=true;node.frustumCulled=false;}});
+    this.groundHeading=dragonGroundHeading(model.scene,model.animations,resources.animationPrefix??'D01');
     this.mixer=new T.AnimationMixer(model.scene);
     const jaw=model.scene.getObjectByName('Jaw'),jawNames=new Set<string>();jaw?.traverse(node=>jawNames.add(node.name));
     const prefix=resources.animationPrefix??'D01';
@@ -88,12 +96,16 @@ export class FlyingCreatureVisual {
       for(const name of new Set([...Object.keys(weights),...Object.keys(history.previous),...Object.keys(history.current)]))
         weights[name]=T.MathUtils.lerp(history.previous[name]??0,history.current[name]??0,alpha);
     }
+    const ground=state.groundBlend??0;
+    if(this.actions.has('D01_Ground_Idle')){for(const name of Object.keys(weights))weights[name]!*=1-ground;weights.D01_Ground_Idle=ground;}
     for(const [name,weight] of Object.entries(weights))this.weight(name,weight,time,name.startsWith('D01_Dodge_')?1-state.evadeRemainingSeconds/.45:undefined);
     if(state.flamePhase!=='off'){
       const name='D01_Shoot_FlameThrower'+(state.flamePhase==='loop'?'Loop':state.flamePhase==='ending'?'End':'');
       this.weight(name,1,time,state.flamePhase==='loop'?undefined:state.flamePhaseSeconds/.3);
     }
-    this.mixer.update(0);this.root.updateWorldMatrix(true,true);
+    this.mixer.update(0);
+    if(this.body)this.body.rotation.y=-Math.PI/2-this.groundHeading*ground;
+    this.root.updateWorldMatrix(true,true);
     this.flame?.sample(time,this.root);
   }
   /** 仅固定步调用；渲染恢复及多次观察不会重复发射。 */
@@ -141,6 +153,7 @@ export class FlyingCreatureVisual {
     clips:[...this.actions.values(),...(this.diveStart?[this.diveStart]:[])].filter(action=>action.getEffectiveWeight()>0).map(action=>({name:action.getClip().name+(action===this.diveStart?' (loop seam)':''),weight:action.getEffectiveWeight(),time:action.time})),
     attachments:Object.fromEntries(['Seat','Head','Jaw','CenturyFireSocket'].map(name=>[name,this.body?.getObjectByName(name)?.getWorldPosition(new T.Vector3()).toArray()]))};}
   dispose():void{
+    this.ladder.dispose();
     this.disposed=true;this.flame?.dispose();this.flame=undefined;this.mixer?.stopAllAction();if(this.body)this.mixer?.uncacheRoot(this.body);
     for(const line of this.reins){line.geometry.dispose();(line.material as T.Material).dispose();line.removeFromParent();}
     const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();

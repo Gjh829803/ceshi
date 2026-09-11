@@ -81,3 +81,4 @@ export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-
 export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';
 
 export type {MotionFamilyState} from './motion-families/state';
+export {dragonGroundHeading} from './motion-families/flying-creature/ground-pose';

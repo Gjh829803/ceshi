@@ -1,3 +1,4 @@
+import {copyFlyingCreatureState} from './motion-families/flying-creature/state';
 import {resolveConfiguredFlyingCreatureFeel} from './motion-families/flying-creature/state';
 import type {FlyingCreatureVisual} from './motion-families/flying-creature/visual';
 import {readCameraWorldPose} from '../camera-observation';
@@ -313,7 +314,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   inputGuide():HumanoidInputGuide{
     const family=this.simulation.vehicle?.spec.mode??'character';
-    return {family,fields:this.simulation.vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.',roll:'Legacy fallback: positive flame, negative evade when dedicated actions are absent.'}:{...HUMANOID_INPUT_GUIDES[family]}};
+    return {family,fields:this.simulation.vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Grounded: take off when overhead is clear. Airborne: glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.',roll:'Legacy fallback: positive flame, negative evade when dedicated actions are absent.'}:{...HUMANOID_INPUT_GUIDES[family]}};
   }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
@@ -346,7 +347,7 @@ export class HumanoidRuntime implements PhysicsPort {
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},
       interactionTargets:readInteractionTargets(h).filter(t=>targets.has(t.id)).map(t=>({id:t.id,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:targets.get(t.id)!.approach,facingYawRadians:targets.get(t.id)!.yaw,eligible:targets.get(t.id)!.eligible,reason:targets.get(t.id)!.reason,message:targets.get(t.id)!.message,positionWorldMetersXYZ:tuple(t.position),rotationWorldQuaternionXYZW:t.rotation?[t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w]:[0,0,0,1]})),
-      vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?{...v.motion.flyingCreature}:null,drive:vehicleDriveTelemetry(v),physicsOwner:v.motion.wheelPhysics||v.motion.body||v.motion.aircraft?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
+      vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):null,drive:vehicleDriveTelemetry(v),physicsOwner:v.motion.wheelPhysics||v.motion.body||v.motion.aircraft?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
     };
   }
   private characterRestriction():{code:string;message:string}|undefined{
@@ -397,6 +398,7 @@ export class HumanoidRuntime implements PhysicsPort {
   recoverVehicle():boolean{this.assertExternalMutation();return this.recoverVehicleOwned();}
   private recoverVehicleOwned():boolean{const ok=this.simulation.recoverVehicle();if(ok){this.clearInputOwned();this.presentation.snap(this.simulation);this.followCamera.reset(this.simulation);this.sync(0);}return ok;}
   interact():boolean{this.assertExternalMutation();const ok=this.simulation.interact();if(ok)this.sync(0);return ok;}
+  summonDragon(id?:string):boolean{this.assertExternalMutation();return this.simulation.summonDragon(id);}
   enter(id:string):boolean{this.assertExternalMutation();return this.enterOwned(id);}
   private enterOwned(id:string):boolean{const ok=this.simulation.enter(id);if(ok)this.sync(0);return ok;}
   exit():boolean{this.assertExternalMutation();return this.exitOwned();}
@@ -522,7 +524,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   private prepareEpisodeStartOwned(start:EpisodeStart):void{
     const probe=this.probeEpisodeStart(start);if(!probe.isValid)throw new Error('HUMANOID_START_BLOCKED');
-    this.clearInputOwned();const config=start.humanoid;
+    this.clearInputOwned();this.simulation.dragonTransition=undefined;const config=start.humanoid;
     if(config?.vehicleInstanceId){
       const {candidate,index}=this.episodeCandidate({...start,positionWorldMetersXYZ:probe.resolvedPositionWorldMetersXYZ});Object.assign(this.simulation.vehicles[index]!,candidate);
       if(config.mounted===false){if(!this.approachOwned(config.vehicleInstanceId))throw new Error('HUMANOID_START_EXIT_BLOCKED');}
@@ -559,9 +561,10 @@ export class HumanoidRuntime implements PhysicsPort {
       const support=refreshUnicycleSupport(mounted,this.environment);
       if(!support||mounted.speed>UNICYCLE_TIMING.stoppedSpeed){mounted.motion.unicycle.footDown=0;mounted.motion.unicycle.phase=mounted.grounded?'riding':'airborne';}
     }
-    if(mounted){object.position.copy(mounted.position).add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation));object.quaternion.copy(mounted.rotation);}
+    if(mounted&&!this.simulation.dragonTransition){object.position.copy(mounted.position).add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation));object.quaternion.copy(mounted.rotation);}
     const pose=readHumanoid(this.simulation.humanoid);
     if(pose){pose.mounted=mounted?(mounted.spec.characterPose??'drive'):null;
+      const t=this.simulation.dragonTransition;if(t)pose.dragonMount={progress:1-this.simulation.transition/t.duration,entering:t.entering,side:t.side};
       if(mounted?.motion.kayak)pose.kayakPose={...mounted.motion.kayak};
       if(mounted?.motion.jetski)pose.atvSteeringAngle=mounted.motion.jetski.steeringAngle;
       if(mounted?.motion.unicycle)pose.unicyclePose=copyUnicycleState(mounted.motion.unicycle);
@@ -588,7 +591,7 @@ export class HumanoidRuntime implements PhysicsPort {
     this.options.vehicles.forEach((instance, index) => {
       const pose = sample.vehicles[index]!;
       instance.flyingVisual?.sample(pose,sample.timeSeconds);
-      if(index!==this.simulation.active)instance.flyingVisual?.sampleReins(null);
+      if(index!==this.simulation.active){instance.flyingVisual?.sampleReins(null);instance.flyingVisual?.sampleMount(undefined,null);}
       if(pose.submersible)sampleSubmersibleVisual(instance.object,pose.submersible,sample.timeSeconds);
       if(pose.raft)sampleRaftVisual(instance.object,pose.raft);
       if(pose.jetski)sampleJetSkiVisual(instance.object,pose.jetski,sample.timeSeconds);
@@ -609,7 +612,12 @@ export class HumanoidRuntime implements PhysicsPort {
     const index = this.simulation.active;
     if (index < 0) return;
     const instance = this.options.vehicles[index]!;
-    if(instance.flyingVisual){this.options.character.animation?.alignMountedPelvis(instance.flyingVisual.readSeatWorld());instance.flyingVisual.sampleReins(this.options.character.object);return;}
+    if(instance.flyingVisual&&this.simulation.dragonTransition){
+      const object=this.options.character.object;object.updateWorldMatrix(true,false);
+      this.options.character.animation?.alignMountedPelvis(object.matrixWorld.clone());instance.flyingVisual.sampleReins(null);
+      const contacts=instance.flyingVisual.sampleMount(this.simulation.dragonTransition,object);if(contacts)this.options.character.animation?.fitDragonClimb(contacts);return;
+    }
+    if(instance.flyingVisual){instance.flyingVisual.sampleMount(undefined,null);this.options.character.animation?.alignMountedPelvis(instance.flyingVisual.readSeatWorld());instance.flyingVisual.sampleReins(this.options.character.object);return;}
     if (!instance.visual) return;
     instance.object.updateWorldMatrix(true, true);
     const anchor = instance.visual.readSeatAnchor(this.simulation.vehicles[index]!.spec.seat, instance.seatAnchor);
@@ -619,7 +627,7 @@ export class HumanoidRuntime implements PhysicsPort {
   logicalPose(id:string):{position:THREE.Vector3;rotation:THREE.Quaternion}|undefined {
     if(id===this.options.character.instanceId){
       const mounted=this.simulation.vehicle;
-      if(mounted)return {
+      if(mounted&&!this.simulation.dragonTransition)return {
         position:mounted.position.clone().add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(mounted.rotation)),
         rotation:mounted.rotation.clone(),
       };
@@ -678,7 +686,7 @@ export class HumanoidRuntime implements PhysicsPort {
       }
       // Rider placement follows visual callbacks and uses the same vehicle sample.
       const index=this.simulation.active;
-      if(index>=0){
+      if(index>=0&&!this.simulation.dragonTransition){
         const vehicle=sample.vehicles[index]!,seat=this.simulation.vehicles[index]!.spec.seat;
         character.position.copy(vehicle.position).add(new THREE.Vector3(...seat).applyQuaternion(vehicle.rotation));
         character.quaternion.copy(vehicle.rotation);

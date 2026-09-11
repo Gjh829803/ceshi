@@ -92,6 +92,13 @@ export interface FlyingCreatureCommandV1 {
 }
 export type FlyingCreatureModeV1 = "cruise" | "boost" | "glide" | "dive" | "brake" | "hover" | "evade" | "collision";
 export interface FlyingCreatureStateV1 {
+  summon?:import('./summon').DragonSummon;
+  groundPhase:'airborne'|'approach'|'landing'|'grounded'|'takeoff';
+  groundSeconds:number;
+  groundBlend:number;
+  groundHeight:number;
+  groundFailure:string;
+
   tick: number;
   yawRadians: number;
   pitchRadians: number;
@@ -114,9 +121,14 @@ export interface FlyingCreatureStateV1 {
 
 export function createFlyingCreatureStateV1(yawRadians = 0): FlyingCreatureStateV1 {
   if (!Number.isFinite(yawRadians)) throw new Error("CREATURE_YAW_INVALID");
-  return { tick: 0, yawRadians, pitchRadians: 0, bankRadians: 0,
+  return { groundPhase:"airborne",groundSeconds:0,groundBlend:0,groundHeight:0,groundFailure:"",tick: 0, yawRadians, pitchRadians: 0, bankRadians: 0,
     speedMetersPerSecond: 0, staminaRatio: 1,
     boostExhausted: false, mode: "hover", primaryCount: 0, flamePhase: "off", flamePhaseSeconds: 0,
     evadeRemainingSeconds: 0, evadeCooldownSeconds: 0, secondaryWasHeld: false,
     evadeDirection: 1, evadeCount: 0, collisionRemainingSeconds: 0, collisionCount: 0 };
+}
+
+/** 观察和插值持有独立路线，不能通过快照改写导航。 */
+export function copyFlyingCreatureState(s:FlyingCreatureStateV1):FlyingCreatureStateV1 {
+  return {...s,...(s.summon?{summon:{...s.summon,target:[...s.summon.target],waypoints:s.summon.waypoints.map(p=>[...p])}}:{})};
 }
