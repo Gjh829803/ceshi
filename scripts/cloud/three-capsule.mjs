@@ -103,7 +103,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   source('packages/three-world/package.json', true);
   const sdkManifest=JSON.parse(readFileSync(path.join(repositoryRoot,'packages/three-world/package.json'),'utf8'));
   const rapierBuild=JSON.parse(readFileSync(path.join(repositoryRoot,'vendor/rapier-query-refresh/build.json'),'utf8'));
-  assert(/^rapier3d-compat-0\.20\.0-whitebox-query\.1-[a-f0-9]{16}\.tgz$/.test(rapierBuild.archive),'Review changed Rapier build');
+  assert(/^rapier3d-compat-0\.20\.0-whitebox-query\.2-[a-f0-9]{16}\.tgz$/.test(rapierBuild.archive),'Review changed Rapier build');
   const rapierArchive=`vendor/rapier-query-refresh/${rapierBuild.archive}`;
   assert.equal(sdkManifest.dependencies['@dimforge/rapier3d-compat'],`file:../../${rapierArchive}`);
   source(rapierArchive,true);
