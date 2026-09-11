@@ -318,25 +318,38 @@ class DeliveryTests(unittest.TestCase):
             d.queue_payload(value)
 
     def test_range_identity_and_rolling_workers(self):
-        import time
+        import threading
         self.assertEqual(d.parse_content_range('bytes 0-9/100', 0, 9), 100)
         with self.assertRaisesRegex(ValueError, 'CONTENT_RANGE_MISMATCH'):
             d.parse_content_range('bytes 0-8/100', 0, 9)
         base = 's3://leap-world-us-east-2/world-model/platform/worldkit-three-episode/rolling-test'
         q = d.QueueWorker(None, base + '/queue', base + '/completed', self.root / 'rolling', FakeStore())
         jobs = [q.queue_prefix + f'/{x}.json' for x in ['a', 'b', 'c', 'd', 'e']]
-        completed, starts, ends = set(), {}, {}
-        q.keys = lambda prefix: jobs if prefix == q.queue_prefix else [q.completion_prefix + '/' + key.rsplit('/',1)[1] for key in completed]
+        completed = set()
+        completed_lock = threading.Lock()
+        fifth_started, first_finished = threading.Event(), threading.Event()
+        def keys(prefix):
+            with completed_lock:
+                return jobs if prefix == q.queue_prefix else [q.completion_prefix + '/' + key.rsplit('/',1)[1] for key in completed]
+        q.keys = keys
         q.sweep_completed = lambda *args: None
         def process(key):
-            starts[key] = time.monotonic()
-            time.sleep(.25 if key == jobs[0] else .01)
-            completed.add(key)
-            ends[key] = time.monotonic()
+            if key == jobs[0]:
+                # Keep one worker occupied until a freed slot admits the fifth job.
+                # The timeout bounds a broken scheduler, not the expected ordering.
+                self.assertTrue(fifth_started.wait(10), 'A free worker must start the fifth job before the first finishes')
+                first_finished.set()
+            elif key == jobs[4]:
+                self.assertFalse(first_finished.is_set())
+                fifth_started.set()
+            with completed_lock:
+                completed.add(key)
             return {'identity': {'requestId': key.rsplit('/',1)[1]}}
         q.process = process
         self.assertEqual(q.run(once=True, interval=.005, limit=5), 0)
-        self.assertLess(starts[jobs[4]], ends[jobs[0]])
+        self.assertTrue(fifth_started.is_set())
+        self.assertTrue(first_finished.is_set())
+        self.assertEqual(completed, set(jobs))
 
     def test_audio_tempo_splits_large_ratios(self):
         self.assertEqual(d.tempo_filter(.25).count('atempo='), 2)
