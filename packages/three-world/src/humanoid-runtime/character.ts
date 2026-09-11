@@ -1,3 +1,4 @@
+import type {ModelLoadOptions} from '../model-loader';
 import {fitUnicycleFeet} from './unicycle-rider';
 import {poseKayakHands} from './kayak-visual';
 import {fitAtvHands} from './atv-rider';
@@ -201,11 +202,11 @@ export class Character {
       throw error;
     }
   }
-  async load(assetBaseUrl?:string|((logicalPath:string)=>string)) {
+  async load(assetBaseUrl?:string|((logicalPath:string)=>string),options:ModelLoadOptions={}) {
     if(this.disposed)throw new Error('CHARACTER_DISPOSED');
     if(this.source)return;
     if(this.loading)return this.loading;
-    const loading=SourceCharacter.load(assetBaseUrl).then(source=>{
+    const loading=SourceCharacter.load(assetBaseUrl,options).then(source=>{
       if(this.disposed){source.dispose();throw new Error('CHARACTER_LOAD_STALE');}
       this.adopt(source);
     });

@@ -39,7 +39,7 @@ it('discovers horse integration and only its required example assets',async()=>{
   expect(schema.entryPoint.name).toBe('createHumanoidWorld');
   expect(schema.sdkFactoryContracts).toContain('export declare function createHumanoidWorld(');
   expect(schema.humanoidSourceContracts['humanoid-runtime/horse.ts']).toContain('class HorseVisual');
-  expect(schema.humanoidSourceContracts['humanoid-runtime/horse.ts']).toContain('load(resolve: ResourceResolver): Promise<void>');
+  expect(schema.humanoidSourceContracts['humanoid-runtime/horse.ts']).toContain('load(resolve: ResourceResolver, options?: ModelLoadOptions): Promise<void>');
   expect(schema.humanoidSourceContracts['humanoid-runtime/horse.ts']).not.toContain('mixer');
   expect(schema.humanoidSourceContracts['humanoid-runtime/runtime.ts']).toContain('interface HumanoidRuntimeOptions');
   expect(schema.sdkGuide).toContain('Imported horse');

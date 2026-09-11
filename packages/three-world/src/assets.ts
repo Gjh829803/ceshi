@@ -5,11 +5,12 @@ import {
   type AnimationAction, type AnimationClip, type BufferGeometry, type Material,
   type Mesh, type Object3D, type Skeleton, type SkinnedMesh, type Texture,
 } from 'three';
-import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import {createModelLoader,resolveLoadTextures,type ModelLoadOptions} from './model-loader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
-type LoadOptions = {
+type LoadOptions = ModelLoadOptions & {
   baseUri?: string;
   fetchBytes?: (uri: string) => Promise<Uint8Array>;
 };
@@ -307,8 +308,9 @@ function selectNodes(gltf: GLTF, clone: Object3D, definition: AssetDefinition): 
  */
 export async function loadAsset(definition: AssetDefinition, options: LoadOptions = {}): Promise<AssetInstance> {
   validateAssetDefinition(definition);
+  const loadTextures=resolveLoadTextures(options);
   const uri = options.baseUri ? new URL(definition.uri, options.baseUri).href : definition.uri;
-  const key = JSON.stringify([uri, definition.sha256, definition.byteLength]);
+  const key = JSON.stringify([uri, definition.sha256, definition.byteLength, loadTextures]);
   let entry = cache.get(key);
   if (!entry) {
     const promise = (async () => {
@@ -317,7 +319,7 @@ export async function loadAsset(definition: AssetDefinition, options: LoadOption
       if (bytesToHex(sha256(bytes)) !== definition.sha256) fail('ASSET_HASH_MISMATCH', definition.id);
       checkEmbeddedGlb(bytes, definition.id);
       // Copy to an owned ArrayBuffer, including when fetchBytes returns a Buffer slice.
-      return new GLTFLoader().parseAsync(Uint8Array.from(bytes).buffer, '');
+      return createModelLoader({loadTextures}).parseAsync(Uint8Array.from(bytes).buffer, '');
     })();
     entry = { promise, references: 0 };
     cache.set(key, entry);

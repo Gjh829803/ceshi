@@ -37,8 +37,12 @@ export interface AssetInstance {
  readonly actionIds:readonly string[];
  readonly recommendedBody:CharacterBody | null;
 }
+export interface ModelLoadOptions {
+ /** Decode and bind model material images. Defaults to false; enabled requires image decoding APIs. */
+ readonly loadTextures?:boolean;
+}
 export interface Assets {
- load(assetId:string):Promise<AssetInstance>;
+ load(assetId:string,options?:ModelLoadOptions):Promise<AssetInstance>;
  search(query:string):readonly {assetId:string;name:string;description:string;limitations:readonly string[];actionIds:readonly string[];recommendedBody:CharacterBody|null;locomotionBindingIds:readonly string[]}[];
 }
 export interface EntityMetadata {

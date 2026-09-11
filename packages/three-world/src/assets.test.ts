@@ -1,9 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, LoopOnce, LoopRepeat, Vector3, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
@@ -28,13 +26,31 @@ const pose = (asset: AssetInstance) => {
   return new Box3().setFromObject(asset.object, true);
 };
 
-beforeEach(()=>{
-  const parse=GLTFLoader.prototype.parse;
-  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-});
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('Three asset loader against original project GLBs', () => {
+  it('skips embedded model images by default and keeps failed texture opt-in separate from live whitebox assets', async () => {
+    const fetchBytes = vi.fn(readBytes(humanoid));
+    const objectURL = vi.spyOn(URL, 'createObjectURL');
+    const first = await loadAsset(humanoid, { fetchBytes }); instances.push(first);
+    const material = meshes(first)[0]!.material as MeshStandardMaterial;
+    expect(material.map).toBeNull(); expect(material.normalMap).toBeNull();
+    expect(material.color.getHex()).toBe(0xffffff);
+    expect(objectURL).not.toHaveBeenCalled();
+    await expect(loadAsset(humanoid, { fetchBytes, loadTextures: true })).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+    const second = await loadAsset(humanoid, { fetchBytes, loadTextures: false }); instances.push(second);
+    expect(meshes(second)[0]!.geometry).toBe(meshes(first)[0]!.geometry);
+    expect(fetchBytes).toHaveBeenCalledTimes(2);
+    second.play('walk'); second.update(.2);
+    expect(Number.isFinite(pose(second).max.y)).toBe(true);
+  });
+
+  it('rejects an invalid texture policy before fetching model bytes', async () => {
+    const fetchBytes = vi.fn(readBytes(humanoid));
+    await expect(loadAsset(humanoid, { fetchBytes, loadTextures: 'false' as never })).rejects.toThrow('MODEL_LOAD_TEXTURES_INVALID');
+    expect(fetchBytes).not.toHaveBeenCalled();
+  });
+
   it('restores the exact idle pose immediately after stopping a different locomotion clip',async()=>{
     const instance=await load();instance.play('idle');instance.update(0);const expected=pose(instance).clone();
     for(const action of ['walk','run','walk','run','walk']){

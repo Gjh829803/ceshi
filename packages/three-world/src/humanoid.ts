@@ -1,3 +1,4 @@
+import {resolveLoadTextures,type ModelLoadOptions} from './model-loader';
 import {claimCharacter} from './humanoid-runtime/character-ownership';
 import { createWorld, type ThreeWorld, type WorldOptions } from './world.js';
 import { Character } from './humanoid-runtime/character.js';
@@ -14,6 +15,8 @@ export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinition
   readonly characterId?:string;
   readonly assetDefinitions?:Readonly<Record<string,HumanoidAssetDefinition>>;
   readonly resourceUrl?:(logicalPath:string)=>string;
+  /** Embedded model textures are opt-in; defaults to false. */
+  readonly characterLoadOptions?:ModelLoadOptions;
   readonly vehicles?:readonly VehicleInstance[];
   readonly profile?:HumanoidProfile;
   /** A supplied character transfers its lifecycle to the returned World. */
@@ -25,7 +28,8 @@ export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinition
  * Other meshes bind through createWorld/addCharacter or the supplied vehicle instances.
  */
 export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<ThreeWorld>{
-  const {map,characterId='player',resourceUrl,vehicles=[],profile,character:provided,assetDefinitions:configured,...worldOptions}=options;
+  const {map,characterId='player',resourceUrl,characterLoadOptions,vehicles=[],profile,character:provided,assetDefinitions:configured,...worldOptions}=options;
+  const modelLoadOptions={loadTextures:resolveLoadTextures(characterLoadOptions)};
   validateEnvironment(map);
   if(!characterId.trim()||vehicles.some(vehicle=>vehicle.instanceId===characterId))throw new Error('HUMANOID_INSTANCE_ID_INVALID');
   let definitions=configured;
@@ -47,7 +51,7 @@ export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<
         if(!uri)throw new Error(`HUMANOID_RESOURCE_MISSING: ${logicalPath}`);
         return typeof document==='undefined'?uri:new URL(uri,document.baseURI).href;
       });
-      await character.load(resolve);
+      await character.load(resolve,modelLoadOptions);
     }
     releasePreparation();
     world=await createWorld({...worldOptions,assetDefinitions:definitions??{},humanoid:{map,vehicles,character:{instanceId:characterId,object:character.root,animation:character}}});

@@ -1,9 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, LoopOnce, Mesh, MeshBasicMaterial, Quaternion, type Object3D } from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, playLocomotion } from './assets';
 import { WorldAssets } from './assets-library';
@@ -32,10 +30,6 @@ function effectiveDuration(instance: AssetInstance, id: 'walk' | 'run') {
   return clip.duration - Math.min(...clip.tracks.map(track => track.times[0]!));
 }
 
-beforeEach(()=>{
-  const parse=GLTFLoader.prototype.parse;
-  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-});
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('automatic humanoid locomotion with the original project GLB', () => {

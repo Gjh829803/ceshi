@@ -1,9 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3, type SkinnedMesh } from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { WorldAssets } from './assets-library.js';
 import type { AssetInstance } from './contracts.js';
@@ -28,13 +26,17 @@ function meshOf(instance: AssetInstance): SkinnedMesh {
   instance.object.traverse(node => { if ((node as SkinnedMesh).isSkinnedMesh && !selected) selected = node as SkinnedMesh; });
   return selected!;
 }
-beforeEach(()=>{
-  const parse=GLTFLoader.prototype.parse;
-  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-});
 afterEach(() => { for (const library of libraries.splice(0)) library.dispose(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('WorldAssets', () => {
+  it('forwards explicit texture opt-in and can load a whitebox instance after unsupported Node decoding', async () => {
+    const { library } = fixture();
+    await expect(library.load('humanoid.source-101', { loadTextures: true })).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+    const instance = await library.load('humanoid.source-101');
+    expect((meshOf(instance).material as MeshStandardMaterial).map).toBeNull();
+    expect(library.owns(instance)).toBe(true);
+  });
+
   it('publishes only grounded catalog metadata and does not infer movement from clips', async () => {
     const { library, fetchBytes } = fixture();
     const subject = library.search('source-101')[0]!;

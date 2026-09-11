@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {createModelLoader,type ModelLoadOptions} from '../../../model-loader';
 import type { MotionPose } from '../../presentation';
 import { CreatureFlame } from './flame';
 import type { FlyingCreatureStateV1 } from './state';
@@ -7,7 +7,7 @@ import {DragonMountLadder} from './mount-ladder';
 import type {DragonMountTransition} from './mount';
 import {dragonGroundHeading} from './ground-pose';
 
-export interface FlyingCreatureVisualResources {dragonUrl:string;flameTextureUrl:string;animationPrefix?:string}
+export interface FlyingCreatureVisualResources extends ModelLoadOptions {dragonUrl:string;flameTextureUrl:string;animationPrefix?:string}
 /** 同族骨架的米制模型适配。运动、显示采样和资源释放均由现有 HumanoidRuntime 调用。 */
 export class FlyingCreatureVisual {
   readonly root=new T.Group();
@@ -35,7 +35,7 @@ export class FlyingCreatureVisual {
     if(this.mixer||this.loading||this.disposed)throw new Error('FLYING_CREATURE_VISUAL_NOT_LOADABLE');
     this.loading=true;
     try{
-    const loader=new GLTFLoader(),model=await loader.loadAsync(resources.dragonUrl);
+    const loader=createModelLoader(resources.loadTextures===undefined?{}:{loadTextures:resources.loadTextures}),model=await loader.loadAsync(resources.dragonUrl);
     this.body=model.scene;
     if(this.disposed)throw new Error('FLYING_CREATURE_VISUAL_DISPOSED');
     this.root.add(model.scene);

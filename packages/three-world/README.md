@@ -38,9 +38,9 @@ uses the supplied object and optional animation. Available actions follow those
 actual bindings and scene conditions.
 
 Complete humanoid loads share a template keyed by the resolved resource URL
-closure. Keep those URLs immutable for their content version. Each instance has
-independent skeletons, inverse-bind matrices, mixer clips, materials and texture
-objects; geometry is shared read-only. Clone geometry explicitly before editing
+closure and model texture loading choice. Keep those URLs immutable for their content version. Each instance has
+independent skeletons, inverse-bind matrices, mixer clips, materials and any loaded
+texture objects; geometry is shared read-only. Clone geometry explicitly before editing
 it and retain ownership of that authored copy. Disposing one character releases
 its instance resources; the final instance releases the shared template.
 Failed loads/bindings release partial resources, and a disposed character cannot
@@ -342,6 +342,29 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.assets.load(id)` creates an independent instance for ordinary
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
+Model image textures are disabled by default (`loadTextures:false`). The loader
+skips model image decoding while preserving material base factors and vertex colors;
+it does not rewrite the GLB or recolor its source data. A model whose color came
+from textures can therefore appear white. To load model textures in a browser,
+choose the option on the initial load:
+
+```ts
+await world.assets.load(assetId, {loadTextures:true});
+await createHumanoidWorld({scene, camera, canvas, map,
+  characterLoadOptions:{loadTextures:true}});
+await character.load(resourceUrl, {loadTextures:true}); // HumanoidCharacter
+await horse.load(resourceUrl, {loadTextures:true});     // HorseVisual
+await flyingVisual.load({dragonUrl, flameTextureUrl, animationPrefix:'D01',
+  loadTextures:true});
+```
+
+`ModelLoadOptions` applies to model images only. Explicit effects such as the
+flying-creature flame atlas keep their own texture loading contract. Opting into
+model textures without image-decoder APIs rejects with
+`MODEL_TEXTURE_DECODER_UNAVAILABLE`. Disabling model textures does not by itself
+make the full FlyingCreatureVisual or its effects usable in Node. Existing source
+factories preserve the texture choice when creating another instance.
+
 Catalog `locomotionBindingIds` describe supplied content for discovery. They do
 not select or install a controller; binding uses `asset/object` with `movement`,
 or an actual `humanoid` instance.
@@ -1239,7 +1262,7 @@ playback resources. Load it with the Host's permitted logical resource resolver:
 ```ts
 import { HorseVisual } from '@worldkit/three';
 const horse = new HorseVisual();
-await horse.load(resolvePresetResource);
+await horse.load(resolvePresetResource); // Model textures default off; pass {loadTextures:true} to opt in.
 // Pass alongside the existing vehicle instanceId, assetId and calibrated spec:
 const horseInstance = {
   instanceId: 'horse-1', assetId: 'creature.horse', spec: horseSpec,

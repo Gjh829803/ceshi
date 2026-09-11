@@ -1,4 +1,5 @@
 import { AnimationAction, AnimationClip, AnimationMixer, Group, LoopOnce, Mesh, Object3D, PropertyBinding, Quaternion, Vector3 } from 'three';
+import type {ModelLoadOptions} from '../../model-loader';
 import {disposeSourceGraphs,leaseSourceCharacter,type SourceCharacterLease} from './source-character-assets';
 import type { SourceCharacterFrame as Simulation } from './animation';
 import type { MotionSource } from './motion';
@@ -87,8 +88,8 @@ export class Character {
   private observedSimulation: Simulation | null = null;
   private traversalEntry: {serial: number; weights: Record<string, number>; duration: number} | null = null;
 
-  static async load(assetBaseUrl:string|((logicalPath:string)=>string) = './assets/humanoid/source/') {
-    return Character.fromLease(await leaseSourceCharacter(assetBaseUrl));
+  static async load(assetBaseUrl:string|((logicalPath:string)=>string) = './assets/humanoid/source/',options:ModelLoadOptions={}) {
+    return Character.fromLease(await leaseSourceCharacter(assetBaseUrl,options));
   }
   private static fromLease(lease:SourceCharacterLease):Character {
     try{

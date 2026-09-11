@@ -22,8 +22,9 @@ H01 参考骑手、火焰图集及四份 JSON。模型和动作来自已有 Cent
 `?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物
 的位置在通过 SDK 起点检查后保留。
 
-真实骑手始终是当前 `humanoid.source-101` 人物：UEFN 白色外形、黑色关节，
-绑定既有 Source101 骨架与动作。H01 GLB 用于适配参考，没有替换真实角色，也未
+真实骑手始终是当前 `humanoid.source-101` 人物，绑定既有 Source101 骨架与动作。
+原始 UEFN 外形资源包含黑色关节贴图；模型贴图默认不解码，因此人物可呈纯白，
+原始 GLB 字节与资源身份保持不变。H01 GLB 用于适配参考，没有替换真实角色，也未
 完成其整套骨骼动作到 Source101 的重定向。
 
 Creator 可通过 `assets_search` 查找 D01–D11，再用 `assets_describe` 读取
@@ -44,6 +45,21 @@ Source101，从 `asset-definitions.json` 读取上述字段，将加载后的
 目录中的 [`creature.dragon`](../assets/three-creator/catalog/creature.dragon.json)
 是另一份 WYVERN 资源，路径为 `presets/creatures/dragon.glb`。它与这些原生变体是
 不同资产；查到该 ID 不代表加载了原生飞行、召唤、上下龙或喷火能力。
+
+## 模型贴图
+
+模型加载默认 `loadTextures:false`，跳过模型图像解码，保留材质基础因子和顶点
+颜色。马、原生飞龙、通用资产与完整人物使用同一模型加载规则。浏览器需要贴图
+时在首次加载显式开启：`world.assets.load(id,{loadTextures:true})`、
+`createHumanoidWorld({...,characterLoadOptions:{loadTextures:true}})`、
+`HumanoidCharacter.load(url,{loadTextures:true})`、
+`HorseVisual.load(resolve,{loadTextures:true})` 或
+`FlyingCreatureVisual.load({...resources,loadTextures:true})`。
+
+飞龙的 `flameTextureUrl` 是显式火焰效果图集，继续按原有效果契约加载，不随模型
+贴图选项关闭。缺少图像解码 API 时开启模型贴图会返回
+`MODEL_TEXTURE_DECODER_UNAVAILABLE`；关闭模型贴图不代表完整飞龙 visual、火焰
+或浏览器呈现功能支持 Node。此选项不修改任何模型二进制。
 
 ## 实际流程与控制
 

@@ -1,17 +1,12 @@
 import {readFile} from 'node:fs/promises';
-import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {Character as SourceCharacter} from './humanoid-runtime/humanoid/source-character';
 import {Character} from './humanoid-runtime/character';
 
 const sources:SourceCharacter[]=[],characters:Character[]=[];
-beforeEach(()=>{
-  const parse=GLTFLoader.prototype.parse;
-  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-});
+
 afterEach(()=>{for(const actor of characters.splice(0))actor.dispose();for(const actor of sources.splice(0))actor.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
 function resources(options:{fail?:()=>boolean;gate?:Promise<void>;manifestModel?:()=>string;modelAliases?:Record<string,string>;failManifest?:()=>boolean}={}){
   const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
@@ -53,8 +48,8 @@ it('shares immutable model sources while isolating three skeletons, mixers, clip
   const materialA=(Array.isArray(ma.material)?ma.material[0]:ma.material) as THREE.MeshStandardMaterial;
   const materialB=(Array.isArray(mb.material)?mb.material[0]:mb.material) as THREE.MeshStandardMaterial;
   expect(materialA.transparent).toBe(false);expect(materialA.depthWrite).toBe(true);
-  expect(materialA.map).toBeTruthy();expect(materialA.map).not.toBe(materialB.map);
-  materialA.map!.offset.x=.25;expect(materialB.map!.offset.x).toBe(0);
+  expect(materialA.map).toBeNull();expect(materialB.map).toBeNull();
+  expect(materialA.normalMap).toBeNull();expect(materialB.normalMap).toBeNull();
   const color=materialB.color.clone();materialA.color.setRGB(.1,.2,.3);expect(materialB.color.equals(color)).toBe(true);
   const sharedDispose=vi.spyOn(ma.geometry,'dispose');
   a.dispose();a.dispose();expect(sharedDispose).not.toHaveBeenCalled();
@@ -175,4 +170,30 @@ it('deduplicates a failed manifest request and permits a clean retry',async()=>{
   expect(counts.get('humanoid/source/manifest.json')).toBe(1);
   fail=false;const actor=await SourceCharacter.load(resolve);sources.push(actor);
   expect(actor.clipCount).toBe(48);expect(counts.get('humanoid/source/manifest.json')).toBe(2);
+});
+
+
+it('loads model textures off by default using the real Node GLTF parser',async()=>{
+  const {resolve}=resources(),actor=await SourceCharacter.load(resolve);sources.push(actor);
+  expect(actor.rigTargets).toBe(101);expect(actor.clipCount).toBe(48);
+  actor.root.traverse(object=>{if(object instanceof THREE.Mesh)for(const material of Array.isArray(object.material)?object.material:[object.material]){
+    expect(Object.values(material).some(value=>value instanceof THREE.Texture)).toBe(false);
+  }});
+});
+
+it('rejects enabled model textures in Node without reusing or poisoning the default cache',async()=>{
+  const {resolve}=resources(),actor=await SourceCharacter.load(resolve);sources.push(actor);
+  await expect(SourceCharacter.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  const again=await SourceCharacter.load(resolve);sources.push(again);expect(mesh(again).geometry).toBe(mesh(actor).geometry);
+  const publicActor=new Character();characters.push(publicActor);
+  await expect(publicActor.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  expect(publicActor.loaded).toBe(false);await publicActor.load(resolve);expect(publicActor.loaded).toBe(true);
+});
+
+it('captures model textures options before async loading and retains them in the immutable source factory',async()=>{
+  const {resolve}=resources(),options={loadTextures:false};
+  const loading=SourceCharacter.load(resolve,options);options.loadTextures=true;
+  const actor=await loading;sources.push(actor);const factory=actor.createFactory()!;actor.dispose();
+  const clone=await factory();sources.push(clone);
+  const material=mesh(clone).material as THREE.MeshStandardMaterial;expect(material.map).toBeNull();
 });

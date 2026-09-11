@@ -160,7 +160,7 @@ export function humanoidFactoryContractSource(source:string):string {
   if(!(error instanceof Error)||!error.message.startsWith('THREE_PUBLIC_PARAMETER_TYPE_UNRESOLVED:'))throw error;
   signature='/** Declaration unavailable for createHumanoidWorld: a default parameter type could not be resolved statically at createHumanoidWorld in this source excerpt; consult the workspace source. */';
  }
- return `import type {WorldOptions,ThreeWorld,EnvironmentDefinition,HumanoidCharacter,humanoid} from '@worldkit/three';
+ return `import type {WorldOptions,ThreeWorld,EnvironmentDefinition,HumanoidCharacter,ModelLoadOptions,humanoid} from '@worldkit/three';
 type Character=HumanoidCharacter;
 type HumanoidProfile=humanoid.HumanoidProfile;
 type VehicleInstance=humanoid.VehicleInstance;
