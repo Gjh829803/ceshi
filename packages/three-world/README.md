@@ -393,11 +393,59 @@ input. Failure such as insufficient speed, occupied hands, cooldown or blocked
 standing space must remain visible to the Agent. Runtime tuning and eligibility
 are authoritative; see `ACTION_TUNING` and the character action module.
 
-**Interactions** — `map.interactions` supplies stable `id`, `kind`, object
+**Interactions** — `map.interactions` supplies stable entity `id`, `slotId`, `kind`, object
 `position`, free `approach`, `yaw`, size/mass and target `colliderIds`. Reach the
 approach within 0.9 m and its vertical tolerance before requesting pickup/sit.
 These commands do not navigate. Render the movable object from the shared
 interaction state so it follows the hand and does not remain duplicated.
+
+Ordinary entities bind the same actions with `addEntity({id,object,physics,interactions})`
+or prototype `options.interactions`. Each slot declares `slotId`, `label`, `kind`
+(`pickup` or `seat`), `positionLocalMetersXYZ`, `approachLocalMetersXYZ`,
+`rotationLocalRadiansXYZ` (XYZ Euler, +Z facing) and `capacity:1`. Coordinates are
+relative to the entity root and follow its actual transform. A fixed bench can
+contain several independent seat slots; pickup requires a dynamic body and
+exclusively holds the entire entity. Its existing model and body are reused.
+Dynamic physics can explicitly set `lockRotations:true` when the calibrated object
+must retain its orientation (the supplied pickup prop uses this constraint).
+Rotation is free by default; binding an interaction never silently locks it.
+
+```ts
+world.addEntity({id:'bench',object:bench,role:'obstacle',physics:{kind:'fixed'},interactions:[
+  {slotId:'left',label:'Left seat',kind:'seat',capacity:1,
+   positionLocalMetersXYZ:[-.6,.46,-.49],
+   approachLocalMetersXYZ:[-.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
+  {slotId:'right',label:'Right seat',kind:'seat',capacity:1,
+   positionLocalMetersXYZ:[.6,.46,-.49],
+   approachLocalMetersXYZ:[.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
+]});
+await world.execute({type:'humanoid.perform-action',actorId:'person',
+  request:{requestId:'sit-right',action:'sit',targetId:'bench',slotId:'right'}});
+```
+
+The example assumes the authored bench root is at floor level and its actual seat
+colliders meet those anchors. Inspect the measured `interactionTargets` approach,
+eligibility, `slotId`, `generation` and `claim` before dispatching. A request may omit
+`slotId` only for an entity with one slot; `putDown` and `standUp` can use the actor's
+current relationship. Replace bindings with
+`world.execute({type:'entity.set-interactions',entityId,slots})`; an empty array
+removes them. Replacement invalidates old reservations and releases held bodies.
+Despawn releases relationships before destroying physics; reset restores baseline
+bindings against the new physical instances.
+
+Reservations expire after five seconds of simulation time. A successful grip or
+seat contact becomes a persistent `held`/`occupied` claim; completing the operation
+does not release it. Actual body state, collider contact, mass, approach and supplied
+clip reach are checked again at contact. A label or local anchor cannot make an
+arbitrary height reachable. Source101 seated motion uses a 1.40 m capsule; standing
+requires 1.68 m clearance. Losing a seat under a low roof starts safe exit cleanup
+before the action can become terminal. Snapshots never advance these transitions.
+The `multiple-actors` example binds an offset Group and two independent seats,
+with controls for NPC approach, contention, carrying, release, cancellation,
+target removal and a low ceiling over the right seat. Navigation uses conservative
+clearance around fixed furniture; reach a nearby walkable point before the action
+controller performs its final alignment. Route around movable obstacles using
+their actual occupied space.
 
 **Dynamic objects** — the Agent decides which objects should respond to gravity,
 forces and collisions from the scene and gameplay requirements; there is no fixed

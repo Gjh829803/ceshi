@@ -120,7 +120,7 @@ describe('Three episode deterministic production capture', () => {
       { id: 'sit-at-chair', trigger: { waypointIndex: 0, radiusMeters: .6 }, targetId: 'chair', intent: { kind: 'skill', action: 'sit' }, completion: { kind: 'settled', holdSeconds: 1 }, timeoutSeconds: 4 },
       { id: 'stand-from-chair', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'skill', action: 'standUp' }, completion: { kind: 'settled', holdSeconds: 0 }, timeoutSeconds: 4 },
     ];
-    let tick = 1, started = 0, currentAction = '', seated: string | null = null;
+    let tick = 1, started = 0, currentAction = '', requestId = '', seated: string | null = null;
     const commands: string[] = [];
     const player = (snapshot: WorldSnapshot): WorldSnapshot => {
       tick = snapshot.simulationTick;
@@ -128,7 +128,9 @@ describe('Three episode deterministic production capture', () => {
       return { ...snapshot, humanoid: { character: { instanceId: 'actor', state: seated ? 'seated' : 'idle', stance: 'stand', swimming: false, swimStyle: 'freestyle', carrying: null, seated,
         activeAction: currentAction && tick < started + 30 ? { requestId: currentAction, action: currentAction, phase: 'animate', elapsedSeconds: (tick - started) / 60 } : null },
         surface: { mode: 'none', surfaceId: null, pose: null }, water: { swimming: false, contact: null },
-        interactionTargets: [{ id: 'chair', kind: 'seat', eligible: true, reason: 'READY', approachPositionWorldMetersXYZ: [0, 0, 0] }], message: '' } as unknown as NonNullable<WorldSnapshot['humanoid']> };
+        interactionTargets: [{ id: 'chair', slotId: 'seat', generation: 1,
+          claim: seated ? { actorId: 'actor', requestId, generation: 1, state: 'occupied', expiresAtSimulationSeconds: null } : null,
+          kind: 'seat', eligible: true, reason: 'READY', approachPositionWorldMetersXYZ: [0, 0, 0] }], message: '' } as unknown as NonNullable<WorldSnapshot['humanoid']> };
     };
     const originalPrepare = session.prepareSegment, originalAdvance = session.advance, originalFrame = session.frame;
     session.prepareSegment = async (...args) => player(await originalPrepare(...args));
@@ -136,7 +138,7 @@ describe('Three episode deterministic production capture', () => {
     session.frame = async (...args) => { const frame = await originalFrame(...args); return { ...frame, snapshot: player(frame.snapshot) }; };
     session.execute = async command => {
       if (command.type !== 'humanoid.perform-action') throw new Error('unexpected fixture command');
-      currentAction = command.request.action; started = tick; commands.push(currentAction);
+      currentAction = command.request.action; requestId = command.request.requestId; started = tick; commands.push(currentAction);
       return { status: 'accepted', commandId: currentAction, worldRevision: 0, operationId: currentAction };
     };
     session.operation = async id => ({ id, status: tick >= started + 30 ? 'succeeded' : 'running', phase: 'animate' });

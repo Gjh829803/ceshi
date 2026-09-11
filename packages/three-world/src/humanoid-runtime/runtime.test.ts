@@ -307,7 +307,7 @@ describe('SDK humanoid runtime',()=>{
  });
  it('returns authored approach anchors and exactly the eligibility used by target execution',async()=>{
   const world=await fixture();try{const runtime=world.humanoid!;
-   runtime.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',position:[5,.5,5],approach:[5,.03,4],yaw:.4}]});
+   runtime.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',slotId:'seat',position:[5,.5,5],approach:[5,.03,4],yaw:.4}]});
    runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle','sit-exit']),[]);world.step({},30);
    const before=world.getEntityState('player').positionWorldMetersXYZ,target=runtime.snapshot().interactionTargets[0]!;
    expect(target).toMatchObject({id:'seat',approachPositionWorldMetersXYZ:[5,.03,4],facingYawRadians:.4,eligible:false,reason:'OUT_OF_REACH'});
@@ -318,7 +318,7 @@ describe('SDK humanoid runtime',()=>{
  });
  it('moves seat anchors with a compound prop and rejects a toppled seat',async()=>{
   const world=await fixture();try{const r=world.humanoid!;
-   r.switchMap({...map,boxes:[map.boxes[0]!,{id:'chair-shape',position:[5,.5,5],size:[1,1,1],rigidGroup:{id:'chair',massKg:8}}],interactions:[{id:'chair-seat',label:'Seat',kind:'seat',position:[5,1,5],approach:[5,0,4],yaw:0,colliderIds:['chair-shape']}]});
+   r.switchMap({...map,boxes:[map.boxes[0]!,{id:'chair-shape',position:[5,.5,5],size:[1,1,1],rigidGroup:{id:'chair',massKg:8}}],interactions:[{id:'chair-seat',label:'Seat',kind:'seat',slotId:'seat',position:[5,1,5],approach:[5,0,4],yaw:0,colliderIds:['chair-shape']}]});
    r.simulation.controlledActor.controller.setAvailableClips(new Set(['sit-enter','sit-idle','sit-exit']),[]);world.step({},30);
    const body=r.environment.colliderForId('chair-shape')!.parent()!;body.setTranslation({x:8,y:.5,z:5},true);body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2),true);world.step({},1);
    const target=r.snapshot().interactionTargets[0]!;expect(target.positionWorldMetersXYZ[0]).toBeGreaterThan(7);expect(target.reason).toBe('SEAT_UNSTABLE');
@@ -596,7 +596,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('observes source surface progress and map interaction targets without mutable references',async()=>{
-  const world=await fixture();try{const runtime=world.humanoid!;runtime.switchMap({...map,interactions:[{id:'parcel',label:'Parcel',kind:'pickup',position:[5,.5,5],approach:[5,.03,4],yaw:0,size:[.5,.5,.5]}]});runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['prone-enter','prone-exit','prone-idle','prone-forward']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),actions:{prone:true}}},1);
+  const world=await fixture();try{const runtime=world.humanoid!;runtime.switchMap({...map,interactions:[{id:'parcel',label:'Parcel',kind:'pickup',slotId:'pickup',position:[5,.5,5],approach:[5,.03,4],yaw:0,size:[.5,.5,.5]}]});runtime.simulation.controlledActor.controller.setAvailableClips(new Set(['prone-enter','prone-exit','prone-idle','prone-forward']),[]);world.step({},30);world.step({humanoid:{...emptyInput(),actions:{prone:true}}},1);
    const snapshot=runtime.snapshot();expect(snapshot.surface.mode).toBe('prone');expect(snapshot.surface.pose?.actionId).toBe('prone-enter');expect(snapshot.interactionTargets[0]).toMatchObject({id:'parcel',state:'available',positionWorldMetersXYZ:[5,.5,5]});expect(snapshot.traversal).toBeNull();expect(snapshot.vehicleDynamics[0]?.launched).toBe(false);
    world.step({},180);expect(snapshot.surface.pose?.actionId).toBe('prone-enter');expect(runtime.snapshot().surface.pose?.actionId).toBe('prone-idle');await world.reset();expect(runtime.snapshot().surface.mode).toBe('none');
   }finally{world.dispose();}

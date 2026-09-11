@@ -50,8 +50,26 @@ export interface EntityMetadata {
 }
 export type SolidPhysics =
  | {readonly kind:'fixed'|'kinematic';readonly shape?:'mesh'|'box'|'convex-hull'}
- | {readonly kind:'dynamic';readonly shape:'box'|'convex-hull';readonly massKilograms:number};
-export type EntityOptions = EntityMetadata & {readonly object:THREE.Object3D} & (
+ | {readonly kind:'dynamic';readonly shape:'box'|'convex-hull';readonly massKilograms:number;readonly lockRotations?:boolean};
+/** Entity-local metres and XYZ Euler radians; +Y up and +Z interaction facing. */
+export interface InteractionSlot {
+ readonly slotId:string;
+ readonly label:string;
+ readonly kind:'pickup'|'seat';
+ readonly positionLocalMetersXYZ:Vec3;
+ readonly approachLocalMetersXYZ:Vec3;
+ readonly rotationLocalRadiansXYZ:Vec3;
+ readonly capacity:1;
+}
+export interface InteractionClaimState {
+ readonly actorId:string|null;
+ readonly requestId:string;
+ readonly state:'reserved'|'held'|'occupied';
+ readonly generation:number;
+ readonly expiresAtSimulationSeconds:number|null;
+}
+
+export type EntityOptions = EntityMetadata & {readonly object:THREE.Object3D;readonly interactions?:readonly InteractionSlot[]} & (
  | {readonly role:'terrain'|'obstacle';readonly physics?:SolidPhysics}
  | {readonly role:'decoration';readonly physics?:never}
 );
@@ -122,10 +140,11 @@ export type PrimitiveCommand =
  | {readonly type:'actor.stop';readonly entityId:string}
  | {readonly type:'actor.resume-autonomy';readonly entityId:string}
  | {readonly type:'actor.set-movement';readonly entityId:string;readonly movementId:string}
+ | {readonly type:'entity.set-interactions';readonly entityId:string;readonly slots:readonly InteractionSlot[]}
  | {readonly type:'entity.set-geometry';readonly entityId:string;readonly geometryId:string};
 export type PropertyCommand = Extract<PrimitiveCommand,{type:'entity.set-visible'|'entity.set-scale'|'entity.set-position'|'entity.set-rotation'}>;
 export type PropertyChannel = 'position'|'rotation'|'scale'|'visibility';
-export type EntityWriteChannel = PropertyChannel|'locomotion'|'animation'|'parentage'|'lifecycle'|'impulse'|'geometry';
+export type EntityWriteChannel = PropertyChannel|'locomotion'|'animation'|'parentage'|'lifecycle'|'impulse'|'geometry'|'interactions';
 export interface PropertyWriteClaim {readonly kind:'entity';readonly entityId:string;readonly channels:readonly PropertyChannel[]}
 export type WriteClaim =
  | {readonly kind:'entity';readonly entityId:string;readonly channels:readonly EntityWriteChannel[]}

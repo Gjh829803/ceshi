@@ -13,6 +13,7 @@ export type RigidPhysics = Readonly<{
   frictionRatio?: number;
   restitutionRatio?: number;
   massKilograms?: number;
+  lockRotations?: boolean;
 }>;
 export type CharacterOptions = Readonly<{
   heightMeters?: number;

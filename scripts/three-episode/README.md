@@ -109,6 +109,16 @@ The recorder observes actions every simulation tick. Each segment writes:
 
 `accepted` records dispatch, not completion. Only `succeeded` is complete;
 `failed`, `cancelled` and `missing` must not become successful video events.
+Interaction goals use `targetId` for the entity and `slotId` for its selected
+interaction. An entity with multiple slots requires an explicit slot. The Host
+approaches that slot, passes its identity to the SDK and checks the same generation,
+actor and persistent claim before reporting pickup/sit completion. Read current
+`snapshot.humanoid.interactionTargets`; a matching entity name alone is insufficient.
+The capture port also accepts the existing `actor.move-to`, `actor.follow` and
+`actor.stop` commands for NPCs. They share World navigation and operations; only
+`advance` progresses simulation. The controlled subject still uses recorded input.
+A command still preparing when the capture lease is released is rejected and its
+prepared resources are released. Entity transforms are not recording movement commands.
 Action evidence is hash-bound to visual/event requests and enters event-prefetch
 and render prompts. The controller permits valid stationary action segments;
 recording health checks use action results rather than demanding continuous gait

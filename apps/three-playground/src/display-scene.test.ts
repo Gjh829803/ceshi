@@ -97,9 +97,9 @@ it('builds only declared map props and never creates models from semantic observ
  const visual=buildInteractionVisuals(scene,[{id:'authored',size:[.2,.3,.4],position:[1,2,3]}]);
  try{
   const object=scene.getObjectByName('authored');expect(object).toBeDefined();expect(object!.position.toArray()).toEqual([1,2,3]);
-  visual.update([{id:'custom-object',kind:'pickup',position:new T.Vector3(5,5,5),state:'available'}]);
+  visual.update([{id:'custom-object',kind:'pickup',slotId:'pickup',position:new T.Vector3(5,5,5),state:'available'}]);
   expect(scene.getObjectByName('custom-object')).toBeUndefined();expect(object!.visible).toBe(false);
-  visual.update([{id:'authored',kind:'pickup',position:new T.Vector3(3,2,1),state:'placed'}]);
+  visual.update([{id:'authored',kind:'pickup',slotId:'pickup',position:new T.Vector3(3,2,1),state:'placed'}]);
   expect(scene.getObjectByName('authored')).toBe(object);expect(object!.visible).toBe(true);expect(object!.position.toArray()).toEqual([3,2,1]);
  }finally{visual.dispose();}
  expect(scene.children).toHaveLength(0);

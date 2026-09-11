@@ -43,6 +43,6 @@ export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderSt
   return out;
 }
 export function readInteractionTargets(environment:EnvironmentQueries):InteractionVisualTarget[]{
-  return [...environment.interactions.targets.values()].map<InteractionVisualTarget>(t=>({id:t.definition.id,kind:t.definition.kind,position:t.position.clone(),rotation:t.rotation.clone(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
+  return [...environment.interactions.targets.values()].map<InteractionVisualTarget>(t=>({id:t.entityId,slotId:t.slotId,kind:t.definition.kind,position:t.position.clone(),rotation:t.rotation.clone(),state:t.state,size:t.definition.size?[...t.definition.size]:undefined}))
     .concat(environment.looseCrates.map(c=>({id:c.id,kind:'pickup' as const,position:new Vector3().copy(c.body.translation()),rotation:new Quaternion().copy(c.body.rotation()),state:'dynamic',size:[c.size,c.size,c.size]})));
 }

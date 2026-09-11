@@ -99,29 +99,14 @@ Actor 绑定、输入、骑乘、模型生命周期和呈现历史，实际消�
 
 ## R3：共享目标与资源
 
-物理 owner 与交互语义已分离，删除动作层裸刚体访问并收敛重置边界；见
-[交互物理所有权](../../reviews/2026-09-11-interaction-physical-ownership.md)。
-交互呈现也已脱离 Actor，内容构建与观察分开，见
-[呈现归属验证](../../reviews/2026-09-11-interaction-presentation-ownership.md)。
-拾取接触会重新检查实际物理条件，见
-[接触再验证](../../reviews/2026-09-11-pickup-contact-validation.md)。
-动态绑定的后续实施见 [R3 计划](2026-09-11-interaction-entity-bindings.md)。
+Map 与普通 Entity/prototype 已接入同一个共享槽位和持有关系。普通物件使用原模型/刚体，
+支持本地锚点、动态替换、目标失效和 baseline reset；持续 held/occupied 独立于操作终态。
+SDK、Playground、Creator 能力卡/schema 和 Episode 同步消费 entity/slot/generation。
+实际三角色交互样例与验证见 [动态槽位验收](../../reviews/2026-09-11-dynamic-interaction-slots.md)。
 
-共享交互基础已实现：环境拥有交互物、松散箱子及预约；控制器只持有自己的关系。
-拾取/落座完成保留 held/occupied，取消握取前的预约不重建物体。世界复位恢复
-物体，单角色复位不重置其他物体；箱子查询与 Playground 显示采用声明 ID。
-目标位置/座椅锚点的同步已进一步收回世界阶段，Actor 只检查自身关系；
-见 [同步归属验证](../../reviews/2026-09-11-shared-target-synchronization.md)。
-验证记录：`.codex-tmp/r0/r2-content-regression-final.log`（98 tests）、
-`r2-world-content-final.log`（资源实例及显示等 17 tests）；typecheck、lint 和 prebuild 通过，
-runtime `77acc3f00d289a50a1b0f8bbbbc076c021382aa861ce51a41fbe3a51bb58735b`。
-独立只读复核无剩余确认问题。尚不代表多 Actor 注册、动态目标失效和完整 R3 验收完成。
-
-文件：现有 MapInteraction/action-schema/action-system、world/control-support、对应 Host/Episode 消费者。
-
-- [ ] 同 tick 两请求争物/座恰一成功；先写原子全有或全无预约、目标移动/移除、reset/despawn 测试。
-- [ ] 世界持有 target/slot generation 与 reservation；grip/sit 转成持续 heldBy/occupiedBy。物理实体及视觉引用同一个目标。
-- [ ] 样例真实争用、搬运、释放、低顶退出、取消；阶段提交与验证记录。
+- [ ] 统一角色移动/全身动画/姿态/手部与目标的原子资源仲裁；当前目标/实体预约已原子化，尚不能代替角色跨能力仲裁。
+- [x] 世界持有 target/slot generation 与 reservation；grip/sit 转成持续 heldBy/occupiedBy。普通实体物理与视觉保持原身份。
+- [x] 同 tick 两请求争物仅一方成功；多座位独立占用，目标变更/reset/despawn/低顶退出有回归。真实 Creator/Episode 样例、近景与阶段记录已提供。
 
 ## R4：持续任务与事件
 

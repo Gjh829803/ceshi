@@ -165,3 +165,42 @@ it('keeps explicit actor input independent when keyboard control switches to ano
  const before=world.getEntityState('player').positionWorldMetersXYZ;world.step({},60);const after=world.getEntityState('player').positionWorldMetersXYZ;
  expect(Math.hypot(after[0]-before[0],after[2]-before[2])).toBeGreaterThan(1);
 });
+
+it('carries and places an offset authored Group through its existing body and invalidates slot identity on rebind',async()=>{
+ const world=await setup(),root=new THREE.Group(),parcel=box(.3,0,0);parcel.scale.setScalar(.13);root.add(parcel);root.position.set(-.249,.914,.363);
+ const table=box(0,.4145,.65);table.scale.set(1.8,.829,.68);world.addEntity({id:'table',object:table,role:'obstacle',physics:{kind:'fixed',shape:'box'}});
+ const slots=[{slotId:'grip',kind:'pickup' as const,label:'Parcel',capacity:1 as const,positionLocalMetersXYZ:[.3,0,0] as const,approachLocalMetersXYZ:[.249,-.894,-.363] as const,rotationLocalRadiansXYZ:[0,0,0] as const}];
+ world.addEntity({id:'parcel',object:root,role:'obstacle',physics:{kind:'dynamic',shape:'box',massKilograms:.3},interactions:slots});
+ const {ACTION_CLIP_IDS}=await import('./humanoid-runtime/humanoid/action-schema');const actor=world.humanoid!.actorController('player');actor.setAvailableClips(new Set(ACTION_CLIP_IDS),[]);world.step({},30);
+ const registry=world.humanoid!.environment.interactions,target=registry.target('parcel','grip')!,count=world.humanoid!.environment.colliderCount;
+ const pickup=await world.execute({type:'humanoid.perform-action',request:{requestId:'offset-grip',action:'pickup',targetId:'parcel',slotId:'grip'}});
+ expect(pickup.status,JSON.stringify(pickup)).toBe('accepted');if(pickup.status!=='accepted')return;
+ world.step({},90);expect(world.operations.get(pickup.operationId).status).toBe('succeeded');expect(actor.skills.carrying).toBe('parcel');
+ expect(root.children).toEqual([parcel]);expect(world.humanoid!.environment.colliderCount).toBe(count);
+ expect(parcel.getWorldPosition(new THREE.Vector3()).distanceTo(registry.target('parcel','grip')!.position)).toBeLessThan(1e-5);
+ const release=await world.execute({type:'humanoid.perform-action',request:{requestId:'offset-place',action:'putDown'}});expect(release.status,JSON.stringify(release)).toBe('applied');
+ expect(Math.abs(parcel.getWorldPosition(new THREE.Vector3()).sub(actor.position).cross(actor.facing).y)).toBeLessThan(1e-5);expect(actor.skills.carrying).toBeNull();
+ expect((await world.execute({type:'entity.set-interactions',entityId:'parcel',slots})).status).toBe('applied');expect(registry.isCurrent(target)).toBe(false);
+ const replacement=registry.target('parcel','grip')!;expect(replacement.generation).toBeGreaterThan(target.generation);
+ expect((await world.execute({type:'entity.despawn',entityId:'parcel'})).status).toBe('applied');expect(registry.isCurrent(replacement)).toBe(false);
+ await world.reset();expect(world.humanoid!.environment.interactions.target('parcel','grip')).toBeDefined();
+ expect(world.getEntityState('parcel').positionWorldMetersXYZ).toEqual([-.249,.914,.363]);
+});
+
+it('rejects map semantic identity collisions before replacing the world or accepting a competing entity',async()=>{
+ const world=await setup(),marker=box(3,2,0);world.addEntity({id:'marker',object:marker,role:'decoration'});world.step();
+ const receipt=await world.execute({type:'entity.set-position',entityId:'marker',positionWorldMetersXYZ:[5,2,0],durationSeconds:2});if(receipt.status!=='accepted')throw new Error(JSON.stringify(receipt));
+ const previous=world.humanoid!.environment,seat={id:'marker',slotId:'seat',label:'Seat',kind:'seat' as const,position:[6,.5,0] as [number,number,number],approach:[6,0,-.5] as [number,number,number],yaw:0,colliderIds:['floor']};
+ expect(()=>world.humanoid!.switchMap({...map,id:'conflicting',interactions:[seat]})).toThrow('INTERACTION_ENTITY_ID_CONFLICT');
+ expect(world.humanoid!.environment).toBe(previous);expect(world.operations.get(receipt.operationId).status).toBe('running');
+ world.humanoid!.switchMap({...map,id:'seat-map',interactions:[{...seat,id:'map-seat'}]});const target=world.humanoid!.environment.interactions.target('map-seat')!;
+ expect(()=>world.addEntity({id:'map-seat',object:new THREE.Group(),role:'decoration'})).toThrow('INTERACTION_ENTITY_ALREADY_BOUND');
+ expect(world.humanoid!.environment.interactions.target('map-seat')).toBe(target);
+});
+
+it('rejects a reset whose baseline would collide with the current map before mutating either world',async()=>{
+ const world=await setup(),marker=box(3,2,0);world.addEntity({id:'marker',object:marker,role:'decoration'});world.step();
+ await world.execute({type:'entity.despawn',entityId:'marker'});world.humanoid!.switchMap({...map,id:'new-map',interactions:[{id:'marker',slotId:'seat',label:'Seat',kind:'seat',position:[6,0,0],approach:[6,0,-.49],yaw:Math.PI,colliderIds:['floor']}]});
+ const environment=world.humanoid!.environment,snapshot=world.snapshot();await expect(world.reset()).rejects.toMatchObject({code:'INTERACTION_ENTITY_ID_CONFLICT'});
+ expect(world.humanoid!.environment).toBe(environment);expect(world.snapshot()).toEqual(snapshot);expect(()=>world.getEntityState('marker')).toThrow();
+});

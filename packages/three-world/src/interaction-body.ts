@@ -7,8 +7,11 @@ export interface InteractionBodySnapshot {
   readonly rotation:Quaternion;
   readonly scale:Vector3;
   readonly sizeMetersXYZ:Vec3;
+  /** Collision bounds center offset from the body root, in body axes and metres. */
+  readonly centerOffsetMetersXYZ:Vec3;
   readonly massKg:number;
-  readonly enabled:boolean;
+  readonly entityEnabled:boolean;
+  readonly collisionEnabled:boolean;
   readonly movable:boolean;
   readonly stable:boolean;
 }
@@ -22,6 +25,7 @@ export interface InteractionBody {
   readonly isValid:boolean;
   readonly isHeld:boolean;
   read():InteractionBodySnapshot;
+  hasContact(position:Vector3,toleranceMeters:number):boolean;
   hold(owner:object):boolean;
   moveHeld(owner:object,position:Vector3,rotation?:Quaternion):boolean;
   release(owner:object,options:InteractionBodyRelease):boolean;
@@ -34,6 +38,8 @@ export interface InteractionBodySource {
   readonly massKg:number;
   readonly scale:Vector3;
   readonly sizeMetersXYZ:Vec3;
+  /** Collision bounds center offset from the body root, in body axes and metres. */
+  readonly centerOffsetMetersXYZ:Vec3;
   project():void;
   changed():void;
   released?(reason:InteractionBodyRelease['reason']):void;
@@ -51,8 +57,12 @@ export class InteractionBodyControl implements InteractionBody {
   read():InteractionBodySnapshot{
     const source=this.source();if(!source)throw new Error('INTERACTION_ENTITY_STALE');
     const {body}=source,rotation=new Quaternion().copy(body.rotation());
-    return {position:new Vector3().copy(body.translation()),rotation,scale:source.scale.clone(),sizeMetersXYZ:[...source.sizeMetersXYZ],massKg:source.massKg,enabled:body.isEnabled()&&source.colliders.some(collider=>collider.isEnabled()),movable:body.isDynamic()||this.owner!==undefined,
+    return {position:new Vector3().copy(body.translation()),rotation,scale:source.scale.clone(),sizeMetersXYZ:[...source.sizeMetersXYZ],centerOffsetMetersXYZ:[...source.centerOffsetMetersXYZ],massKg:source.massKg,entityEnabled:source.enabled&&body.isEnabled(),collisionEnabled:body.isEnabled()&&source.colliders.some(collider=>collider.isEnabled()),movable:body.isDynamic()||this.owner!==undefined,
       stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(body.linvel()).length()<.2&&new Vector3().copy(body.angvel()).length()<.3};
+  }
+  hasContact(position:Vector3,toleranceMeters:number):boolean{
+    const source=this.source();if(!source||!source.enabled||!source.body.isEnabled())return false;
+    return source.colliders.some(collider=>{const point=collider.isEnabled()?collider.projectPoint(position,true):null;return !!point&&new Vector3().copy(point.point).distanceTo(position)<=toleranceMeters;});
   }
   hold(owner:object):boolean{
     const source=this.source();if(!source||!source.enabled)return false;

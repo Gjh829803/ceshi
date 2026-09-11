@@ -123,6 +123,7 @@
     "files": [
       "index.html",
       "main.ts",
+      "interactions.ts",
       "project.json",
       "episode.json"
     ]

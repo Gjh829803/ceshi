@@ -20,7 +20,7 @@ type CharacterState = { driveMode: DriveMode; needsClearance: boolean; controlle
 type Entity = {
   id: string; object: THREE.Object3D; enabled: boolean; kind: RigidPhysics['kind'] | 'character'; body: RigidBody; colliders: Collider[];
   geometry?: GeometrySnapshot; options?: RigidPhysics; character?: CharacterState;
-  interaction?:InteractionBodyControl;interactionSize?:Vec3;
+  interaction?:InteractionBodyControl;interactionSize?:Vec3;interactionCenter?:Vec3;
   fixedQueryPose?: WorldPose;
   sourceObjects?: readonly THREE.Object3D[];
   initial: { local: LocalPose; pose: WorldPose; geometry?: GeometrySnapshot };
@@ -79,16 +79,16 @@ export class ThreePhysics implements PhysicsPort {
     });
   }
   private interactionBody(id:string):InteractionBodyControl{
-    const entry=this.entry(id);if(entry.kind==='character'||!entry.colliders.length)throw new Error('INTERACTION_RIGID_ENTITY_REQUIRED');
+    const entry=this.entry(id);if(entry.kind==='character')throw new Error('INTERACTION_RIGID_ENTITY_REQUIRED');
     const identity=entry.initial;
     return entry.interaction??=new InteractionBodyControl(()=>{
       const current=this.disposed?undefined:this.entries.get(id);if(!current||current.initial!==identity)return;
       if(!current.interactionSize){
         const bounds=new THREE.Box3(),point=new THREE.Vector3();
         for(const geometry of current.geometry!.geometries)for(let i=0;i<geometry.vertices.length;i+=3)bounds.expandByPoint(point.fromArray(geometry.vertices,i));
-        current.interactionSize=vec(bounds.getSize(new THREE.Vector3()));
+        current.interactionSize=vec(bounds.getSize(new THREE.Vector3()));current.interactionCenter=vec(bounds.getCenter(new THREE.Vector3()));
       }
-      return {body:current.body,colliders:current.colliders,enabled:current.enabled&&current.colliders.length>0,massKg:current.colliders.reduce((sum,collider)=>sum+collider.mass(),0),scale:current.geometry!.pose.scale,sizeMetersXYZ:current.interactionSize,
+      return {body:current.body,colliders:current.colliders,enabled:current.enabled&&current.colliders.length>0,massKg:current.colliders.reduce((sum,collider)=>sum+collider.mass(),0),scale:current.geometry!.pose.scale,sizeMetersXYZ:current.interactionSize,centerOffsetMetersXYZ:current.interactionCenter!,
         project:()=>this.project(current),changed:()=>{if(this.borrowed?.colliderChanged)this.borrowed.colliderChanged(id,current.colliders);else this.world.updateSceneQueries(current.colliders.map(collider=>collider.handle));}};
     });
   }
@@ -124,6 +124,7 @@ export class ThreePhysics implements PhysicsPort {
     const shape = options.shape ?? (options.kind === 'dynamic' ? 'convex-hull' : 'trimesh');
     if (options.kind === 'dynamic') { this.validateDynamicParent(object); if (shape === 'trimesh') geometryError('PHYSICS_DYNAMIC_TRIMESH_UNSUPPORTED', 'Use convex-hull or box for a dynamic body.'); }
     const friction = options.frictionRatio ?? .7, restitution = options.restitutionRatio ?? 0, mass = options.massKilograms ?? 1;
+    if(options.lockRotations!==undefined&&(options.kind!=='dynamic'||typeof options.lockRotations!=='boolean'))geometryError('PHYSICS_ROTATION_LOCK_INVALID','lockRotations is a boolean option for dynamic bodies.');
     validateNumber(friction, 0, 'frictionRatio'); validateNumber(restitution, 0, 'restitutionRatio'); validateNumber(mass, 0, 'massKilograms', options.kind !== 'dynamic');
     if (friction > 1 || restitution > 1) geometryError('PHYSICS_OPTION_INVALID', 'Friction and restitution ratios must be between zero and one.');
     let geometry = retained;
@@ -181,6 +182,7 @@ export class ThreePhysics implements PhysicsPort {
     bodyDescriptor.setTranslation(plan.pose.position.x, plan.pose.position.y, plan.pose.position.z).setEnabled(false);
     if (kind !== 'character') bodyDescriptor.setRotation(plan.pose.rotation);
     if(kind==='dynamic' && this.borrowed)bodyDescriptor.setGravityScale(this.gravity[1]/this.world.gravity.y);
+    if(kind==='dynamic'&&options?.lockRotations)bodyDescriptor.lockRotations();
     let body: RigidBody | undefined, controller: KinematicCharacterController | undefined;
     try {
       body = this.world.createRigidBody(bodyDescriptor);

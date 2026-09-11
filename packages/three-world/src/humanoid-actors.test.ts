@@ -167,6 +167,21 @@ it('spawns complete humanoids from a prepared prototype after its original sourc
   const again=await world.execute({type:'entity.spawn',prototypeId:'guide',entityId:'generated',positionWorldMetersXYZ:[3,.04,0]});expect(again.status).toBe('applied');
 });
 
+it('releases a prepared full character when its Episode command lease expires after cloning',async()=>{
+ const {win,renderer}=rendererFixture(),world=await setup(renderer),seed=await world.humanoid!.createCharacter();
+ await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();await world.start();
+ const port=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
+ await port.prepareSegment({positionWorldMetersXYZ:[-4,.04,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+ type Lease={state:'preparing'|'prepared';restoreViewport:()=>void};
+ const internals=world as unknown as {episodeLease:Lease;prototypes:Map<string,{template:{create:()=>Promise<Character>}}>;
+  executePlan(commands:import('./contracts').WorldCommand[],options:object,lease:Lease):Promise<import('./contracts').CommandReceipt>};
+ const template=internals.prototypes.get('guide')!.template,create=template.create;let released:ReturnType<typeof vi.spyOn>|undefined;
+ template.create=async()=>{const clone=await create();released=vi.spyOn(clone,'dispose');port.release();return clone;};
+ const result=await internals.executePlan([{type:'entity.spawn',prototypeId:'guide',entityId:'late',positionWorldMetersXYZ:[3,.04,0]}],{},internals.episodeLease);
+ expect(result).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
+ expect(released).toHaveBeenCalledOnce();expect(world.snapshot().entities.some(entity=>entity.id==='late')).toBe(false);
+});
+
 it('rejects colliding prototype actors without publishing either instance',async()=>{
   const world=await setup(),seed=await world.humanoid!.createCharacter();
   await world.registerPrototype({id:'guide',description:'Full humanoid',template:{kind:'character',options:{humanoid:seed}}});seed.dispose();

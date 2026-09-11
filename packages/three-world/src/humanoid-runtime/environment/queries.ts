@@ -78,7 +78,7 @@ export class EnvironmentQueries {
   private disposed=false;
   private completedPhysicsSteps=0;
   get physicsStepSequence(){return this.completedPhysicsSteps;}
-  private staticColliders=new Map<string,RAPIER.Collider>();
+  private staticColliders=new Map<string,RAPIER.Collider[]>();
   private staticColliderIds=new Map<number,string>();
   private propBodies=new Map<string,{body:RAPIER.RigidBody;origin:Vector3}>();
   private propBoxes=new Map<string,string>();
@@ -110,7 +110,7 @@ export class EnvironmentQueries {
       for(const b of boxes){const p=new Vector3(...b.position).sub(origin),rotation=new Quaternion().setFromEuler(new Euler(...(b.rotation??[0,0,0])));
         // 排除载具查询代理（第 3 组）；只与真正的动态车身求解，避免重复的静态包围盒卡住物品。
         const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(b.size[0]/2,b.size[1]/2,b.size[2]/2).setTranslation(p.x,p.y,p.z).setRotation(rotation).setDensity(mass/volume).setFriction(.55).setRestitution(.08).setCollisionGroups(DYNAMIC_PROP_COLLISION_GROUPS),body);
-        this.staticColliders.set(b.id,collider);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
+        this.staticColliders.set(b.id,[collider]);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
       }
     }
     for(const box of map.boxes){
@@ -126,11 +126,11 @@ export class EnvironmentQueries {
         const x=box.position[0]-box.size[0]/2+(ix+.5)*width,z=box.position[2]-box.size[2]/2+(iz+.5)*depth;
         const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(width/2,box.size[1]/2,depth/2).setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85).setCollisionGroups(0x0001ffff));
         this.staticColliderIds.set(collider.handle,box.id);
-        if(ix===0&&iz===0)this.staticColliders.set(box.id,collider);
+        const colliders=this.staticColliders.get(box.id)??[];colliders.push(collider);this.staticColliders.set(box.id,colliders);
       }
     }
     let props:EnvironmentInteractionProps|undefined;
-    try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point));}
+    try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point),(ids,position,tolerance)=>ids.some(id=>(this.staticColliders.get(id)??[]).some(collider=>{const point=collider.isEnabled()?collider.projectPoint(position,true):null;return !!point&&new Vector3().copy(point.point).distanceTo(position)<=tolerance;})));}
     catch(error){props?.dispose();this.world.free();throw error;}
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();
@@ -162,15 +162,15 @@ export class EnvironmentQueries {
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
   dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.interactionProps.dispose();this.world.free();this.disposed=true;}}
-  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)??this.interactionProps.colliderForId(id);}
+  colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)?.[0]??this.interactionProps.colliderForId(id);}
   private interactionAnchor(boxId:string,point:readonly number[]){
-    const collider=this.staticColliders.get(boxId);if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
+    const collider=this.staticColliders.get(boxId)?.[0];if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
     const group=this.propBodies.get(this.propBoxes.get(boxId)??'');
     if(!group)return {position:new Vector3(point[0],point[1],point[2]),rotation:new Quaternion(),stable:true};
     const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();
     return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};
   }
-  propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)!;return {position:c.translation(),rotation:c.rotation()};}
+  propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)![0]!;return {position:c.translation(),rotation:c.rotation()};}
   resetContents():void{this.interactions.reset(()=>{this.resetRigidGroups();this.interactionProps.reset();});}
   resetRigidGroups(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.updateSceneQueries();}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
@@ -422,7 +422,7 @@ export class EnvironmentQueries {
     });
     return normals;
   }
-  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}this.interactions.syncPhysicalState();}
+  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}this.interactions.advance(dt);this.interactions.syncPhysicalState();}
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){

@@ -79,7 +79,7 @@ import type { HorseVisual,SeatAnchor } from './horse';
 import { registerHumanoidHost } from './host-access';
 import type { SkillRequest,SkillResult } from './humanoid/action-schema';
 import { CENTER,HUMANOID_BODY,RADIUS } from './humanoid/controller';
-import { readHumanoid,readInteractionTargets } from './humanoid/render-state';
+import { readHumanoid } from './humanoid/render-state';
 import { HUMANOID_ACTION_INPUT_FIELDS } from './input';
 import { validateEnvironment } from './map-validation';
 import type { TankState } from './motion-families/ground-vehicle/tank';
@@ -182,7 +182,7 @@ export interface HumanoidSnapshot {
   readonly transition:{readonly kind:''|'enter'|'exit';readonly remainingSeconds:number};
   readonly traversal:{readonly kind:string;readonly phase:string;readonly progress:number;readonly elapsedSeconds:number;readonly durationSeconds:number;readonly sourceActionId:string}|null;
   readonly surface:{readonly mode:string;readonly surfaceId:string|null;readonly pose:{readonly actionId:string;readonly timeSeconds:number;readonly phase:string}|null};
-  readonly interactionTargets:readonly {readonly id:string;readonly kind:'pickup'|'seat';readonly state:string;readonly approachPositionWorldMetersXYZ:Vec3;readonly facingYawRadians:number;readonly eligible:boolean;readonly reason:string;readonly message:string;readonly positionWorldMetersXYZ:Vec3;readonly rotationWorldQuaternionXYZW:readonly [number,number,number,number]}[];
+  readonly interactionTargets:readonly {readonly id:string;readonly slotId:string;readonly generation:number;readonly claim:import('../contracts').InteractionClaimState|null;readonly kind:'pickup'|'seat';readonly state:string;readonly approachPositionWorldMetersXYZ:Vec3;readonly facingYawRadians:number;readonly eligible:boolean;readonly reason:string;readonly message:string;readonly positionWorldMetersXYZ:Vec3;readonly rotationWorldQuaternionXYZW:readonly [number,number,number,number]}[];
   readonly vehicleDynamics:readonly {readonly flyingCreature:Readonly<import("./motion-families/flying-creature/state").FlyingCreatureStateV1>|null;readonly drive:VehicleDriveTelemetry|null;readonly physicsOwner:'rigid-body'|'controller';readonly unicycle:Readonly<UnicycleState>|null;readonly submersible:Readonly<ReturnType<typeof submersibleDiagnostics>>|null;readonly raft:Readonly<RaftState>|null;readonly jetski:Readonly<ReturnType<typeof jetSkiDiagnostics>>|null;readonly kayak:Readonly<KayakState>|null;readonly atv:Readonly<AtvState>|null;readonly tank:Readonly<TankState>|null;readonly instanceId:string;readonly launched:boolean;readonly pitchRadians:number;readonly rollRadians:number;readonly creature:{readonly gait:string;readonly phase:number;readonly flying:boolean;readonly leadPositionWorldMetersXYZ:Vec3|null;readonly leadYawRadians:number|null}|null}[];
 }
 const tuple=(v:THREE.Vector3):Vec3=>[v.x,v.y,v.z];
@@ -223,6 +223,7 @@ export class HumanoidRuntime implements PhysicsPort {
   private readonly initialCamera:THREE.PerspectiveCamera;
   private currentMap:EnvironmentDefinition;
   private readonly visualUpdates=new Set<(deltaSeconds:number,sample:HumanoidDisplaySample)=>void>();
+  private mapValidator:((map:EnvironmentDefinition)=>void)|undefined;
   private readonly simulationReplacements=new Set<(reason:'map'|'reset')=>void>();
   static async create(options:HumanoidRuntimeOptions,camera:THREE.Camera):Promise<HumanoidRuntime>{
     validateEnvironment(options.map);
@@ -269,6 +270,8 @@ export class HumanoidRuntime implements PhysicsPort {
     for(const v of options.vehicles)this.objects.set(v.instanceId,v.object);
     this.presentation=new PresentationState(this.simulation);
     registerHumanoidHost(this, {
+      setMapValidator:validate=>{this.mapValidator=validate;},
+      interactionBody:id=>physicsHost(this.ordinaryPhysics).interactionBody(id),
       claimCharacter:(id,character)=>id===this.options.character.instanceId&&character===this.options.character.animation&&this.releaseCharacterOwnership?this.releaseCharacterOwnership:claimCharacter(character),
       commitCharacterOwnership:id=>{if(id===this.options.character.instanceId)this.releaseCharacterOwnership=undefined;},
       bindCharacter:(id,character,settings,prevalidated)=>this.bindCharacter(id,character,settings,prevalidated),
@@ -352,11 +355,11 @@ export class HumanoidRuntime implements PhysicsPort {
     const meaning=(key:string)=>guide.fields[key as keyof Input]??'Ignored for this control family; leave neutral.';
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow','primary','secondary'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['actions',object(Object.fromEntries(HUMANOID_ACTION_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
     const profile=object({view:object(HUMANOID_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.motion.flyingCreature?'flying-creature':vehicle.spec.mode,!!(vehicle.motion.wheelPhysics||vehicle.motion.body?.powertrain)),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
-    return [...[create('vehicle.exit',{actorId:{const:id}}),create('vehicle.recover',{actorId:{const:id}})],create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{actorId:{const:id},input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{actorId:{const:id},request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
+    return [...[create('vehicle.exit',{actorId:{const:id}}),create('vehicle.recover',{actorId:{const:id}})],create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{actorId:{const:id},input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{actorId:{const:id},request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'},slotId:{type:'string'}},['requestId','action'])})];
   }
   snapshot(actorId:string=this.inputActorId):HumanoidSnapshot{
     const s=this.simulation,actor=s.actor(actorId),h=actor.controller,tr=h?.traversal,surface=h?.surface;
-    const targets=new Map(h?.skills.listTargets().map(target=>[target.id,target])??[]);
+    const targets=h.skills.listTargets();
     const waterControllerActive=Boolean(h&&!actor.vehicle&&!tr),contact=waterControllerActive?h?.water:null;
     return {
       view:{...this.profile.view},
@@ -367,13 +370,13 @@ export class HumanoidRuntime implements PhysicsPort {
           feetBelowSurfaceMeters:contact.feetBelowSurfaceMeters,requiredDepthMeters:contact.requiredDepthMeters,requiredFeetBelowSurfaceMeters:contact.requiredFeetBelowSurfaceMeters,
           depthCheckPassed:contact.depthCheckPassed,immersionCheckPassed:contact.immersionCheckPassed,wasSwimmingAtSample:contact.wasSwimmingAtSample,
           entrySpeedMetersPerSecond:contact.entrySpeed,entrySerial:contact.entrySerial}:null},
-      characterCapabilities:this.characterCapabilities(actorId).map(({id,eligible,reason,message,targetId})=>({id,eligible,reason,message,...(targetId?{targetId}:{})})),
+      characterCapabilities:this.characterCapabilities(actorId).map(({id,eligible,reason,message,targetId,slotId})=>({id,eligible,reason,message,...(targetId?{targetId}:{}),...(slotId?{slotId}:{})})),
       character:{swimStyle:h?.swimStyle??'breaststroke',instanceId:actorId,state:h?.state??actor.player.animation,swimming:!actor.vehicle&&actor.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
       vehicles:s.vehicles.map((v,i)=>({instanceId:v.spec.id,assetId:this.options.vehicles[i]!.assetId,mode:v.spec.mode,available:s.available(v),speedMetersPerSecond:v.velocity.length(),throttle:v.throttle,steering:v.steering,grounded:v.grounded,submerged:v.submerged})),
       transition:{kind:actor.transitionKind,remainingSeconds:actor.transition},
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},
-      interactionTargets:readInteractionTargets(this.environment).filter(t=>targets.has(t.id)).map(t=>({id:t.id,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:targets.get(t.id)!.approach,facingYawRadians:targets.get(t.id)!.yaw,eligible:targets.get(t.id)!.eligible,reason:targets.get(t.id)!.reason,message:targets.get(t.id)!.message,positionWorldMetersXYZ:tuple(t.position),rotationWorldQuaternionXYZW:t.rotation?[t.rotation.x,t.rotation.y,t.rotation.z,t.rotation.w]:[0,0,0,1]})),
+      interactionTargets:targets.map(t=>({id:t.entityId,slotId:t.slotId,generation:t.generation,claim:t.claim,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:t.approach,facingYawRadians:t.yaw,eligible:t.eligible,reason:t.reason,message:t.message,positionWorldMetersXYZ:t.position as Vec3,rotationWorldQuaternionXYZW:t.rotation as [number,number,number,number]})),
       vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?{...v.motion.flyingCreature}:null,drive:vehicleDriveTelemetry(v),physicsOwner:v.motion.wheelPhysics||v.motion.body||v.motion.aircraft?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
     };
   }
@@ -508,7 +511,7 @@ export class HumanoidRuntime implements PhysicsPort {
   onVisualUpdate(callback:(deltaSeconds:number,sample:HumanoidDisplaySample)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
   onSimulationReplaced(callback:(reason:'map'|'reset')=>void):()=>void{this.assertLive();this.simulationReplacements.add(callback);return()=>{this.simulationReplacements.delete(callback);};}
   switchMap(map:EnvironmentDefinition):void{this.assertExternalMutation();
-    const profile=this.prepareProfile(this.profile);validateEnvironment(map);
+    const profile=this.prepareProfile(this.profile);validateEnvironment(map);this.mapValidator?.(map);
     const replacement=new EnvironmentQueries(this.instanceMap(map));
     const previous=this.environment;
     let staged:Simulation|undefined,ordinary:ThreePhysics|undefined;
@@ -740,7 +743,7 @@ export class HumanoidRuntime implements PhysicsPort {
     this.assertRigidIds([id]);this.ordinaryPhysics.addCharacter(id,object,options);
   }
   private assertRigidIds(ids:readonly string[],environment=this.environment):void{
-    if(ids.some(id=>this.objects.has(id)||environment.colliderForId(id)))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');
+    if(ids.some(id=>this.objects.has(id)||environment.colliderForId(id)||environment.interactions.hasMapEntity(id)))throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');
   }
   addRigid(id:string,object:THREE.Object3D,options:RigidPhysics):void{
     this.assertRigidIds([id]);

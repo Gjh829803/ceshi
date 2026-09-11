@@ -7,6 +7,7 @@ import type {AnimationEvent,Block,Probe,Traversal} from './controller';
 
 /** Mutable actor data and collision services used by optional actions, without a Simulation dependency. */
 export interface HumanoidActionContext {
+  readonly actorId:string|null;
   world:RAPIER.World;body:RAPIER.RigidBody;capsule:RAPIER.Collider;controller:RAPIER.KinematicCharacterController;
   level:HumanoidLevel;blocks:Block[];position:Vector3;velocity:Vector3;facing:Vector3;
   readonly isMounted:boolean;grounded:boolean;vertical:number;speed:number;collisions:number;state:string;stance:'stand'|'crouch';swimming:boolean;

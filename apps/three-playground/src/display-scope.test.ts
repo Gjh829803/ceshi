@@ -15,7 +15,7 @@ describe('object and physical helper scope',()=>{
     const verify=()=>{
       const h=runtime.simulation.controlledActor.controller!;
       const owner=(handle:number)=>runtime.environment.colliderId(handle);
-      const target=[...h.skills.targets.values()].find(t=>runtime.environment.colliderForId(t.definition.id)?.isEnabled())!;
+      const target=[...h.skills.interactions.targets.values()].find(t=>runtime.environment.colliderForId(t.definition.id)?.isEnabled())!;
       expect(target).toBeDefined();expect(owner(runtime.environment.colliderForId(target.definition.id)!.handle)).toBe(target.definition.id);
       expect(h.crates.length).toBe(1);
       for(const crate of h.crates)for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('loose-test');

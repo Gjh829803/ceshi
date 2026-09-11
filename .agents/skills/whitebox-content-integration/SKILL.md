@@ -43,6 +43,21 @@ SDK 路径前缀为 `packages/three-world/src/`。Playground 是同源定义的�
 默认值留在所属 SDK/内容模块；场地位置、颜色、实例命名等由 Playground 或场景覆盖。
 不要在 UI、SDK 工厂和 Agent 示例复制三套可变物理默认值。
 
+普通 Mesh/Group 的交互使用 `EntityOptions.interactions` 或 prototype 的同名 options：
+每个槽位显式提供 `slotId/label/kind/capacity:1`，位置、接近点为实体根的本地米制坐标，
+旋转为 XYZ 欧拉弧度。Map 内容也显式提供 `slotId`，两者进入同一个交互 owner。
+拾取复用原动态 body 和模型；固定座椅可声明多个实际座位槽。不要为接入再造一份物理对象。
+若 Playground 标定依赖锁定物体旋转，显式传入 `physics.lockRotations:true`；默认仍自由旋转，
+动作执行器不会隐式覆盖这个配置。`multiple-actors` 示例演示偏心 Group 与双座位的完整接线。
+通过 `entity.set-interactions` 替换槽位，空数组清空；目标删除/重绑会使旧关系失效，
+reset 按 baseline 绑定新物理实例。实际 API 和完整参数见 SDK `character-actions` topic。
+
+动作请求用 `targetId` 指实体、`slotId` 指交互槽；实体多槽时必须选槽。
+从 `interactionTargets` 读取实际 approach、eligibility、generation 和 claim。
+Episode 的 actionGoals 也传递同一 `targetId/slotId`，完成判断必须对应实际占用者。
+锚点必须接触实际 collider，且与供应动作的抓握/坐姿标定匹配，不能只凭动画名称声明可达。
+坐姿胶囊与起身空间由动作 owner 管理；UI 和显示回调不修改关系、body 或动作阶段。
+
 汽车/摩托先调用 `humanoid.createRoadVehicleSpec`，固定翼调用 `humanoid.createAircraftSpec('plane')`。
 用实际 resolved spec 的轮组、碰撞尺寸与座位画普通 Three 几何；不加载车辆模型。
 飞机 `airframe` 当前是固定标定参考，修改该对象或缩放 visual root 不会改变求解器标定。

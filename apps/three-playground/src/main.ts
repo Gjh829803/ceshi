@@ -244,7 +244,7 @@ function readDisplayTargets():DisplayInteractionTarget[] {
   sim.vehicles.forEach((vehicle,n)=>{
     if(!sim.available(vehicle))return;
     const root=visuals[n]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
-    targets.push({id:'vehicle-seat:'+vehicle.spec.id,ownerIds:[vehicle.spec.id],kind:'seat',state:'available',
+    targets.push({id:'vehicle-seat:'+vehicle.spec.id,ownerIds:[vehicle.spec.id],kind:'seat',slotId:'seat',state:'available',
       position:new T.Vector3(...vehicle.spec.seat).applyQuaternion(rotation).add(root.getWorldPosition(new T.Vector3()))});
   });
   return targets;
@@ -1546,6 +1546,7 @@ if (context?.registerTool) {
         },
         requestId: { type: "string" },
         targetId: { type: "string" },
+        slotId: { type: "string" },
       },
       required: ["action", "requestId"],
       additionalProperties: false,

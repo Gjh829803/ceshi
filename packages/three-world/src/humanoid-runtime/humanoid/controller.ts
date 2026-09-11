@@ -111,7 +111,7 @@ export class HumanoidController {
   get canBoard(){return !this.skills.active&&!this.skills.carrying&&!this.skills.seated&&this.surface.mode==='none'&&!this.traversal&&this.stance==='stand';}
   get boardingReason(){return this.skills.carrying?'请先放下手中物件':this.skills.seated?'请先起身':this.surface.mode==='prone'?'请先从匍匐起身':this.surface.mode==='climbing'?'请先退出攀爬':this.traversal||this.skills.active?'请等待当前动作完成':this.stance==='crouch'?'请先站起':'';}
   get isMounted(){return this.mounted;}
-  constructor(private queries:EnvironmentQueries) {
+  constructor(private queries:EnvironmentQueries,readonly actorId:string|null=null) {
     this.level=humanoidLevel(queries.map);
     this.blocks=this.level.boxes.map(b=>({...b,collider:queries.colliderForId(b.id)}));
     this.position.set(...queries.map.playerSpawn);

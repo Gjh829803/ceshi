@@ -288,6 +288,14 @@ it('publishes portable humanoid namespace references for generated authoring con
  expect(selected).not.toContain("import('./humanoid-runtime/");
 });
 
+it('publishes interaction slot definitions with their real entity and command consumers',()=>{
+ const selected=publicContractTopic(contracts,'character-actions');
+ expect(selected).toContain('addEntity(');expect(selected).toContain('registerPrototype(');
+ expect(selected).toContain('export interface InteractionSlot');
+ for(const field of ['positionLocalMetersXYZ','approachLocalMetersXYZ','rotationLocalRadiansXYZ','capacity'])expect(selected).toContain(field);
+ expect(selected).not.toContain("from './interaction-contracts'");
+});
+
 it('keeps shared conventions at the entry point and returns every matching topic section',()=>{
  const markdown='Shared conventions\n<!-- topic:getting-started -->Start\n<!-- topic:humanoid -->First\n<!-- topic:observation -->Observe\n<!-- topic:humanoid -->Second';
  expect(guideTopic(markdown,'getting-started')).toBe('Shared conventions\nStart');

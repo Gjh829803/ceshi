@@ -42,7 +42,7 @@ export class HumanoidActor {
   get vehicles(){return this.world.vehicles;}
   get time(){return this.world.time;}
   constructor(readonly id:string,readonly world:Simulation,position:Vector3,yaw=0){
-    this.controller=new HumanoidController(world.environment);
+    this.controller=new HumanoidController(world.environment,id);
     try{this.resetAt(position,yaw);}catch(error){this.controller.dispose();throw error;}
   }
   resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}

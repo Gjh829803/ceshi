@@ -49,7 +49,10 @@ export interface EpisodeFrame {
   readonly controlForwardWorldXYZ: Vec3;
  };
 }
-export type EpisodeCommand=Extract<import('./humanoid-runtime/runtime').HumanoidCommand,{readonly type:'humanoid.perform-action'|'humanoid.set-input'|'vehicle.exit'}>|{readonly type:'vehicle.enter';readonly instanceId:string;readonly actorId?:string}|{readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
+export type EpisodeCommand=Extract<import('./humanoid-runtime/runtime').HumanoidCommand,{readonly type:'humanoid.perform-action'|'humanoid.set-input'|'vehicle.exit'}>
+ | Extract<import('./contracts').PrimitiveCommand,{readonly type:'actor.move-to'|'actor.follow'|'actor.stop'}>
+ | {readonly type:'vehicle.enter';readonly instanceId:string;readonly actorId?:string}
+ | {readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
 export interface EpisodeRouteInputRequest {readonly targetPositionWorldMetersXYZ:Vec3;readonly gait:'walk'|'run';readonly mode?:'travel'|'stop'}
 export interface EpisodeRuntimePort {
  readonly schemaVersion: 1;

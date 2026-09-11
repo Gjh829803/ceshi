@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {createHumanoidWorld,type EnvironmentDefinition} from '@worldkit/three';
+import {addInteractionDemo} from './interactions';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
 scene.add(new THREE.HemisphereLight('#ffffff','#aaaaaa',2.5));
@@ -19,9 +20,10 @@ for(const [id,x] of [['npc-left',-4],['npc-right',4]] as const){
   world.setAutonomy(id,{kind:'patrol',waypointPositionsWorldMetersXYZ:[[x,0,7],[x,0,-3]],pauseSeconds:.5});
 }
 world.setCaptureTargets(['person','npc-left','npc-right']);
+const interactionPanel=addInteractionDemo(world);
 const presentation=world.createPresentation(),hud=document.createElement('div');
 hud.style.cssText='position:absolute;top:16px;left:16px;padding:12px;background:#ffffffdd;font:14px sans-serif';
-const label=document.createElement('p');label.textContent='WASD 控制人物 · NPC 自动往返';hud.append(label);
+const label=document.createElement('p');label.textContent='WASD 控制人物 · NPC 自动往返 · 接近后争用物件、搬运及坐下';hud.append(label,interactionPanel);
 for(const id of ['person','npc-left','npc-right']){
   const button=document.createElement('button');button.textContent=`跟随 ${id}`;
   button.onclick=()=>{world.setCameraFollow({targetEntityId:id});presentation.focus();};hud.append(button);

@@ -21,6 +21,7 @@ export interface CharacterCapabilityAvailability {
   readonly reason:string;
   readonly message:string;
   readonly targetId?:string;
+  readonly slotId?:string;
 }
 export interface CharacterCapabilityState extends CharacterCapability,CharacterCapabilityAvailability {}
 const skillCards:CharacterCapability[]=SKILL_DEFINITIONS.map((skill):CharacterCapability=>({
@@ -33,8 +34,8 @@ const skillCards:CharacterCapability[]=SKILL_DEFINITIONS.map((skill):CharacterCa
     skill.id==='pickup'?{maximumMassKg:ACTION_TUNING.maximumPickupMassKg,approachRadiusMeters:ACTION_TUNING.approachRadiusMeters,approachVerticalToleranceMeters:ACTION_TUNING.approachVerticalToleranceMeters}:
     skill.id==='sit'?{approachRadiusMeters:ACTION_TUNING.approachRadiusMeters}: {},
   completion:skill.id==='slide'?'Operation succeeded and standing. Under a low ceiling, continue movement until the actor has room to rise.':
-    skill.id==='pickup'?'Operation succeeded and character.carrying equals targetId.':skill.id==='putDown'?'Receipt applied and character.carrying is null; target.state is placed.':
-    skill.id==='sit'?'Operation succeeded and character.seated equals targetId.':skill.id==='standUp'?'Operation succeeded and character.seated is null.':'Operation succeeded.',
+    skill.id==='pickup'?'Operation succeeded and the selected entity/slot has this actor\'s held claim.':skill.id==='putDown'?'Receipt applied and character.carrying is null; target.state is placed.':
+    skill.id==='sit'?'Operation succeeded and the selected entity/slot has this actor\'s occupied claim.':skill.id==='standUp'?'Operation succeeded and character.seated is null.':'Operation succeeded.',
   source:'sdk/three-world/src/humanoid-runtime/humanoid/action-system.ts',
 }));
 /** Read this catalog first; stateful input recipes must be verified in a snapshot. */
@@ -54,16 +55,16 @@ export const ANIMATION_ONLY_CLIP_IDS=Object.freeze(['prone-backward','prone-left
 export function characterCapabilities(h:HumanoidController|undefined):CharacterCapabilityState[]{
   const targets=h?.skills.listTargets()??[];
   return CHARACTER_CAPABILITIES.map(card=>{
-    let state:{eligible:boolean;reason:string;message:string};let targetId:string|undefined;
+    let state:{eligible:boolean;reason:string;message:string};let targetId:string|undefined,slotId:string|undefined;
     if(!h)state={eligible:false,reason:'CHARACTER_UNAVAILABLE',message:'人形控制器不可用'};
     else if(h.isMounted)state={eligible:false,reason:'MOUNTED',message:'请先离开载具或坐骑'};
     else if(card.trigger.kind==='skill'){
-      if(card.id==='pickup'||card.id==='sit'){const candidates=targets.filter(t=>t.action===card.id).sort((a,b)=>Math.hypot(a.approach[0]-h.position.x,a.approach[1]-h.position.y,a.approach[2]-h.position.z)-Math.hypot(b.approach[0]-h.position.x,b.approach[1]-h.position.y,b.approach[2]-h.position.z));targetId=(candidates.find(t=>t.eligible)??candidates[0])?.id;}
-      state=h.skills.eligibility(card.trigger.action,targetId);
+      if(card.id==='pickup'||card.id==='sit'){const candidates=targets.filter(t=>t.action===card.id).sort((a,b)=>Math.hypot(a.approach[0]-h.position.x,a.approach[1]-h.position.y,a.approach[2]-h.position.z)-Math.hypot(b.approach[0]-h.position.x,b.approach[1]-h.position.y,b.approach[2]-h.position.z));const target=candidates.find(t=>t.eligible)??candidates[0];targetId=target?.entityId;slotId=target?.slotId;}
+      state=h.skills.eligibility(card.trigger.action,targetId,slotId);
     }else if(card.id==='crouch')state=h.crouchEligibility();
     else if(card.id==='prone'||card.id==='climb'||card.id==='releaseClimb')state=h.surface.eligibility(card.id);
     else if(card.id==='swim'||card.id==='swimStyle')state={eligible:h.swimming,reason:h.swimming?'READY':'NOT_SWIMMING',message:h.swimming?'正在游泳':'需要进入满足深度和浸入条件的水体'};
     else {const busy=!!(h.skills.active||h.skills.seated||h.traversal);const ready=card.id==='jump'?!busy&&!h.skills.carrying&&h.surface.mode==='none'&&!h.swimming&&h.grounded:!busy;state={eligible:ready,reason:ready?'READY':busy?'BUSY':'INVALID_STATE',message:ready?'可执行':'当前状态不满足动作条件'};}
-    return {...structuredClone(card),...state,...(targetId?{targetId}:{})};
+    return {...structuredClone(card),...state,...(targetId?{targetId}:{}),...(slotId?{slotId}:{})};
   });
 }

@@ -24,7 +24,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
  humanoid:['addCharacter','setControlledEntity','setCameraFollow','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
  'mounted-interaction':['inspectVehicles','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
- 'character-actions':['humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'character-actions':['addEntity','registerPrototype','humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
 export function publicContractTopic(source: string, topic: AuthoringTopic, options:{includeHostFactory?:boolean}={}): string {

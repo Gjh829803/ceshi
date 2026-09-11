@@ -7,6 +7,8 @@ import type { SkillResult } from './humanoid/action-schema';
 /** Engine/World capability, deliberately absent from the public barrels. */
 export interface HumanoidHostAccess {
   isDisposed(): boolean;
+  setMapValidator(validate:(map:import('./environment/types').EnvironmentDefinition)=>void):void;
+  interactionBody(id:string):import('../interaction-body').InteractionBody;
   claimCharacter(id:string,character:import('./character').Character):()=>void;
   commitCharacterOwnership(id:string):void;
   bindCharacter(id:string,binding:import('./character-binding').RuntimeActorBinding,settings?:import('../engine-contracts').CharacterOptions,prevalidated?:boolean):void;
