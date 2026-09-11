@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Maintainer-only rebuild. Ordinary pnpm installs consume the checked archive. */
 import assert from 'node:assert/strict';
+import {Buffer} from 'node:buffer';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {cpSync,existsSync,mkdirSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
@@ -21,7 +22,18 @@ const source=path.join(output,'source');
 run('git',['clone','--filter=blob:none','--no-checkout',metadata.upstreamRepository,source],output);
 run('git',['checkout','--detach',metadata.upstreamCommit],source);
 run('git',['apply','--unidiff-zero',path.join(here,'query-refresh.patch')],source);
+// Pin the collision library source as well as its narrow voxel-cast correction.
+const parryPatch=path.join(here,'parry-voxel-cast.patch');
+assert.equal(hash(readFileSync(parryPatch)),metadata.parry.patchSha256);
+const response=await globalThis.fetch(metadata.parry.archiveUrl);assert(response.ok,'Parry source download failed');
+const parryBytes=Buffer.from(await response.arrayBuffer());assert.equal(hash(parryBytes),metadata.parry.sha256);
+const parryArchive=path.join(output,'parry.crate');writeFileSync(parryArchive,parryBytes);
+run('tar',['-xzf',parryArchive,'-C',output],output);
+const parry=path.join(output,`parry3d-${metadata.parry.version}`);
+run('git',['apply','--unidiff-zero',parryPatch],parry);
 const typescript=path.join(source,'typescript'),compat=path.join(typescript,'rapier-compat');
+const cargoManifest=path.join(typescript,'Cargo.toml');
+writeFileSync(cargoManifest,readFileSync(cargoManifest,'utf8')+`\nparry3d = { path = "../../parry3d-${metadata.parry.version}" }\n`);
 // The generator only creates manifests. The checked lock governs the WASM build.
 run('cargo',['run','-p','prepare_builds','--','-d','dim3','-f','non-deterministic'],typescript);
 cpSync(path.join(here,'Cargo.lock'),path.join(typescript,'Cargo.lock'));
@@ -55,7 +67,7 @@ writeFileSync(path.join(compat,'rollup.single.config.js'),rollup.slice(0,rollup.
 run('npm',['exec','--','rollup','--config','rollup.single.config.js','--bundleConfigAsCjs'],compat);
 writeFileSync(path.join(dist,'raw.d.ts'),'export * from "./rapier_wasm3d";\n');
 const pkg=path.join(build,'pkg'),manifest=JSON.parse(readFileSync(path.join(pkg,'package.json'),'utf8'));
-manifest.version=metadata.version;manifest.description='Rapier 0.20.0 compatibility build with a Whitebox native query-refresh patch.';
+manifest.version=metadata.version;manifest.description='Rapier 0.20.0 with native query refresh and collision fixes.';
 writeFileSync(path.join(pkg,'package.json'),JSON.stringify(manifest,null,2)+'\n');
 run('npm',['pack','--ignore-scripts','--pack-destination',output],pkg);
 const archive=readdirSync(output).find(name=>name.endsWith('.tgz'));

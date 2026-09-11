@@ -104,7 +104,9 @@ export class ActionSystem {
       if(this.interactions.unavailable(target)||target.state!=='available'&&target.state!=='placed')return ['TARGET_UNAVAILABLE','目标已被占用'];
       const approach=new Vector3(...target.definition.approach),delta=approach.clone().sub(sim.position);
       if(Math.hypot(delta.x,delta.z)>ACTION_TUNING.approachRadiusMeters||Math.abs(delta.y)>ACTION_TUNING.approachVerticalToleranceMeters)return ['OUT_OF_REACH','靠近目标的交互位置后按 E'];
-      const hit=sim.world.castShape(sim.body.translation(),ROT,delta,new RAPIER.Capsule(sim.capsuleHalf,RADIUS),0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule);
+      // Alignment requests horizontal travel; the KCC retains gravity/support.
+      // Casting down to the authored floor would mistake that support for a blocker.
+      const hit=sim.world.castShape(sim.body.translation(),ROT,delta.clone().setY(0),new RAPIER.Capsule(sim.capsuleHalf,RADIUS),0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,sim.capsule);
       if(hit&&hit.time_of_impact<.99)return ['PATH_BLOCKED','交互位置被实体挡住'];
       if(action==='pickup')return this.pickupContactReason(target,approach,target.definition.yaw);
       if(action==='sit')return this.seatContactReason(target,approach,target.definition.yaw);

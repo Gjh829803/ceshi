@@ -11,6 +11,27 @@ import {SPECS} from '../../shared/preset-content/config';
 import {defaultRegion,prepareCourse} from '../../shared/preset-content/platform/scenarios';
 
 describe('player workspace configuration',()=>{
+ it('inherits road factory defaults while preserving authored tuning and wheel layout',async()=>{
+  vi.resetModules();
+  vi.doMock('@worldkit/three',async()=>{
+   const actual=await vi.importActual<typeof import('@worldkit/three')>('@worldkit/three');
+   return {...actual,humanoid:{...actual.humanoid,createRoadVehicleSpec:(kind:'car'|'motorcycle')=>{
+    const spec=actual.humanoid.createRoadVehicleSpec(kind);
+    if(kind==='car'){spec.wheelPhysics.mass=1617;spec.wheelPhysics.powertrain.idleRpm=867;}
+    return spec;
+   }}};
+  });
+  try{
+   const {SPECS:specs}=await import('../../shared/preset-content/config');
+   const rover=specs.find(s=>s.id==='rover')!.wheelPhysics!;
+   const supercar=specs.find(s=>s.id==='supercar')!.wheelPhysics!;
+   expect(rover.mass).toBe(1617);expect(rover.powertrain!.idleRpm).toBe(867);
+   expect(supercar.mass).toBe(1250);expect(supercar.powertrain!.idleRpm).toBe(867);
+   expect(supercar.wheels).toEqual([-1.02,1.02].flatMap(x=>[-1.5,1.5].map(z=>({x,z,steering:z>0,driven:true}))));
+   expect(specs.find(s=>s.id==='kart')!.wheelPhysics!.wheels).toEqual([-.78,.78].flatMap(x=>[-.89,.85].map(z=>({x,z,steering:z>0,driven:z<0}))));
+  }finally{vi.doUnmock('@worldkit/three');vi.resetModules();}
+ });
+
  it('exports the explicit bus brake profile without replacing it with family defaults',()=>{
   const catalog=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8'));
   const exported=catalog.assets.find((asset:{id:string})=>asset.id==='vehicle.bus').vehicle.spec;
@@ -22,7 +43,7 @@ describe('player workspace configuration',()=>{
  it.each(SPECS.filter(spec=>!!spec.wheelPhysics).map(spec=>spec.id))('prepares, drives, brakes and resets the %s with its own profile and collision envelope',async(id)=>{
   const spec=SPECS.find(s=>s.id===id);expect(spec).toBeDefined();
   const profile=getDefaultProfile(id);expect(profile).toBeDefined();
-  // These presets use wheel forces, not the optional legacy brake-drift controller.
+  // These presets use wheel forces rather than the optional brake-drift controller.
   expect(spec!.wheelPhysics).toBeDefined();expect(spec!.brakeDrift).not.toBe(true);
   expect(profile!.control.brakeDeceleration).toBeGreaterThan(0);expect(profile!.control.brakeDamping).toBeGreaterThan(0);
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:SPECS.map(s=>({instanceId:s.id,assetId:s.id,spec:s,object:new Group()}))}});
@@ -59,7 +80,9 @@ describe('player workspace configuration',()=>{
    expect(sim.controlledActor.vehicle!.position.z).toBeGreaterThanOrEqual(150);
    expect(sim.controlledActor.vehicle!.position.y).toBeGreaterThan(.1);
   }finally{world.dispose();}
- });
+ // This fixture initializes all vehicle families and replaces two full maps.
+ // Its wall-clock budget is independent of the bounded simulated drive above.
+ },15_000);
  it('prepares every circuit driving section on supported clear ground and drives past the old campus boundary',async()=>{
   const map=getMap('grand-prix'),spec=SPECS.find(s=>s.id==='racer')!;
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'racer',assetId:'racer',spec,object:new Group()}]}});
@@ -118,7 +141,7 @@ describe('player workspace configuration',()=>{
  });
  it('renders all live Rapier shapes only in all mode and follows map replacement',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
-  const scene=new Scene(),debug=createCollisionDebug(scene);
+  const scene=new Scene(),debug=createCollisionDebug(scene,handle=>world.humanoid!.environment.colliderId(handle));
   try{const h=world.humanoid!.simulation.controlledActor.controller!,spy=vi.spyOn(h.world,'debugRender');
    debug.update(h,'off');expect(spy).not.toHaveBeenCalled();expect(scene.children.every(o=>!o.visible)).toBe(true);
    debug.update(h,'person');expect(spy).not.toHaveBeenCalled();expect(debug.person.mesh.visible).toBe(true);expect(debug.all.visible).toBe(false);
@@ -138,7 +161,7 @@ describe('player workspace configuration',()=>{
    {id:'ramp',position:[15,1,0] as const,size:[4,1,8] as const,rotation:[.3,0,0] as const},
   ]};
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[]}});
-  const scene=new Scene(),debug=createCollisionDebug(scene);
+  const scene=new Scene(),debug=createCollisionDebug(scene,handle=>world.humanoid!.environment.colliderId(handle));
   try{const h=world.humanoid!.simulation.controlledActor.controller!,count=h.world.colliders.len();
    debug.update(h,'all',map.boxes);
    const ground=new Set<number>();h.world.forEachCollider(c=>{if(c.translation().y===-2.5)ground.add(c.handle);});

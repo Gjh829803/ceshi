@@ -1,5 +1,7 @@
 import {launchChromiumWithSystemFallback} from '../../../scripts/lib/playwright-browser-launch';
 import assert from 'node:assert/strict';
+import {mkdir,readFile} from 'node:fs/promises';
+await mkdir('output/playwright',{recursive:true});
 const browser=await launchChromiumWithSystemFallback();const page=await browser.newPage({viewport:{width:1500,height:950}});const errors:string[]=[];
 page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
 try{
@@ -18,6 +20,10 @@ const reversed=await state();assert.equal(reversed.activeVehicle,'supercar');ass
 await page.locator('#resetButton').click();await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle===null);
 const speedInput=page.locator('[data-control-field="speed"] input[type="number"]');await speedInput.fill('4');await speedInput.dispatchEvent('input');await page.waitForFunction(()=>(window as any).playground.getState().movement.control.speed===4);
 const position=(await state()).position;await page.keyboard.down('w');await page.waitForTimeout(300);await page.keyboard.up('w');const still=(await state()).position;assert(Math.hypot(still[0]-position[0],still[2]-position[2])<.01);
+const downloadPending=page.waitForEvent('download');await page.getByRole('button',{name:'导出全部配置',exact:true}).click();
+const download=await downloadPending;await download.saveAs('output/playwright/profiles.json');
+const exported=JSON.parse(await readFile('output/playwright/profiles.json','utf8'));
+assert.equal(exported.schemaVersion,1);assert.equal(exported.profiles.find((profile:{assetId:string})=>profile.assetId==='person').control.speed,4);
 await page.locator('#libraryButton').click();await page.waitForSelector('.asset-library');await page.screenshot({path:'output/playwright/react-editor-library.png'});await page.keyboard.press('Escape');
 await page.locator('#equipmentButton').click();await page.waitForSelector('.equipment-panel[role="dialog"][data-state="open"]');await page.screenshot({path:'output/playwright/react-editor-equipment.png'});assert.equal((await state()).paused,false); // UI modal pauses SDK but preserves user pause state.
 await page.getByRole('button',{name:'关闭人物装备'}).click();await page.waitForSelector('.equipment-panel[role=dialog]',{state:'detached'});

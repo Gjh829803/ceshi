@@ -1,4 +1,5 @@
 import {ActorResources} from '../../actor-resources';
+import {FixedBoxColliderFactory,contactColliderVolume} from '../../physics-box';
 import {EnvironmentInteractionProps} from './interaction-props';
 import {readNavigationGeometry} from '../../physics-navigation';
 import {WorldInteractions} from '../humanoid/world-interactions';
@@ -100,6 +101,7 @@ export class EnvironmentQueries {
     validateEnvironmentIdentities(map);
     this.world=new RAPIER.World({x:0,y:-18,z:0});
     this.colliderBindings=new PhysicsColliderBindings(this.world);
+    try{
     const groups=new Map<string,typeof map.boxes[number][]>();
     for(const box of map.boxes)if(box.rigidGroup){const g=box.rigidGroup;if(box.collision===false||!g.id||!Number.isFinite(g.massKg)||g.massKg<=0)throw new Error('HUMANOID_PROP_INVALID');const list=groups.get(g.id)??[];list.push(box);groups.set(g.id,list);}
     for(const [id,boxes] of groups){
@@ -114,31 +116,32 @@ export class EnvironmentQueries {
         this.staticColliders.set(b.id,[collider]);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
       }
     }
-    for(const box of map.boxes){
+    const fixedBoxes=new FixedBoxColliderFactory(this.world);
+    try{for(const box of map.boxes){
       if(box.collision===false||box.rigidGroup)continue;
       const rotation=new Quaternion().setFromEuler(new Euler(...(box.rotation??[0,0,0]),'XYZ'));
-      // GJK loses centimetres of contact precision against a kilometre-wide
-      // cuboid when the source character radius is only .28 m. Subdivide broad
-      // horizontal slabs into exact adjoining volumes, preserving the map surface.
+      // Broadphase tiles share precise native box partitions by dimensions.
+      // Their outer volume and map identity remain unchanged.
       const horizontal=box.size[1]<=10&&(!box.rotation||box.rotation.every(angle=>angle===0));
       const nx=horizontal?Math.ceil(box.size[0]/64):1,nz=horizontal?Math.ceil(box.size[2]/64):1;
       const width=box.size[0]/nx,depth=box.size[2]/nz;
       for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++){
         const x=box.position[0]-box.size[0]/2+(ix+.5)*width,z=box.position[2]-box.size[2]/2+(iz+.5)*depth;
-        const collider=this.world.createCollider(RAPIER.ColliderDesc.cuboid(width/2,box.size[1]/2,depth/2).setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85).setCollisionGroups(0x0001ffff));
+        const collider=fixedBoxes.create([width/2,box.size[1]/2,depth/2],descriptor=>descriptor.setTranslation(x,box.position[1],z).setRotation(rotation).setFriction(.85).setCollisionGroups(0x0001ffff));
         this.staticColliderIds.set(collider.handle,box.id);
         const colliders=this.staticColliders.get(box.id)??[];colliders.push(collider);this.staticColliders.set(box.id,colliders);
       }
-    }
+    }}finally{fixedBoxes.dispose();}
     let props:EnvironmentInteractionProps|undefined;
     try{props=new EnvironmentInteractionProps(this.world,map,this.colliderBindings);this.interactionProps=props;this.interactions=new WorldInteractions(map,id=>this.interactionProps.body(id),(id,point)=>this.interactionAnchor(id,point),(ids,position,tolerance)=>ids.some(id=>(this.staticColliders.get(id)??[]).some(collider=>{const point=collider.isEnabled()?collider.projectPoint(position,true):null;return !!point&&new Vector3().copy(point.point).distanceTo(position)<=tolerance;})),resources);}
-    catch(error){props?.dispose();this.world.free();throw error;}
+    catch(error){props?.dispose();throw error;}
     // Publish the initial map without integrating props or consuming simulation time.
     this.world.updateSceneQueries();
     this.controller=this.world.createCharacterController(.015);
     this.controller.setMaxSlopeClimbAngle(Math.PI/3);
     this.controller.setMinSlopeSlideAngle(Math.PI/3);
     this.controller.setSlideEnabled(true);
+    }catch(error){this.world.free();throw error;}
   }
   private assertLive(){if(this.disposed)throw new Error('Environment queries disposed');}
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
@@ -265,14 +268,7 @@ export class EnvironmentQueries {
       return true;
     const body = shape(pose.body);
     return this.directColliders(filter).some((other) => {
-      const hit = body.contactShape(
-        c,
-        pose.rotation,
-        other.shape,
-        other.translation(),
-        other.rotation(),
-        0,
-      );
+      const hit = contactColliderVolume(other,body,c,pose.rotation,0);
       // Native capsule contact can report zero depth for coincident segments.
       // A slightly inset intersection distinguishes penetration from mere contact.
       if(hit?.distance===0&&pose.body.kind==='capsule'&&other.shapeType()===RAPIER.ShapeType.Capsule){
@@ -284,7 +280,7 @@ export class EnvironmentQueries {
         !!hit &&
         hit.distance < 0 &&
         !(
-          hit.normal2.y >= Math.SQRT1_2 &&
+          hit.normal1.y >= Math.SQRT1_2 &&
           hit.distance >= -contactToleranceMeters
         )
       );
@@ -314,36 +310,18 @@ export class EnvironmentQueries {
         body = shape(from.body);
       if (delta.lengthSq() < 1e-12) continue;
       for (const other of colliders) {
-        const hit = body.castShape(
-          start,
-          from.rotation,
-          delta,
-          other.shape,
-          other.translation(),
-          other.rotation(),
-          { x: 0, y: 0, z: 0 },
-          clearance,
-          1,
-          true,
-        );
+        const hit = other.castShape({x:0,y:0,z:0},body,start,from.rotation,delta,clearance,1,true);
         if (!hit) continue;
-        const contact = body.contactShape(
-          start,
-          from.rotation,
-          other.shape,
-          other.translation(),
-          other.rotation(),
-          clearance,
-        );
+        const contact = contactColliderVolume(other,body,start,from.rotation,clearance);
         if (
           contact &&
-          contact.normal2.y >= Math.SQRT1_2 &&
+          contact.normal1.y >= Math.SQRT1_2 &&
           contact.distance >= -clearance &&
           delta.dot(
             new Vector3(
-              contact.normal2.x,
-              contact.normal2.y,
-              contact.normal2.z,
+              contact.normal1.x,
+              contact.normal1.y,
+              contact.normal1.z,
             ),
           ) >= -1e-8
         )
@@ -416,14 +394,24 @@ export class EnvironmentQueries {
     const normals:Vector3[]=[];
     for(const collider of rig.colliders)this.world.contactPairsWith(collider,other=>{
       if(other.parent()?.handle===rig.body.handle)return;
-      this.world.contactPair(collider,other,(manifold,flipped)=>{
-        if(!manifold.numSolverContacts())return;
-        const n=manifold.normal();normals.push(new Vector3(n.x,n.y,n.z).multiplyScalar(flipped?1:-1));
-      });
+      for(const n of this.world.solverContactNormals(collider,other))normals.push(new Vector3(-n.x,-n.y,-n.z));
     });
     return normals;
   }
-  stepPhysics(dt:number){this.assertLive();if(dt<=0)return;const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1;this.world.timestep=dt/count;for(let n=0;n<count;n++){for(const before of this.physicsSubsteps)before((n+1)/count);for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);this.world.step();this.completedPhysicsSteps++;for(const rig of this.vehicleRigs.values())rig.afterStep();}this.interactions.advance(dt);this.interactions.syncPhysicalState();}
+  stepPhysics(dt:number){
+    this.assertLive();if(dt<=0)return;
+    const count=this.vehicleRigs.size?Math.max(1,Math.ceil(dt/(1/120))):1,previousTimestep=this.world.timestep;
+    // Native KCC impulse calculations read this same integration parameter.
+    // A vehicle substep must not change the following actor update's duration.
+    this.world.timestep=dt/count;
+    try{for(let n=0;n<count;n++){
+      for(const before of this.physicsSubsteps)before((n+1)/count);
+      for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);
+      this.world.step();this.completedPhysicsSteps++;
+      for(const rig of this.vehicleRigs.values())rig.afterStep();
+    }}finally{this.world.timestep=previousTimestep;}
+    this.interactions.advance(dt);this.interactions.syncPhysicalState();
+  }
   waterAt(position:Vector3){return this.map.water.find(w=>position.x>=w.min[0]&&position.x<=w.max[0]&&position.z>=w.min[2]&&position.z<=w.max[2]);}
   waterContains(position:Vector3,radius=0){const w=this.waterAt(position);return !!w&&position.x-radius>=w.min[0]&&position.x+radius<=w.max[0]&&position.z-radius>=w.min[2]&&position.z+radius<=w.max[2];}
   support(position:Vector3,maxDrop=100,step=.45){

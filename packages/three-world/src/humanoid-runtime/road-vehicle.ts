@@ -6,6 +6,7 @@ import {DEFAULT_POWERTRAIN,type PowertrainConfig} from './powertrain';
 export type RoadVehicleKind='car'|'motorcycle';
 /** Model-free configuration: metre coordinates, kg mass, m/s speeds, +Y up, +Z forward. */
 export interface RoadVehicleSpec extends VehicleSpec {
+  maxSpeed:number;
   wheelPhysics:WheelPhysicsConfig & {wheels:WheelLayout[];powertrain:PowertrainConfig;wheelWidth:number};
 }
 

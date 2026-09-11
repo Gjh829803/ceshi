@@ -7,6 +7,7 @@ import path from 'node:path';
 import {ThreeCreatorTools} from './tools.js';
 import {openEpisodeBrowser} from '../three-episode/browser.js';
 import type {WorldInput, Vec3} from '@worldkit/three';
+import {parseAssetProfile,type AssetProfile} from '../../shared/preset-content/platform/profiles.js';
 
 // Maintainer-only baseline. No new runtime owner or production observation API.
 // The temporary example exposes its world solely for synchronous timing wrappers.
@@ -17,6 +18,7 @@ const skipPerformance = process.argv.includes('--skip-performance');
 const skipCreator = process.argv.includes('--skip-creator');
 const patrolActors=process.argv.includes('--patrol-actors');
 const actorCount=Number(process.argv.find(value=>value.startsWith('--actors='))?.split('=')[1]??1);
+const playgroundProfilesPath=process.argv.find(value=>value.startsWith('--playground-profiles='))?.split('=').slice(1).join('=');
 if(patrolActors&&actorCount<3)throw new Error('PATROL_REQUIRES_MULTIPLE_ACTORS');
 if(![1,3,10].includes(actorCount)||(actorCount>1&&example!=='custom-vehicle'))throw new Error('BASELINE_ACTOR_COUNT_INVALID');
 if (process.env.WORLDKIT_CAPTURE_GPU === '1') throw new Error('BASELINE_REQUIRES_SWIFTSHADER: unset WORLDKIT_CAPTURE_GPU');
@@ -26,11 +28,22 @@ const workspace = path.join(output, 'workspace');
 await cp(path.resolve('examples/three-creator', example), workspace, {recursive: true,
   filter: source => !source.includes('.three-creator')});
 let mainSource=await readFile(path.join(workspace,'main.ts'),'utf8');
+let importedProfile:{character:AssetProfile['control'];camera:Omit<AssetProfile['camera'],'distance'>;cameraDistanceMeters:number}|undefined;
+if(playgroundProfilesPath){
+  const exported=JSON.parse(await readFile(playgroundProfilesPath,'utf8'));
+  assert.equal(exported.schemaVersion,1);assert(Array.isArray(exported.profiles));
+  const profile=parseAssetProfile(exported.profiles.find((entry:{assetId:string})=>entry.assetId==='person'),'person');
+  const {distance,...camera}=profile.camera;
+  importedProfile={character:profile.control,camera,cameraDistanceMeters:distance};
+  assert(mainSource.includes('await world.start();'));
+  mainSource=mainSource.replace('await world.start();',`world.humanoid!.applyProfile(${JSON.stringify(importedProfile)});\nawait world.start();`);
+}
 if(actorCount>1)mainSource=mainSource.replace('await world.start();',`for(let n=1;n<${actorCount};n++){const actor=await world.humanoid!.createCharacter();actor.root.position.set(10+(n%3)*3,.04,8+Math.floor(n/3)*3);world.addCharacter({id:'benchmark-actor-'+n,humanoid:actor});${patrolActors?`const {x,z}=actor.root.position;world.setAutonomy('benchmark-actor-'+n,{kind:'patrol',waypointPositionsWorldMetersXYZ:[[x+.65,0,z+.65],[x-.65,0,z+.65],[x-.65,0,z-.65],[x+.65,0,z-.65]]});`:''}}\nawait world.start();`);
 await writeFile(path.join(workspace,'main.ts'),mainSource+'\n(window as any).__BASELINE_WORLD__ = world;\n');
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const report: Record<string, unknown> = {
   kind: 'local-runtime-baseline', schemaVersion: 1, example, actorCount, patrolActors, startedAt: new Date().toISOString(),
+  ...(importedProfile?{importedPlaygroundProfile:importedProfile,playgroundProfilesSha256:hash(await readFile(playgroundProfilesPath!))}:{}),
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim(),
   sourceDiffSha256: hash(execFileSync('git', ['diff', 'HEAD'])),
   harnessSha256: hash(await readFile(new URL(import.meta.url))),
@@ -61,6 +74,12 @@ try {
     });
     const neutral: WorldInput = {humanoid: {forward: 0, steer: 0, roll: 0, lift: 0, pitch: 0, strafe: 0,
       boost: false, brake: false, slow: false, jump: false}};
+    if(importedProfile){
+      const actual=await session.page.evaluate(()=>(window as any).__BASELINE_WORLD__.humanoid.exportProfile());
+      assert.deepEqual(actual.character,importedProfile.character);assert.deepEqual(actual.camera,importedProfile.camera);
+      assert.equal(actual.cameraDistanceMeters,importedProfile.cameraDistanceMeters);
+      report.consumedPlaygroundProfile=actual;
+    }
     const records: unknown[] = []; report.episode = records;
     const capture = async (name: string) => {
       const frame = await session.frame('image/png');
@@ -76,6 +95,13 @@ try {
       assert(probe.isValid, JSON.stringify(probe));
       await session.prepareSegment(start, {widthPixels: 1280, heightPixels: 720});
       await session.advance(neutral, 60);
+      if(importedProfile){
+        const configuration=await session.page.evaluate(()=>(window as any).__BASELINE_WORLD__.humanoid.inspectConfiguration());
+        assert.deepEqual(configuration.profile.character,importedProfile.character);
+        assert.equal(configuration.effective.family,'character');
+        assert.equal(configuration.effective.control.speed,importedProfile.character.speed);
+        report.playgroundConfigurationAfterReset=configuration;
+      }
     };
     const checks: Record<string, unknown>[] = []; report.checks = checks;
     const check = async (name: string, run: () => Promise<void>) => {

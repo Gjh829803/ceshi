@@ -1,4 +1,4 @@
-import {INTERACTION_SLOT_SCHEMA} from '../../packages/three-world/src/interaction-contracts';
+import {INTERACTION_SLOT_SCHEMA} from '@worldkit/three';
 import type { WorldCommand } from '@worldkit/three';
 import {humanoid} from '@worldkit/three';
 import { objectSchema } from './schema-helpers.js';

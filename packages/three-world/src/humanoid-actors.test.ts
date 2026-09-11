@@ -93,7 +93,7 @@ it('arbitrates navigation and humanoid actions before either can take the same a
 });
 
 it('keeps the surface posture owner after its input pulse ends until exit or reset',async()=>{
- const world=await setup(undefined,{map:{...map,boxes:Array.from({length:100},(_,i)=>({id:`floor-${i}`,position:[(i%10)*4-18,-.5,Math.floor(i/10)*4-18],size:[4,1,4]}))}}),character=await world.humanoid!.createCharacter();character.root.position.set(0,.04,0);world.addCharacter({id:'npc',humanoid:character});world.step({},30);
+ const world=await setup(),character=await world.humanoid!.createCharacter();character.root.position.set(0,.04,0);world.addCharacter({id:'npc',humanoid:character});world.step({},30);
  await world.execute({type:'humanoid.set-input',actorId:'npc',input:{...emptyInput(),actions:{prone:true}}});world.step({},1);
  await world.execute({type:'humanoid.set-input',actorId:'npc',input:null});
  expect(world.humanoid!.snapshot('npc').surface.mode).toBe('prone');

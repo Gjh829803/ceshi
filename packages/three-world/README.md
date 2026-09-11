@@ -317,6 +317,9 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.assets.load(id)` creates an independent instance for ordinary
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
+Catalog `locomotionBindingIds` describe supplied content for discovery. They do
+not select or install a controller; binding uses `asset/object` with `movement`,
+or an actual `humanoid` instance.
 
 For Creator generation, every human (including NPCs and riders) must use the
 permitted preset visible model, skeleton and motions; omit added clothing,

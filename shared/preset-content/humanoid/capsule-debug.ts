@@ -31,28 +31,20 @@ export function createCapsuleDebug(scene:Scene){
 }
 
 export type CollisionDebugMode='person'|'all'|'off';
-type DebugCollider={handle:number;parent():unknown;halfExtents():{x:number;y:number;z:number}|null;translation():{x:number;y:number;z:number};rotation():{x:number;y:number;z:number;w:number}};
+type DebugCollider={handle:number};
 type PhysicsSource={capsule:CapsuleCollider;world:{forEachCollider(callback:(collider:DebugCollider)=>void):void;debugRender(flags?:undefined,predicate?:(collider:DebugCollider)=>boolean):{vertices:Float32Array;colors:Float32Array}}};
 const noBoxes:readonly EnvironmentBox[]=[];
 
 
-export function createCollisionDebug(scene:Scene){
+export function createCollisionDebug(scene:Scene,colliderId:(handle:number)=>string|undefined){
   const person=createCapsuleDebug(scene);
-  let filteredWorld:PhysicsSource['world']|undefined,filteredBoxes:readonly EnvironmentBox[]|undefined;
-  const groundHandles=new Set<number>();
-  const showCollider=(collider:DebugCollider)=>!groundHandles.has(collider.handle);
-  function updateGroundFilter(world:PhysicsSource['world'],boxes:readonly EnvironmentBox[]){
-    if(world===filteredWorld&&boxes===filteredBoxes)return;
-    filteredWorld=world;filteredBoxes=boxes;groundHandles.clear();
-    const grounds=boxes.filter(b=>b.collision!==false&&(/(^|-)ground($|-)/.test(b.id)||b.id==='basin-floor')&&(!b.rotation||b.rotation.every(a=>a===0)));
-    // Broad ground slabs are tiled by physics. Match every actual tile against
-    // its authored slab, rather than hiding all fixed bodies or low objects.
-    world.forEachCollider(c=>{
-      if(c.parent())return;
-      const half=c.halfExtents(),p=c.translation(),q=c.rotation(),eps=.001;
-      if(!half||Math.abs(q.x)+Math.abs(q.y)+Math.abs(q.z)>eps)return;
-      if(grounds.some(b=>Math.abs(p.y-b.position[1])<eps&&Math.abs(half.y-b.size[1]/2)<eps&&Math.abs(p.x-b.position[0])+half.x<=b.size[0]/2+eps&&Math.abs(p.z-b.position[2])+half.z<=b.size[2]/2+eps))groundHandles.add(c.handle);
-    });
+  let filteredBoxes:readonly EnvironmentBox[]|undefined;
+  const groundIds=new Set<string>();
+  const showCollider=(collider:DebugCollider)=>!groundIds.has(colliderId(collider.handle)??'');
+  function updateGroundFilter(boxes:readonly EnvironmentBox[]){
+    if(boxes===filteredBoxes)return;
+    filteredBoxes=boxes;groundIds.clear();
+    for(const box of boxes)if(box.collision!==false&&(/(^|-)ground($|-)/.test(box.id)||box.id==='basin-floor')&&(!box.rotation||box.rotation.every(a=>a===0)))groundIds.add(box.id);
   }
   const all=new LineSegments(new BufferGeometry(),new LineBasicMaterial({vertexColors:true,transparent:true,opacity:.8,depthTest:false,depthWrite:false}));
   all.name='playground-all-colliders';all.visible=false;all.frustumCulled=false;all.renderOrder=1000;scene.add(all);
@@ -67,7 +59,7 @@ export function createCollisionDebug(scene:Scene){
       all.visible=mode==='all'&&!!source;
       if(!all.visible||!source)return;
       // Read the current world each time: map switches replace and free the old world.
-      updateGroundFilter(source.world,boxes);
+      updateGroundFilter(boxes);
       const predicate=filter?(collider:DebugCollider)=>(includeGround||showCollider(collider))&&filter(collider):includeGround?undefined:showCollider;
       const {vertices,colors}=source.world.debugRender(undefined,predicate);
       const previous=all.geometry.getAttribute('position');

@@ -30,6 +30,8 @@ NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `h
 - 分清模型、animation clip、rig binding、motion profile 和可执行动作。
   换材质或同动作变体通常改内容/binding；增加新行为才扩展动作 owner。
   只有 clip 不能声明已支持拾取、攀爬、飞行或碰撞。
+- 目录中的 `locomotionBindingIds` 是发现元数据。接入时明确使用 `asset/object` 加
+  `body/movement`，或完整 `humanoid` 实例；标签本身不会安装控制器或赋予能力。
 - 资源按资产独立维护。普通 Mesh/Group、自绘车辆无需为了可发现而创建假模型资产。
   稳定 ID 沿用实际已注册的 ID；可见名称可以变化。Source101 与现有动作保持默认。
 

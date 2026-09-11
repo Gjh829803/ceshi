@@ -1,6 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { CameraCollisionProbeResult } from '@whitebox-world/camera-collision';
 import type { Vec3 } from '../contracts';
+import {contactColliderVolume} from '../physics-box';
 
 const identity = { x:0,y:0,z:0,w:1 };
 /** Query adaptation only. World.castShape normal1/witness1 are world-space in Rapier 0.20. */
@@ -12,7 +13,7 @@ export function probeHumanoidCamera(
   const start={x:from[0],y:from[1],z:from[2]},shape=new RAPIER.Ball(radius);
   const collider=world.intersectionWithShape(start,identity,shape,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,exclude,undefined,predicate);
   if(collider){
-    const contact=collider.contactShape(shape,start,identity,0);
+    const contact=contactColliderVolume(collider,shape,start,identity,0);
     if(contact&&contact.distance<=0)return {distanceMeters:0,colliderEntityId:String(collider.handle),startedOverlapping:true,
       normalWorldXYZ:[contact.normal1.x,contact.normal1.y,contact.normal1.z],penetrationDepthMeters:-contact.distance};
   }

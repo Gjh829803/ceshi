@@ -76,6 +76,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/locomotion-animation.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/locomotion-animation.test.ts", lane: "contract" },
   { path: "packages/three-world/src/navigation.test.ts", lane: "resource-heavy", reasonCodes: ["native-recast"] },
+  { path: "packages/three-world/src/physics-box.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/physics-continuity.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/physics.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/presentation.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-rapier"] },

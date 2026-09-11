@@ -3,6 +3,9 @@ import type {CharacterOptions} from '../engine-contracts';
 /** Dynamic props contact real bodies, excluding fixed vehicle query proxies (groups 3 and 5). */
 export const DYNAMIC_PROP_COLLISION_GROUPS = 0x0001ffeb;
 
+/** Exact native box partitions avoid unstable capsule contacts on broad faces. */
+export const MAXIMUM_BOX_CELL_EDGE_METERS = 4;
+
 /** Ordinary controllable-subject defaults; contextual humanoids use their calibrated profile. */
 export const DEFAULT_CHARACTER_OPTIONS: Required<CharacterOptions> = Object.freeze({
   heightMeters: 1.8, radiusMeters: .35, walkSpeedMetersPerSecond: 2.4, runSpeedMetersPerSecond: 4.8,

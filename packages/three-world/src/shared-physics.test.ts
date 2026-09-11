@@ -1,5 +1,6 @@
 import {afterEach,expect,it} from 'vitest';
 import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 import {createWorld,type ThreeWorld} from './world';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 import {createRoadVehicleSpec} from './humanoid-runtime/road-vehicle';
@@ -84,6 +85,31 @@ it('preserves kinematic velocity over the two vehicle substeps in one SDK tick',
   platform.position.x=.1;world.step({},1);
   expect(world.humanoid!.environment.physicsStepSequence-before).toBe(2);
   expect(world.humanoid!.state('platform')?.velocityMetersPerSecondXYZ[0]).toBeCloseTo(6,3);
+});
+it('keeps character push impulses independent of vehicle substep frequency',async()=>{
+  const velocities:number[]=[];
+  for(const withVehicle of [false,true]){
+    const spec=createRoadVehicleSpec('car');spec.id='car';spec.spawn=[20,0,20];
+    const vehicleMap:EnvironmentDefinition={...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[50,50],color:'#fff',modes:['wheeled']}],
+      spawns:[{id:'car-spawn',vehicleId:'car',name:'Car',position:[20,0,20],yaw:0,regionId:'road'}]};
+    const world=await createWorld({navigation:false,humanoid:{map:withVehicle?vehicleMap:map,character:{instanceId:'player',object:new THREE.Group()},
+      vehicles:withVehicle?[{instanceId:'car',assetId:'custom.car',object:new THREE.Group(),spec}]:[]}});worlds.push(world);
+    const environment=world.humanoid!.environment,physics=environment.borrowPhysics().world,before=environment.physicsStepSequence;
+    world.step({},1);expect(environment.physicsStepSequence-before).toBe(withVehicle?2:1);
+    const actor=physics.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0,10,0));
+    const capsule=physics.createCollider(RAPIER.ColliderDesc.capsule(.55,.28),actor);
+    const chair=physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,9.58,.485));
+    physics.createCollider(RAPIER.ColliderDesc.cuboid(.28,.05,.19).setMass(8),chair);physics.updateSceneQueries();
+    const controller=physics.createCharacterController(.015);controller.setCharacterMass(75);controller.setApplyImpulsesToDynamicBodies(true);
+    controller.computeColliderMovement(capsule,{x:0,y:0,z:.1});velocities.push(chair.linvel().z);
+  }
+  expect(velocities[0]).toBeGreaterThan(1);expect(velocities[1]).toBeCloseTo(velocities[0]!,4);
+});
+it('restores the caller timestep when a physics substep callback fails',async()=>{
+  const world=await setup(),environment=world.humanoid!.environment,physics=environment.borrowPhysics().world;
+  const timestep=physics.timestep,remove=environment.beforePhysicsSubstep(()=>{throw new Error('SUBSTEP_FAILED');});
+  try{expect(()=>environment.stepPhysics(1/120)).toThrow('SUBSTEP_FAILED');expect(physics.timestep).toBe(timestep);}
+  finally{remove();}
 });
 it('rejects standing into a newly registered low ceiling without a refresh tick',async()=>{
   const world=await setup();world.step({},30);

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { toast as notify } from "sonner";
 import * as T from "three";
+import { createNpcPlayground } from "./npc-playground";
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { readMapHash, writeMapHash } from "./map-route";
@@ -152,6 +153,10 @@ const accessories = createAccessoryPreview(character);
 let currentMap = initialMap,
   world = buildWorld(scene, currentMap);
 sdk.configureShadowLight(world.sun);
+let npcLab: ReturnType<typeof createNpcPlayground> | undefined;
+function controlledCharacter() {
+  return npcLab?.character(sim.controlledActor.id) ?? character;
+}
 const session = {
   get map() {
     return currentMap;
@@ -168,6 +173,7 @@ const session = {
       visual = buildWorld(scene, next);
     try {
       sdk.configureShadowLight(visual.sun);
+      npcLab?.beforeMapChange();
       runtime.switchMap(next);
     } catch (error) {
       visual.dispose();
@@ -184,6 +190,7 @@ const session = {
       scope:displaySettings.scope==='selected'&&!selectedIds.length?'all':displaySettings.scope};
     displayPreview.setSettings(displaySettings);shell.update({display:displaySettings});refreshDisplayMetadata();
     writeMapHash(window, next.id);
+    void npcLab?.setMap(next.id);
   },
   dispose() {
     world.dispose();
@@ -252,6 +259,7 @@ function readDisplayTargets():DisplayInteractionTarget[] {
 function readDisplayCatalog() {
   const colliderIds=new Set<string>();sim.controlledActor.controller?.world.forEachCollider(c=>{if(c.isEnabled())colliderIds.add(displayColliderId(c.handle));});
   return buildDisplayCatalog({scene,map:session.map,environment:world.root,person:character.root,
+    actors: npcLab?.displayActors() ?? [],
     vehicles:visuals.map((visual,n)=>({id:SPECS[n]!.id,name:SPECS[n]!.name,object:visual.root,available:sim.available(sim.vehicles[n]!),type:(SPECS[n]!.mode==='mount'||SPECS[n]!.mode==='dragon'?'creature':'vehicle') as DisplayType})),
     ...(sim.controlledActor.vehicle?{currentVehicleId:sim.controlledActor.vehicle.spec.id}:{}),colliderIds});
 }
@@ -274,7 +282,7 @@ function refreshDisplayMetadata() {
 }
 const displayPreview = createDisplayPreview({
   scene, camera, source: renderer, mount: canvas.parentElement!,
-  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[character.root,visuals[sim.controlledActor.vehicleIndex]!.root]:[character.root]}),
+  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[sim.controlledActor.vehicleIndex]!.root]:[controlledCharacter().root]}),
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map, targets: readDisplayTargets(),colliderId:displayColliderId,
     colliderDistance:(handle,centers)=>{const c=sim.controlledActor.controller?.world.getCollider(handle);if(!c)return Infinity;
       return centers.reduce((distance,center)=>{const projected=c.projectPoint(center,true);return projected?Math.min(distance,center.distanceTo(new T.Vector3().copy(projected.point))):distance;},Infinity);}
@@ -350,6 +358,7 @@ function selectAsset(id: string) {
   if (!ready) return;
   if(id==='dragon'){prepareSelection(DRAGON_TRAINING.id,'dragon-air',id);shell.update({mapId:session.map.id});return;}
   if (id === "person") {
+    if (sim.controlledActor.id !== "person") npcLab?.control("person");
     if(sim.controlledActor.vehicle?.motion.flyingCreature){prepareSelection(session.map.id,defaultRegion(session.map,'person').id,'person');return;}
     if (sim.controlledActor.vehicle) {
       runtime.interact();
@@ -474,6 +483,7 @@ shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
 shell.on("resetButton", async () => {
   await sdk.reset();
+  await npcLab?.whenReady();
   if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
   else syncTeleport();
   toast("已返回场景起点");
@@ -529,6 +539,7 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
   )
     throw new Error("所选主体不适配这个训练区域");
 
+  if (sim.controlledActor.id !== "person") npcLab?.control("person");
   session.switchMap(mapId);
   world = session.world;
   follow.environment = session.queries;
@@ -548,9 +559,9 @@ function humanoidState() {
     地图: session.map.name,
     操控权: sim.controlledActor.vehicle ? sim.controlledActor.vehicle.spec.name : "人物",
     状态: h?.state,
-    动画: character.clipLabel,
-    骨骼: character.sourceCharacter?.rigTargets,
-    已载入动作: character.availableHumanoidClips.size,
+    动画: controlledCharacter().clipLabel,
+    骨骼: controlledCharacter().sourceCharacter?.rigTargets,
+    已载入动作: controlledCharacter().availableHumanoidClips.size,
     速度: h?.speed,
     着地: h?.grounded,
     姿态: h?.stance,
@@ -574,6 +585,7 @@ function humanoidState() {
 }
 function prepareHumanTrial(mapId: string, trial: CharacterTrial, demo = false) {
   if (!ready) throw new Error("人物动作仍在加载");
+  if (sim.controlledActor.id !== "person") npcLab?.control("person");
   session.switchMap(mapId);
   world = session.world;
   follow.environment = session.queries;
@@ -608,9 +620,9 @@ const humanPanel = mountHumanoidLab(document.body, {
   setAutoTraverse: (value) => {
     if (sim.controlledActor.controller) sim.controlledActor.controller.autoTraverse = value;
   },
-  getSmoothing: () => character.sourceCharacter?.smoothing ?? true,
+  getSmoothing: () => controlledCharacter().sourceCharacter?.smoothing ?? true,
   setSmoothing: (value) => {
-    if (character.sourceCharacter) character.sourceCharacter.smoothing = value;
+    const source = controlledCharacter().sourceCharacter; if (source) source.smoothing = value;
   },
   getDebug: () => collisionMode,
   setDebug: setCollisionMode,
@@ -697,7 +709,7 @@ const inspector = mountInspector(el("inspectorHost"), {
     subtitle: sim.controlledActor.vehicle
       ? `${sim.controlledActor.vehicle.spec.en} / ${sim.controlledActor.vehicle.spec.kernel}`
       : "TRAVERSAL / 101 BONES · 48 CLIPS",
-    state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : character.clipLabel,
+    state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : controlledCharacter().clipLabel,
     color: sim.controlledActor.vehicle?.spec.color ?? "#b4d7c2",
   }),
   getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
@@ -779,6 +791,7 @@ shell.on("debugButton", () =>
 );
 shell.on("inspectorClose", () => toggleInspector(false));
 shell.on("equipmentButton", () => {
+  if (sim.controlledActor.id !== "person") npcLab?.control("person");
   library.close();
   equipmentPanel.open();
 });
@@ -1150,7 +1163,7 @@ function updateUI() {
           : (traversalPrompt ?? "打开资产库选择主体，或自由探索")),
     );
   if (!v) {
-    setText("stateValue", character.clipLabel);
+    setText("stateValue", controlledCharacter().clipLabel);
     setText(
       "bottomHint",
       humanDemo
@@ -1252,16 +1265,12 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
       n !== sim.controlledActor.vehicleIndex &&
       camera.position.distanceToSquared(state.position) < 8100;
   });
-  const held = character.carriedAttachment;
-  world.interactionProps.update(
-    humanoid
-      .readInteractionTargets(sim.environment)
-      .map((target) =>
-        held && target.id === held.id && target.state === "carried"
-          ? { ...target, position: held.position }
-          : target,
-      ),
-  );
+  const held = [character, ...(npcLab?.characters() ?? [])].flatMap(actor => actor.carriedAttachment ? [actor.carriedAttachment] : []);
+  world.interactionProps.update(humanoid.readInteractionTargets(sim.environment).map(target => {
+    const attachment = held.find(item => item.id === target.id);
+    return attachment && target.state === 'carried' ? {...target, position: attachment.position} : target;
+  }));
+  npcLab?.update();
   world.update(
     sim.time,
     sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position,
@@ -1297,6 +1306,15 @@ sdk.onReset(() => {
   humanDemo = null;
   lastActive = -99;
 });
+// Seal only the persistent Playground content. Scene-local NPCs are recreated on reset.
+sdk.step({}, 0);
+npcLab = createNpcPlayground(sdk, {
+  focus: () => { pause(false, false); sdkPresentation.focus(); },
+  beforeControl: () => { clearInput(); humanDemo = null; },
+  changed: () => { lastActive = -99; syncCameraProfile(true); refreshDisplayMetadata(); },
+});
+sdkPresentation.ui.mount(npcLab.panel);
+await npcLab.setMap(session.map.id);
 // Keep loading visible while first-use shaders and camera geometry are prepared.
 // The SDK remains the only clock; render() samples display state without stepping.
 try {
@@ -1379,12 +1397,17 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    npc: npcLab?.state(),
+    controlledEntityId: sdk.snapshot().controlledEntityId,
+    worldErrors: sdk.snapshot().errors,
+    cameraOwnership: sdk.snapshot().camera,
+    entityIds: sdk.snapshot().entities.map(entity => entity.id),
     display: displaySettings,
     diagnosticVisible: !!displayPreview.canvas && !displayPreview.canvas.hidden,
     flyingCreature:sim.controlledActor.vehicle?.motion.flyingCreature?{...sim.controlledActor.vehicle.motion.flyingCreature}:undefined,
     dragonVisual:nativeDragon.inspect(),
     dragonSeat:nativeDragon.readSeatWorld().elements,
-    riderHip:character.hip?.getWorldPosition(new T.Vector3()).toArray(),
+    riderHip:controlledCharacter().hip?.getWorldPosition(new T.Vector3()).toArray(),
     flight:sim.controlledActor.vehicle?.motion.aircraft?{...sim.controlledActor.vehicle.motion.aircraft,throttle:sim.controlledActor.vehicle.throttle,grounded:sim.controlledActor.vehicle.grounded}:undefined,
     vehicleRotation:sim.controlledActor.vehicle?.rotation.toArray(),powertrain:sim.controlledActor.vehicle?(sim.controlledActor.vehicle.motion.wheelPhysics?.powertrain??sim.controlledActor.vehicle.motion.body?.powertrain?{...(sim.controlledActor.vehicle.motion.wheelPhysics?.powertrain??sim.controlledActor.vehicle.motion.body?.powertrain)}:undefined):undefined,wheelTelemetry:sim.controlledActor.vehicle?.motion.wheelPhysics?.wheels.map(w=>({...w})),driveTelemetry:sim.controlledActor.vehicle?humanoid.vehicleDriveTelemetry(sim.controlledActor.vehicle):null,
 
@@ -1420,6 +1443,7 @@ const labAPI = {
   },
   reset: async () => {
     await sdk.reset();
+    await npcLab?.whenReady();
     if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
     else syncTeleport();
     return labAPI.getState();

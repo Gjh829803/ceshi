@@ -1,3 +1,20 @@
+diff --git a/src/control/character_controller.rs b/src/control/character_controller.rs
+index 742684e..e11bbac 100644
+--- a/src/control/character_controller.rs
++++ b/src/control/character_controller.rs
+@@ -934 +934,3 @@ impl KinematicCharacterController {
+-                        let prev_manifolds_len = manifolds.len();
++                        // Dispatchers may overwrite/reuse the supplied vector. Keep
++                        // each collider's points, owner and pose together.
++                        let mut collider_manifolds: Vec<ContactManifold> = vec![];
+@@ -940 +942 @@ impl KinematicCharacterController {
+-                            &mut manifolds,
++                            &mut collider_manifolds,
+@@ -944 +946 @@ impl KinematicCharacterController {
+-                        for m in &mut manifolds[prev_manifolds_len..] {
++                        for m in &mut collider_manifolds {
+@@ -947,0 +950 @@ impl KinematicCharacterController {
++                        manifolds.extend(collider_manifolds);
 diff --git a/src/pipeline/query_pipeline.rs b/src/pipeline/query_pipeline.rs
 index 124c0d7..21f4577 100644
 --- a/src/pipeline/query_pipeline.rs
@@ -7,8 +24,26 @@ index 124c0d7..21f4577 100644
 +        collider.flags.enabled != crate::geometry::ColliderEnabled::Disabled
 +            && collider.parent.and_then(|p| bodies.get(p.handle)).map(|body| body.is_enabled()).unwrap_or(true)
 +            && self.exclude_collider != Some(handle)
+diff --git a/typescript/src.ts/geometry/narrow_phase.ts b/typescript/src.ts/geometry/narrow_phase.ts
+index 6163053..1c976f4 100644
+--- a/typescript/src.ts/geometry/narrow_phase.ts
++++ b/typescript/src.ts/geometry/narrow_phase.ts
+@@ -43,0 +44,13 @@ export class NarrowPhase {
++    /** Copies actual solver normals, including compound contact clusters. */
++    public solverContactNormals(collider1: ColliderHandle, collider2: ColliderHandle): Vector[] {
++        const values = this.raw.solver_contact_normals(collider1, collider2);
++        const normals: Vector[] = [];
++        // #if DIM2
++        for (let i = 0; i < values.length; i += 2) normals.push(VectorOps.new(values[i], values[i + 1]));
++        // #endif
++        // #if DIM3
++        for (let i = 0; i < values.length; i += 3) normals.push(VectorOps.new(values[i], values[i + 1], values[i + 2]));
++        // #endif
++        return normals;
++    }
++
 diff --git a/typescript/src.ts/pipeline/world.ts b/typescript/src.ts/pipeline/world.ts
-index 4c919fd..5d70554 100644
+index 4c919fd..d31043e 100644
 --- a/typescript/src.ts/pipeline/world.ts
 +++ b/typescript/src.ts/pipeline/world.ts
 @@ -298,10 +298,10 @@ export class World {
@@ -32,6 +67,12 @@ index 4c919fd..5d70554 100644
 +        if (handles) handles.forEach(update);
 +        else this.colliders.forEach((collider) => update(collider.handle));
 +    }
+@@ -1106,0 +1107,5 @@ export class World {
++    /** Copies world-space solver normals oriented from collider1 to collider2, without stepping. */
++    public solverContactNormals(collider1: Collider, collider2: Collider): Vector[] {
++        return this.narrowPhase.solverContactNormals(collider1.handle, collider2.handle);
++    }
++
 diff --git a/typescript/src/geometry/broad_phase.rs b/typescript/src/geometry/broad_phase.rs
 index f85a776..2ef3e86 100644
 --- a/typescript/src/geometry/broad_phase.rs
@@ -59,5 +100,26 @@ index f85a776..2ef3e86 100644
 +                self.0.set_aabb(&params.0, handle, aabb);
 +            }
 +        }
++    }
++
+diff --git a/typescript/src/geometry/narrow_phase.rs b/typescript/src/geometry/narrow_phase.rs
+index fc1cc9d..15e499b 100644
+--- a/typescript/src/geometry/narrow_phase.rs
++++ b/typescript/src/geometry/narrow_phase.rs
+@@ -38,0 +39,16 @@ impl RawNarrowPhase {
++    /// World-space normals seen by the solver, oriented from handle1 to handle2.
++    pub fn solver_contact_normals(&self, handle1: FlatHandle, handle2: FlatHandle) -> Vec<Real> {
++        let handle1 = utils::collider_handle(handle1);
++        let handle2 = utils::collider_handle(handle2);
++        let mut normals = Vec::new();
++        if let Some(pair) = self.0.contact_pair(handle1, handle2) {
++            let sign = if pair.collider1 == handle1 { 1.0 } else { -1.0 };
++            for manifold in pair.solver_manifolds() {
++                if !manifold.data.solver_contacts.is_empty() {
++                    normals.extend_from_slice(&(manifold.data.normal * sign).to_array());
++                }
++            }
++        }
++        normals
 +    }
 +

@@ -38,8 +38,12 @@ it('steps after preparing an actor twice before the first physics integration',(
 
 it('keeps approaching actors separated by their real capsules',()=>{
   const {sim}=setup(),a=sim.addActor('a',new Vector3(-1,.04,0)),b=sim.addActor('b',new Vector3(1,.04,0));
-  for(let n=0;n<90;n++)sim.step(1/60,new Map([['a',{input:{...emptyInput(),steer:-1},yaw:0}],['b',{input:{...emptyInput(),steer:1},yaw:0}]]));
-  expect(b.player.position.x-a.player.position.x).toBeGreaterThanOrEqual(.55);
+  for(let n=0;n<90;n++){
+    sim.step(1/60,new Map([['a',{input:{...emptyInput(),steer:-1},yaw:0}],['b',{input:{...emptyInput(),steer:1},yaw:0}]]));
+    // Real contacts can slide around the other capsule; X ordering is not an invariant.
+    expect(Math.hypot(b.player.position.x-a.player.position.x,b.player.position.z-a.player.position.z)).toBeGreaterThanOrEqual(.55);
+    expect(a.controller.capsule.contactCollider(b.controller.capsule,1)?.distance??1).toBeGreaterThanOrEqual(-.001);
+  }
 });
 
 it('rejects an occupied spawn before allocating another actor rig',()=>{

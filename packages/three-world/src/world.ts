@@ -176,7 +176,6 @@ export class ThreeWorld implements API.World {
   this.validateHumanoidOptions(options);
   const movement=options.movement;const movementId=movement?.kind==='custom'?movement.movementId:'ground';
   if(movementId!=='ground'&&!this.movements.has(movementId))throw failure('MOVEMENT_NOT_REGISTERED');
-  if(options.locomotionBindingId){const info=this.assets.search('').find(item=>item.assetId===asset?.assetId);if(!info?.locomotionBindingIds.includes(options.locomotionBindingId))throw failure('LOCOMOTION_BINDING_UNAVAILABLE');}
   const character=this.engineCharacter(options,body);
   const {asset:_asset,humanoid:_humanoid,...metadata}=options;const binding=runtimeActor??(options.humanoid?{object,animation:options.humanoid}:undefined);this.engine.addCharacter({...metadata,object,character,...(binding?{runtimeActor:binding}:{}),...(asset?{asset:this.assets.internal(asset)}:{})},prevalidated);
   this.entries.set(options.id,{id:options.id,object,options,role:'actor',body,...(asset?{asset}:{}),generation:++this.nextGeneration,geometryVersion:0,movementId,movementState:movementId==='ground'?null:cloneJson(this.movements.get(movementId)!.initialState),physicsKind:'character'});this.touch();return object;
@@ -422,7 +421,6 @@ export class ThreeWorld implements API.World {
  private validateHumanoidOptions(options:API.CharacterOptions):void{
   if(!options.humanoid)return;
   if(options.asset||options.object||options.body)throw failure('CHARACTER_SOURCE_INVALID');
-  if(options.locomotionBindingId)throw failure('LOCOMOTION_BINDING_UNAVAILABLE');
   if(options.movement&&(options.movement.kind!=='ground'||Object.keys(options.movement).some(key=>!['kind','walkSpeedMetersPerSecond','runSpeedMetersPerSecond','jumpSpeedMetersPerSecond'].includes(key))))throw failure('HUMANOID_MOVEMENT_UNSUPPORTED','Full humanoids accept ground walk/run/jump tuning; new movement execution belongs in their SDK controller.');
  }
  private engineCharacter(options:API.CharacterOptions,body:API.CharacterBody):EngineBody{this.validateHumanoidOptions(options);if(options.movement?.kind==='ground'){const {kind:_kind,...settings}=options.movement;return {...body,...settings};}return {...body};}

@@ -10,7 +10,8 @@ export type DisplayInteractionTarget=humanoid.InteractionVisualTarget&{ownerIds?
 export function createDisplayOverlays(scene:T.Scene,read:()=>{physics:PhysicsSource;map:EnvironmentDefinition;targets:readonly DisplayInteractionTarget[];
   colliderId?:(handle:number)=>string;colliderDistance?:(handle:number,centers:readonly T.Vector3[])=>number}) {
   const root=new T.Group();root.name='display-diagnostics';root.visible=false;scene.add(root);
-  const collisions=createCollisionDebug(scene);root.add(collisions.person.mesh,collisions.all);
+  let colliderOwner:((handle:number)=>string)|undefined;
+  const collisions=createCollisionDebug(scene,handle=>colliderOwner?.(handle));root.add(collisions.person.mesh,collisions.all);
   const waters=new T.Group(),climbs=new T.Group(),anchors=new T.Group();root.add(waters,climbs,anchors);
   const unitBox=new T.BoxGeometry(1,1,1),boxEdges=new T.EdgesGeometry(unitBox);unitBox.dispose();
   const sphere=new T.SphereGeometry(.13,8,6),sphereEdges=new T.EdgesGeometry(sphere);sphere.dispose();
@@ -35,6 +36,7 @@ export function createDisplayOverlays(scene:T.Scene,read:()=>{physics:PhysicsSou
   return {root,
     update(settings:DisplayRenderSettings,context:DisplayContext={roots:[],subjects:[]}) {
       const data=read(),{physics,map,targets}=data;
+      colliderOwner=data.colliderId;
       const scope=resolveDisplayScope({...settings,mode:'material'},context);
       const colliderScope=settings.colliderScope==='nearby'&&settings.scope==='all'?resolveDisplayScope({...settings,mode:'material',scope:'subject'},context):scope;
       const matches=(id:string)=>scope.ids===null||scope.ids.has(id);

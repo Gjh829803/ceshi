@@ -5,12 +5,14 @@ import type {DisplayObjectRow,DisplayType} from './display-settings';
 
 /** Adapt already-authored object identities; never require a new layer schema. */
 export function buildDisplayCatalog(input:{scene:T.Scene;map:EnvironmentDefinition;environment:T.Object3D;person:T.Object3D;
+  actors?:readonly {id:string;name:string;object:T.Object3D}[];
   vehicles:readonly {id:string;name:string;type:DisplayType;object:T.Object3D;available:boolean}[];currentVehicleId?:string;colliderIds:ReadonlySet<string>}) {
   const roots:DisplayRoot[]=[],rows:DisplayObjectRow[]=[];
   const add=(id:string,name:string,type:DisplayType,object:T.Object3D,parentId?:string,available=true,tags:readonly string[]=[])=>{
     roots.push({id,type,object});rows.push({id,name,type,available,hasCollider:input.colliderIds.has(id),tags,...(parentId?{parentId}:{})});
   };
   add('person','主体人物','person',input.person);
+  for(const actor of input.actors ?? [])add(actor.id,actor.name,'person',actor.object);
   for(const v of input.vehicles)add(v.id,v.name,v.type,v.object,undefined,v.available);
   const mapId='map:'+input.map.id;add(mapId,input.map.name,'environment',input.environment);
   const names=new Map<string,T.Object3D>();input.environment.traverse(object=>{if(object.name)names.set(object.name,object);});
