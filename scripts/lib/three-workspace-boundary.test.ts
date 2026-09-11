@@ -5,7 +5,7 @@ import path from "node:path";
 import { expect, it } from "vitest";
 
 import { scanWorkspaceBoundaries } from "./workspace-boundary";
-import { checkThreeWorkspaceFiles, scanThreeWorkspace } from "./three-workspace-boundary";
+import { checkThreeWorkspaceFiles, scanThreeWorkspace, RETAINED_PACKAGES } from "./three-workspace-boundary";
 
 it("rejects a dangling import after its workspace package was removed", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "three-workspace-boundary-"));
@@ -23,19 +23,17 @@ it("rejects a dangling import after its workspace package was removed", async ()
 });
 
 const retained = {
-  "apps/three-playground/package.json": JSON.stringify({ name: "@worldkit/three-playground", dependencies: { "@worldkit/three": "workspace:*" } }),
-  "package.json": JSON.stringify({ name: "fixture" }),
-  "packages/three-world/package.json": JSON.stringify({ name: "@worldkit/three", dependencies: { "@whitebox-world/camera-collision": "workspace:*" } }),
-  "packages/camera-collision/package.json": JSON.stringify({ name: "@whitebox-world/camera-collision" }),
+  ...Object.fromEntries([...RETAINED_PACKAGES].map(([file, name]) => [file, JSON.stringify({name})])),
+  "package.json": JSON.stringify({name: "fixture"}),
 };
 
 it("requires exactly the retained workspace package identities", () => {
   expect(checkThreeWorkspaceFiles(retained)).toEqual([]);
   expect(checkThreeWorkspaceFiles({ ...retained, "packages/old/package.json": '{"name":"@whitebox-world/old"}' }))
     .toContainEqual({ code: "THREE_WORKSPACE_PACKAGE", importer: "packages/old/package.json", specifier: "@whitebox-world/old" });
-  expect(checkThreeWorkspaceFiles({ ...retained, "apps/three-playground/package.json": '{"name":"@worldkit/unknown"}' }))
-    .toContainEqual({ code: "THREE_WORKSPACE_PACKAGE", importer: "apps/three-playground/package.json", specifier: "@worldkit/unknown" });
-  expect(checkThreeWorkspaceFiles({ "package.json": "{}" })).toHaveLength(3);
+  expect(checkThreeWorkspaceFiles({ ...retained, "apps/sdk-playground/package.json": '{"name":"@worldkit/unknown"}' }))
+    .toContainEqual({ code: "THREE_WORKSPACE_PACKAGE", importer: "apps/sdk-playground/package.json", specifier: "@worldkit/unknown" });
+  expect(checkThreeWorkspaceFiles({ "package.json": "{}" })).toHaveLength(RETAINED_PACKAGES.size);
 });
 
 it("checks real imports and every dependency scope while ignoring negative fixtures and history", () => {
@@ -48,10 +46,10 @@ it("checks real imports and every dependency scope while ignoring negative fixtu
     'type Old = import("@whitebox-world/protocol").Old;',
     'const fixture = `import "@babylonjs/not-an-import";`;',
     'const negative = "@whitebox-world/test-fixture-string";',
-    'import "@whitebox-world/camera-collision/testing";',
+    'import "@worldkit/camera-collision/testing";',
   ].join("\n");
   const manifest = { name: "fixture", dependencies: { "@babylonjs/havok": "1" }, devDependencies: { "@whitebox-world/dev-old": "*" }, peerDependencies: { "@whitebox-world/peer-old": "*" }, optionalDependencies: { "@whitebox-world/optional-old": "*" } };
-  const violations = checkThreeWorkspaceFiles({ ...retained, "package.json": JSON.stringify(manifest), "shared/preset-content/use.ts": source, "docs/history.ts": 'import "@babylonjs/historical";' });
+  const violations = checkThreeWorkspaceFiles({ ...retained, "package.json": JSON.stringify(manifest), "packages/preset-content/use.ts": source, "docs/history.ts": 'import "@babylonjs/historical";' });
   expect(violations.map(({ specifier }) => specifier).sort()).toEqual([
     "@babylonjs/core", "@babylonjs/havok", "@whitebox-world/compiler", "@whitebox-world/dev-old",
     "@whitebox-world/native-babylon", "@whitebox-world/optional-old", "@whitebox-world/peer-old",

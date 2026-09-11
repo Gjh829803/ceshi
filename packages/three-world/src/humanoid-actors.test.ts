@@ -18,7 +18,7 @@ const worlds:ThreeWorld[]=[];
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const map:EnvironmentDefinition={id:'three-actors',name:'Three actors',description:'',bounds:{min:[-20,-5,-20],max:[20,10,20]},boxes:[{id:'floor',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[-4,.04,0]};
 async function setup(renderer?:THREE.WebGLRenderer,options:Partial<Parameters<typeof createHumanoidWorld>[0]>={}){
-  const paths=new Map(catalog.assets.find(a=>a.id==='humanoid.source-101')!.resources!.map(r=>[r.path,r.sourcePath]));
+  const paths=new Map(catalog.assets.find(a=>a.id==='humanoid.uefn-mannequin')!.resources!.map(r=>[r.path,r.sourcePath]));
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
   vi.stubGlobal('fetch',async(input:RequestInfo|URL)=>{const uri=typeof input==='string'?input:input instanceof URL?input.href:input.url;const path=paths.get(decodeURIComponent(new URL(uri,'https://actors.test/').pathname.slice(1)))??catalog.assets.find(asset=>uri.includes(asset.sha256))?.sourcePath;if(!path)throw new Error(uri);return new Response(await readFile(path));});
   const world=await createHumanoidWorld({map,...options,...(renderer?{renderer}:{}),resourceUrl:path=>`https://actors.test/${path}`});worlds.push(world);return world;
@@ -368,7 +368,7 @@ it('runs custom three-dimensional NPC intent once per shared world tick',async()
   await world.reset();expect(world.getEntityState('floating').positionWorldMetersXYZ).toEqual([3,.04,0]);world.step({},60);expect(calls).toBe(120);expect(world.snapshot().errors).toEqual([]);
 });
 it('advances a separately loaded AssetInstance mixer beside the full humanoid controller',async()=>{
-  const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')! as unknown as AssetDefinition;
+  const definition=catalog.assets.find(asset=>asset.id==='humanoid.uefn-mannequin')! as unknown as AssetDefinition;
   const world=await setup(undefined,{assetDefinitions:{[definition.id]:definition}}),asset=await world.assets.load(definition.id);asset.object.position.set(5,.04,0);
   world.addCharacter({id:'asset-actor',asset});await world.start();world.stop();
   const move=await world.execute({type:'actor.move-to',entityId:'asset-actor',targetPositionWorldMetersXYZ:[5,0,5]});expect(move.status).toBe('accepted');world.step({},60);
@@ -380,7 +380,7 @@ it('advances a separately loaded AssetInstance mixer beside the full humanoid co
 });
 
 it('prevalidates resource changes in a plan without leaving a partially started animation',async()=>{
- const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')! as unknown as AssetDefinition;
+ const definition=catalog.assets.find(asset=>asset.id==='humanoid.uefn-mannequin')! as unknown as AssetDefinition;
  const world=await setup(undefined,{assetDefinitions:{[definition.id]:definition}}),asset=await world.assets.load(definition.id);asset.object.position.set(5,.04,0);world.addCharacter({id:'actor',asset});
  const register=(id:string,plan:()=>import('./contracts').PrimitiveCommand[])=>world.registerAction({id,description:id,inputSchema:{type:'object',properties:{},required:[],additionalProperties:false},writes:[{kind:'entity',entityId:'actor',channels:['locomotion','animation']}],plan});
  register('conflict',()=>[{type:'entity.play-action',entityId:'actor',actionId:'jump',playback:'loop'},{type:'actor.move-to',entityId:'actor',targetPositionWorldMetersXYZ:[5,0,5]}]);

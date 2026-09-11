@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {applyCpuRouting} from '../../src/cloud/cpu-routing.mjs';
+const fixture=()=>({metadata:{annotations:{'worldkit.seedleap.dev/batch-hash':'hash'}},spec:{template:{spec:{containers:[{args:['--run','script.ts','--stop-before-seedance']}],nodeSelector:{'karpenter.sh/nodepool':'platform'}}}}});
+test('CPU routing preserves stop, original command and placement and rejects malformed account identifiers',()=>{
+ const job=fixture();applyCpuRouting(job,{codexAccountIds:['healthy-a'],imageAccountIds:['healthy-a']});assert(job.spec.template.spec.containers[0].args.includes('--stop-before-seedance'));assert(job.spec.template.spec.containers[0].args[3].includes('script.ts'));assert.equal(job.metadata.annotations['worldkit.seedleap.dev/batch-hash'],'hash');assert.equal(job.spec.template.spec.nodeSelector['karpenter.sh/nodepool'],'platform');assert.throws(()=>applyCpuRouting(fixture(),{codexAccountIds:['bad;code'],imageAccountIds:['ok']}),/INVALID/);
+});

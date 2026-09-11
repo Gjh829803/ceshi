@@ -1,4 +1,4 @@
-import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { createMountedFixture } from './mounted-test-fixture';
 import { describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,27 @@ async function fixture(boxes: EnvironmentDefinition['boxes'] = map.boxes) {
 }
 
 describe('Humanoid authored opening integration', () => {
+  it('retargets a pending opening through actual programmatic boarding before first movement',async()=>{
+    const world=await createMountedFixture();
+    try{
+      world.camera.position.set(1.45,2.2,3.55);world.camera.lookAt(1.45,1.49,0);
+      world.setCameraFollow({followHalfLifeSeconds:0});world.step({},0);
+      const baseline=world.snapshot().camera,opening=world.camera.clone();
+      expect(world.humanoid!.enter('horse-1')).toBe(true);
+      expect(world.cameraMode).toBe('follow-pending');
+      expect(world.snapshot().camera.subjectEntityId).toBe('horse-1');
+      expect(world.camera.position.distanceTo(new Vector3(0,3.253,3.55))).toBeLessThan(1e-7);
+      expect(world.camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+      world.step({moveZRatio:-1});
+      const active=world.snapshot().camera;
+      expect(active.desiredArmDistanceMeters).toBeCloseTo(baseline.desiredArmDistanceMeters!,7);
+      expect(active.desiredPitchRadians).toBeCloseTo(baseline.desiredPitchRadians!,7);
+      expect(world.camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+      world.step({},90);expect(world.humanoid!.exit()).toBe(true);world.step({},90);
+      expect(world.snapshot().camera.subjectEntityId).toBe('person');
+      expect(world.snapshot().camera.desiredArmDistanceMeters).toBeCloseTo(baseline.desiredArmDistanceMeters!,7);
+    }finally{world.dispose();}
+  });
   it('preserves target-framed orbit and zoom through actual boarding and exit',async()=>{
     const world=await createMountedFixture();
     try{

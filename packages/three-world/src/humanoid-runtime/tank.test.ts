@@ -9,8 +9,8 @@ import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environme
 import {tankBarrel,TANK_CONTROLS} from './motion-families/ground-vehicle/tank';
 import {sampleTankVisual} from './tank-visual';
 import {Character} from './character';
-import {TANK_SPEC,TANK_SOCKETS} from '../../../../shared/preset-content/tank';
-import {buildTankModel} from '../../../../shared/preset-content/tank-model';
+import {TANK_SPEC,TANK_SOCKETS} from '@worldkit/preset-content/tank';
+import {buildTankModel} from '@worldkit/preset-content/tank-model';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
  const q=new EnvironmentQueries({id:'tank-test',name:'Tank',description:'',bounds:{min:[-2000,-10,-2000],max:[2000,100,2000]},

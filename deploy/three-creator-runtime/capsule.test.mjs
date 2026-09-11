@@ -4,8 +4,8 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, 
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { projectLock, auditCapsule, sha256, stageContext } from '../../scripts/cloud/three-capsule.mjs';
-import { freezeRunAssetPolicy } from '../../scripts/cloud/three-eval-mcp-bridge.mjs';
+import { projectLock, auditCapsule, sha256, stageContext, CREATOR_RUNTIME_PACKAGES } from '@worldkit/creator-cloud/three-capsule';
+import { freezeRunAssetPolicy } from '@worldkit/creator-cloud/three-eval-mcp-bridge';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const rootManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json')));
@@ -14,11 +14,12 @@ const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
 test('minimal importer projection preserves exact package resolutions and integrity records', () => {
   const projected = projectLock(lock, rootManifest);
   const importers = projected.slice(projected.indexOf('\nimporters:\n'), projected.indexOf('\npackages:\n'));
-  assert.deepEqual([...importers.matchAll(/^  (\S+):(?: \{\})?$/gm)].map(match => match[1]), ['.', 'packages/three-world', 'packages/camera-collision']);
+  assert.deepEqual([...importers.matchAll(/^  (\S+):(?: \{\})?$/gm)].map(match => match[1]), ['.', ...CREATOR_RUNTIME_PACKAGES]);
   assert(!importers.includes('@babylonjs'));
-  assert(!importers.replaceAll('@whitebox-world/camera-collision', '').includes('@whitebox-world'));
+  assert(!importers.replaceAll('@worldkit/camera-collision', '').includes('@whitebox-world'));
   assert(importers.includes('version: link:../camera-collision'));
   assert(importers.includes("'@worldkit/three'")); assert(importers.includes("'@modelcontextprotocol/sdk'"));
+  assert(!importers.includes('packages/episode-pipeline'));
   assert(importers.includes('      typescript:\n'), 'Runtime authoring schema requires the pinned TypeScript compiler API');
   assert.equal(projected.slice(projected.indexOf('\npackages:\n')), lock.slice(lock.indexOf('\npackages:\n')));
   assert.equal(projected.slice(0, projected.indexOf('\nimporters:\n')), lock.slice(0, lock.indexOf('\nimporters:\n')));
@@ -29,7 +30,7 @@ test('projection rejects changed dependency versions and unknown lock formats', 
   assert.throws(() => projectLock(lock, { ...rootManifest, devDependencies: { ...rootManifest.devDependencies, typescript: '99.0.0' } }), /Root\/lock mismatch/);
   assert.throws(() => projectLock(lock.replace("lockfileVersion: '9.0'", "lockfileVersion: '10.0'"), rootManifest), /lock layout/);
   assert.throws(() => projectLock(lock.replace('  packages/three-world:', '  packages/not-three:'), rootManifest), /workspace importer/);
-  assert.throws(() => projectLock(lock.replace('  packages/camera-collision: {}', '  packages/camera-collision:\n    dependencies: {}'), rootManifest), /shared camera collision dependencies/);
+  assert.throws(() => projectLock(lock.replace('  packages/camera-collision:\n', '  packages/camera-collision:\n    dependencies: {}\n'), rootManifest), /shared camera collision dependencies/);
 });
 
 function withCapsule(run) {
@@ -79,26 +80,28 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }
     }
-    for (const relative of ['scripts/three-creator/agent/README.md','scripts/three-creator/agent/assets/README.md','scripts/three-creator/agent/assets/animals/README.md','scripts/three-creator/agent/assets/animals/flying-mounts.md','scripts/three-creator/agent/assets/animals/flying-mounts.ts']) {
+    for (const relative of ['packages/creator-host/docs/agent/README.md','packages/creator-host/docs/agent/assets/README.md','packages/creator-host/docs/agent/assets/animals/README.md','packages/creator-host/docs/agent/assets/animals/flying-mounts.md','packages/creator-host/docs/agent/assets/animals/flying-mounts.ts']) {
       assert.deepEqual(readFileSync(path.join(sourceRoot,relative)),readFileSync(path.join(repositoryRoot,relative)));
     }
-    for (const name of ['config.ts', 'project.json', 'environment/maps.ts', 'models.ts']) {
-      const relative = `shared/preset-content/${name}`;
+    for (const name of ['src/config.ts', 'config/project.json', 'src/environment/maps.ts', 'src/models.ts']) {
+      const relative = `packages/preset-content/${name}`;
       assert.deepEqual(readFileSync(path.join(sourceRoot, relative)), readFileSync(path.join(repositoryRoot, relative)));
     }
     for (const name of ['asset-policy.mjs', 'asset-policy.d.mts']) {
-      const relative = `scripts/three-creator/${name}`;
+      const relative = `packages/creator-host/src/assets/${name}`;
       assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
     }
-    const observerPath='apps/three-creator-playground/character-continuity.ts';
+    const observerPath='packages/creator-host/src/browser/character-continuity.ts';
     assert.deepEqual(readFileSync(path.join(sourceRoot,observerPath)),readFileSync(path.join(repositoryRoot,observerPath)));
-    const policyPath = 'config/three-creator/asset-policy.json';
+    assert(!existsSync(path.join(sourceRoot, 'packages/creator-host/AGENTS.md')), 'Maintenance instructions are not production task instructions');
+    assert(!existsSync(path.join(sourceRoot, 'packages/three-world/AGENTS.md')));
+    const policyPath = 'packages/creator-host/config/asset-policy.json';
     assert(existsSync(path.join(sourceRoot, policyPath)), 'Capsule must include Host policy at its default config path');
     const policyBytes = readFileSync(path.join(sourceRoot, policyPath));
     assert.deepEqual(policyBytes, readFileSync(path.join(repositoryRoot, policyPath)));
     const manifest = JSON.parse(readFileSync(path.join(sourceRoot, 'source-manifest.json')));
     assert.equal(manifest.files.find(file => file.path === policyPath)?.sha256, sha256(policyBytes));
-    assert(!existsSync(path.join(sourceRoot, 'scripts/three-creator/asset-policy.json')));
+    assert(!existsSync(path.join(sourceRoot, 'packages/creator-host/asset-policy.json')));
     const frozen = await freezeRunAssetPolicy({toolkitRoot: sourceRoot});
     assert.deepEqual(frozen.assetPolicySnapshot.policy, JSON.parse(policyBytes));
     assert.deepEqual(frozen, await freezeRunAssetPolicy({toolkitRoot: repositoryRoot}));
@@ -106,8 +109,8 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     const catalogBytes = readFileSync(path.join(sourceRoot, catalogPath));
     assert.deepEqual(catalogBytes, readFileSync(path.join(repositoryRoot, catalogPath)));
     assert.equal(manifest.files.find(file => file.path === catalogPath)?.sha256, sha256(catalogBytes));
-    assert(!existsSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));
-    assert(!existsSync(path.join(sourceRoot, 'config/three-creator/account-policy.json')), 'Account routing is Host-only');
+    assert(!existsSync(path.join(sourceRoot, 'packages/creator-host/asset-catalog.json')));
+    assert(!existsSync(path.join(sourceRoot, 'apps/creator-cloud/config/account-policy.json')), 'Account routing is Host-only');
     const catalog = JSON.parse(catalogBytes);
     const dragons=catalog.assets.filter(asset=>/^creature\.dragon\.d\d{2}$/.test(asset.id));
     assert.equal(dragons.length,11);

@@ -1,6 +1,6 @@
 {
   "id": "vehicle.ski",
-  "displayName": "双板滑雪 / ALPINE",
+  "displayName": "双板滑雪 / Skis",
   "path": "vehicles/ski.glb",
   "uri": "./assets/subjects/c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05.glb",
   "sha256": "c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-ski.ts"
+    "generator": "packages/creator-host/scripts/assets/export-ski.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.ski"
+    "locomotion.ski"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "ski",
       "name": "双板滑雪",
-      "en": "ALPINE",
+      "en": "Skis",
       "mode": "ski",
       "archetype": "ski",
       "kernel": "K14",

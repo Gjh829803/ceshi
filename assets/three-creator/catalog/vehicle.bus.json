@@ -1,6 +1,6 @@
 {
   "id": "vehicle.bus",
-  "displayName": "复古小巴 / BUS",
+  "displayName": "复古小巴 / Bus",
   "path": "vehicles/bus.glb",
   "uri": "./assets/subjects/47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14.glb",
   "sha256": "47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14",
@@ -31,11 +31,11 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-bus.ts"
+    "generator": "packages/creator-host/scripts/assets/export-bus.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.bus"
+    "locomotion.bus"
   ],
   "vehicle": {
     "schemaVersion": 1,
@@ -68,7 +68,7 @@
       "jumpSpeed": 6.3,
       "id": "bus",
       "name": "复古小巴",
-      "en": "MINIBUS",
+      "en": "Bus",
       "mode": "bus",
       "archetype": "bus",
       "kernel": "K15",

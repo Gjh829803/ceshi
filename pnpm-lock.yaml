@@ -16,6 +16,18 @@ importers:
 
   .:
     dependencies:
+      '@worldkit/browser-capture':
+        specifier: workspace:*
+        version: link:packages/browser-capture
+      '@worldkit/creator-host':
+        specifier: workspace:*
+        version: link:packages/creator-host
+      '@worldkit/episode-pipeline':
+        specifier: workspace:*
+        version: link:packages/episode-pipeline
+      '@worldkit/preset-content':
+        specifier: workspace:*
+        version: link:packages/preset-content
       '@worldkit/three':
         specifier: workspace:*
         version: link:packages/three-world
@@ -47,6 +59,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^3.2.4
         version: 3.2.7(vitest@3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0))
+      '@worldkit/creator-cloud':
+        specifier: workspace:*
+        version: link:apps/creator-cloud
       ajv:
         specifier: 8.17.1
         version: 8.17.1
@@ -75,8 +90,31 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
 
-  apps/three-playground:
+  apps/creator-cloud:
     dependencies:
+      '@worldkit/cloud-generation-client':
+        specifier: workspace:*
+        version: link:../../packages/cloud-generation-client
+      '@worldkit/creator-host':
+        specifier: workspace:*
+        version: link:../../packages/creator-host
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+
+  apps/creator-evaluation-site: {}
+
+  apps/sdk-playground:
+    dependencies:
+      '@worldkit/browser-capture':
+        specifier: workspace:*
+        version: link:../../packages/browser-capture
+      '@worldkit/creator-host':
+        specifier: workspace:*
+        version: link:../../packages/creator-host
+      '@worldkit/preset-content':
+        specifier: workspace:*
+        version: link:../../packages/preset-content
       '@worldkit/three':
         specifier: workspace:*
         version: link:../../packages/three-world
@@ -127,7 +165,155 @@ importers:
         specifier: ^8.2.2
         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
 
-  packages/camera-collision: {}
+  packages/browser-capture:
+    dependencies:
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/camera-collision:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/cloud-generation-client: {}
+
+  packages/creator-host:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(zod@4.5.4)
+      '@worldkit/browser-capture':
+        specifier: workspace:*
+        version: link:../browser-capture
+      '@worldkit/preset-content':
+        specifier: workspace:*
+        version: link:../preset-content
+      '@worldkit/three':
+        specifier: workspace:*
+        version: link:../three-world
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
+      sharp:
+        specifier: 0.35.4
+        version: 0.35.4(@types/node@24.13.3)
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      '@types/three':
+        specifier: 0.185.4
+        version: 0.185.4
+      '@worldkit/episode-pipeline':
+        specifier: workspace:*
+        version: link:../episode-pipeline
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/episode-pipeline:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: 1.30.0
+        version: 1.30.0(zod@4.5.4)
+      '@worldkit/browser-capture':
+        specifier: workspace:*
+        version: link:../browser-capture
+      '@worldkit/cloud-generation-client':
+        specifier: workspace:*
+        version: link:../cloud-generation-client
+      '@worldkit/creator-host':
+        specifier: workspace:*
+        version: link:../creator-host
+      '@worldkit/three':
+        specifier: workspace:*
+        version: link:../three-world
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
+      lodash-es:
+        specifier: ^4.18.1
+        version: 4.18.1
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
+      sharp:
+        specifier: 0.35.4
+        version: 0.35.4(@types/node@24.13.3)
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      '@types/three':
+        specifier: 0.185.4
+        version: 0.185.4
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/preset-content:
+    dependencies:
+      '@worldkit/three':
+        specifier: workspace:*
+        version: link:../three-world
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      '@types/three':
+        specifier: 0.185.4
+        version: 0.185.4
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
 
   packages/three-world:
     dependencies:
@@ -143,16 +329,31 @@ importers:
       '@recast-navigation/generators':
         specifier: 0.43.1
         version: 0.43.1(patch_hash=6c5bd3e917bd258087cb1a62fcd821c8730cd3d5fe62a253ddb241ffd84d26b6)
-      '@whitebox-world/camera-collision':
+      '@worldkit/camera-collision':
         specifier: workspace:*
         version: link:../camera-collision
       three:
         specifier: 0.185.1
         version: 0.185.1
     devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
       '@types/three':
         specifier: 0.185.4
         version: 0.185.4
+      '@worldkit/browser-capture':
+        specifier: workspace:*
+        version: link:../browser-capture
+      '@worldkit/preset-content':
+        specifier: workspace:*
+        version: link:../preset-content
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.12)(yaml@2.9.0)
 
 packages:
 

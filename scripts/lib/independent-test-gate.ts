@@ -26,37 +26,38 @@ export interface IndependentTestCommandV1 {
 
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
+    { path: "apps/creator-cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-eval-asset-policy.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-eval-effort.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-eval-progress.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-eval.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-host-reliability.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-ray-cleanup.test.mjs", lane: "node" },
     { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
     { path: "deploy/three-creator-runtime/capsule.test.mjs", lane: "node" },
-    { path: "scripts/cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
-    { path: "scripts/cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-episode-scheduling.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-eval-asset-policy.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-eval-effort.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-eval-progress.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-eval.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-host-reliability.test.mjs", lane: "node" },
-    { path: "scripts/cloud/three-ray-cleanup.test.mjs", lane: "node" },
-    { path: "scripts/lib/canonical-json.test.mjs", lane: "node" },
-    { path: "scripts/lib/cloud-production-run.test.mjs", lane: "node" },
-    { path: "scripts/lib/episode-style-variants.test.mjs", lane: "node" },
-    { path: "scripts/lib/gpu-capture-batch.test.mjs", lane: "node" },
-    { path: "scripts/lib/lwdp-generation-client.test.mjs", lane: "node" },
-    { path: "scripts/lib/vertex-event-director.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/batch-integration.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/batch-resources.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/batch.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/cloud.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/cpu-routing.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/human-review-store.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/outbox.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/seedance-admission-service.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/seedance-preflight.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/seedance-production-budget.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/seedance-python.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/seedance-slot.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/streaming-overlay.test.mjs", lane: "node" },
-    { path: "scripts/three-episode/visuals.test.mjs", lane: "node" },
+    { path: "packages/cloud-generation-client/lwdp-generation-client.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/batch/batch-resources.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/batch/cloud-production-run.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/batch/gpu-capture-batch.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/batch/outbox.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/cloud/cloud-scheduling.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/cloud/cloud.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/cloud/cpu-routing.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/cloud/frozen-entrypoints.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/cloud/streaming-overlay.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/integration/batch-integration.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/integration/batch.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/review/human-review-store.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/seedance/seedance-admission-service.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/seedance/seedance-preflight.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/seedance/seedance-production-budget.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/seedance/seedance-python.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/seedance/seedance-slot.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/serialization/canonical-json.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/visuals/episode-style-variants.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/visuals/vertex-event-director.test.mjs", lane: "node" },
+    { path: "packages/episode-pipeline/tests/visuals/visuals.test.mjs", lane: "node" },
   ]);
 
 function fail(code: string, detail: string): never {
@@ -137,8 +138,11 @@ async function discoverMatchingFiles(input: {
   const matchedPaths: string[] = [];
   async function visit(relativeDirectory: string): Promise<void> {
     const absoluteDirectory = path.join(input.repositoryRoot, relativeDirectory);
-    const entries = await readdir(absoluteDirectory, { withFileTypes: true });
+    let entries;
+    try { entries = await readdir(absoluteDirectory, { withFileTypes: true }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
     await Promise.all(entries.map(async (entry) => {
+      if (["node_modules", "dist", ".git", "coverage"].includes(entry.name)) return;
       const relativePath = path.posix.join(relativeDirectory, entry.name);
       if (entry.isDirectory()) {
         await visit(relativePath);
@@ -154,21 +158,10 @@ async function discoverMatchingFiles(input: {
 export async function discoverIndependentTestFilesV1(
   repositoryRoot: string,
 ): Promise<IndependentTestDiscoveryV1> {
-  const [deployment, scripts] = await Promise.all([
-    discoverMatchingFiles({
-      repositoryRoot,
-      directory: "deploy",
-      matches: (filename) => filename.endsWith(".test.mjs"),
-    }),
-    discoverMatchingFiles({
-      repositoryRoot,
-      directory: "scripts",
-      matches: (filename) => filename.endsWith(".test.mjs"),
-    }),
-  ]);
-  return Object.freeze({
-    node: frozenPaths([...deployment, ...scripts].sort()),
-  });
+  const suites = await Promise.all(["deploy", "scripts", "packages", "apps"].map(directory =>
+    discoverMatchingFiles({repositoryRoot, directory, matches: filename => filename.endsWith(".test.mjs")}),
+  ));
+  return Object.freeze({node: frozenPaths(suites.flat().sort())});
 }
 
 export function parseIndependentTestSelectionV1(

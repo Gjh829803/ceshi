@@ -5,8 +5,8 @@ Build an independent Three/Rapier Creator runtime for Linux cloud evaluation.
 Run from the repository root:
 
 ```sh
-node scripts/cloud/three-capsule.mjs --stage-only
-node scripts/cloud/three-capsule.mjs --dependencies-only
+node apps/creator-cloud/three-capsule.mjs --stage-only
+node apps/creator-cloud/three-capsule.mjs --dependencies-only
 node --test deploy/three-creator-runtime/capsule.test.mjs
 ```
 
@@ -19,7 +19,7 @@ multiple dependency/build reports. Existing export directories are immutable.
 After the integrated SDK/tool source has been reviewed and frozen, pass that
 exact staged source hash to `--build --expected-source-hash sha256:<digest>`.
 This fails if the live source closure differs. The build invokes the fixed
-`scripts/three-creator/prebuild.ts` contract. It never
+`packages/creator-host/src/cli/prebuild.ts` contract. It never
 uploads files, invokes a model, changes shared workers or labels a provisional
 source as cloud-ready. The trusted prebuild/compile doctor has a five-minute
 timeout; Docker dependency/build phases have fifteen/twenty-minute timeouts.

@@ -1,0 +1,182 @@
+{
+  "id": "vehicle.observation-submarine",
+  "displayName": "单人观景潜艇 / Observation submarine",
+  "path": "vehicles/observation-sub.glb",
+  "uri": "./assets/subjects/18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f.glb",
+  "sha256": "18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f",
+  "byteLength": 279828,
+  "sourcePath": "assets/three-creator/presets/vehicles/observation-sub.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Hydrostatic buoyancy and ballast approximation; no fluid solver or pressure damage.",
+    "W/S propulsion, A/D yaw, Ctrl dives with ballast, Space surfaces, Q/E roll, Shift slows; hatch opens only at the surface."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "packages/creator-host/scripts/assets/export-submersible.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "locomotion.submarine"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "speed": 5,
+      "accel": 2.1,
+      "grip": 1.4,
+      "steer": 0.75,
+      "maxSpeed": 5,
+      "reverseSpeed": 2.2,
+      "slowSpeed": 2.5,
+      "groundSpeed": 5,
+      "coastDeceleration": 1.8,
+      "brakeDeceleration": 3.7800000000000002,
+      "brakeDamping": 2.8,
+      "groundDeceleration": 2.1,
+      "directionChangeDeceleration": 4.2,
+      "steeringResponse": 2.5,
+      "steeringReturn": 3,
+      "verticalAcceleration": 4.5,
+      "linearDamping": 0.5,
+      "verticalDamping": 2.6,
+      "drag": 0.18,
+      "dragQuadratic": 0.08,
+      "pitchResponse": 3,
+      "rollResponse": 3,
+      "throttleResponse": 2.5,
+      "minimumSpeed": 0,
+      "launchSpeed": 22,
+      "jumpSpeed": 6.3,
+      "id": "observation-submarine",
+      "name": "单人观景潜艇",
+      "en": "Observation submarine",
+      "mode": "submarine",
+      "archetype": "submarine",
+      "visualVariant": "bubble-sub",
+      "kernel": "K07",
+      "color": "#d4ad38",
+      "spawn": [
+        205,
+        -1.88,
+        -105
+      ],
+      "yaw": 1.5707963267948966,
+      "radius": 1.6,
+      "seat": [
+        0,
+        0.24,
+        0.25
+      ],
+      "camera": 6.5,
+      "characterPose": "submarine",
+      "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
+      "bodyPhysics": {
+        "kind": "submersible",
+        "mass": 720,
+        "centerOfMassHeight": 0,
+        "driveRadius": 0.4,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              552.5
+            ],
+            [
+              1800,
+              765
+            ],
+            [
+              3200,
+              850
+            ],
+            [
+              4500,
+              807.5
+            ],
+            [
+              6200,
+              552.5
+            ]
+          ],
+          "forwardRatios": [
+            1.5
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 2,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 127.5,
+          "dragArea": 2,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        },
+        "water": {
+          "displacement": 2.4,
+          "depth": 2.2,
+          "bottom": 0.78,
+          "damping": 2.6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.55,
+          1.2,
+          1.55
+        ],
+        "offset": [
+          0,
+          0.15,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.24,
+        0.25
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      1.55,
+      1.2,
+      1.55
+    ],
+    "offset": [
+      0,
+      0.15,
+      0
+    ]
+  }
+}

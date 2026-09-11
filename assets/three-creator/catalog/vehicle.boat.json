@@ -1,6 +1,6 @@
 {
   "id": "vehicle.boat",
-  "displayName": "水上快艇 / WAKE",
+  "displayName": "水上快艇 / Motorboat",
   "path": "vehicles/boat.glb",
   "uri": "./assets/subjects/9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0.glb",
   "sha256": "9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "boat",
       "name": "水上快艇",
-      "en": "WAKE",
+      "en": "Motorboat",
       "mode": "boat",
       "kernel": "K06",
       "color": "#68baf1",

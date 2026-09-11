@@ -161,7 +161,7 @@ it('rebases ordinary follow on a newly controlled subject without moving the cam
   } finally { world.dispose(); }
 });
 
-it('preserves the current composition when boarding and leaving a mounted subject', async () => {
+it('translates the current framing to the subject when boarding and leaving with zero follow damping', async () => {
   const world = await createMountedFixture();
   try {
     authoredOpening(world);
@@ -169,13 +169,19 @@ it('preserves the current composition when boarding and leaving a mounted subjec
     world.step({}, 30);
     for (const transition of [() => world.humanoid!.enter('horse-1'), () => world.humanoid!.exit()]) {
       const before = (world.camera as THREE.PerspectiveCamera).clone();
+      const previous=world.snapshot().camera;
       expect(transition()).toBe(true);
-      expectPose(world, before);
+      const switched=world.snapshot().camera;
+      const displacement=new THREE.Vector3(...switched.targetPositionWorldMetersXYZ!).sub(new THREE.Vector3(...previous.targetPositionWorldMetersXYZ!));
+      expectPose(world, before, displacement);
+      expect(switched.desiredArmDistanceMeters).toBe(previous.desiredArmDistanceMeters);
+      expect(switched.desiredYawRadians).toBe(previous.desiredYawRadians);
+      expect(switched.desiredPitchRadians).toBe(previous.desiredPitchRadians);
       const subjectId = world.humanoid!.snapshot().mountedInstanceId ?? 'person';
       const switchedSubject = { world, subjectId };
       const start = subjectPosition(switchedSubject);
       world.step({});
-      expectPose(world, before, subjectPosition(switchedSubject).sub(start));
+      expectPose(world, before, displacement.add(subjectPosition(switchedSubject).sub(start)));
       world.step({}, 60);
       expect(world.camera.quaternion.angleTo(before.quaternion)).toBeLessThan(2e-7);
       expect((world.camera as THREE.PerspectiveCamera).fov).toBe(before.fov);

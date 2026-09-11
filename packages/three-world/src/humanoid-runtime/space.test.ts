@@ -1,5 +1,5 @@
-import {createSpaceTrainingMap} from '../../../../shared/preset-content/environment/space-training';
-import {getMap} from '../../../../shared/preset-content/environment/maps';
+import {createSpaceTrainingMap} from '@worldkit/preset-content/environment/space-training';
+import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';
 import {AnimationClip,Box3,SkinnedMesh} from 'three';
 import {parseFixtureGlb} from './textured-glb-fixture';
@@ -16,10 +16,10 @@ import {SPACE_FLIGHT_PRESETS} from './motion-families/space/config';
 import {setSpaceDriveMode,requestSpaceDock,spaceTelemetry} from './motion-families/space/commands';
 import {resetRigidState} from './motion-families/space/physics-state';
 import {spaceFamily} from './motion-families/space/family';
-import {SPECS} from '../../../../shared/preset-content/config';
-import {buildSpaceModel} from '../../../../shared/preset-content/space-model';
+import {SPECS} from '@worldkit/preset-content/config';
+import {buildSpaceModel} from '@worldkit/preset-content/space-model';
 
-const spec:VehicleSpec={...SPECS.find(s=>s.id==='space')!,spawn:[0,20,0],spaceFlight:{...SPACE_FLIGHT_PRESETS.shuttle,driveMode:'inertial',dockingPorts:[{id:'bay',name:'Bay',positionMetersXYZ:[0,20,4],rotationXYZW:[0,0,0,1]}]}};
+const spec:VehicleSpec={...SPECS.find(s=>s.id==='spacecraft')!,spawn:[0,20,0],spaceFlight:{...SPACE_FLIGHT_PRESETS.shuttle,driveMode:'inertial',dockingPorts:[{id:'bay',name:'Bay',positionMetersXYZ:[0,20,4],rotationXYZW:[0,0,0,1]}]}};
 const map:EnvironmentDefinition={id:'space-test',name:'Space',description:'',bounds:{min:[-500,-100,-500],max:[500,500,500]},boxes:[{id:'floor',position:[0,-2,0],size:[1000,1,1000]}],water:[],regions:[{id:'flight',name:'Flight',description:'',center:[0,0,0],size:[1000,1000],color:'#ddd',modes:['spacecraft','wheeled','plane','dragon']}],spawns:[{id:'bay',name:'Bay',vehicleId:'space',position:[0,20,0],yaw:0,regionId:'flight'}],playerSpawn:[4,.025,0]};
 beforeAll(initEnvironmentQueries);
 function fixture(overrides:Partial<VehicleSpec>={},scene=map){
@@ -74,14 +74,14 @@ describe('native space family',()=>{
   }finally{f.dispose();}
  });
  it('keeps each hull/config/mode independent and resets its own state',()=>{
-  const f=fixture(),saucer=createVehicle(SPECS.find(s=>s.id==='survey-space')!);try{const before=spaceTelemetry(saucer)!;f.step({forward:1},60);setSpaceDriveMode(f.v,'assisted');expect(spaceTelemetry(saucer)).toEqual(before);
+  const f=fixture(),saucer=createVehicle(SPECS.find(s=>s.id==='survey-spacecraft')!);try{const before=spaceTelemetry(saucer)!;f.step({forward:1},60);setSpaceDriveMode(f.v,'assisted');expect(spaceTelemetry(saucer)).toEqual(before);
    f.v.spec.spaceFlight!.massKilograms=1234;expect(SPACE_FLIGHT_PRESETS.shuttle.massKilograms).toBe(2160);
    resetRigidState(f.v);expect(spaceTelemetry(f.v)).toMatchObject({driveMode:'inertial',docking:null});
    const other=createVehicle(SPECS.find(s=>s.id==='rover')!);expect(()=>spaceFamily.step!(other,emptyInput(),1/60,0,f.q)).toThrow('MOTION_PHYSICS_OWNER_MISMATCH');expect(()=>setSpaceDriveMode(other,'inertial')).toThrow('SPACE_VEHICLE_NOT_MOUNTED');
   }finally{f.dispose();}
  });
  it('flies the heavier circular saucer with its own inertia and collider',()=>{
-  const f=fixture({...SPECS.find(s=>s.id==='survey-space')!,spawn:[0,20,0]});try{f.step({forward:1},60);expect(f.v.velocity.z).toBeGreaterThan(6);expect(f.v.velocity.z).toBeLessThan(8);f.step({steer:1},120);expect(f.v.rotation.angleTo(new Quaternion())).toBeGreaterThan(.2);
+  const f=fixture({...SPECS.find(s=>s.id==='survey-spacecraft')!,spawn:[0,20,0]});try{f.step({forward:1},60);expect(f.v.velocity.z).toBeGreaterThan(6);expect(f.v.velocity.z).toBeLessThan(8);f.step({steer:1},120);expect(f.v.rotation.angleTo(new Quaternion())).toBeGreaterThan(.2);
   }finally{f.dispose();}
  });
  it('approaches a configured bay, latches, holds, then releases for manual flight',()=>{
@@ -122,7 +122,7 @@ async function loadSpaceDriver(){
 }
 
 // 实际可见人物、骨架与驾驶动作；只替代 Node 中的纹理解码。
-it.each(['space','survey-space'])('fits the current Source101 driver in %s through thrust and bank, with an eye camera',async id=>{
+it.each(['spacecraft','survey-spacecraft'])('fits the current Source101 driver in %s through thrust and bank, with an eye camera',async id=>{
  const character=await loadSpaceDriver();
  const config={...SPECS.find(s=>s.id===id)!,spawn:[0,20,0] as [number,number,number]},model=buildSpaceModel(config);
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:character.root,animation:character},vehicles:[{instanceId:'craft',assetId:id,spec:config,object:model.root}]}});
@@ -149,8 +149,8 @@ it('registers a separate space training map with safe real berths and no foreign
  const training=createSpaceTrainingMap();expect(getMap('space-training').name).toBe('太空 · 飞行训练场');
  const vehicles=SPECS.map(spec=>({instanceId:spec.id,assetId:spec.id,spec,object:new Group()}));
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:training,character:{instanceId:'person',object:new Group()},vehicles}});
- try{const r=world.humanoid!,sim=r.simulation;expect(sim.vehicles.filter(v=>sim.available(v)).map(v=>v.spec.id)).toEqual(['space','survey-space']);
-  for(const id of ['space','survey-space']){
+ try{const r=world.humanoid!,sim=r.simulation;expect(sim.vehicles.filter(v=>sim.available(v)).map(v=>v.spec.id)).toEqual(['spacecraft','survey-spacecraft']);
+  for(const id of ['spacecraft','survey-spacecraft']){
    const v=sim.vehicles.find(v=>v.spec.id===id)!,spawn=training.spawns.find(s=>s.vehicleId===id)!;
    expect(r.prepare(id,spawn)).toBe(true);expect(r.enter(id)).toBe(true);world.step({},60);
    expect(v.position.y).toBeCloseTo(.8,3);r.command({type:'space.dock',portId:'home'});world.step({},60);expect(spaceTelemetry(v)!.docking?.status).toBe('docked');
@@ -166,7 +166,7 @@ it('routes space commands and descriptors to the named mounted actor without cha
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:training,character:{instanceId:'player',object:new Group()},vehicles}});
  try{
   const runtime=world.humanoid!,character=await loadSpaceDriver();character.root.position.set(30,.04,0);world.addCharacter({id:'npc',humanoid:character});
-  for(const [actorId,instanceId] of [['player','space'],['npc','survey-space']] as const){
+  for(const [actorId,instanceId] of [['player','spacecraft'],['npc','survey-spacecraft']] as const){
    const spawn=training.spawns.find(spawn=>spawn.vehicleId===instanceId)!;
    runtime.command({type:'vehicle.prepare',actorId,instanceId,spawn});runtime.command({type:'vehicle.enter',actorId,instanceId});
   }

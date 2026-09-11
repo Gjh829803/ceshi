@@ -1,7 +1,7 @@
 import {readCameraWorldPose} from './camera-observation';
 import {FOLLOW_CAMERA_DEFAULTS,recenterCameraYaw} from './config/follow-camera';
 import * as THREE from 'three';
-import { CameraCollisionSolver, type CameraCollisionRequest, type CameraCollisionSolution, type CameraHardDecolliderTransactionStateV1 } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver, type CameraCollisionRequest, type CameraCollisionSolution, type CameraHardDecolliderTransactionStateV1 } from '@worldkit/camera-collision';
 import type { CameraArmHit, PhysicsPort, Vec3 } from './engine-contracts.js';
 import type {CameraFollowViewOptions,CameraPerspective,CameraOpening} from './contracts.js';
 import type { CameraSubjectAdapter, CameraSubjectBody, CameraSubjectSample } from './camera-subject.js';
@@ -59,7 +59,7 @@ type RigMemory = {
   mode: CameraRigState['mode']; follow: Follow | undefined; yawRadians: number;
   zoomDistanceMeters: number; transitionElapsedSeconds: number;
   transitionPosition: THREE.Vector3; transitionQuaternion: THREE.Quaternion;
-  framingRotation: THREE.Quaternion; smoothedSubject: THREE.Vector3;
+  framingRotation: THREE.Quaternion; framingRollRadians:number; smoothedSubject: THREE.Vector3;
   safeArmDistanceMeters: number | undefined; actualArmDistanceMeters: number | undefined;
   obstructionEntityId: string | undefined; collisionPhase: CameraRigState['collisionPhase'];
   resolvedTarget: THREE.Vector3 | undefined;
@@ -79,7 +79,7 @@ function validDeltaSeconds(dt: number): void {
 }
 function initialMemory(): RigMemory {
   return { perspective:'third-person',firstPersonPitchRadians:0,thirdPersonNear:undefined,mode: 'authored', follow: undefined, yawRadians: 0, zoomDistanceMeters: 0, transitionElapsedSeconds: 0,
-    transitionPosition: new THREE.Vector3(), transitionQuaternion: new THREE.Quaternion(), framingRotation: new THREE.Quaternion(),
+    transitionPosition: new THREE.Vector3(), transitionQuaternion: new THREE.Quaternion(), framingRotation: new THREE.Quaternion(), framingRollRadians:0,
     smoothedSubject: new THREE.Vector3(), safeArmDistanceMeters: undefined, actualArmDistanceMeters: undefined,
     obstructionEntityId: undefined, collisionPhase: undefined, resolvedTarget: undefined,
     headingHoldSeconds:0,skipHeadingUpdate:true,headingTargetYawRadians:null };
@@ -172,7 +172,7 @@ export class ThreeCameraRig {
     this.memory = { ...initialMemory(), mode: follow.activateOnInput ? 'follow-pending' : 'follow', follow,
       yawRadians: opening?.yawRadians ?? Math.atan2(-direction.x, -direction.z),
       zoomDistanceMeters: follow.distanceMeters, transitionPosition: position, transitionQuaternion: rotation,
-      framingRotation: opening?.framingRotation ?? new THREE.Quaternion(), smoothedSubject: subject,
+      framingRotation: opening?.framingRotation ?? new THREE.Quaternion(), framingRollRadians:opening?.rollRadians??0, smoothedSubject: subject,
       headingHoldSeconds:sample.heading?.recenterDelaySeconds??0 };
     this.decollider.reset(); this.solveTick = 0;
     if(view?.defaultPerspective==='first-person')this.setPerspective('first-person');
@@ -184,13 +184,18 @@ export class ThreeCameraRig {
     if (typeof entityId !== 'string' || !entityId.trim()) throw new Error('WORLD_CAMERA_TARGET_REQUIRED');
     const sample = this.subjectSample(entityId), subject = new THREE.Vector3(...sample.positionWorldMetersXYZ);
     const height = previous.targetHeightFromSubject ? (sample.body ? sample.body.heightMeters * .65 : 1.3) : previous.targetHeightMeters;
-    const opening = previous.framingMode==='preserve-opening'&&this.perspective==='third-person'
-      ? this.readOpening(subject.clone().add(new THREE.Vector3(0, height, 0))) : undefined;
     this.memory.follow = { ...previous, targetEntityId: entityId, targetHeightMeters: height };
-    if(opening){
-      this.memory.follow.distanceMeters=opening.distanceMeters;this.memory.follow.pitchRadians=opening.pitchRadians;
-      this.memory.yawRadians=opening.yawRadians;this.memory.zoomDistanceMeters=opening.distanceMeters;
-      this.memory.framingRotation.copy(opening.framingRotation);this.memory.smoothedSubject.copy(subject);
+    if(previous.framingMode==='preserve-opening'&&this.perspective==='third-person'){
+      // Keep the established screen framing and user orbit. Reading an opening
+      // from a retracted vehicle camera would save the dismounted actor off-screen.
+      if(this.mode==='follow-pending'){
+        const delta=subject.clone().sub(this.memory.smoothedSubject);delta.y+=height-previous.targetHeightMeters;
+        this.applyWorldPose(this.camera.getWorldPosition(new THREE.Vector3()).add(delta),this.camera.getWorldQuaternion(new THREE.Quaternion()));
+        this.memory.smoothedSubject.copy(subject);
+      }else{
+        // Begin the follow translation at the previous pivot, including a height change.
+        this.memory.smoothedSubject.y+=previous.targetHeightMeters-height;
+      }
     }
     this.camera.getWorldPosition(this.memory.transitionPosition);
     this.camera.getWorldQuaternion(this.memory.transitionQuaternion);
@@ -257,6 +262,7 @@ export class ThreeCameraRig {
         this.memory.yawRadians = opening.yawRadians;
         follow.distanceMeters = opening.distanceMeters; follow.pitchRadians = opening.pitchRadians;
         this.memory.framingRotation.copy(opening.framingRotation);
+        this.memory.framingRollRadians=opening.rollRadians;
         this.memory.zoomDistanceMeters = opening.distanceMeters; this.memory.smoothedSubject.copy(subject);
       }
       this.memory.mode = 'follow'; this.memory.transitionElapsedSeconds = 0;
@@ -420,9 +426,14 @@ export class ThreeCameraRig {
     return new THREE.Quaternion().setFromEuler(new THREE.Euler(-pitchRadians, yawRadians, 0, 'YXZ'));
   }
   private framedRotation(follow: Follow): THREE.Quaternion {
-    return this.orbitRotation(this.memory.yawRadians, follow.pitchRadians).multiply(this.memory.framingRotation);
+    const rotation=this.orbitRotation(this.memory.yawRadians, follow.pitchRadians).multiply(this.memory.framingRotation);
+    // An off-axis target (for example after boarding) must not turn pitch orbit
+    // into persistent horizon roll. Retain the view direction and authored roll.
+    const view=new THREE.Euler().setFromQuaternion(rotation,'YXZ');
+    view.z=this.memory.framingRollRadians;
+    return rotation.setFromEuler(view);
   }
-  private readOpening(target: THREE.Vector3,camera=this.camera): { distanceMeters: number; yawRadians: number; pitchRadians: number; framingRotation: THREE.Quaternion } {
+  private readOpening(target: THREE.Vector3,camera=this.camera): { distanceMeters: number; yawRadians: number; pitchRadians: number; framingRotation: THREE.Quaternion; rollRadians:number } {
     const position = camera.getWorldPosition(new THREE.Vector3()), rotation = camera.getWorldQuaternion(new THREE.Quaternion());
     if (![...position.toArray(), ...rotation.toArray()].every(Number.isFinite)) throw new Error('WORLD_CAMERA_POSE_INVALID');
     const offset = position.clone().sub(target), distanceMeters = offset.length();
@@ -431,7 +442,7 @@ export class ThreeCameraRig {
     const yawRadians = distanceMeters > 1e-12 ? Math.atan2(offset.x, offset.z) : Math.atan2(-direction.x, -direction.z);
     const pitchRadians = distanceMeters > 1e-12 ? Math.asin(THREE.MathUtils.clamp(offset.y / distanceMeters, -1, 1)) : 0;
     const framingRotation = this.orbitRotation(yawRadians, pitchRadians).invert().multiply(rotation);
-    return { distanceMeters, yawRadians, pitchRadians, framingRotation };
+    return { distanceMeters, yawRadians, pitchRadians, framingRotation, rollRadians:new THREE.Euler().setFromQuaternion(rotation,'YXZ').z };
   }
   private lookRotation(eye: THREE.Vector3, target: THREE.Vector3): THREE.Quaternion { return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(eye, target, this.camera.up)); }
   private openingCamera(opening:CameraOpening):THREE.PerspectiveCamera {

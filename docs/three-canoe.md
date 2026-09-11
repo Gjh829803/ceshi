@@ -19,7 +19,7 @@ F 上下舟；T 切换第三人称、第一人称和越肩视角。
 四点采样浮力使船体平衡原点约高于水面 0.112 m。
 前进上限 3.1 m/s、倒划上限 1.2 m/s、划桨峰值加速度 1.9 m/s²；
 线性水阻 0.11 /s，速度二次阻力系数 0.11 /m。
-这些参数通过 [驾驶配置](../shared/preset-content/canoe.ts) 和
+这些参数通过 [驾驶配置](../packages/preset-content/src/vehicles/canoe/spec.ts) 和
 SDK 的 `humanoid.CANOE_WATER` 导出。
 
 桨叶浸水时才施加推进和偏航脉冲；出水回桨无推力。
@@ -28,14 +28,14 @@ SDK 的 `humanoid.CANOE_WATER` 导出。
 
 相关实现：
 
-- [木舟模型](../shared/preset-content/canoe-model.ts)
-- [浮力与单桨运动](../packages/three-world/src/humanoid-runtime/kayak.ts)
+- [木舟模型](../packages/preset-content/src/vehicles/canoe/model.ts)
+- [浮力与单桨运动](../packages/three-world/src/humanoid-runtime/motion-families/surface-vessel/paddling.ts)
 - [握桨与水面反馈](../packages/three-world/src/humanoid-runtime/kayak-visual.ts)
 - [物理和真实骨架测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)
-- [浏览器真实按键验证](../scripts/three-creator/canoe-browser-smoke.ts)
-- [Episode 路线输入测试](../scripts/three-episode/vehicle-route.test.ts)
+- [浏览器真实按键验证](../packages/creator-host/scripts/smoke/canoe-browser-smoke.ts)
+- [Episode 路线输入测试](../packages/episode-pipeline/tests/planning/vehicle-route.test.ts)
 
-执行 `pnpm exec tsx scripts/three-creator/export-canoe.ts` 导出
+执行 `pnpm exec tsx packages/creator-host/scripts/assets/export-canoe.ts` 导出
 `assets/three-creator/presets/vehicles/canoe.glb` 并更新 `vehicle.canoe` 目录哈希。
 SDK 修改后执行 `pnpm build` 并重启预览。
 在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import type { CameraCollisionRequest } from '@whitebox-world/camera-collision';
+import type { CameraCollisionRequest } from '@worldkit/camera-collision';
 import { ThreeCameraRig } from './camera.js';
 import type { CameraSubjectAdapter, CameraSubjectSample } from './camera-subject.js';
 import type { Vec3 } from './engine-contracts.js';
@@ -16,7 +16,7 @@ function expectPose(camera: THREE.Camera, pose: ReturnType<typeof worldPose>): v
 }
 
 describe('camera subject adapter contract', () => {
-  it.each([true, false])('retargets without changing a parented composition (pending=%s)', (pending) => {
+  it.each([true, false])('translates parented framing to the new subject while retaining orbit and lens (pending=%s)', (pending) => {
     const parent = new THREE.Group(); parent.position.set(3, 8, -4); parent.rotation.set(.1, .7, -.2);
     const camera = new THREE.PerspectiveCamera(38, 1.8, .07, 3000); parent.add(camera);
     camera.position.set(5, 7, 13); camera.rotation.set(.25, -.3, .12); camera.zoom = 1.4;
@@ -30,17 +30,22 @@ describe('camera subject adapter contract', () => {
     const rig = new ThreeCameraRig(camera, clear, adapter);
     rig.setFollow({ targetEntityId: 'person', activateOnInput: pending, followHalfLifeSeconds: 0 });
     rig.sealInitialState();
-    if (!pending) { rig.updateDesired({ yawDeltaRadians: .35, pitchDeltaRadians: -.1, distanceDeltaMeters: 1 }, 0); rig.update(0); }
+    if (!pending) { rig.updateDesired({ yawDeltaRadians: .35, pitchDeltaRadians: -.1, distanceDeltaMeters: 1 }, 0); rig.update(5); }
     const before = worldPose(camera);
-    rig.retarget('vehicle'); expectPose(camera, before);
+    const orbit=rig.snapshot(),transfer=new THREE.Vector3(4,1+(3-1.8)*.65,-3);
+    const transferred={position:before.position.clone().add(transfer),quaternion:before.quaternion};
+    rig.retarget('vehicle'); expectPose(camera, pending?transferred:before);
     expect(rig.mode).toBe(pending ? 'follow-pending' : 'follow');
-    rig.updateDesired({ activate: true }, 0); rig.update(0); expectPose(camera, before);
+    rig.updateDesired({ activate: true }, 0); rig.update(0); expectPose(camera, transferred);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(orbit.desiredArmDistanceMeters!,8);
+    expect(rig.snapshot().desiredYawRadians).toBeCloseTo(orbit.desiredYawRadians!,8);
+    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(orbit.desiredPitchRadians!,8);
     expect(rig.snapshot().targetPositionWorldMetersXYZ).toEqual([4, 2.95, -3]);
     const delta = new THREE.Vector3(1, .2, -2); vehiclePosition = new THREE.Vector3(...vehiclePosition).add(delta).toArray();
-    rig.update(1 / 60); expectPose(camera, { position: before.position.clone().add(delta), quaternion: before.quaternion });
+    rig.update(1 / 60); expectPose(camera, { position: transferred.position.clone().add(delta), quaternion: before.quaternion });
     expect(camera.fov).toBe(38); expect(camera.near).toBe(.07); expect(camera.far).toBe(3000);
     expect(camera.projectionMatrix.equals(projection)).toBe(true);
-    const moved = worldPose(camera); rig.retarget('person'); rig.update(0); expectPose(camera, moved);
+    rig.retarget('person'); rig.update(0); expectPose(camera, before);
     rig.reset(); expect(rig.targetEntityId).toBe('person'); expect(rig.mode).toBe(pending ? 'follow-pending' : 'follow');
     expect(camera.projectionMatrix.equals(projection)).toBe(true);
   });
@@ -50,10 +55,11 @@ describe('camera subject adapter contract', () => {
     let sample: CameraSubjectSample = { id: 'person', positionWorldMetersXYZ: [0, 0, 0], body: { heightMeters: 1.8, radiusMeters: .35 } };
     const rig = new ThreeCameraRig(camera, clear, { sample: () => sample });
     rig.setFollow({ targetEntityId: 'controlled', framingMode: 'preserve-opening', activateOnInput: false, targetHeightMeters: 1.1 });
-    rig.updateDesired({ yawDeltaRadians: .4 }, 0); rig.update(0); const before = worldPose(camera);
+    rig.updateDesired({ yawDeltaRadians: .4 }, 0); rig.update(0); const before = worldPose(camera),orbit=rig.snapshot();
     sample = { id: 'horse', positionWorldMetersXYZ: [1, .5, 0], body: { heightMeters: 3, radiusMeters: .6 } };
     rig.retarget('controlled'); expectPose(camera, before); rig.update(0); expectPose(camera, before);
-    expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(before.position.distanceTo(new THREE.Vector3(1, 1.6, 0)), 8);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBe(orbit.desiredArmDistanceMeters);
+    rig.update(5);expectPose(camera,{position:before.position.clone().add(new THREE.Vector3(1,.5,0)),quaternion:before.quaternion});
     expect(rig.snapshot().targetPositionWorldMetersXYZ).toEqual([1, 2.45, 0]);
   });
 

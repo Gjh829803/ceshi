@@ -1,6 +1,6 @@
 {
   "id": "vehicle.patrol-boat",
-  "displayName": "水域巡逻艇 / PATROL",
+  "displayName": "水域巡逻艇 / Patrol boat",
   "path": "vehicles/patrol-boat.glb",
   "uri": "./assets/subjects/96a590c8a2378bb5648f9fd01d7bb14ab4c6bd5686154d6322ec8b9642936bf7.glb",
   "sha256": "96a590c8a2378bb5648f9fd01d7bb14ab4c6bd5686154d6322ec8b9642936bf7",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "patrol-boat",
       "name": "水域巡逻艇",
-      "en": "PATROL",
+      "en": "Patrol boat",
       "mode": "boat",
       "kernel": "K06",
       "color": "#315f91",

@@ -37,7 +37,7 @@ export class WorldAssets implements Assets {
       if (!Array.isArray(bindings) || new Set(bindings).size !== bindings.length || bindings.some(value => typeof value !== 'string' || !value.trim())) {
         throw new Error(`ASSET_LOCOMOTION_BINDING_INVALID: ${id}`);
       }
-      if (bindings.includes('ground.standard') && ['idle', 'walk', 'run', 'jump'].some(actionId => !Object.hasOwn(definition.actions, actionId))) {
+      if (bindings.includes('locomotion.ground') && ['idle', 'walk', 'run', 'jump'].some(actionId => !Object.hasOwn(definition.actions, actionId))) {
         throw new Error(`ASSET_LOCOMOTION_ACTION_MISSING: ${id}`);
       }
       this.definitions.set(id, definition);

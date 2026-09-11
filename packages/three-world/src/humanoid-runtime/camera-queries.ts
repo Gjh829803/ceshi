@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { CameraCollisionProbeResult } from '@whitebox-world/camera-collision';
+import type { CameraCollisionProbeResult } from '@worldkit/camera-collision';
 import type { Vec3 } from '../contracts';
 import {contactColliderVolume} from '../physics-box';
 

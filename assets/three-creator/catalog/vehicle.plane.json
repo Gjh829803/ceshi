@@ -1,6 +1,6 @@
 {
   "id": "vehicle.plane",
-  "displayName": "动力飞机 / AERO",
+  "displayName": "动力飞机 / Powered airplane",
   "path": "vehicles/plane.glb",
   "uri": "./assets/subjects/5532ea472b92b3362ba78a53e338baabc5d01ec94ce01ac872a5e8e3f1b87637.glb",
   "sha256": "5532ea472b92b3362ba78a53e338baabc5d01ec94ce01ac872a5e8e3f1b87637",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "plane",
       "name": "动力飞机",
-      "en": "AERO",
+      "en": "Powered airplane",
       "mode": "plane",
       "kernel": "K09",
       "color": "#e27e58",

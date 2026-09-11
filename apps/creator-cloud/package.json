@@ -1,0 +1,18 @@
+{
+  "name": "@worldkit/creator-cloud",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./three-capsule": "./three-capsule.mjs",
+    "./three-eval-mcp-bridge": "./three-eval-mcp-bridge.mjs"
+  },
+  "dependencies": {
+    "@worldkit/cloud-generation-client": "workspace:*",
+    "lodash-es": "^4.18.1",
+    "@worldkit/creator-host": "workspace:*"
+  },
+  "scripts": {
+    "test": "node --test *.test.mjs"
+  }
+}

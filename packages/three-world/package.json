@@ -8,14 +8,23 @@
     "./testing": "./src/testing.ts"
   },
   "dependencies": {
-    "three": "0.185.1",
     "@dimforge/rapier3d-compat": "file:../../vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.2-575cd152b6fe51d6.tgz",
     "@noble/hashes": "1.8.0",
     "@recast-navigation/core": "0.43.1",
     "@recast-navigation/generators": "0.43.1",
-    "@whitebox-world/camera-collision": "workspace:*"
+    "@worldkit/camera-collision": "workspace:*",
+    "three": "0.185.1"
   },
   "devDependencies": {
-    "@types/three": "0.185.4"
+    "@types/three": "0.185.4",
+    "@worldkit/browser-capture": "workspace:*",
+    "@worldkit/preset-content": "workspace:*",
+    "typescript": "^5.9.2",
+    "@types/node": "^24.3.0",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. packages/three-world",
+    "typecheck": "tsc --noEmit"
   }
 }

@@ -6,10 +6,10 @@ import {createWorld} from '../index';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle} from './simulation';
 import {vehicleDriveTelemetry} from './vehicle-dynamics';
-import {SPECS} from '../../../../shared/preset-content/config';
+import {SPECS} from '@worldkit/preset-content/config';
 import type {EnvironmentDefinition} from './environment/types';
 
-const added=['atv','bus','tank','unicycle','sled','ski','kayak','canoe','raft','jetski','observation-sub'];
+const added=['atv','bus','tank','unicycle','sled','ski','kayak','canoe','raft','jetski','observation-submarine'];
 const map:EnvironmentDefinition={id:'native-vehicles',name:'Native vehicles',description:'',bounds:{min:[-500,-50,-500],max:[500,100,500]},boxes:[{id:'floor',position:[0,-21,0],size:[1000,2,1000]}],water:[{id:'water',min:[-500,-20,-500],max:[500,0,500],surface:0}],regions:[],spawns:[],playerSpawn:[20,0,20]};
 beforeAll(initEnvironmentQueries);
 function fixture(id:string,wall=false){
@@ -28,7 +28,7 @@ it.each(added)('%s submits intent to the one physics clock, drives and exposes i
     expect([...v.position.toArray(),...v.rotation.toArray(),v.speed]).toSatisfy(values=>values.every(Number.isFinite));
     const state=JSON.stringify(v),sample=vehicleDriveTelemetry(v)!;
     expect(sample.speed).toBe(v.speed);for(let n=0;n<10;n++)expect(vehicleDriveTelemetry(v)).toEqual(sample);expect(JSON.stringify(v)).toBe(state);
-    if(['atv','bus','tank','jetski','observation-sub'].includes(id)){expect(sample.kind).toBe('engine');expect(sample.rpm).toBeGreaterThan(850);expect(sample.effort).toBeGreaterThan(.9);}
+    if(['atv','bus','tank','jetski','observation-submarine'].includes(id)){expect(sample.kind).toBe('engine');expect(sample.rpm).toBeGreaterThan(850);expect(sample.effort).toBeGreaterThan(.9);}
     else {expect(sample.kind).not.toBe('engine');expect(sample.rpm).toBe(0);}
   }finally{q.dispose();}
 });
@@ -39,7 +39,7 @@ it.each(added)('%s is stopped by the shared rigid body collision solver',id=>{
     expect(v.position.y).toBeGreaterThan(-22);
   }finally{q.dispose();}
 });
-it.each(['atv','tank','canoe','kayak','raft','observation-sub'])('%s keeps camera meshes cached while its independent physics updates the pose',id=>{
+it.each(['atv','tank','canoe','kayak','raft','observation-submarine'])('%s keeps camera meshes cached while its independent physics updates the pose',id=>{
   const {q,v,run}=fixture(id),root=new Group(),panel=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());
   panel.scale.set(1,1.1,.9);root.add(panel);v.rotation.setFromAxisAngle(new Vector3(0,1,0),.7);
   const query=new VehicleCameraQueries([{instanceId:id,object:root}]),build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');

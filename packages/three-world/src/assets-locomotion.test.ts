@@ -8,7 +8,7 @@ import { WorldAssets } from './assets-library';
 import { createWorld } from './world';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
-const humanoid = catalog.assets.find(asset => asset.id === 'humanoid.source-101')! as unknown as AssetDefinition & { sourcePath: string };
+const humanoid = catalog.assets.find(asset => asset.id === 'humanoid.uefn-mannequin')! as unknown as AssetDefinition & { sourcePath: string };
 const instances: AssetInstance[] = [];
 async function load() {
   const instance = await loadAsset(humanoid, { fetchBytes: () => readFile(resolve(humanoid.sourcePath)) });

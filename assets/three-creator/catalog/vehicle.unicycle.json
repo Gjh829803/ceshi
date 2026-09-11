@@ -1,6 +1,6 @@
 {
   "id": "vehicle.unicycle",
-  "displayName": "独轮车 / UNICYCLE",
+  "displayName": "独轮车 / Unicycle",
   "path": "vehicles/unicycle.glb",
   "uri": "./assets/subjects/9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0.glb",
   "sha256": "9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-unicycle.ts"
+    "generator": "packages/creator-host/scripts/assets/export-unicycle.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.unicycle"
+    "locomotion.unicycle"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "unicycle",
       "name": "独轮车",
-      "en": "UNICYCLE",
+      "en": "Unicycle",
       "mode": "unicycle",
       "archetype": "unicycle",
       "kernel": "K02",

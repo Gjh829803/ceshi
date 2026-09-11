@@ -8,7 +8,7 @@ import { validateEnvironment } from './humanoid-runtime/map-validation.js';
 import type { HumanoidProfile, VehicleInstance } from './humanoid-runtime/runtime.js';
 import type { AssetDefinition } from './engine-contracts.js';
 
-export const DEFAULT_HUMANOID_ASSET_ID = 'humanoid.source-101';
+export const DEFAULT_HUMANOID_ASSET_ID = 'humanoid.uefn-mannequin';
 export interface HumanoidResource { readonly path:string; readonly uri:string }
 export type HumanoidAssetDefinition = AssetDefinition & { readonly resources?:readonly HumanoidResource[] };
 export type HumanoidWorldOptions = Omit<WorldOptions,'humanoid'|'assetDefinitions'|'boundaries'> & {

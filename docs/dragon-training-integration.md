@@ -17,12 +17,12 @@ H01 参考骑手、火焰图集及四份 JSON。模型和动作来自已有 Cent
 
 [variants.json](../assets/dragon-training/__creature-assets/variants.json)是各变体的
 模型文件、镜头距离、鞍座、空中/地面球组与支撑范围的标定源。Playground 通过
-[dragon-variants.ts](../shared/preset-content/dragon-variants.ts)读取它，并把配置
+[dragon-variants.ts](../packages/preset-content/src/creatures/dragon-variants.ts)读取它，并把配置
 交给 SDK；不得只换模型而沿用另一变体的碰撞与座位尺寸。顶部飞龙选择器会以
 `?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物
 的位置在通过 SDK 起点检查后保留。
 
-真实骑手始终是当前 `humanoid.source-101` 人物，绑定既有 Source101 骨架与动作。
+真实骑手始终是当前 `humanoid.uefn-mannequin` 人物，绑定既有 Source101 骨架与动作。
 原始 UEFN 外形资源包含黑色关节贴图；浏览器中的完整人物默认保留这些贴图，
 原始 GLB 字节与资源身份保持不变。H01 GLB 用于适配参考，没有替换真实角色，也未
 完成其整套骨骼动作到 Source101 的重定向。
@@ -31,18 +31,18 @@ Creator 可通过 `assets_search` 查找 D01–D11，再用 `assets_describe` �
 `creature.dragon.d01` 至 `creature.dragon.d11`。每个资产的 `vehicle.spec` 包含自身
 标定，`integrationMetadata.visual` 指定 `animationPrefix`、`modelResource` 与
 `flameResource`。资源按逻辑 `path` 在该资产的 `resources` 中解析为实际 URI。
-`requiredAssetIds` 明确该变体与 `humanoid.source-101` 的依赖。
+`requiredAssetIds` 明确该变体与 `humanoid.uefn-mannequin` 的依赖。
 
-Agent 从 [动物与生物](../scripts/three-creator/agent/assets/animals/README.md)
-进入 [飞行坐骑](../scripts/three-creator/agent/assets/animals/flying-mounts.md)。
+Agent 从 [动物与生物](../packages/creator-host/docs/agent/assets/animals/README.md)
+进入 [飞行坐骑](../packages/creator-host/docs/agent/assets/animals/flying-mounts.md)。
 `assets_describe` 返回这份下层说明的 `documentation` 和可直接调用的 `bindingExample`。
 绑定入口为 `creator_get_examples({topic:'mounted-interaction',variant:'flying-creature'})`，
-返回同目录的 [最小绑定片段](../scripts/three-creator/agent/assets/animals/flying-mounts.ts)。
+返回同目录的 [最小绑定片段](../packages/creator-host/docs/agent/assets/animals/flying-mounts.ts)。
 Agent 提供所选资产、实例、参考图中的位置与资源解析器，将视觉实例交给唯一的
 `createHumanoidWorld`。场地、开场镜头和输入路线由当前需求决定；召唤、登乘、
 起降的条件和结果通过当前接口及状态查询确认。
 
-目录中的 [`creature.dragon`](../assets/three-creator/catalog/creature.dragon.json)
+目录中的 [`creature.dragon-evolved`](../assets/three-creator/catalog/creature.dragon-evolved.json)
 是另一份 WYVERN 资源，路径为 `presets/creatures/dragon.glb`。它与这些原生变体是
 不同资产；查到该 ID 不代表加载了原生飞行、召唤、上下龙或喷火能力。
 
@@ -118,7 +118,7 @@ pnpm verify:dragon-training http://127.0.0.1:5178 .codex-tmp/dragon-native-smoke
 `prepare:dragon-training` 重新计算上述 17 个文件的身份，不生成模型或更改动作。
 开发插件与生产构建验证相同清单，产物位于 `.codex-tmp/react-playground-dist`。
 
-[浏览器 smoke](../apps/three-playground/scripts/dragon-training-smoke.ts)使用真实
+[浏览器 smoke](../apps/sdk-playground/scripts/dragon-training-smoke.ts)使用真实
 键盘验证地面开始、召唤、接近、登乘、起飞、飞行与喷火，并检查变体加载、地图
 切换、重载和历史路由。失败时保存实际状态、间隔采样的接近过程与截图。
 运行时测试覆盖飞行、碰撞、起降与人物过渡；visual 测试覆盖动作采样、座位、

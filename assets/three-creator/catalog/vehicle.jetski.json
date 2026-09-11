@@ -1,6 +1,6 @@
 {
   "id": "vehicle.jetski",
-  "displayName": "水上摩托 / JET SKI",
+  "displayName": "水上摩托 / Personal watercraft",
   "path": "vehicles/jetski.glb",
   "uri": "./assets/subjects/d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707.glb",
   "sha256": "d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-jetski.ts"
+    "generator": "packages/creator-host/scripts/assets/export-jetski.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.jetski"
+    "locomotion.boat"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "jetski",
       "name": "水上摩托",
-      "en": "JET SKI",
+      "en": "Personal watercraft",
       "mode": "boat",
       "archetype": "jetski",
       "kernel": "K06",

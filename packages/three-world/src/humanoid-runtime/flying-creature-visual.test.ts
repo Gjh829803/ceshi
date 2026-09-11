@@ -5,7 +5,7 @@ import type {WorldEngine} from '../engine';
 import {Character} from './character';
 import {createWorld} from '../world';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
-import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
+import {createDragonTrainingMap} from '@worldkit/preset-content/environment/dragon-training';
 import {emptyInput} from './simulation';
 import {readFileSync} from 'node:fs';
 import {afterEach,expect,it,vi} from 'vitest';
@@ -15,8 +15,8 @@ import {FlyingCreatureVisual} from './motion-families/flying-creature/visual';
 import {createFlyingCreatureStateV1} from './motion-families/flying-creature/state';
 import {CreatureFlame} from './motion-families/flying-creature/flame';
 import type {MotionPose} from './presentation';
-import {DRAGON_VARIANTS} from '../../../../shared/preset-content/dragon-variants';
-import {getDefaultProfile,parseAssetProfile} from '../../../../shared/preset-content/platform/profiles';
+import {DRAGON_VARIANTS} from '@worldkit/preset-content/dragon-variants';
+import {getDefaultProfile,parseAssetProfile} from '@worldkit/preset-content/platform/profiles';
 // 真实骨架/Rapier 回归连续占用主线程；每例释放一次事件循环以发送测试进度。
 afterEach(async()=>{vi.restoreAllMocks();await new Promise<void>(resolve=>setImmediate(resolve));});
 async function fixture(id='D01'){
@@ -86,9 +86,10 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
   vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(readFileSync(fileURLToPath(String(input)))));
   const rider=new Character();await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
   const world=await createWorld({camera:new T.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
-    character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,...(variant.collisionProbes?{flyingCreatureCollision:variant.collisionProbes}:{})},object:visual.root,flyingVisual:visual}]}});
+    character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:`creature.dragon.${id.toLowerCase()}`,spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,...(variant.collisionProbes?{flyingCreatureCollision:variant.collisionProbes}:{})},object:visual.root,flyingVisual:visual}]}});
   try{
     const runtime=world.humanoid!;runtime.applyProfile({view:{keyboardToggleEnabled:true}});
+    expect(world.snapshot().humanoid?.vehicles[0]?.assetId).toBe(`creature.dragon.${id.toLowerCase()}`);
     runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const meshes:T.SkinnedMesh[]=[];rider.root.traverse(n=>{if(n instanceof T.SkinnedMesh)meshes.push(n);});
     const full=meshes.map(mesh=>mesh.geometry.index?.count??0);

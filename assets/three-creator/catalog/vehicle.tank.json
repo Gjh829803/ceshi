@@ -1,6 +1,6 @@
 {
   "id": "vehicle.tank",
-  "displayName": "履带坦克 / TANK",
+  "displayName": "履带坦克 / Tank",
   "path": "vehicles/tank.glb",
   "uri": "./assets/subjects/6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf.glb",
   "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-tank.ts"
+    "generator": "packages/creator-host/scripts/assets/export-tank.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.tank"
+    "locomotion.tank"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "tank",
       "name": "履带坦克",
-      "en": "TANK",
+      "en": "Tank",
       "mode": "tank",
       "archetype": "tank",
       "kernel": "K16",

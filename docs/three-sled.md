@@ -13,11 +13,11 @@
 | F | 沿用统一上下载具流程；速度超过 5 m/s 时需先减速 |
 
 资产 ID 为 `vehicle.sled`，运行家族为 `sled`，坐姿为 `sled`。
-[模型与座位配置](../shared/preset-content/sled.ts)使用米、秒，+Z 为前方；
-[程序模型](../shared/preset-content/sled-model.ts)和导出的 GLB 使用相同生成器。
+[模型与座位配置](../packages/preset-content/src/vehicles/sled/spec.ts)使用米、秒，+Z 为前方；
+[程序模型](../packages/preset-content/src/vehicles/sled/model.ts)和导出的 GLB 使用相同生成器。
 角色保持原 Source101 模型，通过既有动画所有者叠加坐姿、蹬地与拖脚姿态。
 
-[SDK 控制器](../packages/three-world/src/humanoid-runtime/sled.ts)使用固定步长，坡面法线投影重力为
+[SDK 控制器](../packages/three-world/src/humanoid-runtime/motion-families/ground-vehicle/sled.ts)使用固定步长，坡面法线投影重力为
 9.81 m/s²。默认最大滑速 24 m/s，蹬地峰值 4 m/s²、周期 0.85 秒，
 滑动摩擦减速度 0.22 m/s²，双脚制动 6 m/s²，侧向阻尼 2.2 /s，
 速度平方阻力系数 0.006 /m。属性面板可单独修改这些参数。
@@ -29,12 +29,12 @@
 重新生成资产及启动：
 
 ```powershell
-& .\node_modules\.bin\tsx.CMD scripts/three-creator/export-sled.ts
+& .\node_modules\.bin\tsx.CMD packages/creator-host/scripts/assets/export-sled.ts
 pnpm build
 pnpm dev
 ```
 
 导出仅更新雪橇 GLB 和对应资产目录条目，包含完整运动默认值、座位和碰撞包围盒。
 预览启动时编译代码；修改后需重启预览进程。
-[浏览器验收脚本](../scripts/three-creator/sled-browser-smoke.ts)使用真实键盘输入，
+[浏览器验收脚本](../packages/creator-host/scripts/smoke/sled-browser-smoke.ts)使用真实键盘输入，
 录制纯渲染画面至 `outputs/sled/browser/sled-input.webm`，同时记录状态与截图。

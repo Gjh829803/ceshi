@@ -98,7 +98,7 @@ it('uses explicit standalone resources without requiring a Creator catalog',asyn
 it('loads the complete humanoid and performs a physical action through the public world',async()=>{
   const parse=GLTFLoader.prototype.parse;
   vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-  const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
+  const definition=catalog.assets.find(asset=>asset.id==='humanoid.uefn-mannequin')!;
   const resources=new Map(definition.resources!.map(resource=>[resource.path,resource.sourcePath]));
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
   vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>{

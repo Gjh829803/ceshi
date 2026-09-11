@@ -24,6 +24,6 @@ runtime.command({type:'space.dock', portId:null}); // 取消或解除
 
 `spaceTelemetry(vehicle)` 和 `runtime.snapshot().vehicles[].spaceFlight` 提供只读副本，包括质量、世界推力和角速度、驾驶模式、泊位及对接状态。只查询不会推进模拟。Creator 和 Episode 使用同一配置、动作、物理及相机契约；命令遵守原有录制期间的外部修改限制。
 
-主项目模型入口为 `shared/preset-content/space-model.ts`，配置为 `shared/preset-content/config.ts` 的 `space`（轻型穿梭机）和 `survey-space`（星环飞碟）。保留实例 ID 以兼容原有场地与资产目录。当前模型按 Source101 骨架、UEFN 可见蒙皮的驾驶姿态校准；新人物体型需重新校准座椅和接触面。
+主项目模型入口为 `packages/preset-content/src/vehicles/spacecraft/model.ts`，配置为 `packages/preset-content/src/config.ts` 的 `space`（轻型穿梭机）和 `survey-space`（星环飞碟）。保留实例 ID 以兼容原有场地与资产目录。当前模型按 Source101 骨架、UEFN 可见蒙皮的驾驶姿态校准；新人物体型需重新校准座椅和接触面。
 
 场景菜单的“太空 · 飞行训练场”（`space-training`）是独立地图，含两船停靠平台、六自由度门框通道和实体碰撞练习区。太空背景无大气雾；人物在平台上下船。入口 `http://127.0.0.1:5296/?map=space-training`，沿用同一主项目会话与输入映射。

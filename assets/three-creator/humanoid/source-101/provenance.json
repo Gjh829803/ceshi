@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceAssetId": "humanoid.source-101",
+  "sourceAssetId": "humanoid.uefn-mannequin",
   "sources": [
     {
       "path": "assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb",

@@ -7,7 +7,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Character} from './character';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
-import {BUS_SPEC} from '../../../../shared/preset-content/bus';
+import {BUS_SPEC} from '@worldkit/preset-content/bus';
 import {busWheelAngle} from './motion-families/ground-vehicle/bus';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){

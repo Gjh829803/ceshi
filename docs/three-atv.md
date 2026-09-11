@@ -27,18 +27,18 @@
 
 ## 人物、锚点与运动
 
-[规格](../shared/preset-content/atv.ts)和
-[模型](../shared/preset-content/atv-model.ts)定义驾驶座、后座预留点、
+[规格](../packages/preset-content/src/vehicles/atv/spec.ts)和
+[模型](../packages/preset-content/src/vehicles/atv/model.ts)定义驾驶座、后座预留点、
 左右握把、左右脚踏、左右入口和驾驶观察点。当前 Training 控制一个驾驶者；
 后座为预留 socket，尚未提供第二位乘客的控制与挂载。
 
-保留 `humanoid.source-101` 原人物和骨骼长度。驾驶座位于 `[0, 1, -0.15]` 米，
+保留 `humanoid.uefn-mannequin` 原人物和骨骼长度。驾驶座位于 `[0, 1, -0.15]` 米，
 人物跨坐窄坐垫；脚踏上表面 0.2505 米，实测脚底最低点约 0.2544 米。
 [手臂求解](../packages/three-world/src/humanoid-runtime/atv-rider.ts)通过上下臂旋转跟随转动车把，
 不改变骨骼长度和模型缩放。零时间进入及左右满舵时，左右手与握把、前脚掌与脚踏
 锚点的距离均小于 2 mm，原始蒙皮顶点通过车壳和挡泥板穿插检查。
 
-[ATV 运行时](../packages/three-world/src/humanoid-runtime/atv.ts)复用 `wheeled` 家族入口、
+[ATV 运行时](../packages/three-world/src/humanoid-runtime/motion-families/ground-vehicle/atv.ts)复用 `wheeled` 家族入口、
 SDK 时钟和碰撞世界。短轴距为 1.6 米；前轮分别转向，每个车轮有独立滚动相位和
 最多 ±0.12 米的接地补偿。运动状态由物理固定步推进，渲染仅插值取样。
 碰墙或被其他载具阻挡时，轮胎不会累计未被接受的前进距离。
@@ -47,14 +47,14 @@ SDK 时钟和碰撞世界。短轴距为 1.6 米；前轮分别转向，每个�
 
 ## 构建与验证
 
-修改模型后运行 `pnpm exec tsx scripts/three-creator/export-atv.ts`，更新
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-atv.ts`，更新
 [atv.glb](../assets/three-creator/presets/vehicles/atv.glb)及资产目录。
 运行 `pnpm build` 重建 SDK；重启训练预览加载最新运行时。
 
 [ATV 测试](../packages/three-world/src/humanoid-runtime/atv.test.ts)覆盖驾驶、制动、加速、倒车、
 车轮差速、静止转向限制、坡道、飞越边缘后落地、墙体/载具碰撞及原人物握持净空。
-[路线测试](../scripts/three-episode/vehicle-route.test.ts)包含 ATV 的三十秒实际控制器路线。
-[浏览器验收脚本](../scripts/three-creator/atv-browser-smoke.ts)从训练场资产库入口验证
+[路线测试](../packages/episode-pipeline/tests/planning/vehicle-route.test.ts)包含 ATV 的三十秒实际控制器路线。
+[浏览器验收脚本](../packages/creator-host/scripts/smoke/atv-browser-smoke.ts)从训练场资产库入口验证
 真实按键、三种视角、上下车与复位，保存视频、截图及运行时字节哈希到 `.codex-tmp/atv-browser/`。
 该录像脚本针对旧训练预览；当前 React 编辑器验收运行 `pnpm test:editor:browser`。
 

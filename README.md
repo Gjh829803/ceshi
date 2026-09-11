@@ -6,7 +6,7 @@ Agent 使用普通 Three.js 创建简洁可玩的白模，复用或修改人物�
 还原参考图片的样式与主要形态，简化细节；环境整体以白色为主，仅使用基础照明。
 主体、关键客体与标识物用少量识别色区分，地形用轻微灰度或色调差区分。
 保留参考图的构图、尺度、空间关系及真实碰撞和动作条件，省去装饰、氛围、反射和复杂阴影。
-人形默认保留 `humanoid.source-101` 提供的可见模型、骨架与动作；其他主体优先复用，
+人形默认保留 `humanoid.uefn-mannequin` 提供的可见模型、骨架与动作；其他主体优先复用，
 没有合适的再自绘 Mesh 并绑定能力。Creator 自检以核心功能覆盖决定长度。
 
 ```mermaid
@@ -23,10 +23,11 @@ Agent 按四层使用：**直接复用 → 场景与能力绑定 → 参数配�
 按键、Agent 指令和录制共用执行逻辑；能力说明明确前置条件、场景要求和实际结果。
 当前视频流程执行到 Seedance 提交前。
 
+- [包职责与两条工作链路](docs/workspace-packages.md)
 - [文档索引](docs/README.md) · [设计与职责](docs/three-sdk-architecture.md)
 - [SDK 用法与动作条件](packages/three-world/README.md)
-- [Creator 创作工具](scripts/three-creator/README.md) · [云生成](scripts/cloud/three-eval-README.md)
-- [Episode 录制与素材](scripts/three-episode/README.md) · [生产流程](docs/three-sdk-data-production.md)
+- [Creator 创作工具](packages/creator-host/README.md) · [云生成](apps/creator-cloud/three-eval-README.md)
+- [Episode 录制与素材](packages/episode-pipeline/README.md) · [生产流程](docs/three-sdk-data-production.md)
 
 ```sh
 pnpm install --frozen-lockfile
@@ -35,8 +36,8 @@ pnpm dev
 
 默认启动 React + shadcn/ui 编辑器，地址为 `http://127.0.0.1:5178/`，支持热更新。
 `pnpm dev:example` 在 `http://127.0.0.1:5175/` 预览独立 SDK 集成示例，不提供编辑器。
-编辑器位于 `apps/three-playground`，共享场景、模型和配置位于 `shared/preset-content`。
-项目参数保存在 `shared/preset-content/profiles.json`，界面支持导出。
+编辑器位于 `apps/sdk-playground`，共享场景、模型和配置位于 `packages/preset-content`。
+项目参数保存在 `packages/preset-content/config/profiles.json`，界面支持导出。
 `?debugProfiles=1` 可加载浏览器本地调试参数，正式交付使用项目配置。
 
 独立集成示例位于 [character-actions](examples/three-creator/character-actions/main.ts)

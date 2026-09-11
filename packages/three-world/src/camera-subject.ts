@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { CameraCollisionRequest } from '@whitebox-world/camera-collision';
+import type { CameraCollisionRequest } from '@worldkit/camera-collision';
 import type { Vec3 } from './engine-contracts.js';
 
 export type CameraSubjectBody = Readonly<{ heightMeters: number; radiusMeters: number }>;

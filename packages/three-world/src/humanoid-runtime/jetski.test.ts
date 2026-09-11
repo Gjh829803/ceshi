@@ -9,8 +9,8 @@ import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from 
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './motion-families/ground-vehicle/atv';
 import {Character} from './character';
-import {JETSKI_SPEC,JETSKI_SOCKETS} from '../../../../shared/preset-content/jetski';
-import {buildJetSkiModel} from '../../../../shared/preset-content/jetski-model';
+import {JETSKI_SPEC,JETSKI_SOCKETS} from '@worldkit/preset-content/jetski';
+import {buildJetSkiModel} from '@worldkit/preset-content/jetski-model';
 import {createJetSkiState,copyJetSkiState} from './motion-families/surface-vessel/jetski';
 import {sampleJetSkiVisual,disposeJetSkiVisual} from './jetski-visual';
 beforeAll(initEnvironmentQueries);

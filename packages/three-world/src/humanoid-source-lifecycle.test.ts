@@ -9,7 +9,7 @@ const sources:SourceCharacter[]=[],characters:Character[]=[];
 
 afterEach(()=>{for(const actor of characters.splice(0))actor.dispose();for(const actor of sources.splice(0))actor.dispose();vi.restoreAllMocks();vi.unstubAllGlobals();});
 function resources(options:{fail?:()=>boolean;gate?:Promise<void>;manifestModel?:()=>string;modelAliases?:Record<string,string>;failManifest?:()=>boolean}={}){
-  const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
+  const definition=catalog.assets.find(asset=>asset.id==='humanoid.uefn-mannequin')!;
   const paths=new Map(definition.resources!.map(resource=>[resource.path,resource.sourcePath]));
   for(const [relative,sourcePath] of Object.entries(options.modelAliases??{}))paths.set(`humanoid/source/${relative}`,sourcePath);
   const counts=new Map<string,number>(),requestedUrls:string[]=[];

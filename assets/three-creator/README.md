@@ -7,7 +7,7 @@ The compiler verifies and packages the selected resource closure.
 
 Asset producers should follow the [asset submission and Agent integration guide](../../docs/asset-production-integration.md).
 
-`humanoid.source-101` is the default humanoid. Keep its supplied visible model,
+`humanoid.uefn-mannequin` is the default humanoid. Keep its supplied visible model,
 skeleton and actions. `createHumanoidWorld` loads its complete action resources
 and contextual controller. Its base model also
 supports ordinary `world.assets.load` / `addCharacter` animation binding.
@@ -28,7 +28,7 @@ its license notices remain attached for provenance. Raw creature GLBs do not
 declare a `seat.driver` node; their logical seat comes from `vehicle.spec.seat`.
 Only procedural vehicle exports create that named socket.
 
-[`import-preset-content.ts`](../../scripts/three-creator/import-preset-content.ts)
+[`import-preset-content.ts`](../../packages/creator-host/scripts/assets/import-preset-content.ts)
 regenerates resource identities and structural metadata, while preserving each
 existing preset asset's `limitations` and `integrationMetadata` from its source definition.
 Those fields remain the maintained guidance source. The importer reads the pinned
@@ -40,7 +40,7 @@ in this repository and are never copied back from that historical source. Use
 D01–D11 飞龙使用独立 ID `creature.dragon.d01` 至 `creature.dragon.d11`。
 其 `integrationMetadata.visual` 声明模型、火焰资源和动画前缀，`vehicle.spec`
 保留与 Playground 一致的尺寸、鞍位、核心碰撞和地面校准。
-从 [动物 → 飞行坐骑](../../scripts/three-creator/agent/assets/animals/flying-mounts.md)
+从 [动物 → 飞行坐骑](../../packages/creator-host/docs/agent/assets/animals/flying-mounts.md)
 进入 `mounted-interaction` 的 `flying-creature` 绑定变体；使用专用 `FlyingCreatureVisual`，目录 `actions` 为空，
 避免普通资产 mixer 与专用控制器争用动画。来源、限制与重新注册命令见
 [飞龙资源说明](../dragon-training/README.md#creator--agent-接入)。

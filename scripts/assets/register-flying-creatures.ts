@@ -4,8 +4,8 @@ import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {humanoid} from '@worldkit/three';
-import type {DragonVariant} from '../../shared/preset-content/dragon-variants';
-import {readCatalogSources,writeCatalogSources,syncAssetCatalog} from '../three-creator/catalog-sources';
+import type {DragonVariant} from '@worldkit/preset-content/dragon-variants';
+import {readCatalogSources,writeCatalogSources,syncAssetCatalog} from '@worldkit/creator-host/catalog-sources';
 
 const repositoryRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const sourceDirectory='assets/dragon-training/__creature-assets';
@@ -22,15 +22,17 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
   return Promise.all(variants.map(async variant=>{
     const id=`creature.dragon.${variant.id.toLowerCase()}`;
     const model=await resource(`flying-creatures/${variant.id}/model.glb`,`${sourceDirectory}/${variant.file}`);
-    const spec={...humanoid.createFlyingCreatureSpec(id),name:variant.name,camera:variant.camera,
+    const name=variant.id==='D09'?`长身飞龙 ${variant.id}`:`飞龙 ${variant.id}`;
+    const english=variant.id==='D09'?`Long-bodied flying dragon ${variant.id}`:`Flying dragon ${variant.id}`;
+    const spec={...humanoid.createFlyingCreatureSpec(id),name,en:english,camera:variant.camera,
       ...(variant.seat?{seat:structuredClone(variant.seat)}:{}),
       ...(variant.envelope?{envelope:structuredClone(variant.envelope)}:{}),
       ...(variant.collisionProbes?{flyingCreatureCollision:structuredClone(variant.collisionProbes)}:{}),
       ...(variant.ground?{flyingCreatureGround:structuredClone(variant.ground)}:{})};
-    return {id,displayName:`${variant.name} / Flying dragon`,...model,uri:`./assets/subjects/${model.sha256}.glb`,usage:'reusable',
+    return {id,displayName:`${name} / ${english}`,...model,uri:`./assets/subjects/${model.sha256}.glb`,usage:'reusable',
       rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},actions:{},
       resources:[model,flame,notices,...traces],vehicle:{schemaVersion:1,spec},collision:spec.envelope,
-      locomotionBindingIds:['locomotion.dragon'],
+      locomotionBindingIds:['locomotion.flying-creature'],
       provenance:{source:`Local Century ${variant.id} extraction`,variantId:variant.id,registeredWithoutChangingAssetBytes:true,
         registrationScript:'scripts/assets/register-flying-creatures.ts',noticesResource:notices.path,
         sourceRecords:traces.map(trace=>trace.path)},
@@ -39,11 +41,11 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
         'Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles.',
         'Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.',
       ],
-      integrationMetadata:{classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.source-101',id],
+      integrationMetadata:{classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.uefn-mannequin',id],
         visual:{animationPrefix:variant.id,modelResource:model.path,flameResource:flame.path},
-        useWhen:`使用 ${variant.id} 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。`,
+        useWhen:`使用编号 ${variant.id} 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。`,
         binding:'Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.',
-        capabilities:['Flight, boost, glide, brake hover, dodge and flame visual feedback.','Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.','SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion.'],
+        capabilities:['Flight, boost, glide, brake hover, dodge and flame visual feedback.','Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.','SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion.'],
       },
     };
   }));

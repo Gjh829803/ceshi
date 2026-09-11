@@ -1,6 +1,6 @@
 {
   "id": "vehicle.canoe",
-  "displayName": "单桨木舟 / CANOE",
+  "displayName": "单桨木舟 / Canoe",
   "path": "vehicles/canoe.glb",
   "uri": "./assets/subjects/e34475368d6762eb5e76ab6c757dff9f2209a32b3bce2cfb73641ce11dff922c.glb",
   "sha256": "e34475368d6762eb5e76ab6c757dff9f2209a32b3bce2cfb73641ce11dff922c",
@@ -31,11 +31,11 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-canoe.ts"
+    "generator": "packages/creator-host/scripts/assets/export-canoe.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.canoe"
+    "locomotion.paddled-boat"
   ],
   "vehicle": {
     "schemaVersion": 1,
@@ -68,7 +68,7 @@
       "jumpSpeed": 6.3,
       "id": "canoe",
       "name": "单桨木舟",
-      "en": "CANOE",
+      "en": "Canoe",
       "mode": "paddled_boat",
       "archetype": "canoe",
       "kernel": "K17",

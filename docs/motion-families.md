@@ -51,4 +51,4 @@ SDK 使用 `humanoid.listMotionFamilies()` 浏览独立目录副本，`motionFam
 - 固定翼起飞、双向转弯、松键回正、碰撞、正常落地制动、硬着陆和固定步长重复性测试通过。
 - 浏览器验证起飞、转弯、回正、减油门、T 视角切换，以及七类目录浏览不修改当前资产控制。
 
-浏览器检查可运行 `pnpm exec tsx apps/three-playground/scripts/aircraft-smoke.ts <预览地址> <输出目录>` 和 `pnpm exec tsx apps/three-playground/scripts/motion-family-smoke.ts <预览地址> <输出目录>`。这些是开发回归，不是新的生成或交付准入门槛。
+浏览器检查可运行 `pnpm exec tsx apps/sdk-playground/scripts/aircraft-smoke.ts <预览地址> <输出目录>` 和 `pnpm exec tsx apps/sdk-playground/scripts/motion-family-smoke.ts <预览地址> <输出目录>`。这些是开发回归，不是新的生成或交付准入门槛。

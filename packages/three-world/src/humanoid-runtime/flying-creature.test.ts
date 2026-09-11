@@ -2,15 +2,15 @@ import {requestDragonLanding} from './motion-families/flying-creature/ground';
 import {actionForKey,createKeyBindings} from './input';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {afterEach,beforeAll,expect,it} from 'vitest';
-import {DRAGON_VARIANTS} from '../../../../shared/preset-content/dragon-variants';
+import {DRAGON_VARIANTS} from '@worldkit/preset-content/dragon-variants';
 import {Group,PerspectiveCamera,Vector3} from 'three';
 import {createWorld} from '../world';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {creatureBodies} from './creatures/controller';
-import {CREATURE_SPECS} from '../../../../shared/preset-content/creatures/specs';
-import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
+import {CREATURE_SPECS} from '@worldkit/preset-content/creatures/specs';
+import {createDragonTrainingMap} from '@worldkit/preset-content/environment/dragon-training';
 beforeAll(initEnvironmentQueries);
 // 连续 Rapier 固定步会占满微任务队列；用真实事件循环机会交付 Vitest 的进度 RPC。
 afterEach(()=>new Promise<void>(resolve=>setImmediate(resolve)));
@@ -24,9 +24,10 @@ it('routes H and remapped summon keys through the shared unmounted action channe
 it('stops a summoned dragon before a new wall and rejects wet landing candidates',async()=>{
   const map=createDragonTrainingMap();
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
-    vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+    vehicles:[{instanceId:'dragon',assetId:'creature.dragon.d01',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation,v=s.vehicles[0]!;world.step({},4);
+    expect(world.snapshot().humanoid?.vehicles[0]?.assetId).toBe('creature.dragon.d01');
     expect(r.summonDragon('dragon'),s.controlledActor.message).toBe(true);
     const wall=s.controlledActor.controller.world.createCollider(RAPIER.ColliderDesc.cuboid(.2,200,200).setTranslation(-15,180,0));
     world.step({},1200);
@@ -45,7 +46,7 @@ it.each(['D01','D07'])('summons %s from the sky, then boards, takes off and walk
   const variant=DRAGON_VARIANTS.find(variant=>variant.id===id)!;
   const map=createDragonTrainingMap();
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
-    vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+    vehicles:[{instanceId:'dragon',assetId:`creature.dragon.${variant.id.toLowerCase()}`,spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation,v=s.vehicles[0]!;world.step({},4);
     const human=s.controlledActor.player.position.clone(),origin=v.position.clone();
@@ -79,7 +80,7 @@ it.each(['D01','D07'])('summons %s from the sky, then boards, takes off and walk
 it('walks away after a rotated D07 dismount with live collision bodies',async()=>{
   const variant=DRAGON_VARIANTS.find(v=>v.id==='D07')!,map=createDragonTrainingMap();
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
-    vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+    vehicles:[{instanceId:'dragon',assetId:`creature.dragon.${variant.id.toLowerCase()}`,spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation;
     r.prepareEpisodeStart({positionWorldMetersXYZ:[170,22,-10],facingYawRadians:.9-Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
@@ -114,7 +115,7 @@ it('rejects invalid ground configurations and isolates per-instance tuning',()=>
 it('holds a blocked dismount at its original path, resumes safely, and resets a pending mount',async()=>{
   const map=createDragonTrainingMap();map.boxes=[{id:'floor',position:[0,-.5,0],size:[300,1,300]}];
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
-    vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+    vehicles:[{instanceId:'dragon',assetId:'creature.dragon.d01',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation;
     const start={positionWorldMetersXYZ:[0,22,0] as [number,number,number],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}};
@@ -177,7 +178,7 @@ it('keeps independent stamina/action state and resets to hover',()=>{
   }finally{q.dispose();}
 });
 it('runs dedicated actions, camera switching and map reset through the public SDK owner',async()=>{
-  const spec=createFlyingCreatureSpec('dragon'),map=createDragonTrainingMap(),world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+  const spec=createFlyingCreatureSpec('dragon'),map=createDragonTrainingMap(),world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,vehicles:[{instanceId:'dragon',assetId:'creature.dragon.d01',spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const descriptors=JSON.stringify(runtime.commandDescriptors('person'));

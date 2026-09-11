@@ -6,7 +6,7 @@ FROM ${PLAYWRIGHT_SOURCE_IMAGE} AS capsule-source
 
 ARG PLAYWRIGHT_SOURCE_IMAGE
 USER root
-COPY scripts/cloud/prepare-creator-browser-capsule.mjs /tmp/prepare-creator-browser-capsule.mjs
+COPY apps/creator-cloud/prepare-creator-browser-capsule.mjs /tmp/prepare-creator-browser-capsule.mjs
 RUN node /tmp/prepare-creator-browser-capsule.mjs \
     --extract-in-container \
     --source-image "${PLAYWRIGHT_SOURCE_IMAGE}" \
@@ -33,7 +33,7 @@ RUN apt-get -o Acquire::Retries=3 update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=cached-browser /usr/bin/node /usr/bin/node
 COPY --from=cached-browser /ms-playwright/chromium_headless_shell-1234 /ms-playwright/chromium_headless_shell-1234
-COPY scripts/cloud/prepare-creator-browser-capsule.mjs /tmp/prepare-creator-browser-capsule.mjs
+COPY apps/creator-cloud/prepare-creator-browser-capsule.mjs /tmp/prepare-creator-browser-capsule.mjs
 RUN node /tmp/prepare-creator-browser-capsule.mjs --extract-in-container \
     --output-dir /export/browser-capsule \
     --source-image "Ubuntu22 apt libraries; same-version CfT browser from cached worldkit image ${CACHED_BROWSER_IMAGE_ID}"

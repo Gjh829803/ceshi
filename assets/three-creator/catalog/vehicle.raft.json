@@ -1,6 +1,6 @@
 {
   "id": "vehicle.raft",
-  "displayName": "橡皮艇 / INFLATABLE BOAT",
+  "displayName": "橡皮艇 / Inflatable boat",
   "path": "vehicles/raft.glb",
   "uri": "./assets/subjects/24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd.glb",
   "sha256": "24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd",
@@ -31,11 +31,11 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-raft.ts"
+    "generator": "packages/creator-host/scripts/assets/export-raft.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.raft"
+    "locomotion.paddled-boat"
   ],
   "vehicle": {
     "schemaVersion": 1,
@@ -68,7 +68,7 @@
       "jumpSpeed": 6.3,
       "id": "raft",
       "name": "橡皮艇",
-      "en": "INFLATABLE BOAT",
+      "en": "Inflatable boat",
       "mode": "paddled_boat",
       "archetype": "raft",
       "kernel": "K17",

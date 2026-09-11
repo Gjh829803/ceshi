@@ -17,6 +17,57 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('moves a pending opening with the newly mounted subject before first movement',()=>{
+    const camera=new THREE.PerspectiveCamera();camera.position.set(0,2.2,3.55);camera.lookAt(0,1.49,0);
+    let position:Vec3=[0,0,0];const rig=new ThreeCameraRig(camera,unobstructed,()=>position);
+    rig.setFollow({targetEntityId:'player'});const baseline=rig.snapshot(),opening=camera.clone();
+    position=[4,1,-6];rig.retarget('car');rig.update(0);
+    expect(rig.mode).toBe('follow-pending');
+    expect(camera.position.distanceTo(opening.position.clone().add(new THREE.Vector3(...position)))).toBeLessThan(1e-7);
+    rig.updateDesired({activate:true},1/60);rig.update(1/60);
+    expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(baseline.desiredArmDistanceMeters!,7);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+  });
+  it.each([false,true])('keeps a dismounted actor in frame without adopting the obstructed vehicle camera (obstructed %s)',obstructed=>{
+    const camera=new THREE.PerspectiveCamera(50,1.6,.05,1000);
+    camera.position.set(0,2.2,3.55);camera.lookAt(0,1.49,0);
+    let sample={id:'player',positionWorldMetersXYZ:[0,0,0] as Vec3,body:{heightMeters:1.68,radiusMeters:.3}},blocked=false;
+    const rig=new ThreeCameraRig(camera,(target,eye)=>({distanceMeters:blocked?Math.min(.8,distance(target,eye)):distance(target,eye)}),{sample:()=>sample});
+    rig.setFollow({targetEntityId:'player',activateOnInput:false});rig.update(1/60);
+    const baseline=rig.snapshot();
+    sample={id:'car',positionWorldMetersXYZ:[0,1.35,0],body:{heightMeters:2.3,radiusMeters:1.5}};
+    rig.retarget('player');blocked=obstructed;for(let i=0;i<90;i++)rig.update(1/60);
+    sample={id:'player',positionWorldMetersXYZ:[4.5,0,-.5],body:{heightMeters:1.68,radiusMeters:.3}};
+    blocked=false;rig.retarget('player');for(let i=0;i<180;i++)rig.update(1/60);
+    camera.updateMatrixWorld(true);
+    for(const height of [.05,.84,1.63]){
+      const projected=new THREE.Vector3(4.5,height,-.5).project(camera);
+      expect(Math.abs(projected.x)).toBeLessThan(.95);expect(Math.abs(projected.y)).toBeLessThan(.95);
+      expect(projected.z).toBeGreaterThan(-1);expect(projected.z).toBeLessThan(1);
+    }
+    expect(rig.snapshot().desiredArmDistanceMeters).toBeCloseTo(baseline.desiredArmDistanceMeters!,7);
+    expect(rig.snapshot().desiredYawRadians).toBeCloseTo(baseline.desiredYawRadians!,7);
+    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(baseline.desiredPitchRadians!,7);
+  });
+  it.each([0,.21])('keeps authored horizon roll through mount retargeting and pitch orbit (roll %s)',roll=>{
+    const camera=new THREE.PerspectiveCamera();
+    camera.position.set(0,2.2,18.55);camera.lookAt(0,1.49,15);camera.rotateZ(roll);
+    let subject:Vec3=[0,0,15];
+    const rig=new ThreeCameraRig(camera,unobstructed,()=>subject);
+    rig.setFollow({targetEntityId:'player',activateOnInput:false});rig.sealInitialState();
+    const opening=camera.quaternion.clone();
+    const horizonRoll=()=>new THREE.Euler().setFromQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()),'YXZ').z;
+    const expectRoll=()=>expect(horizonRoll()).toBeCloseTo(roll,7);
+    for(const [id,position] of [['car',[8,0,.2]],['player',[10,0,.2]]] as const){
+      const before=camera.clone();subject=position;rig.retarget(id);rig.update(0);
+      expect(camera.quaternion.angleTo(before.quaternion)).toBeLessThan(1e-7);
+      expect(camera.position.distanceTo(before.position)).toBeLessThan(1e-7);
+      for(const pitch of [.35,.5,-.8]){
+        rig.updateDesired({yawDeltaRadians:.4,pitchDeltaRadians:pitch},1/60);rig.update(1/60);expectRoll();
+      }
+    }
+    rig.reset();expect(camera.quaternion.angleTo(opening)).toBeLessThan(1e-7);expectRoll();
+  });
   it('keeps a rolled zero-arm declarative opening under a transformed camera parent',()=>{
     const parent=new THREE.Group();parent.position.set(3,2,5);parent.rotation.y=.4;
     const camera=new THREE.PerspectiveCamera();parent.add(camera);parent.updateMatrixWorld(true);

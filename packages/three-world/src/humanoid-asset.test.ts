@@ -10,7 +10,7 @@ import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const instances: AssetInstance[] = [];
 async function preset() {
-  const definition = catalog.assets.find(a => a.id === 'humanoid.source-101');
+  const definition = catalog.assets.find(a => a.id === 'humanoid.uefn-mannequin');
   expect(definition, 'Creator must expose the ordinary SDK preset').toBeDefined();
   const asset = await loadAsset(definition as unknown as AssetDefinition, {
     fetchBytes: () => readFile(definition!.sourcePath),

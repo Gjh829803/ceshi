@@ -7,6 +7,38 @@
 AI 可以编辑所属资源、binding、配置和必要代码，不要求内容全部套入统一注册框架。
 工程工具用于减少重复和核对身份；资产定义与实例、clip 与行为、共享资源与实例状态分别维护。
 
+## 接入维护约束
+
+以下规则约束负责接入素材和能力的开发者及开发 Agent，覆盖资产、SDK、Creator 和示例的
+跨包修改，用于保持现有去重与分层结果，不增加生产 Agent 创作世界的执行步骤。
+
+- 按既有包职责、目录和资产分类更新所属文件。保留“任务要求 → 编程规范 → SDK 索引 →
+  资产分类 → 所需能力或绑定”的阅读层级，优先扩展已有分类和 topic。
+- 每项要求、能力说明和绑定流程只维护一处权威来源，其他文档和工具入口引用它，
+  不在多个指南、资产页面或示例中重复展开。
+- 公开文档和片段只保留理解接口所需的最小参数化绑定。完整可运行示例和自检夹具放入
+  既有示例或内部夹具目录，按实际消费者登记、引用，不嵌入生产 Agent 指南。
+- 按受影响范围核对实际发现工具返回的导航、接口和示例，防止后续接入重新引入
+  重复说明、冗长示例或与能力无关的场景配方。
+
+## 命名规范
+
+本节是全仓库命名规则的权威来源，适用于代码、API、配置、工具、文档和生产产物。
+资产接入涉及的资源、能力、绑定与实例遵循同一套规则。
+
+所有名称必须清晰、无歧义，忠实表达实际指代对象、职责和行为。使用相关技术领域当前
+通行的术语和命名惯例，使 AI 维护者和生产 Agent 能够正确理解和使用。
+
+全项目保持术语和命名风格一致，遵循对应语言及文件格式的惯例。同一概念在不同界面、
+代码和文档中使用一致术语，不同概念使用不同名称。
+
+既有名称不豁免：发现不一致或具有误导性的名称，必须重命名，并同步更新其引用、
+消费者和文档。不能仅因为名称已经存在，就保留不符合规范的命名。
+
+避免含糊的缩写、自造术语，以及暗示不存在的能力或错误职责归属的名称。
+当省略作用范围、单位或生命周期状态可能引起误解时，必须在命名中明确表达。
+命名应降低 AI 维护成本，减少生产 Agent 的误解、错误操作和重试。
+
 ## 1. 从目标分支另开资产分支
 
 拉取 `main` 最新版本，从它新建自己的资产分支。PR 的目标分支选择 `main`，不直接推送共享分支。
@@ -40,13 +72,13 @@ AI 可以编辑所属资源、binding、配置和必要代码，不要求内容�
 `setColor` 着色；其他模型通过 `setObjectColor` 创建独立材质，原贴图 RGB 不参与叠色。
 资产侧说明透明裁切、材质槽及自定义着色器需求；接入侧检查多个实例、工厂生成、骑乘、
 重置和各视图的配色一致性，并按模型生命周期释放着色绑定。详细接口见
-[人形接入](../scripts/three-creator/agent/assets/humans/integration.md)及
+[人形接入](../packages/creator-host/docs/agent/assets/humans/integration.md)及
 [对象配色](../packages/three-world/README.md#per-object-whitebox-color)。
 
 ## Agent 文件结构与阅读路径
 
 ```text
-scripts/three-creator/agent/
+packages/creator-host/docs/agent/
   README.md                 通用要求、交付标准、何时读哪份说明
   programming.md            编程规范、检查工具、录制与交付
   sdk.md → sdk/basics.md     SDK 能力索引及公共能力
@@ -72,9 +104,9 @@ scripts/three-creator/agent/
 参考图构图、场地规模、出生点、HUD 和游玩路线由当前任务决定。
 
 同类新资产复用此路径，只增加各自资源、标定和能力数据。新增分类子页须在
-[agent-docs.ts](../scripts/three-creator/agent-docs.ts) 注册路径与父子导航；资产条目的
+[agent-docs.ts](../packages/creator-host/src/discovery/agent-docs.ts) 注册路径与父子导航；资产条目的
 `integrationMetadata.documentation` 指向该已注册页面，`assets_describe` 实际读取它。
-绑定有差异时在 [binding-examples.ts](../scripts/three-creator/binding-examples.ts)
+绑定有差异时在 [binding-examples.ts](../packages/creator-host/src/discovery/binding-examples.ts)
 和 MCP 参数中接通所属 topic 的变体，并从真实工具走通搜索、说明、片段、接口查询。
 较深的 schema/源码只在配置或修改能力时读取。
 
@@ -83,11 +115,11 @@ scripts/three-creator/agent/
 | 注册内容 | 放在哪里 | Agent 如何获取 |
 | --- | --- | --- |
 | 资产及能力信息 | [catalog/](../assets/three-creator/catalog/) 下各自 `<assetId>.json`：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制；`pnpm content:sync` 派生 Host 的 asset-catalog.json | `assets_search` 查找，`assets_describe` 读取详情 |
-| 可用权限 | [asset-policy.json](../config/three-creator/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
-| 分类阅读入口 | [Agent 资产索引](../scripts/three-creator/agent/assets/README.md) 及人、动物、载具、场景对象子目录；新增子页时接入 [agent-docs.ts](../scripts/three-creator/agent-docs.ts) 的路径和父子导航 | `creator_get_authoring_schema({document:...})` 按层读取，页面再链接具体资产与能力 topic |
-| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [creator-discovery.ts](../scripts/three-creator/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、humanoid 等接口 |
-| Agent 接入片段 | [agent/examples/](../scripts/three-creator/agent/examples/) 与 [binding-examples.ts](../scripts/three-creator/binding-examples.ts)；复用对应主体的现有入口，片段只演示绑定和调用 | `creator_get_examples` 返回最小代码及文件清单，场景和参数由 Agent 提供 |
-| 内部运行示例 | `examples/three-creator/`；在 [example-registry.json](../scripts/three-creator/example-registry.json) 登记 topic、root 和默认文件，供维护者回归和运行包引用 | 维护者通过示例预览/测试使用；新增登记不会自动扩充 Agent 的片段入口 |
+| 可用权限 | [asset-policy.json](../packages/creator-host/config/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
+| 分类阅读入口 | [Agent 资产索引](../packages/creator-host/docs/agent/assets/README.md) 及人、动物、载具、场景对象子目录；新增子页时接入 [agent-docs.ts](../packages/creator-host/src/discovery/agent-docs.ts) 的路径和父子导航 | `creator_get_authoring_schema({document:...})` 按层读取，页面再链接具体资产与能力 topic |
+| 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../packages/creator-host/src/discovery/authoring-schema.ts) / [creator-discovery.ts](../packages/creator-host/src/discovery/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、humanoid 等接口 |
+| Agent 接入片段 | [agent/examples/](../packages/creator-host/docs/agent/examples) 与 [binding-examples.ts](../packages/creator-host/src/discovery/binding-examples.ts)；复用对应主体的现有入口，片段只演示绑定和调用 | `creator_get_examples` 返回最小代码及文件清单，场景和参数由 Agent 提供 |
+| 内部运行示例 | `examples/three-creator/`；在 [example-registry.json](../packages/creator-host/config/example-registry.json) 登记 topic、root 和默认文件，供维护者回归和运行包引用 | 维护者通过示例预览/测试使用；新增登记不会自动扩充 Agent 的片段入口 |
 
 包内文件不会自动全部加载，依赖的其他资产 ID 也不会自动被选中：文件依赖登记到条目的 `resources`，需要组合的资产 ID 在项目中一并选择。
 
@@ -121,7 +153,7 @@ Agent 的使用顺序应明确为：**搜索资产 → 查看能力说明 → �
 
 ### 新主体的镜头与输入接入
 
-初始关系与镜头的接入顺序统一遵循 [编程规范](../scripts/three-creator/agent/programming.md#initial-state-and-camera)。资产侧提供下表事实；不在资产包中另写初始化按键或镜头接管脚本。
+初始关系与镜头的接入顺序统一遵循 [编程规范](../packages/creator-host/docs/agent/programming.md#initial-state-and-camera)。资产侧提供下表事实；不在资产包中另写初始化按键或镜头接管脚本。
 
 资产生产侧提供以下事实，并由接入同事绑定到实际接口。仅命名一个 `camera.driver` 节点不会自动启用驾驶视角。
 

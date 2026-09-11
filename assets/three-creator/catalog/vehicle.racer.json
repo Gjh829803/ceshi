@@ -1,6 +1,6 @@
 {
   "id": "vehicle.racer",
-  "displayName": "公路赛车 / APEX",
+  "displayName": "公路赛车 / Race car",
   "path": "vehicles/racer.glb",
   "uri": "./assets/subjects/43547f472b9a91b19c25925c7f63a008c4e24bcfb0dd0a8ca1669083c4bf1f59.glb",
   "sha256": "43547f472b9a91b19c25925c7f63a008c4e24bcfb0dd0a8ca1669083c4bf1f59",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "racer",
       "name": "公路赛车",
-      "en": "APEX",
+      "en": "Race car",
       "mode": "wheeled",
       "kernel": "K03",
       "color": "#f37659",

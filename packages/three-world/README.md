@@ -179,7 +179,7 @@ Preserve broad composition, scale, spatial relationships and actual collision/ac
 Keep the supplied humanoid visible; omit extra clothing, accessories, decoration,
 atmospheric effects, reflections and elaborate shadows.
 
-Select `humanoid.source-101` in `project.json` and obtain the `getting-started`
+Select `humanoid.uefn-mannequin` in `project.json` and obtain the `getting-started`
 example from Creator. Author the visible scene in Three; `map` supplies the actual
 collision geometry and action anchors.
 
@@ -279,7 +279,7 @@ bind the model through `addCharacter({object,body,movement})`, then select it wi
 `setControlledEntity` and `setCameraFollow`. `setCaptureTargets` identifies complete
 subjects for Creator and Episode.
 
-The [independent subject binding](../../scripts/three-creator/agent/examples/nonhuman.ts),
+The [independent subject binding](../creator-host/docs/agent/examples/nonhuman.ts),
 returned by creator_get_examples({topic:'nonhuman-subject'}), accepts your visual
 root, body/movement, scene setup and follow configuration. Use permitted models
 when suitable; ordinary authored geometry remains available.
@@ -340,8 +340,18 @@ ordinary ground and Humanoid vehicles keep their built-in recording paths.
 <!-- topic:assets -->
 ## Select, load and reuse assets
 
+Asset IDs identify selectable resources; `locomotion.*` tags describe binding
+families, not asset IDs or installed controllers. `animationClips` lists animation
+resources, `actions` maps clip playback, and executable character skills expose
+their own requests and preconditions. A listed clip does not imply an executable action.
+
+The default `humanoid.uefn-mannequin` retains the Source101 rig and existing motion
+resources. `creature.dragon-evolved` uses the simple dragon controller; numbered
+`creature.dragon.d01`–`d11` use the distinct `locomotion.flying-creature` binding.
+Source rig names and imported filenames remain provenance rather than public asset aliases.
+
 Use `assets_search` / `assets_describe`, then select IDs in
-`project.json: {schemaVersion:1,assetIds:['humanoid.source-101']}`. The compiler
+`project.json: {schemaVersion:1,assetIds:['humanoid.uefn-mannequin']}`. The compiler
 packages verified resources. `world.assets.search(query)` describes that selection;
 `world.assets.load(id)` creates an independent instance for ordinary
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
@@ -384,7 +394,7 @@ Mesh/Group geometry; do not load supplied or external vehicle models. The catalo
 geometry; custom subjects and compatible external assets follow the task's
 effective asset policy.
 
-For a custom vehicle, see the [preset rider + custom motorcycle example](../../scripts/three-creator/agent/examples/vehicle.ts)
+For a custom vehicle, see the [preset rider + custom motorcycle example](../creator-host/docs/agent/examples/vehicle.ts)
 (`creator_get_examples({topic:'custom-vehicle'})`). Supply only vehicle geometry
 as `VehicleInstance.object`, with a matching `spec` controller family,
 collision envelope and local pelvis seat position. `createHumanoidWorld` keeps
@@ -408,7 +418,7 @@ An instance belongs to one live character. For asynchronous changes:
 
 ```ts
 await world.runTask(async scope => {
-  const asset = await scope.assets.load('humanoid.source-101');
+  const asset = await scope.assets.load('humanoid.uefn-mannequin');
   scope.addCharacter({id:'guide',asset});
 });
 ```
@@ -423,8 +433,8 @@ changing a rig or motion binding.
 <!-- topic:character-actions -->
 ## Humanoid action cards
 
-<!-- asset-info:humanoid.source-101 -->
-`humanoid.source-101` supplies 48 animation clips. Six skills accept discrete
+<!-- asset-info:humanoid.uefn-mannequin -->
+`humanoid.uefn-mannequin` supplies 48 animation clips. Six skills accept discrete
 `humanoid.perform-action` requests; posture and surface changes use `humanoid.set-input`;
 locomotion and transitions follow actual controller state. `characterUsage` in
 asset tools exposes capabilities and controls. `world.humanoid.characterCapabilities()`
@@ -607,7 +617,7 @@ release only their own override. Full humanoid bindings accept ground walk/run/j
 speed settings; custom movement adapters and arbitrary body dimensions are not
 accepted for this controller. Vehicle commands also accept `actorId`; omitting it
 selects the current input actor. A rider retains its vehicle across input switches,
-and another actor cannot board or prepare that occupied vehicle. Use the [human integration guide](../../scripts/three-creator/agent/assets/humans/integration.md)
+and another actor cannot board or prepare that occupied vehicle. Use the [human integration guide](../creator-host/docs/agent/assets/humans/integration.md)
 for complete rigs and autonomous navigation.
 
 Every actor, including the initial character, uses the same controller, binding and
@@ -674,7 +684,7 @@ Transition clips need no key. Swimming style is a secondary menu/input choice.
 Keyboard routing uses the controlled actor's current vehicle mode, independently
 of the camera target. Unreserved axes remain camera inputs and do not also drive
 the vehicle. Rebound camera keys follow the same rule. For initial framing and
-mount handoffs, follow the [camera setup guide](../../scripts/three-creator/agent/programming.md#initial-state-and-camera).
+mount handoffs, follow the [camera setup guide](../creator-host/docs/agent/programming.md#initial-state-and-camera).
 HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
 roll:['KeyR']})` rebinds semantic actions and rejects duplicate/invalid codes.
@@ -770,7 +780,7 @@ through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
 
 ### Authored opening and subject integration
 
-The [initial state and camera guide](../../scripts/three-creator/agent/programming.md#initial-state-and-camera)
+The [initial state and camera guide](../creator-host/docs/agent/programming.md#initial-state-and-camera)
 defines the authoring sequence. `HumanoidWorldOptions.initialMountId` selects a
 grounded initial ride using the existing map spawn and seat; invalid placement fails.
 `CameraFollowOptions.opening` configures world position, look-at/up and FOV once.
@@ -787,8 +797,9 @@ starts gradually after activation and the manual-orbit hold interval;
 keyboard and programmatic movement/look; scene code must not install a first-key
 `setCameraMode` listener. Explicit view switching, orbit/zoom and collision avoidance
 can change the view. Once an obstruction clears, collision recovery restores the
-intended framing. Changing carrier during preserved follow rebases from the current
-camera instead of substituting a vehicle's default distance.
+intended framing. Changing carrier retains the current orbit, zoom and relative
+composition while following the new subject. A collision-retracted camera does not
+replace the intended follow distance or become the dismounted person's new opening.
 
 `distanceMeters` or `pitchRadians` explicitly selects target framing unless a
 mode is specified. Do not combine either with `framingMode:'preserve-opening'`.
@@ -1051,8 +1062,8 @@ geometry registered under another ID to restore it. Do not mutate a published
 geometry template. Geometry IDs are discoverable; an effect cannot secretly edit
 physics geometry. Async procedural geometry uses scope.replaceGeometry.
 
-The React editor in `apps/three-playground` uses the scene and vehicle modules in
-`shared/preset-content`. Authoring bindings are indexed by the [Agent asset guide](../../scripts/three-creator/agent/assets/README.md).
+The React editor in `apps/sdk-playground` uses the scene and vehicle modules in
+`packages/preset-content`. Authoring bindings are indexed by the [Agent asset guide](../creator-host/docs/agent/assets/README.md).
 
 <!-- topic:presentation -->
 ## Per-object whitebox color
@@ -1210,7 +1221,7 @@ the actual preset pelvis to this anchor. Author the cushion and anchor together:
 for a horizontal box cushion, `seatY = cushionCenterY + cushionHeight / 2 + pelvisClearance`.
 Choose local X/Z to place the hips over the saddle or seat pan.
 
-For `humanoid.source-101`, these Playground fits provide starting references:
+For `humanoid.uefn-mannequin`, these Playground fits provide starting references:
 
 | Mounted pose | Cushion geometry | Pelvis above cushion top |
 | --- | --- | --- |
@@ -1220,7 +1231,7 @@ For `humanoid.source-101`, these Playground fits provide starting references:
 These clearances depend on the current rig, pose and cushion geometry; they are
 not universal defaults or automatic seat fitting. A wider/deeper cushion can
 intersect the thighs even when the pelvis clears it. Changed rigs, poses or
-sloped seats need their own fit. The [vehicle binding](../../scripts/three-creator/agent/examples/vehicle.ts)
+sloped seats need their own fit. The [vehicle binding](../creator-host/docs/agent/examples/vehicle.ts)
 passes the selected handling configuration to your visual builder. Match the
 seat geometry to its pelvis anchor and verify rider contact.
 
@@ -1230,7 +1241,7 @@ Check first-person visibility as well as enter/exit/reset transitions. First-per
 eye position follows the real head bone and its eye offset: correcting the pelvis
 also raises the eye. Do not conceal a sunken rider by independently lifting the camera.
 
-<!-- asset-info:creature.horse,humanoid.source-101 -->
+<!-- asset-info:creature.horse,humanoid.uefn-mannequin -->
 ### Imported horse and rider anchors
 
 `HorseVisual` owns the real `creatures/horse.glb` skeleton, cloned clips and
@@ -1385,7 +1396,7 @@ read the vehicle's `spaceFlight.docking.status` to observe actual completion.
 | Environment | Declare real ground/obstacles, a region allowing `spec.mode`, and a spawn matching the instance. Movable props additionally need `rigidGroup`. |
 | Display | Pass `sample.vehicles[index]` from `onVisualUpdate((dt,sample)=>...)` to `humanoid.updateVehicleWheels`. This carries suspension, spin and steering at the chassis display time. |
 
-Read the [vehicle binding](../../scripts/three-creator/agent/examples/vehicle.ts)
+Read the [vehicle binding](../creator-host/docs/agent/examples/vehicle.ts)
 with creator_get_examples({topic:'custom-vehicle',variant:'car'}) or
 variant:'motorcycle'. Prepare the vehicle object/spec for your world's vehicles
 option; keep the supplied person separate. Mechanical visuals use the display binding

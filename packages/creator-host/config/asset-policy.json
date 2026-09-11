@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "allowedAssetIds": [
+    "humanoid.uefn-mannequin",
+    "creature.quadruped-static-diagnostic",
+    "creature.dragon-evolved",
+    "creature.horse",
+    "creature.dragon.d01",
+    "creature.dragon.d02",
+    "creature.dragon.d03",
+    "creature.dragon.d04",
+    "creature.dragon.d05",
+    "creature.dragon.d06",
+    "creature.dragon.d07",
+    "creature.dragon.d08",
+    "creature.dragon.d09",
+    "creature.dragon.d10",
+    "creature.dragon.d11"
+  ],
+  "defaultHumanoidAssetId": "humanoid.uefn-mannequin",
+  "allowCustomAssets": true
+}

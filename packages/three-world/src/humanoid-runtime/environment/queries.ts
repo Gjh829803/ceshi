@@ -8,7 +8,7 @@ import {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {BorrowedPhysicsWorld} from '../../physics-host';
 import {DYNAMIC_PROP_COLLISION_GROUPS,DEFAULT_CHARACTER_OPTIONS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import { Euler,Quaternion,Vector3 } from 'three';
 import type { Vec3 } from '../../contracts';
 import { probeHumanoidCamera } from '../camera-queries';

@@ -98,5 +98,5 @@ const driftTuning = {
 
 实现：[侧滑积分](../packages/three-world/src/humanoid-runtime/simulation.ts)、
 [配置合同](../packages/three-world/src/humanoid-runtime/config.ts)、
-[车型参数](../shared/preset-content/config.ts)、
+[车型参数](../packages/preset-content/src/config.ts)、
 [完整摩托示例](../examples/three-creator/custom-vehicle/main.ts)。

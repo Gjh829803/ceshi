@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {launchChromiumWithSystemFallback} from '@worldkit/browser-capture/browser';
+const output=path.resolve('outputs/kayak/browser');await mkdir(output,{recursive:true});
+const browser=await launchChromiumWithSystemFallback({headless:true,args:['--enable-unsafe-swiftshader']});
+const page=await browser.newPage({viewport:{width:1440,height:960}}),errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+const state=()=>page.evaluate(()=>(window as any).trainingGround.getState());
+const elapsed=async(seconds:number)=>{const t=(await state()).simulationTime;await page.waitForFunction(({t,seconds})=>(window as any).trainingGround.getState().simulationTime>=t+seconds,{t,seconds},{timeout:60000});};
+const hold=async(key:string,seconds:number)=>{await page.keyboard.down(key);await elapsed(seconds);await page.keyboard.up(key);};
+try{
+ await page.goto(process.argv[2]??'http://127.0.0.1:5177/');await page.waitForFunction(()=>Boolean((window as any).trainingGround?.getState().ready),{},{timeout:60000});
+ const bytes=await(await page.request.get(new URL('/runtime/worldkit-three.js',page.url()).href)).body();
+ await page.locator('#libraryButton').click();await page.getByRole('searchbox',{name:'搜索资产'}).fill('皮划艇');
+ await page.getByRole('button',{name:'查看单人皮划艇',exact:true}).click();await page.screenshot({path:path.join(output,'library.png')});
+ await page.getByRole('button',{name:'前往资产',exact:true}).click();await elapsed(.4);const boarding=await state();assert(boarding.position[1]>-2,'boarding point must be on the low pontoon');
+ await page.mouse.click(700,500);await page.keyboard.press('f');await elapsed(.7);assert.equal((await state()).activeVehicle,'kayak');
+ await page.evaluate(()=>{const stream=(document.querySelector('#viewport') as HTMLCanvasElement).captureStream(30),r=new MediaRecorder(stream,{mimeType:'video/webm'}),chunks:Blob[]=[];r.ondataavailable=e=>chunks.push(e.data);r.start();(window as any).finishKayak=()=>new Promise<string>(resolve=>{r.onstop=()=>{const reader=new FileReader();reader.onload=()=>{stream.getTracks().forEach(t=>t.stop());resolve(String(reader.result).split(',')[1]!);};reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};r.stop();});});
+ const start=await state();await page.screenshot({path:path.join(output,'third-person.png')});
+ const buoyancy=await page.evaluate(()=>(window as any).__WORLDKIT_EVAL__.snapshot().humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='kayak').kayak);
+ assert.equal(buoyancy.surface,-2);assert(buoyancy.immersion>.3&&buoyancy.immersion<.6);
+ await page.keyboard.down('w');await elapsed(2.5);await page.screenshot({path:path.join(output,'paddling.png')});await elapsed(3.5);await page.keyboard.up('w');const forward=await state();assert(forward.speed>1);
+ await elapsed(1);const coast=await state();assert(coast.speed>.2&&coast.speed<forward.speed);
+ await page.keyboard.press('t');await elapsed(.4);assert.equal((await state()).camera.mode,1);await page.screenshot({path:path.join(output,'first-person.png')});
+ await hold('s',9);const reverse=await state();assert(reverse.movement.velocity[0]<-.2);
+ await hold(' ',3);const stopped=await state();assert(stopped.speed<.05);
+ await page.keyboard.press('t');await elapsed(.3);await page.screenshot({path:path.join(output,'shoulder.png')});await page.keyboard.press('t');await elapsed(.2);
+ await hold('a',4);const turn=await state();
+ await page.mouse.move(700,500);await page.mouse.down();await page.mouse.move(1080,440,{steps:16});await page.mouse.up();await elapsed(.3);await page.screenshot({path:path.join(output,'side.png')});
+ await page.keyboard.press('f');await elapsed(.5);assert.equal((await state()).activeVehicle,null);const exit=await state();
+ const video=await page.evaluate(()=>(window as any).finishKayak());await writeFile(path.join(output,'kayak-input.webm'),Buffer.from(video,'base64'));
+ await page.evaluate(()=>(window as any).trainingGround.reset());assert.equal((await state()).activeVehicle,null);assert.deepEqual(errors,[]);
+ await writeFile(path.join(output,'report.json'),JSON.stringify({runtimeSha256:createHash('sha256').update(bytes).digest('hex'),runtimeBytes:bytes.length,buoyancy,boarding,start,forward,coast,reverse,stopped,turn,exit,errors},null,2));
+ console.log(JSON.stringify({output,boarding:boarding.position,forward:forward.speed,coast:coast.speed,reverse:reverse.movement.velocity,stopped:stopped.speed,errors}));
+}catch(error){console.log(JSON.stringify(await state().catch(()=>null)));await page.screenshot({path:path.join(output,'failure.png')});throw error;}finally{await browser.close();}

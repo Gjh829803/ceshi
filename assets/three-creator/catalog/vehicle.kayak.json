@@ -1,6 +1,6 @@
 {
   "id": "vehicle.kayak",
-  "displayName": "单人皮划艇 / KAYAK",
+  "displayName": "单人皮划艇 / Kayak",
   "path": "vehicles/kayak.glb",
   "uri": "./assets/subjects/457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7.glb",
   "sha256": "457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-kayak.ts"
+    "generator": "packages/creator-host/scripts/assets/export-kayak.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.kayak"
+    "locomotion.paddled-boat"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "kayak",
       "name": "单人皮划艇",
-      "en": "KAYAK",
+      "en": "Kayak",
       "mode": "paddled_boat",
       "archetype": "kayak",
       "kernel": "K17",

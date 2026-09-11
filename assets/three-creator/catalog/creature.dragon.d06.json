@@ -1,6 +1,6 @@
 {
   "id": "creature.dragon.d06",
-  "displayName": "D06 · 飞龙 / Flying dragon",
+  "displayName": "飞龙 D06 / Flying dragon D06",
   "path": "flying-creatures/D06/model.glb",
   "uri": "./assets/subjects/358490a9057da00dd8e7b9726cf1ce529b28c254262cd5776255ec0bfd350932.glb",
   "sha256": "358490a9057da00dd8e7b9726cf1ce529b28c254262cd5776255ec0bfd350932",
@@ -42,9 +42,9 @@
     },
     {
       "path": "flying-creatures/README.md",
-      "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-      "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-      "byteLength": 9139,
+      "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+      "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+      "byteLength": 9156,
       "sourcePath": "assets/dragon-training/README.md"
     },
     {
@@ -80,8 +80,8 @@
     "schemaVersion": 1,
     "spec": {
       "id": "creature.dragon.d06",
-      "name": "D06 · 飞龙",
-      "en": "DRAGON",
+      "name": "飞龙 D06",
+      "en": "Flying dragon D06",
       "mode": "dragon",
       "kernel": "creature-flight",
       "archetype": "dragon",
@@ -376,7 +376,7 @@
     ]
   },
   "locomotionBindingIds": [
-    "locomotion.dragon"
+    "locomotion.flying-creature"
   ],
   "provenance": {
     "source": "Local Century D06 extraction",
@@ -402,7 +402,7 @@
     "exampleVariant": "flying-creature",
     "documentation": "assets/animals/flying-mounts.md",
     "requiredAssetIds": [
-      "humanoid.source-101",
+      "humanoid.uefn-mannequin",
       "creature.dragon.d06"
     ],
     "visual": {
@@ -410,11 +410,11 @@
       "modelResource": "flying-creatures/D06/model.glb",
       "flameResource": "flying-creatures/flame.png"
     },
-    "useWhen": "使用 D06 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+    "useWhen": "使用编号 D06 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
     "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
     "capabilities": [
       "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-      "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+      "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
       "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
     ]
   }

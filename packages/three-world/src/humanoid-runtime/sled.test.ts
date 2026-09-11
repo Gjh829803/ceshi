@@ -8,13 +8,13 @@ import { Character } from './character';
 import { EnvironmentQueries, initEnvironmentQueries, vehicleBody } from './environment/queries';
 import { createVehicle, emptyInput, stepVehicle as prepareVehicle, type Input } from './simulation';
 import type { EnvironmentDefinition } from './environment/types';
-import { SLED_SPEC } from '../../../../shared/preset-content/sled';
+import { SLED_SPEC } from '@worldkit/preset-content/sled';
 
-import { SKI_SPEC } from '../../../../shared/preset-content/ski';
+import { SKI_SPEC } from '@worldkit/preset-content/ski';
 
-import {buildSkiModel} from '../../../../shared/preset-content/ski-model';
+import {buildSkiModel} from '@worldkit/preset-content/ski-model';
 import {sampleSkiEquipment} from './ski-visual';
-import {getDefaultProfile} from '../../../../shared/preset-content/platform/profiles';
+import {getDefaultProfile} from '@worldkit/preset-content/platform/profiles';
 
 beforeAll(initEnvironmentQueries);
 describe.each([SLED_SPEC,SKI_SPEC])('$id snow vehicle',spec=>{

@@ -1,4 +1,4 @@
-import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
+import {createDragonTrainingMap} from '@worldkit/preset-content/environment/dragon-training';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {describe,it,expect,beforeAll,afterEach,vi} from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';

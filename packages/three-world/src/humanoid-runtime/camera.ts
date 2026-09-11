@@ -3,7 +3,7 @@ import {recenterCameraYaw} from '../config/follow-camera';
 import {VehicleCameraQueries} from './vehicle-camera-queries';
 import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CameraCollisionSolver, type CameraCollisionRequest } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver, type CameraCollisionRequest } from '@worldkit/camera-collision';
 import { probeHumanoidCamera } from './camera-queries';
 import { angleDelta, clamp, damp } from './simulation';
 import type {HumanoidActor} from './humanoid/actor';
@@ -447,7 +447,13 @@ export class HumanoidCameraFollow {
   useAuthoredCamera():void {this.rig.useAuthoredCamera();this.previous=undefined;this.current=undefined;}
   beforeFixedUpdate():void {
     // A pending follow must observe the Agent's final edits, including projection changes.
-    if(this.rig.mode==='follow-pending')this.capture(true);
+    if(this.rig.mode==='follow-pending'){
+      const id=this.rig.targetEntityId,subject=id?this.sample(id):undefined;
+      // Programmatic boarding can change the subject before the first input.
+      // Reconcile it before capture overwrites the previous subject identity.
+      if(subject&&this.current&&subject.id!==this.current.subject.id){this.prepareQueries();this.rig.retarget(id!);}
+      this.capture(true);
+    }
     if(this.current&&this.rig.mode==='follow'){
       const aspect=this.camera.aspect;this.camera.copy(this.current.camera,false);
       this.camera.aspect=aspect;this.camera.updateProjectionMatrix();

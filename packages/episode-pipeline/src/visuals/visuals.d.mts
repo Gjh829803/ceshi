@@ -1,0 +1,3 @@
+import type { EpisodeSourceManifest } from '../contracts.js';
+import type { CloudClient } from '../cloud/cloud.mjs';
+export function runThreeEpisodeVisuals(options: {source: EpisodeSourceManifest; capture: unknown; episodeId: string; outputRoot: string; cloud: CloudClient; onProgress?: (state: any) => Promise<void>; stopBeforeSeedance: true; streaming?: boolean; publishS3Prefix?: string; loadRejectionPolicy?: () => Promise<any>; anchorContinuation?: {path:string;sha256:string}; referenceStyleVariantId?: string; stylePlanCandidate?: {path:string;sha256:string}}): Promise<{status: string; preparedRequestCount: number; expectedRequestCount?: number; providerVideoSubmissionCount: number}>;

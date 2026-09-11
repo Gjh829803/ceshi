@@ -24,8 +24,8 @@ visuals 输出、已登记 manifest 与 attempt journal。跨 Pod 使用共享�
 和 S3 权限。设置 `WORLDKIT_CLOUD_MEDIA_HOST=1`；实际媒体操作同时检查云端 Linux
 环境。GPU 仍只用于前面的真实录制。
 
-将[提供商配置](../config/three-episode-seedance-provider.example.json)和
-[准入配置](../config/three-episode-seedance-admission.example.json)复制到私有运行目录，
+将[提供商配置](../packages/episode-pipeline/config/three-episode-seedance-provider.example.json)和
+[准入配置](../packages/episode-pipeline/config/three-episode-seedance-admission.example.json)复制到私有运行目录，
 填入实际 endpoint/model、桶前缀、登记清单、并发和总量。提供商接口使用 Seedance 的
 `contents/generations/tasks` 视频编辑协议。`limitUnits` 每 15 秒计 1 单位，当前
 30 秒请求计 2；例如 120 单位最多接受 60 个 30 秒生成结果。它是产出与占用额度，
@@ -48,7 +48,7 @@ ConfigMap get/create/replace 权限。禁止公开桶。跨 Host 的 admission �
    确实没有拒绝记录时为空数组。准备命令只校验和写清单，不调用模型。
 
 ```sh
-node scripts/three-episode/seedance-preflight.mjs prepare \
+node packages/episode-pipeline/src/seedance/seedance-preflight.mjs prepare \
   --source /work/run/source/source.json \
   --capture /work/run/episode/capture-input.json \
   --visual-root /work/run/episode/visuals \
@@ -62,7 +62,7 @@ node scripts/three-episode/seedance-preflight.mjs prepare \
    相同配置的服务通过 Kubernetes CAS 共用额度；`name` 必须是该轮统一名称。
 
 ```sh
-node scripts/three-episode/seedance-admission-service.mjs \
+node packages/episode-pipeline/src/seedance/seedance-admission-service.mjs \
   --config /work/run/control/admission.json
 ```
 
@@ -70,7 +70,7 @@ node scripts/three-episode/seedance-admission-service.mjs \
    journal、queue、completed 和 media 使用互不重叠的私有 S3 前缀。
 
 ```sh
-python3 scripts/three-episode/seedance-dispatch.py \
+python3 packages/episode-pipeline/src/seedance/seedance-dispatch.py \
   --manifest /work/run/batch/seedance-requests.json --attempt attempt-01 \
   --config /work/run/control/provider.json \
   --post-slot-root /work/run/control/post-slots \
@@ -81,7 +81,7 @@ python3 scripts/three-episode/seedance-dispatch.py \
 4. 运行独立 CPU 回收进程；可先于 dispatcher 启动并持续消费队列。
 
 ```sh
-python3 scripts/three-episode/seedance-delivery.py \
+python3 packages/episode-pipeline/src/seedance/seedance-delivery.py \
   --output-root /work/seedance-delivery \
   --queue-prefix s3://example-private-bucket/owned-run/queue \
   --completion-prefix s3://example-private-bucket/owned-run/completed \
@@ -108,7 +108,7 @@ python3 scripts/three-episode/seedance-delivery.py \
 - `delivery-queued` 表示等待回收；S3 completion 才证明产物持久化。当前验收覆盖媒体
   规格和身份闭包，最终内容质量仍需检查。Creator 交付自动订阅不在此入口中。
 
-本地回归：`node --test scripts/three-episode/seedance-*.test.mjs`，以及
-`python3 scripts/three-episode/seedance-dispatch.test.py`、
-`python3 scripts/three-episode/seedance-delivery.test.py`。测试模拟云服务；合成媒体用来
+本地回归：`node --test packages/episode-pipeline/seedance-*.test.mjs`，以及
+`python3 packages/episode-pipeline/tests/seedance/seedance-dispatch.test.py`、
+`python3 packages/episode-pipeline/tests/seedance/seedance-delivery.test.py`。测试模拟云服务；合成媒体用来
 验证回收契约，不构成真实提供商成功或视觉质量的证据。

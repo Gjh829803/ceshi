@@ -1,0 +1,106 @@
+{
+  "id": "vehicle.motorcycle",
+  "displayName": "两轮摩托 / Motorcycle",
+  "path": "vehicles/bike.glb",
+  "uri": "./assets/subjects/7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301.glb",
+  "sha256": "7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301",
+  "byteLength": 61392,
+  "sourcePath": "assets/three-creator/presets/vehicles/bike.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [],
+  "provenance": {
+    "repository": "vehicle-training-ground",
+    "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+    "notices": "resources",
+    "importedWithoutChangingAssetBytes": true
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "locomotion.motorcycle"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "motorcycle",
+      "name": "两轮摩托",
+      "en": "Motorcycle",
+      "mode": "motorcycle",
+      "kernel": "K02",
+      "color": "#a4d479",
+      "spawn": [
+        4,
+        0,
+        64
+      ],
+      "yaw": 0,
+      "speed": 32,
+      "accel": 12,
+      "grip": 13,
+      "steer": 1.12,
+      "radius": 0.85,
+      "seat": [
+        0,
+        0.99,
+        -0.2
+      ],
+      "camera": 6.8,
+      "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
+      "archetype": "motorcycle",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.99,
+        -0.2
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.65,
+      1.2,
+      1.65
+    ],
+    "offset": [
+      0,
+      1.2,
+      0
+    ]
+  }
+}

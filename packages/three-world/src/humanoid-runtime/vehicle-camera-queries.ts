@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import {Box3,Matrix4,Ray,Vector3,type InstancedMesh,type Material,type Mesh,type Object3D} from 'three';
-import type {CameraCollisionProbeResult} from '@whitebox-world/camera-collision';
+import type {CameraCollisionProbeResult} from '@worldkit/camera-collision';
 import {collisionMeshes,extractCollisionGeometry,geometryAttributeVersion,isWorldVisible,poseFromWorldMatrix,worldPose,type WorldPose} from '../geometry';
 import type {Vec3} from '../contracts';
 import {CameraMeshShape} from './camera-mesh-shape';

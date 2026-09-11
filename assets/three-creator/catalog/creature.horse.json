@@ -1,6 +1,6 @@
 {
   "id": "creature.horse",
-  "displayName": "骑乘骏马 / STEED",
+  "displayName": "骑乘骏马 / Horse",
   "path": "creatures/horse.glb",
   "uri": "./assets/subjects/6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae.glb",
   "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
@@ -27,7 +27,7 @@
   "actions": {},
   "limitations": [
     "Walk also serves trot; no distinct trot clip.",
-    "Source101 uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection."
+    "The supplied humanoid uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection."
   ],
   "provenance": {
     "repository": "vehicle-training-ground",
@@ -66,14 +66,14 @@
     }
   ],
   "locomotionBindingIds": [
-    "locomotion.mount"
+    "locomotion.horse"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "horse",
       "name": "骑乘骏马",
-      "en": "STEED",
+      "en": "Horse",
       "mode": "mount",
       "kernel": "K11",
       "color": "#a46942",
@@ -128,9 +128,9 @@
   },
   "integrationMetadata": {
     "classification": "ground-mount",
-    "useWhen": "骑马、地面骑乘、双马实例、上下马交互；HorseVisual 原始骨骼动画与 Source101 骑手。",
+    "useWhen": "骑马、地面骑乘及上下马交互；复用马匹骨骼动画与独立的人形骑手。",
     "requiredAssetIds": [
-      "humanoid.source-101",
+      "humanoid.uefn-mannequin",
       "creature.horse"
     ],
     "clips": [

@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "assets": [
     {
-      "id": "creature.dragon",
-      "displayName": "双翼飞龙 / WYVERN",
+      "id": "creature.dragon-evolved",
+      "displayName": "进化龙 / Evolved dragon",
       "path": "creatures/dragon.glb",
       "uri": "./assets/subjects/347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1.glb",
       "sha256": "347f5570219a9f180b575a85bd1fd383dd9f219d16a1bbfe9f46b35488713ea1",
@@ -28,7 +28,9 @@
         ]
       },
       "actions": {},
-      "limitations": [],
+      "limitations": [
+        "Uses the simple dragon vehicle controller; the numbered flying-creature landing, summon, rope-ladder and flame integration does not apply."
+      ],
       "provenance": {
         "repository": "vehicle-training-ground",
         "commit": "c293622a63716b8473cc2a95cb485c515265945e",
@@ -66,14 +68,14 @@
         }
       ],
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.dragon-evolved"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "dragon",
-          "name": "双翼飞龙",
-          "en": "WYVERN",
+          "id": "dragon-evolved",
+          "name": "进化龙",
+          "en": "Evolved dragon",
           "mode": "dragon",
           "kernel": "K13",
           "color": "#527a59",
@@ -125,11 +127,14 @@
           2.6,
           0
         ]
-      }
+      },
+      "recommendedFor": [
+        "Evolved dragon model with Flying_Idle and Fast_Flying clips; simple dragon vehicle control."
+      ]
     },
     {
       "id": "creature.dragon.d01",
-      "displayName": "D01 · 原始飞龙 / Flying dragon",
+      "displayName": "飞龙 D01 / Flying dragon D01",
       "path": "flying-creatures/D01/model.glb",
       "uri": "./assets/subjects/e2b9494c35643b9f1c292695712e408512c1cceaa7ffefda58ad73b5219fce88.glb",
       "sha256": "e2b9494c35643b9f1c292695712e408512c1cceaa7ffefda58ad73b5219fce88",
@@ -171,9 +176,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -209,8 +214,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d01",
-          "name": "D01 · 原始飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D01",
+          "en": "Flying dragon D01",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -505,7 +510,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D01 extraction",
@@ -531,7 +536,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d01"
         ],
         "visual": {
@@ -539,18 +544,18 @@
           "modelResource": "flying-creatures/D01/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D01 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D01 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d02",
-      "displayName": "D02 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D02 / Flying dragon D02",
       "path": "flying-creatures/D02/model.glb",
       "uri": "./assets/subjects/947d9b47cbd6f1d5cc5ecdf0b91f6b31ead9bda199987db3bfaacb41a0562330.glb",
       "sha256": "947d9b47cbd6f1d5cc5ecdf0b91f6b31ead9bda199987db3bfaacb41a0562330",
@@ -592,9 +597,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -630,8 +635,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d02",
-          "name": "D02 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D02",
+          "en": "Flying dragon D02",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -926,7 +931,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D02 extraction",
@@ -952,7 +957,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d02"
         ],
         "visual": {
@@ -960,18 +965,18 @@
           "modelResource": "flying-creatures/D02/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D02 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D02 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d03",
-      "displayName": "D03 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D03 / Flying dragon D03",
       "path": "flying-creatures/D03/model.glb",
       "uri": "./assets/subjects/e9ec6ab6236094c027f29574656613b746d2e5f6ccc8174a35f9e0831bf36f66.glb",
       "sha256": "e9ec6ab6236094c027f29574656613b746d2e5f6ccc8174a35f9e0831bf36f66",
@@ -1013,9 +1018,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -1051,8 +1056,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d03",
-          "name": "D03 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D03",
+          "en": "Flying dragon D03",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -1347,7 +1352,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D03 extraction",
@@ -1373,7 +1378,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d03"
         ],
         "visual": {
@@ -1381,18 +1386,18 @@
           "modelResource": "flying-creatures/D03/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D03 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D03 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d04",
-      "displayName": "D04 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D04 / Flying dragon D04",
       "path": "flying-creatures/D04/model.glb",
       "uri": "./assets/subjects/b4b804765d468c64d5cd7e64a56ceda3a1c6b6e8684b1b756092e77d0780b19a.glb",
       "sha256": "b4b804765d468c64d5cd7e64a56ceda3a1c6b6e8684b1b756092e77d0780b19a",
@@ -1434,9 +1439,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -1472,8 +1477,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d04",
-          "name": "D04 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D04",
+          "en": "Flying dragon D04",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -1768,7 +1773,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D04 extraction",
@@ -1794,7 +1799,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d04"
         ],
         "visual": {
@@ -1802,18 +1807,18 @@
           "modelResource": "flying-creatures/D04/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D04 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D04 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d05",
-      "displayName": "D05 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D05 / Flying dragon D05",
       "path": "flying-creatures/D05/model.glb",
       "uri": "./assets/subjects/4283e795b3f36aeb810b2dd16ff889381415e0edc0fcecf6c83732309d62a938.glb",
       "sha256": "4283e795b3f36aeb810b2dd16ff889381415e0edc0fcecf6c83732309d62a938",
@@ -1855,9 +1860,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -1893,8 +1898,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d05",
-          "name": "D05 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D05",
+          "en": "Flying dragon D05",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -2189,7 +2194,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D05 extraction",
@@ -2215,7 +2220,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d05"
         ],
         "visual": {
@@ -2223,18 +2228,18 @@
           "modelResource": "flying-creatures/D05/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D05 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D05 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d06",
-      "displayName": "D06 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D06 / Flying dragon D06",
       "path": "flying-creatures/D06/model.glb",
       "uri": "./assets/subjects/358490a9057da00dd8e7b9726cf1ce529b28c254262cd5776255ec0bfd350932.glb",
       "sha256": "358490a9057da00dd8e7b9726cf1ce529b28c254262cd5776255ec0bfd350932",
@@ -2276,9 +2281,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -2314,8 +2319,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d06",
-          "name": "D06 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D06",
+          "en": "Flying dragon D06",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -2610,7 +2615,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D06 extraction",
@@ -2636,7 +2641,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d06"
         ],
         "visual": {
@@ -2644,18 +2649,18 @@
           "modelResource": "flying-creatures/D06/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D06 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D06 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d07",
-      "displayName": "D07 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D07 / Flying dragon D07",
       "path": "flying-creatures/D07/model.glb",
       "uri": "./assets/subjects/0aa9b08737d4d2e41be7f1c97821802a5874eba3017f73364fe2bd5895fb1ad2.glb",
       "sha256": "0aa9b08737d4d2e41be7f1c97821802a5874eba3017f73364fe2bd5895fb1ad2",
@@ -2697,9 +2702,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -2735,8 +2740,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d07",
-          "name": "D07 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D07",
+          "en": "Flying dragon D07",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -3031,7 +3036,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D07 extraction",
@@ -3057,7 +3062,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d07"
         ],
         "visual": {
@@ -3065,18 +3070,18 @@
           "modelResource": "flying-creatures/D07/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D07 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D07 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d08",
-      "displayName": "D08 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D08 / Flying dragon D08",
       "path": "flying-creatures/D08/model.glb",
       "uri": "./assets/subjects/6b201c045d0fa163fc5f1cad6ed223230e8f081e02a6c9b2f0201ed1633c8ada.glb",
       "sha256": "6b201c045d0fa163fc5f1cad6ed223230e8f081e02a6c9b2f0201ed1633c8ada",
@@ -3118,9 +3123,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -3156,8 +3161,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d08",
-          "name": "D08 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D08",
+          "en": "Flying dragon D08",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -3452,7 +3457,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D08 extraction",
@@ -3478,7 +3483,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d08"
         ],
         "visual": {
@@ -3486,18 +3491,18 @@
           "modelResource": "flying-creatures/D08/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D08 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D08 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d09",
-      "displayName": "D09 · 长身龙 / Flying dragon",
+      "displayName": "长身飞龙 D09 / Long-bodied flying dragon D09",
       "path": "flying-creatures/D09/model.glb",
       "uri": "./assets/subjects/a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833.glb",
       "sha256": "a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833",
@@ -3539,9 +3544,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -3577,8 +3582,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d09",
-          "name": "D09 · 长身龙",
-          "en": "DRAGON",
+          "name": "长身飞龙 D09",
+          "en": "Long-bodied flying dragon D09",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -3873,7 +3878,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D09 extraction",
@@ -3899,7 +3904,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d09"
         ],
         "visual": {
@@ -3907,18 +3912,18 @@
           "modelResource": "flying-creatures/D09/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D09 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D09 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d10",
-      "displayName": "D10 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D10 / Flying dragon D10",
       "path": "flying-creatures/D10/model.glb",
       "uri": "./assets/subjects/b90e2c6232ff411bcc75f73a1e3e1207946593c5758dc2b08ce88696b0133331.glb",
       "sha256": "b90e2c6232ff411bcc75f73a1e3e1207946593c5758dc2b08ce88696b0133331",
@@ -3960,9 +3965,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -3998,8 +4003,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d10",
-          "name": "D10 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D10",
+          "en": "Flying dragon D10",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -4294,7 +4299,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D10 extraction",
@@ -4320,7 +4325,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d10"
         ],
         "visual": {
@@ -4328,18 +4333,18 @@
           "modelResource": "flying-creatures/D10/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D10 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D10 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.dragon.d11",
-      "displayName": "D11 · 飞龙 / Flying dragon",
+      "displayName": "飞龙 D11 / Flying dragon D11",
       "path": "flying-creatures/D11/model.glb",
       "uri": "./assets/subjects/84b1aefb69d0ea28c721ae2782380e7ca9c8d15a13414bfe1a34205aee04ad92.glb",
       "sha256": "84b1aefb69d0ea28c721ae2782380e7ca9c8d15a13414bfe1a34205aee04ad92",
@@ -4381,9 +4386,9 @@
         },
         {
           "path": "flying-creatures/README.md",
-          "uri": "./assets/resources/8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade.md",
-          "sha256": "8dd9cb62a40d2f5ae74f95b8b64e8c35c4640a5e4926ca1bf5bd43837c1afade",
-          "byteLength": 9139,
+          "uri": "./assets/resources/1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4.md",
+          "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+          "byteLength": 9156,
           "sourcePath": "assets/dragon-training/README.md"
         },
         {
@@ -4419,8 +4424,8 @@
         "schemaVersion": 1,
         "spec": {
           "id": "creature.dragon.d11",
-          "name": "D11 · 飞龙",
-          "en": "DRAGON",
+          "name": "飞龙 D11",
+          "en": "Flying dragon D11",
           "mode": "dragon",
           "kernel": "creature-flight",
           "archetype": "dragon",
@@ -4715,7 +4720,7 @@
         ]
       },
       "locomotionBindingIds": [
-        "locomotion.dragon"
+        "locomotion.flying-creature"
       ],
       "provenance": {
         "source": "Local Century D11 extraction",
@@ -4741,7 +4746,7 @@
         "exampleVariant": "flying-creature",
         "documentation": "assets/animals/flying-mounts.md",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.dragon.d11"
         ],
         "visual": {
@@ -4749,18 +4754,18 @@
           "modelResource": "flying-creatures/D11/model.glb",
           "flameResource": "flying-creatures/flame.png"
         },
-        "useWhen": "使用 D11 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+        "useWhen": "使用编号 D11 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
         "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
         "capabilities": [
           "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
-          "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+          "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
           "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
         ]
       }
     },
     {
       "id": "creature.horse",
-      "displayName": "骑乘骏马 / STEED",
+      "displayName": "骑乘骏马 / Horse",
       "path": "creatures/horse.glb",
       "uri": "./assets/subjects/6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae.glb",
       "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
@@ -4787,7 +4792,7 @@
       "actions": {},
       "limitations": [
         "Walk also serves trot; no distinct trot clip.",
-        "Source101 uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection."
+        "The supplied humanoid uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection."
       ],
       "provenance": {
         "repository": "vehicle-training-ground",
@@ -4826,14 +4831,14 @@
         }
       ],
       "locomotionBindingIds": [
-        "locomotion.mount"
+        "locomotion.horse"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "horse",
           "name": "骑乘骏马",
-          "en": "STEED",
+          "en": "Horse",
           "mode": "mount",
           "kernel": "K11",
           "color": "#a46942",
@@ -4888,9 +4893,9 @@
       },
       "integrationMetadata": {
         "classification": "ground-mount",
-        "useWhen": "骑马、地面骑乘、双马实例、上下马交互；HorseVisual 原始骨骼动画与 Source101 骑手。",
+        "useWhen": "骑马、地面骑乘及上下马交互；复用马匹骨骼动画与独立的人形骑手。",
         "requiredAssetIds": [
-          "humanoid.source-101",
+          "humanoid.uefn-mannequin",
           "creature.horse"
         ],
         "clips": [
@@ -4902,8 +4907,54 @@
       }
     },
     {
-      "id": "humanoid.source-101",
-      "displayName": "UEFN 白色人形 / 黑色关节 / LOD1 / 48 动作",
+      "id": "creature.quadruped-static-diagnostic",
+      "displayName": "静态四足动物（诊断用） / Static quadruped (diagnostic)",
+      "uri": "./assets/subjects/70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b.glb",
+      "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
+      "byteLength": 27616,
+      "sourcePath": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
+      "usage": "diagnostic",
+      "recommendedFor": [
+        "static asset loading diagnostic"
+      ],
+      "recommendedBody": null,
+      "locomotionBindingIds": [],
+      "selectedNodeIndices": [
+        2,
+        7,
+        12,
+        14,
+        15,
+        17
+      ],
+      "rootTransform": {
+        "positionMetersXYZ": [
+          -1.1497997045516968,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [
+        "Static six-mesh diagnostic animal; no skeleton or authored animation.",
+        "The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal.",
+        "Not a fox or nine-tailed fox reference; do not recommend it for matching those characters.",
+        "A character controller can translate this object but cannot supply leg motion."
+      ]
+    },
+    {
+      "id": "humanoid.uefn-mannequin",
+      "displayName": "UEFN 白色黑关节人形 / UEFN mannequin, white with black joints",
       "uri": "./assets/subjects/260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461.glb",
       "sha256": "260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461",
       "byteLength": 7029028,
@@ -5519,10 +5570,16 @@
         "radiusMeters": 0.35
       },
       "locomotionBindingIds": [
-        "ground.standard",
+        "locomotion.ground",
         "locomotion.humanoid"
       ],
-      "runtimeActions": [
+      "boneCount": 101,
+      "runtimeClipCount": 48,
+      "recommendedFor": [
+        "human protagonist",
+        "full humanoid actions"
+      ],
+      "animationClips": [
         {
           "id": "idle-loop",
           "file": "gasp-research/idle-loop.experimental.glb",
@@ -5811,63 +5868,11 @@
           "source": "CMU 125/06",
           "license": "CMU terms"
         }
-      ],
-      "boneCount": 101,
-      "runtimeClipCount": 48,
-      "recommendedFor": [
-        "human protagonist",
-        "full humanoid actions"
-      ]
-    },
-    {
-      "id": "quadruped.animal.large-static",
-      "displayName": "Single large quadruped diagnostic specimen",
-      "uri": "./assets/subjects/70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b.glb",
-      "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
-      "byteLength": 27616,
-      "sourcePath": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
-      "usage": "diagnostic",
-      "recommendedFor": [
-        "static asset loading diagnostic"
-      ],
-      "recommendedBody": null,
-      "locomotionBindingIds": [],
-      "selectedNodeIndices": [
-        2,
-        7,
-        12,
-        14,
-        15,
-        17
-      ],
-      "rootTransform": {
-        "positionMetersXYZ": [
-          -1.1497997045516968,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          0,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {},
-      "limitations": [
-        "Static six-mesh diagnostic animal; no skeleton or authored animation.",
-        "The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal.",
-        "Not a fox or nine-tailed fox reference; do not recommend it for matching those characters.",
-        "A character controller can translate this object but cannot supply leg motion."
       ]
     },
     {
       "id": "vehicle.atv",
-      "displayName": "全地形车 / QUAD ATV",
+      "displayName": "全地形车 / All-terrain vehicle",
       "path": "vehicles/atv.glb",
       "uri": "./assets/subjects/042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004.glb",
       "sha256": "042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004",
@@ -5898,18 +5903,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-atv.ts"
+        "generator": "packages/creator-host/scripts/assets/export-atv.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.atv"
+        "locomotion.wheeled"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "atv",
           "name": "全地形车",
-          "en": "QUAD ATV",
+          "en": "All-terrain vehicle",
           "mode": "wheeled",
           "archetype": "atv",
           "kernel": "K01",
@@ -6151,114 +6156,8 @@
       }
     },
     {
-      "id": "vehicle.bike",
-      "displayName": "两轮摩托 / LEAN",
-      "path": "vehicles/bike.glb",
-      "uri": "./assets/subjects/7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301.glb",
-      "sha256": "7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301",
-      "byteLength": 61392,
-      "sourcePath": "assets/three-creator/presets/vehicles/bike.glb",
-      "usage": "reusable",
-      "rootTransform": {
-        "positionMetersXYZ": [
-          0,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          0,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {},
-      "limitations": [],
-      "provenance": {
-        "repository": "vehicle-training-ground",
-        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
-        "notices": "resources",
-        "importedWithoutChangingAssetBytes": true
-      },
-      "resources": [],
-      "locomotionBindingIds": [
-        "locomotion.motorcycle"
-      ],
-      "vehicle": {
-        "schemaVersion": 1,
-        "spec": {
-          "id": "bike",
-          "name": "两轮摩托",
-          "en": "LEAN",
-          "mode": "motorcycle",
-          "kernel": "K02",
-          "color": "#a4d479",
-          "spawn": [
-            4,
-            0,
-            64
-          ],
-          "yaw": 0,
-          "speed": 32,
-          "accel": 12,
-          "grip": 13,
-          "steer": 1.12,
-          "radius": 0.85,
-          "seat": [
-            0,
-            0.99,
-            -0.2
-          ],
-          "camera": 6.8,
-          "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
-          "archetype": "motorcycle",
-          "envelope": {
-            "kind": "box",
-            "halfExtents": [
-              0.65,
-              1.2,
-              1.65
-            ],
-            "offset": [
-              0,
-              1.2,
-              0
-            ]
-          }
-        }
-      },
-      "sockets": [
-        {
-          "id": "driver",
-          "node": "seat.driver",
-          "positionMetersXYZ": [
-            0,
-            0.99,
-            -0.2
-          ]
-        }
-      ],
-      "collision": {
-        "kind": "box",
-        "halfExtents": [
-          0.65,
-          1.2,
-          1.65
-        ],
-        "offset": [
-          0,
-          1.2,
-          0
-        ]
-      }
-    },
-    {
       "id": "vehicle.boat",
-      "displayName": "水上快艇 / WAKE",
+      "displayName": "水上快艇 / Motorboat",
       "path": "vehicles/boat.glb",
       "uri": "./assets/subjects/9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0.glb",
       "sha256": "9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0",
@@ -6299,7 +6198,7 @@
         "spec": {
           "id": "boat",
           "name": "水上快艇",
-          "en": "WAKE",
+          "en": "Motorboat",
           "mode": "boat",
           "kernel": "K06",
           "color": "#68baf1",
@@ -6364,7 +6263,7 @@
     },
     {
       "id": "vehicle.bus",
-      "displayName": "复古小巴 / BUS",
+      "displayName": "复古小巴 / Bus",
       "path": "vehicles/bus.glb",
       "uri": "./assets/subjects/47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14.glb",
       "sha256": "47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14",
@@ -6395,11 +6294,11 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-bus.ts"
+        "generator": "packages/creator-host/scripts/assets/export-bus.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.bus"
+        "locomotion.bus"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -6432,7 +6331,7 @@
           "jumpSpeed": 6.3,
           "id": "bus",
           "name": "复古小巴",
-          "en": "MINIBUS",
+          "en": "Bus",
           "mode": "bus",
           "archetype": "bus",
           "kernel": "K15",
@@ -6588,7 +6487,7 @@
     },
     {
       "id": "vehicle.canoe",
-      "displayName": "单桨木舟 / CANOE",
+      "displayName": "单桨木舟 / Canoe",
       "path": "vehicles/canoe.glb",
       "uri": "./assets/subjects/e34475368d6762eb5e76ab6c757dff9f2209a32b3bce2cfb73641ce11dff922c.glb",
       "sha256": "e34475368d6762eb5e76ab6c757dff9f2209a32b3bce2cfb73641ce11dff922c",
@@ -6619,11 +6518,11 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-canoe.ts"
+        "generator": "packages/creator-host/scripts/assets/export-canoe.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.canoe"
+        "locomotion.paddled-boat"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -6656,7 +6555,7 @@
           "jumpSpeed": 6.3,
           "id": "canoe",
           "name": "单桨木舟",
-          "en": "CANOE",
+          "en": "Canoe",
           "mode": "paddled_boat",
           "archetype": "canoe",
           "kernel": "K17",
@@ -6729,7 +6628,7 @@
     },
     {
       "id": "vehicle.carriage",
-      "displayName": "双轴马车 / CARRIAGE",
+      "displayName": "双轴马车 / Horse-drawn carriage",
       "path": "vehicles/carriage.glb",
       "uri": "./assets/subjects/949de81de7b40aacf27194f4c841c37ff2de28ebf994b46847d5e5e1dc2fe04f.glb",
       "sha256": "949de81de7b40aacf27194f4c841c37ff2de28ebf994b46847d5e5e1dc2fe04f",
@@ -6799,7 +6698,7 @@
         "spec": {
           "id": "carriage",
           "name": "双轴马车",
-          "en": "CARRIAGE",
+          "en": "Horse-drawn carriage",
           "mode": "carriage",
           "kernel": "K12",
           "color": "#6b4b31",
@@ -6864,7 +6763,7 @@
     },
     {
       "id": "vehicle.glider",
-      "displayName": "无动力滑翔机 / SOAR",
+      "displayName": "无动力滑翔机 / Glider",
       "path": "vehicles/glider.glb",
       "uri": "./assets/subjects/47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169.glb",
       "sha256": "47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169",
@@ -6905,7 +6804,7 @@
         "spec": {
           "id": "glider",
           "name": "无动力滑翔机",
-          "en": "SOAR",
+          "en": "Glider",
           "mode": "glider",
           "kernel": "K08",
           "color": "#e2e8eb",
@@ -6969,8 +6868,8 @@
       }
     },
     {
-      "id": "vehicle.hover",
-      "displayName": "定高悬浮艇 / FLOAT",
+      "id": "vehicle.hovercraft",
+      "displayName": "定高悬浮艇 / Hovercraft",
       "path": "vehicles/hover.glb",
       "uri": "./assets/subjects/3942da86cecc5cbe79616ac17e74229ba2112abc9170cdc2f0f3d5ab0d6c33f6.glb",
       "sha256": "3942da86cecc5cbe79616ac17e74229ba2112abc9170cdc2f0f3d5ab0d6c33f6",
@@ -7009,9 +6908,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "hover",
+          "id": "hovercraft",
           "name": "定高悬浮艇",
-          "en": "FLOAT",
+          "en": "Hovercraft",
           "mode": "hover",
           "kernel": "K05",
           "color": "#55cec5",
@@ -7076,7 +6975,7 @@
     },
     {
       "id": "vehicle.jetski",
-      "displayName": "水上摩托 / JET SKI",
+      "displayName": "水上摩托 / Personal watercraft",
       "path": "vehicles/jetski.glb",
       "uri": "./assets/subjects/d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707.glb",
       "sha256": "d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707",
@@ -7107,18 +7006,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-jetski.ts"
+        "generator": "packages/creator-host/scripts/assets/export-jetski.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.jetski"
+        "locomotion.boat"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "jetski",
           "name": "水上摩托",
-          "en": "JET SKI",
+          "en": "Personal watercraft",
           "mode": "boat",
           "archetype": "jetski",
           "kernel": "K06",
@@ -7325,7 +7224,7 @@
     },
     {
       "id": "vehicle.kayak",
-      "displayName": "单人皮划艇 / KAYAK",
+      "displayName": "单人皮划艇 / Kayak",
       "path": "vehicles/kayak.glb",
       "uri": "./assets/subjects/457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7.glb",
       "sha256": "457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7",
@@ -7356,18 +7255,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-kayak.ts"
+        "generator": "packages/creator-host/scripts/assets/export-kayak.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.kayak"
+        "locomotion.paddled-boat"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "kayak",
           "name": "单人皮划艇",
-          "en": "KAYAK",
+          "en": "Kayak",
           "mode": "paddled_boat",
           "archetype": "kayak",
           "kernel": "K17",
@@ -7465,8 +7364,114 @@
       }
     },
     {
-      "id": "vehicle.observation-sub",
-      "displayName": "单人观景潜艇 / SUBMERSIBLE",
+      "id": "vehicle.motorcycle",
+      "displayName": "两轮摩托 / Motorcycle",
+      "path": "vehicles/bike.glb",
+      "uri": "./assets/subjects/7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301.glb",
+      "sha256": "7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301",
+      "byteLength": 61392,
+      "sourcePath": "assets/three-creator/presets/vehicles/bike.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [],
+      "provenance": {
+        "repository": "vehicle-training-ground",
+        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+        "notices": "resources",
+        "importedWithoutChangingAssetBytes": true
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "locomotion.motorcycle"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "motorcycle",
+          "name": "两轮摩托",
+          "en": "Motorcycle",
+          "mode": "motorcycle",
+          "kernel": "K02",
+          "color": "#a4d479",
+          "spawn": [
+            4,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 32,
+          "accel": 12,
+          "grip": 13,
+          "steer": 1.12,
+          "radius": 0.85,
+          "seat": [
+            0,
+            0.99,
+            -0.2
+          ],
+          "camera": 6.8,
+          "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
+          "archetype": "motorcycle",
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.65,
+              1.2,
+              1.65
+            ],
+            "offset": [
+              0,
+              1.2,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.99,
+            -0.2
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "vehicle.observation-submarine",
+      "displayName": "单人观景潜艇 / Observation submarine",
       "path": "vehicles/observation-sub.glb",
       "uri": "./assets/subjects/18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f.glb",
       "sha256": "18ed4089b70bf0bccc9aa109bbc3ee3c5fb60021c27a57165c954ad8cefd0c5f",
@@ -7497,11 +7502,11 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-submersible.ts"
+        "generator": "packages/creator-host/scripts/assets/export-submersible.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.observation-sub"
+        "locomotion.submarine"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -7532,9 +7537,9 @@
           "minimumSpeed": 0,
           "launchSpeed": 22,
           "jumpSpeed": 6.3,
-          "id": "observation-sub",
+          "id": "observation-submarine",
           "name": "单人观景潜艇",
-          "en": "SUBMERSIBLE",
+          "en": "Observation submarine",
           "mode": "submarine",
           "archetype": "submarine",
           "visualVariant": "bubble-sub",
@@ -7648,7 +7653,7 @@
     },
     {
       "id": "vehicle.patrol-boat",
-      "displayName": "水域巡逻艇 / PATROL",
+      "displayName": "水域巡逻艇 / Patrol boat",
       "path": "vehicles/patrol-boat.glb",
       "uri": "./assets/subjects/96a590c8a2378bb5648f9fd01d7bb14ab4c6bd5686154d6322ec8b9642936bf7.glb",
       "sha256": "96a590c8a2378bb5648f9fd01d7bb14ab4c6bd5686154d6322ec8b9642936bf7",
@@ -7689,7 +7694,7 @@
         "spec": {
           "id": "patrol-boat",
           "name": "水域巡逻艇",
-          "en": "PATROL",
+          "en": "Patrol boat",
           "mode": "boat",
           "kernel": "K06",
           "color": "#315f91",
@@ -7755,7 +7760,7 @@
     },
     {
       "id": "vehicle.plane",
-      "displayName": "动力飞机 / AERO",
+      "displayName": "动力飞机 / Powered airplane",
       "path": "vehicles/plane.glb",
       "uri": "./assets/subjects/5532ea472b92b3362ba78a53e338baabc5d01ec94ce01ac872a5e8e3f1b87637.glb",
       "sha256": "5532ea472b92b3362ba78a53e338baabc5d01ec94ce01ac872a5e8e3f1b87637",
@@ -7796,7 +7801,7 @@
         "spec": {
           "id": "plane",
           "name": "动力飞机",
-          "en": "AERO",
+          "en": "Powered airplane",
           "mode": "plane",
           "kernel": "K09",
           "color": "#e27e58",
@@ -7861,7 +7866,7 @@
     },
     {
       "id": "vehicle.racer",
-      "displayName": "公路赛车 / APEX",
+      "displayName": "公路赛车 / Race car",
       "path": "vehicles/racer.glb",
       "uri": "./assets/subjects/43547f472b9a91b19c25925c7f63a008c4e24bcfb0dd0a8ca1669083c4bf1f59.glb",
       "sha256": "43547f472b9a91b19c25925c7f63a008c4e24bcfb0dd0a8ca1669083c4bf1f59",
@@ -7902,7 +7907,7 @@
         "spec": {
           "id": "racer",
           "name": "公路赛车",
-          "en": "APEX",
+          "en": "Race car",
           "mode": "wheeled",
           "kernel": "K03",
           "color": "#f37659",
@@ -7967,7 +7972,7 @@
     },
     {
       "id": "vehicle.raft",
-      "displayName": "橡皮艇 / INFLATABLE BOAT",
+      "displayName": "橡皮艇 / Inflatable boat",
       "path": "vehicles/raft.glb",
       "uri": "./assets/subjects/24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd.glb",
       "sha256": "24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd",
@@ -7998,11 +8003,11 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-raft.ts"
+        "generator": "packages/creator-host/scripts/assets/export-raft.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.raft"
+        "locomotion.paddled-boat"
       ],
       "vehicle": {
         "schemaVersion": 1,
@@ -8035,7 +8040,7 @@
           "jumpSpeed": 6.3,
           "id": "raft",
           "name": "橡皮艇",
-          "en": "INFLATABLE BOAT",
+          "en": "Inflatable boat",
           "mode": "paddled_boat",
           "archetype": "raft",
           "kernel": "K17",
@@ -8189,8 +8194,8 @@
       }
     },
     {
-      "id": "vehicle.rescue-hover",
-      "displayName": "救援悬浮艇 / LIFTER",
+      "id": "vehicle.rescue-hovercraft",
+      "displayName": "救援悬浮艇 / Rescue hovercraft",
       "path": "vehicles/rescue-hover.glb",
       "uri": "./assets/subjects/9fe95fec8e19a48db38f9d7a59fbaa5a2fbe0eaf7100c47a96b84684c85a56ea.glb",
       "sha256": "9fe95fec8e19a48db38f9d7a59fbaa5a2fbe0eaf7100c47a96b84684c85a56ea",
@@ -8229,9 +8234,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "rescue-hover",
+          "id": "rescue-hovercraft",
           "name": "救援悬浮艇",
-          "en": "LIFTER",
+          "en": "Rescue hovercraft",
           "mode": "hover",
           "kernel": "K05",
           "color": "#e36b55",
@@ -8297,7 +8302,7 @@
     },
     {
       "id": "vehicle.rover",
-      "displayName": "越野车 / ROVER",
+      "displayName": "越野车 / Off-road car",
       "path": "vehicles/rover.glb",
       "uri": "./assets/subjects/10e3289df10b54a6459eaaaf82b306a0d4405eef86353ac1be551cc61de7369a.glb",
       "sha256": "10e3289df10b54a6459eaaaf82b306a0d4405eef86353ac1be551cc61de7369a",
@@ -8338,7 +8343,7 @@
         "spec": {
           "id": "rover",
           "name": "越野车",
-          "en": "ROVER",
+          "en": "Off-road car",
           "mode": "wheeled",
           "kernel": "K03",
           "color": "#f0b64d",
@@ -8402,8 +8407,115 @@
       }
     },
     {
+      "id": "vehicle.skateboard",
+      "displayName": "贴面滑板 / Skateboard",
+      "path": "vehicles/slide.glb",
+      "uri": "./assets/subjects/035bf797a20a3c86dc8b4979859249b625f627d588d5455982be3828a32ae658.glb",
+      "sha256": "035bf797a20a3c86dc8b4979859249b625f627d588d5455982be3828a32ae658",
+      "byteLength": 42016,
+      "sourcePath": "assets/three-creator/presets/vehicles/slide.glb",
+      "usage": "reusable",
+      "rootTransform": {
+        "positionMetersXYZ": [
+          0,
+          0,
+          0
+        ],
+        "rotationEulerRadiansXYZ": [
+          0,
+          0,
+          0
+        ],
+        "scaleXYZ": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actions": {},
+      "limitations": [],
+      "provenance": {
+        "repository": "vehicle-training-ground",
+        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+        "notices": "resources",
+        "importedWithoutChangingAssetBytes": true
+      },
+      "resources": [],
+      "locomotionBindingIds": [
+        "locomotion.skateboard"
+      ],
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "id": "skateboard",
+          "name": "贴面滑板",
+          "en": "Skateboard",
+          "mode": "skateboard",
+          "kernel": "K04",
+          "color": "#f39eae",
+          "spawn": [
+            17,
+            0,
+            64
+          ],
+          "yaw": 0,
+          "speed": 22,
+          "accel": 8,
+          "grip": 2.8,
+          "steer": 1.65,
+          "radius": 0.7,
+          "seat": [
+            0,
+            0.2,
+            0
+          ],
+          "camera": 6,
+          "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
+          "characterPose": "stand",
+          "archetype": "skateboard",
+          "envelope": {
+            "kind": "box",
+            "halfExtents": [
+              0.45,
+              1.05,
+              1.2
+            ],
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        }
+      },
+      "sockets": [
+        {
+          "id": "driver",
+          "node": "seat.driver",
+          "positionMetersXYZ": [
+            0,
+            0.2,
+            0
+          ]
+        }
+      ],
+      "collision": {
+        "kind": "box",
+        "halfExtents": [
+          0.45,
+          1.05,
+          1.2
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      }
+    },
+    {
       "id": "vehicle.ski",
-      "displayName": "双板滑雪 / ALPINE",
+      "displayName": "双板滑雪 / Skis",
       "path": "vehicles/ski.glb",
       "uri": "./assets/subjects/c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05.glb",
       "sha256": "c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05",
@@ -8434,18 +8546,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-ski.ts"
+        "generator": "packages/creator-host/scripts/assets/export-ski.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.ski"
+        "locomotion.ski"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "ski",
           "name": "双板滑雪",
-          "en": "ALPINE",
+          "en": "Skis",
           "mode": "ski",
           "archetype": "ski",
           "kernel": "K14",
@@ -8524,7 +8636,7 @@
     },
     {
       "id": "vehicle.sled",
-      "displayName": "木座雪橇 / SLED",
+      "displayName": "木座雪橇 / Sled",
       "path": "vehicles/sled.glb",
       "uri": "./assets/subjects/6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3.glb",
       "sha256": "6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3",
@@ -8555,18 +8667,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-sled.ts"
+        "generator": "packages/creator-host/scripts/assets/export-sled.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.sled"
+        "locomotion.sled"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "sled",
           "name": "木座雪橇",
-          "en": "SLED",
+          "en": "Sled",
           "mode": "sled",
           "archetype": "sled",
           "kernel": "K14",
@@ -8658,115 +8770,8 @@
       }
     },
     {
-      "id": "vehicle.slide",
-      "displayName": "贴面滑板 / SKIM",
-      "path": "vehicles/slide.glb",
-      "uri": "./assets/subjects/035bf797a20a3c86dc8b4979859249b625f627d588d5455982be3828a32ae658.glb",
-      "sha256": "035bf797a20a3c86dc8b4979859249b625f627d588d5455982be3828a32ae658",
-      "byteLength": 42016,
-      "sourcePath": "assets/three-creator/presets/vehicles/slide.glb",
-      "usage": "reusable",
-      "rootTransform": {
-        "positionMetersXYZ": [
-          0,
-          0,
-          0
-        ],
-        "rotationEulerRadiansXYZ": [
-          0,
-          0,
-          0
-        ],
-        "scaleXYZ": [
-          1,
-          1,
-          1
-        ]
-      },
-      "actions": {},
-      "limitations": [],
-      "provenance": {
-        "repository": "vehicle-training-ground",
-        "commit": "c293622a63716b8473cc2a95cb485c515265945e",
-        "notices": "resources",
-        "importedWithoutChangingAssetBytes": true
-      },
-      "resources": [],
-      "locomotionBindingIds": [
-        "locomotion.skateboard"
-      ],
-      "vehicle": {
-        "schemaVersion": 1,
-        "spec": {
-          "id": "slide",
-          "name": "贴面滑板",
-          "en": "SKIM",
-          "mode": "skateboard",
-          "kernel": "K04",
-          "color": "#f39eae",
-          "spawn": [
-            17,
-            0,
-            64
-          ],
-          "yaw": 0,
-          "speed": 22,
-          "accel": 8,
-          "grip": 2.8,
-          "steer": 1.65,
-          "radius": 0.7,
-          "seat": [
-            0,
-            0.2,
-            0
-          ],
-          "camera": 6,
-          "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
-          "characterPose": "stand",
-          "archetype": "skateboard",
-          "envelope": {
-            "kind": "box",
-            "halfExtents": [
-              0.45,
-              1.05,
-              1.2
-            ],
-            "offset": [
-              0,
-              1,
-              0
-            ]
-          }
-        }
-      },
-      "sockets": [
-        {
-          "id": "driver",
-          "node": "seat.driver",
-          "positionMetersXYZ": [
-            0,
-            0.2,
-            0
-          ]
-        }
-      ],
-      "collision": {
-        "kind": "box",
-        "halfExtents": [
-          0.45,
-          1.05,
-          1.2
-        ],
-        "offset": [
-          0,
-          1,
-          0
-        ]
-      }
-    },
-    {
-      "id": "vehicle.space",
-      "displayName": "无重力飞行器 / ORBIT",
+      "id": "vehicle.spacecraft",
+      "displayName": "无重力飞行器 / Spacecraft",
       "path": "vehicles/space.glb",
       "uri": "./assets/subjects/65a4bcd9c4c0eff7ec8d152023086ebeb7fc45e7611ef95bf2a2d1063d34fcbf.glb",
       "sha256": "65a4bcd9c4c0eff7ec8d152023086ebeb7fc45e7611ef95bf2a2d1063d34fcbf",
@@ -8805,9 +8810,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "space",
+          "id": "spacecraft",
           "name": "无重力飞行器",
-          "en": "ORBIT",
+          "en": "Spacecraft",
           "mode": "spacecraft",
           "kernel": "K10",
           "color": "#a398eb",
@@ -8871,8 +8876,8 @@
       }
     },
     {
-      "id": "vehicle.sub",
-      "displayName": "探索潜艇 / DEEP",
+      "id": "vehicle.submarine",
+      "displayName": "探索潜艇 / Submarine",
       "path": "vehicles/sub.glb",
       "uri": "./assets/subjects/994b053a8b0d34c8f1bdd9b7f6a6b0d9bed047490e3aae3fc95729aeab80607a.glb",
       "sha256": "994b053a8b0d34c8f1bdd9b7f6a6b0d9bed047490e3aae3fc95729aeab80607a",
@@ -8911,9 +8916,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "sub",
+          "id": "submarine",
           "name": "探索潜艇",
-          "en": "DEEP",
+          "en": "Submarine",
           "mode": "submarine",
           "kernel": "K07",
           "color": "#f4ca58",
@@ -8977,8 +8982,8 @@
       }
     },
     {
-      "id": "vehicle.survey-space",
-      "displayName": "轨道测绘艇 / SURVEYOR",
+      "id": "vehicle.survey-spacecraft",
+      "displayName": "轨道测绘艇 / Survey spacecraft",
       "path": "vehicles/survey-space.glb",
       "uri": "./assets/subjects/5faf4cc740ef8979a205b92f25743a18c67a31a53c498de6b0a91187509b8069.glb",
       "sha256": "5faf4cc740ef8979a205b92f25743a18c67a31a53c498de6b0a91187509b8069",
@@ -9017,9 +9022,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "survey-space",
+          "id": "survey-spacecraft",
           "name": "轨道测绘艇",
-          "en": "SURVEYOR",
+          "en": "Survey spacecraft",
           "mode": "spacecraft",
           "kernel": "K10",
           "color": "#64c8d0",
@@ -9085,7 +9090,7 @@
     },
     {
       "id": "vehicle.tank",
-      "displayName": "履带坦克 / TANK",
+      "displayName": "履带坦克 / Tank",
       "path": "vehicles/tank.glb",
       "uri": "./assets/subjects/6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf.glb",
       "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
@@ -9116,18 +9121,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-tank.ts"
+        "generator": "packages/creator-host/scripts/assets/export-tank.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.tank"
+        "locomotion.tank"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "tank",
           "name": "履带坦克",
-          "en": "TANK",
+          "en": "Tank",
           "mode": "tank",
           "archetype": "tank",
           "kernel": "K16",
@@ -9322,8 +9327,8 @@
       }
     },
     {
-      "id": "vehicle.touring-bike",
-      "displayName": "长途巡航摩托 / TOURER",
+      "id": "vehicle.touring-motorcycle",
+      "displayName": "长途巡航摩托 / Touring motorcycle",
       "path": "vehicles/touring-bike.glb",
       "uri": "./assets/subjects/16d3eff62f9437a74fadd6d77b443c1b39b6cff3c931b40e7d22845451ff72cb.glb",
       "sha256": "16d3eff62f9437a74fadd6d77b443c1b39b6cff3c931b40e7d22845451ff72cb",
@@ -9362,9 +9367,9 @@
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
-          "id": "touring-bike",
+          "id": "touring-motorcycle",
           "name": "长途巡航摩托",
-          "en": "TOURER",
+          "en": "Touring motorcycle",
           "mode": "motorcycle",
           "kernel": "K02",
           "color": "#507fc4",
@@ -9430,7 +9435,7 @@
     },
     {
       "id": "vehicle.trail-rover",
-      "displayName": "远征保障车 / TRAIL",
+      "displayName": "远征保障车 / Expedition car",
       "path": "vehicles/trail-rover.glb",
       "uri": "./assets/subjects/7a3e0c8140000831e568f64cb1ea6b07b95b893f99330ee9bc5012c8be2a0887.glb",
       "sha256": "7a3e0c8140000831e568f64cb1ea6b07b95b893f99330ee9bc5012c8be2a0887",
@@ -9471,7 +9476,7 @@
         "spec": {
           "id": "trail-rover",
           "name": "远征保障车",
-          "en": "TRAIL",
+          "en": "Expedition car",
           "mode": "wheeled",
           "kernel": "K03",
           "color": "#568f72",
@@ -9537,7 +9542,7 @@
     },
     {
       "id": "vehicle.trainer-plane",
-      "displayName": "稳定教练机 / MENTOR",
+      "displayName": "稳定教练机 / Trainer airplane",
       "path": "vehicles/trainer-plane.glb",
       "uri": "./assets/subjects/cdfc214312a4b907ee89cf8a3fc751dbd4e55c2e8a742c972b8dc233652aa031.glb",
       "sha256": "cdfc214312a4b907ee89cf8a3fc751dbd4e55c2e8a742c972b8dc233652aa031",
@@ -9578,7 +9583,7 @@
         "spec": {
           "id": "trainer-plane",
           "name": "稳定教练机",
-          "en": "MENTOR",
+          "en": "Trainer airplane",
           "mode": "plane",
           "kernel": "K09",
           "color": "#f0d04f",
@@ -9644,7 +9649,7 @@
     },
     {
       "id": "vehicle.unicycle",
-      "displayName": "独轮车 / UNICYCLE",
+      "displayName": "独轮车 / Unicycle",
       "path": "vehicles/unicycle.glb",
       "uri": "./assets/subjects/9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0.glb",
       "sha256": "9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0",
@@ -9675,18 +9680,18 @@
       ],
       "provenance": {
         "source": "Local procedural geometry",
-        "generator": "scripts/three-creator/export-unicycle.ts"
+        "generator": "packages/creator-host/scripts/assets/export-unicycle.ts"
       },
       "resources": [],
       "locomotionBindingIds": [
-        "vehicle.unicycle"
+        "locomotion.unicycle"
       ],
       "vehicle": {
         "schemaVersion": 1,
         "spec": {
           "id": "unicycle",
           "name": "独轮车",
-          "en": "UNICYCLE",
+          "en": "Unicycle",
           "mode": "unicycle",
           "archetype": "unicycle",
           "kernel": "K02",

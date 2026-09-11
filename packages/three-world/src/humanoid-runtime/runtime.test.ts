@@ -1,5 +1,5 @@
 import {createRoadVehicleSpec} from './road-vehicle';
-import { CameraCollisionSolver } from '@whitebox-world/camera-collision';
+import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import {describe,it,expect,vi,beforeAll} from 'vitest';
 import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,Euler,Bone,BufferGeometry,Float32BufferAttribute,Uint16BufferAttribute,SkinnedMesh,Skeleton,PCFShadowMap,type WebGLRenderer} from 'three';
 import {createMountedFixture} from './mounted-test-fixture';

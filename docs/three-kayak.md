@@ -23,14 +23,14 @@ W 交替划桨，S 倒划，A / D 单侧扫桨，Space 压桨制动。
 
 源码：
 
-- [模型](../shared/preset-content/kayak-model.ts)
-- [默认驾驶参数](../shared/preset-content/kayak.ts)
-- [SDK 物理](../packages/three-world/src/humanoid-runtime/kayak.ts)
+- [模型](../packages/preset-content/src/vehicles/kayak/model.ts)
+- [默认驾驶参数](../packages/preset-content/src/vehicles/kayak/spec.ts)
+- [SDK 物理](../packages/three-world/src/humanoid-runtime/motion-families/surface-vessel/paddling.ts)
 - [SDK 桨和水纹显示](../packages/three-world/src/humanoid-runtime/kayak-visual.ts)
 - [物理与真实骨架测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)
-- [浏览器键盘验证](../scripts/three-creator/kayak-browser-smoke.ts)
+- [浏览器键盘验证](../packages/creator-host/scripts/smoke/kayak-browser-smoke.ts)
 
-导出 `pnpm exec tsx scripts/three-creator/export-kayak.ts` 会更新
+导出 `pnpm exec tsx packages/creator-host/scripts/assets/export-kayak.ts` 会更新
 `assets/three-creator/presets/vehicles/kayak.glb` 及 `vehicle.kayak` 的目录哈希。
 SDK 修改后执行 `pnpm build` 并重启预览服务。
 在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。

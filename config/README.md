@@ -1,38 +1,16 @@
-# Current Three configuration
+# Configuration ownership
 
-This directory contains public configuration and templates used by the current
-Three production lane. Real credentials and instance-specific configuration stay
-outside Git under ignored `.codex-tmp` or in deployment Secrets.
+Repository-wide workspace-boundary debt lives in `workspace-boundary-debt.json`.
+Production configuration belongs to its consumer:
 
-| File | Consumer / purpose |
+| Owner | Configuration |
 | --- | --- |
-| [`three-creator/asset-policy.json`](three-creator/asset-policy.json) | Creator Host asset admission and default humanoid |
-| [`three-creator/account-policy.json`](three-creator/account-policy.json) | Creator Host account routing; frozen per run |
-| `episode-style-variants.json` | Episode style generation and resume concurrency |
-| `episode-visual-event-director.json` | Episode event generation and Vertex adapter |
-| `prompts/three-episode-style-director.md` | Style planning |
-| `prompts/three-episode-image.md` | Styled image generation |
-| `prompts/three-episode-review.md` | Image review |
-| `prompts/episode-visual-event-director.zh-CN.md` | Video visual-event prompts |
-| `three-episode-review-calibration.json` | User-confirmed image review calibration |
-| `three-episode-runtime.example.json` | Host runtime configuration template |
-| `three-episode-launcher-runtime.example.json` | Capsule launcher configuration template |
-| `three-episode-seedance-provider.example.json` | Seedance endpoint, private inputs and output policy |
-| `three-episode-seedance-admission.example.json` | Registered requests, shared capacity and production budget |
-| `workspace-boundary-debt.json` | Workspace-boundary verification |
+| [Creator Host](../packages/creator-host/config/asset-policy.json) | Asset admission and default humanoid |
+| [Creator Cloud](../apps/creator-cloud/config/account-policy.json) | Account routing, frozen per run |
+| [Episode pipeline](../packages/episode-pipeline/config/README.md) | Style/event prompts, review calibration, runtime and provider templates |
+| [Three SDK](../packages/three-world/src/config/README.md) | Runtime defaults and developer effect switches |
 
-Asset metadata belongs in [`assets/three-creator`](../assets/three-creator/README.md).
-The Kubernetes device-plugin manifest belongs in
-[`deploy/three-episode`](../deploy/three-episode/README.md); its generator stays in `scripts/cloud`.
-
-The templates require actual deployment values before use. Episode preparation
-requires `--stop-before-seedance`; the separate
-[Seedance cloud lane](../docs/three-episode-seedance.md) has explicit submission
-and delivery commands. Automatic Creator delivery subscription is not implemented.
-
-SDK runtime defaults and developer effect switches are maintained separately in
-[`packages/three-world/src/config`](../packages/three-world/src/config/README.md).
-The SDK does not import this Host configuration directory.
-
-See the [production guide](../docs/three-sdk-data-production.md) for entry points
-and configuration ownership.
+Real credentials and instance-specific runtime settings stay outside Git in ignored
+`.codex-tmp` or deployment Secrets. Asset metadata stays under `assets/three-creator`;
+deployment resources stay under `deploy/`. The SDK does not import Host production
+configuration. See [production entry points](../docs/three-sdk-data-production.md).

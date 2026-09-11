@@ -111,7 +111,7 @@ Playground 共同读取这份定义；Host 账号、权限与生产配置仍归�
 中性白灰。保留大体构图、尺度、空间关系和真实碰撞条件。
 先按需求确定被控制的主体；动物或其他非人主角直接作为主体，不额外添加人或骑手。
 Creator 生成中的所有人形（含 NPC 和骑手）使用许可的预设人物，当前为
-`humanoid.source-101`，保留可见模型、骨架和动作，不添制服装或配饰。
+`humanoid.uefn-mannequin`，保留可见模型、骨架和动作，不添制服装或配饰。
 每个人物在步行、上车、骑乘、下车和重置中保持同一实例；不能隐藏原人物，
 或把自绘骑手塞进载具模型。主体外形、运动能力与骑乘关系分别描述，以实际控制器
 和资产条件为准。非人形生物优先复用提供的资源。车辆外观由 Agent 自绘，
@@ -132,7 +132,7 @@ Creator 生成中的所有人形（含 NPC 和骑手）使用许可的预设人�
 正常速度下应有至少 5 分钟的参考场景探索空间；这是空间容量，不要求增加玩法。
 容量估算与实测时长分别说明，不靠空跑、降速或等待凑时，不规定自检录像时长。
 Creator 验证实际可通行性、运动、镜头及用户要求的功能，复用真实输入、状态和画面。
-详细说明见 [Creator 质量指引](../scripts/three-creator/README.md#exploration-and-quality)。
+详细说明见 [Creator 质量指引](../packages/creator-host/README.md#exploration-and-quality)。
 
 ## 四层使用方式
 
@@ -209,8 +209,8 @@ Agent 读取动作可用性与目标位置，先通过真实输入接近，再�
 Agent 声明开场构图，由公共 `world.setCameraFollow` 维护连续镜头状态。首次
 移动/环视激活时沿用当前构图，后续随主体平移；显式选择载具回正时只平滑调整
 朝向，不替换距离、俯仰与 FOV。声明式入口与初始骑乘顺序见
-[编程规范](../scripts/three-creator/agent/programming.md#initial-state-and-camera)。
-切换载体时从当前机位重新计算跟随关系；用户明确切视角、
+[编程规范](../packages/creator-host/docs/agent/programming.md#initial-state-and-camera)。
+切换载体时保留当前轨道与相对构图，并跟随新主体平移；用户明确切视角、
 环视/缩放或必要碰撞避让时才改变构图。重置恢复封存首帧；Agent 修改首帧源码
 并重新编译后建立新世界基线。接口细节见 [SDK 契约](../packages/three-world/README.md#authored-opening-and-subject-integration)。
 
@@ -254,7 +254,7 @@ world_read_playtest 按录制时间范围读取位置、速度、骑乘、镜头
 提交使用同一 MCP session 中最新的完整合格录制，重新校验当前源码、运行时、episode、
 证据文件和资产策略。调试后完成代表性真实录制再提交。交付包含自检录像、最终开场、
 全可玩区俯视图、重要对象三视图和源码/运行时身份；技术合格不等于玩法或视觉验收。
-详见 [Creator 交付契约](../scripts/three-creator/README.md#verify-and-deliver)。
+详见 [Creator 交付契约](../packages/creator-host/README.md#verify-and-deliver)。
 Episode 在独立生产副本中，用同一 SDK 记录六段 30 秒动作，之后制作十套风格。
 录制中每帧来自真实模拟，动作事件来自执行证据。视频请求准备完成与最终视频完成
 分别表达；执行范围见 [数据生产](three-sdk-data-production.md)。

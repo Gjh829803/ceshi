@@ -1,0 +1,41 @@
+{
+  "name": "@worldkit/creator-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./asset-policy": "./src/assets/asset-policy.mjs",
+    "./asset-resources": "./src/assets/asset-resources.ts",
+    "./catalog-sources": "./src/assets/catalog-sources.ts",
+    "./compiler": "./src/compiler/compiler.ts",
+    "./mcp": "./src/cli/mcp.ts",
+    "./tools": "./src/tools/tools.ts",
+    "./workspace-runtime": "./src/compiler/workspace-runtime.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@worldkit/browser-capture": "workspace:*",
+    "@worldkit/preset-content": "workspace:*",
+    "@worldkit/three": "workspace:*",
+    "ajv": "8.17.1",
+    "esbuild": "0.28.2",
+    "playwright": "^1.62.1",
+    "sharp": "0.35.4",
+    "three": "0.185.1",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "@worldkit/episode-pipeline": "workspace:*",
+    "@types/node": "^24.3.0",
+    "@types/three": "0.185.4",
+    "vitest": "^3.2.4",
+    "tsx": "^4.23.12"
+  },
+  "scripts": {
+    "cli": "tsx src/cli/cli.ts",
+    "mcp": "tsx src/cli/mcp.ts",
+    "prebuild": "tsx src/cli/prebuild.ts",
+    "test": "vitest run --root ../.. packages/creator-host",
+    "typecheck": "tsc --noEmit"
+  }
+}

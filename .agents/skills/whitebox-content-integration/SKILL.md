@@ -43,7 +43,7 @@ NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `h
 | Source101 动画/绑定 | `humanoid-runtime/humanoid/source-character.ts`、`catalog.ts`、`action-schema.ts` 与实际 source manifest/clip | Character 单个 mixer、动作资格和终态；按实际绑定支持变体 |
 | 可执行动作 | 当前 action-system/controller、capabilities、World execute/operations | 键盘、Creator command schema、Episode action-controller |
 | 操控与几何约定 | SDK `config/`、所属 motion-family、`road-vehicle.ts`/`aircraft-spec.ts` | Playground resolved 配置、自绘示例、真实碰撞与机械动画 |
-| 示例 | `examples/three-creator/<主题>/`、`scripts/three-creator/example-registry.json` | creator_get_examples、完整文件清单、运行包 staging |
+| 示例 | `examples/three-creator/<主题>/`、`packages/creator-host/config/example-registry.json` | creator_get_examples、完整文件清单、运行包 staging |
 
 SDK 路径前缀为 `packages/three-world/src/`。Playground 是同源定义的调试客户端。
 默认值留在所属 SDK/内容模块；场地位置、颜色、实例命名等由 Playground 或场景覆盖。
@@ -91,7 +91,7 @@ Episode 的 actionGoals 也传递同一 `targetId/slotId`，完成判断必须�
 先检查受影响内容，工具可选辅助：
 
 ```sh
-pnpm content:check --asset humanoid.source-101
+pnpm content:check --asset humanoid.uefn-mannequin
 ```
 
 它检查派生目录及选中资源身份，并分别报告 policy 状态；不证明动作效果或发布完成。

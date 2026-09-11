@@ -1,6 +1,6 @@
 {
   "id": "vehicle.atv",
-  "displayName": "全地形车 / QUAD ATV",
+  "displayName": "全地形车 / All-terrain vehicle",
   "path": "vehicles/atv.glb",
   "uri": "./assets/subjects/042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004.glb",
   "sha256": "042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-atv.ts"
+    "generator": "packages/creator-host/scripts/assets/export-atv.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.atv"
+    "locomotion.wheeled"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "atv",
       "name": "全地形车",
-      "en": "QUAD ATV",
+      "en": "All-terrain vehicle",
       "mode": "wheeled",
       "archetype": "atv",
       "kernel": "K01",

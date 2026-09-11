@@ -6,9 +6,9 @@
 
 | 阶段 | 入口 | 输入与产物 |
 | --- | --- | --- |
-| 创作与交付 | `scripts/three-creator` | 原图、需求、自由绘制/复用的 Mesh、能力绑定 → 可玩世界、源码、运行时、自检 |
+| 创作与交付 | `packages/creator-host` | 原图、需求、自由绘制/复用的 Mesh、能力绑定 → 可玩世界、源码、运行时、自检 |
 | 案例选取 | 共享场景审核 | 明确选定的交付清单 |
-| 源准备 | `scripts/three-episode/source.ts` | 验证的交付 → 可移植 `source.json` 与生产副本 |
+| 源准备 | `packages/episode-pipeline/src/source/source.ts` | 验证的交付 → 可移植 `source.json` 与生产副本 |
 | 规划与录制 | `workflow.ts`、`capture.ts` | 路线和动作计划 → 6×30 秒、1280×720、24fps，60Hz 模拟与 trace |
 | 风格制作 | `visuals.mjs` | 1 套原图风格与 9 套重设计 → 锚点、各段首帧和目标三视图 |
 | 事件与请求 | `event-prefetch.mjs`、`visuals.mjs` | 真实动作/视觉资料 → Prompt、单样式请求和最多 60 条汇总 |
@@ -42,12 +42,12 @@ pnpm three:episode:preview /absolute/production/episode/report 53847
 
 工作流执行可能产生云调用。构建本身不启动生产。输出使用独立目录；源文件、资产
 和实际运行时字节具有可校验身份。复制源包应复制完整依赖闭包，并在传输解包后
-再次验证；精确调用方式见 [Episode README](../scripts/three-episode/README.md)。
+再次验证；精确调用方式见 [Episode README](../packages/episode-pipeline/README.md)。
 
 ## 配置与资源
 
-[Host 配置示例](../config/three-episode-runtime.example.json) 和
-[launcher 配置示例](../config/three-episode-launcher-runtime.example.json) 不含凭据。
+[Host 配置示例](../packages/episode-pipeline/config/three-episode-runtime.example.json) 和
+[launcher 配置示例](../packages/episode-pipeline/config/three-episode-launcher-runtime.example.json) 不含凭据。
 填入实际胶囊、S3、镜像摘要和 cohort，保存在忽略目录或部署 Secret 中。
 
 GPU 只用于白膜录制。一个任务录一个 Episode 六段，使用一个 L4 执行槽。
@@ -64,5 +64,5 @@ CPU 后处理独立接续；并发和服务账号是否可用以当前配置与�
 - 保留已验证片段，失败案例不会重录整批。变更运行时创建新身份，不改写录像出处。
 - 人工反馈沿用共享审核身份；图片决定只适用于其精确内容和范围。
 
-Creator 云执行见 [云生成说明](../scripts/cloud/three-eval-README.md)，生产接续与
-取消见 [Episode README](../scripts/three-episode/README.md)。
+Creator 云执行见 [云生成说明](../apps/creator-cloud/three-eval-README.md)，生产接续与
+取消见 [Episode README](../packages/episode-pipeline/README.md)。

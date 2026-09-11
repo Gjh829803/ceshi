@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.json","include":["../../shared/preset-content/**/*.ts","vehicle-sandbox/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}
+{"extends":"../../tsconfig.json","include":["../../packages/preset-content/**/*.ts","vehicle-sandbox/**/*.ts"],"exclude":["**/.three-creator/**","**/outputs/**"]}

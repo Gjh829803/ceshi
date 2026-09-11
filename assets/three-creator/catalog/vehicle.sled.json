@@ -1,6 +1,6 @@
 {
   "id": "vehicle.sled",
-  "displayName": "木座雪橇 / SLED",
+  "displayName": "木座雪橇 / Sled",
   "path": "vehicles/sled.glb",
   "uri": "./assets/subjects/6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3.glb",
   "sha256": "6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3",
@@ -31,18 +31,18 @@
   ],
   "provenance": {
     "source": "Local procedural geometry",
-    "generator": "scripts/three-creator/export-sled.ts"
+    "generator": "packages/creator-host/scripts/assets/export-sled.ts"
   },
   "resources": [],
   "locomotionBindingIds": [
-    "vehicle.sled"
+    "locomotion.sled"
   ],
   "vehicle": {
     "schemaVersion": 1,
     "spec": {
       "id": "sled",
       "name": "木座雪橇",
-      "en": "SLED",
+      "en": "Sled",
       "mode": "sled",
       "archetype": "sled",
       "kernel": "K14",

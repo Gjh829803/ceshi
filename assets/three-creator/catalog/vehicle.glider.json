@@ -1,6 +1,6 @@
 {
   "id": "vehicle.glider",
-  "displayName": "无动力滑翔机 / SOAR",
+  "displayName": "无动力滑翔机 / Glider",
   "path": "vehicles/glider.glb",
   "uri": "./assets/subjects/47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169.glb",
   "sha256": "47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "glider",
       "name": "无动力滑翔机",
-      "en": "SOAR",
+      "en": "Glider",
       "mode": "glider",
       "kernel": "K08",
       "color": "#e2e8eb",

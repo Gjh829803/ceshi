@@ -23,18 +23,29 @@ async function packageManifests(): Promise<string[]> {
 }
 
 describe("Three repository layout", () => {
+  it("keeps organized package roots for metadata and separates runtime from maintenance", async () => {
+    for (const name of ["browser-capture", "preset-content", "creator-host", "episode-pipeline"]) {
+      const root = path.join(REPOSITORY_ROOT, "packages", name);
+      const entries = await readdir(root, { withFileTypes: true });
+      expect(entries.filter((entry) => entry.isFile()).map((entry) => entry.name).sort()).toEqual([
+        "AGENTS.md", "README.md", "package.json", "tsconfig.json",
+      ]);
+      expect((await stat(path.join(root, "src"))).isDirectory()).toBe(true);
+    }
+  });
+
   it("keeps exactly the runtime packages and current Creator applications", async () => {
-    expect(await packageManifests()).toEqual(["camera-collision", "three-world"]);
-    for (const application of ["apps/creator-evaluation-site", "apps/three-creator-playground"]) {
+    expect(await packageManifests()).toEqual(["browser-capture", "camera-collision", "cloud-generation-client", "creator-host", "episode-pipeline", "preset-content", "three-world"]);
+    for (const application of ["apps/creator-evaluation-site", "packages/creator-host/src/browser"]) {
       expect((await stat(path.join(REPOSITORY_ROOT, application))).isDirectory()).toBe(true);
     }
   });
 
   it("keeps executable scripts under their responsibilities and current documentation authorities", async () => {
     const entries = await readdir(path.join(REPOSITORY_ROOT, "scripts"), { withFileTypes: true });
-    expect(entries.filter((entry) => entry.isFile() && entry.name !== "README.md").map((entry) => entry.name)).toEqual([]);
+    expect(entries.filter((entry) => entry.isFile() && !["README.md", "AGENTS.md"].includes(entry.name)).map((entry) => entry.name)).toEqual([]);
     for (const currentPath of [
-      "scripts/three-creator", "scripts/three-episode", "scripts/cloud", "scripts/testing",
+      "packages/creator-host", "packages/episode-pipeline", "apps/creator-cloud", "scripts/testing",
       "docs/three-sdk-architecture.md", "docs/three-sdk-data-production.md", "packages/three-world/README.md",
       "deploy/creator-evaluation/gateway.mjs",
     ]) {

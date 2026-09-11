@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import type { Browser, Page } from 'playwright';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { launchChromiumWithSystemFallback } from '../../../scripts/lib/playwright-browser-launch.js';
+import { launchChromiumWithSystemFallback } from '@worldkit/browser-capture/browser';
 
 // Real WebGL/DOM/MediaStream and SDK physics; no model provider or fake simulation.
 describe('independent UI and clean model input',()=>{

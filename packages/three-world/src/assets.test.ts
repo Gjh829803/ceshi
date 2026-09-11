@@ -7,8 +7,8 @@ import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const assets = catalog.assets as unknown as readonly (AssetDefinition & { sourcePath: string })[];
-const humanoid = assets.find((asset) => asset.id === 'humanoid.source-101')!;
-const animal = assets.find((asset) => asset.id === 'quadruped.animal.large-static')!;
+const humanoid = assets.find((asset) => asset.id === 'humanoid.uefn-mannequin')!;
+const animal = assets.find((asset) => asset.id === 'creature.quadruped-static-diagnostic')!;
 const instances: AssetInstance[] = [];
 const readBytes = (definition: typeof humanoid) => () => readFile(resolve(definition.sourcePath));
 const load = async (definition: AssetDefinition = humanoid, source = humanoid) => {

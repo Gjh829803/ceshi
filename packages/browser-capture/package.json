@@ -1,0 +1,22 @@
+{
+  "name": "@worldkit/browser-capture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./browser": "./src/playwright-browser-launch.ts",
+    "./video": "./src/rendered-frame-encoder.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. packages/browser-capture",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "@types/node": "^24.3.0",
+    "vitest": "^3.2.4"
+  }
+}

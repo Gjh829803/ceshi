@@ -1,5 +1,5 @@
 import {parseFixtureGlb} from './textured-glb-fixture';
-import {getMap} from '../../../../shared/preset-content/environment/maps';
+import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -11,8 +11,8 @@ import {initEnvironmentQueries,EnvironmentQueries,vehicleBody} from './environme
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {SUBMERSIBLE_WATER,createSubmersibleState} from './motion-families/underwater/submersible';
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
-import {SUBMERSIBLE_SPEC} from '../../../../shared/preset-content/submersible';
-import {buildSubmersibleModel} from '../../../../shared/preset-content/submersible-model';
+import {SUBMERSIBLE_SPEC} from '@worldkit/preset-content/submersible';
+import {buildSubmersibleModel} from '@worldkit/preset-content/submersible-model';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false){
  const q=new EnvironmentQueries({id:'pool',name:'Pool',description:'',bounds:{min:[-100,-30,-100],max:[100,30,100]},boxes:[{id:'floor',position:[0,dry?-1.55:-21,0],size:[200,1,200]},...(wall?[{id:'wall',position:[0,-4,9] as const,size:[100,40,.5] as const}]:[])],water:dry?[]:[{id:'water',min:[-90,-20.5,-90],max:[90,0,90],surface:0}],regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[180,180],color:'#aaa',modes:['submarine','character']}],spawns:[],playerSpawn:[-20,1,0]});
@@ -45,7 +45,7 @@ describe('observation submersible',()=>{
  });
  it('keeps unattended craft afloat, prevents underwater hatch exit, and resets ballast/particles',async()=>{
   const f=fixture(),map=f.q.map;f.q.dispose();const spec={...SUBMERSIBLE_SPEC,spawn:[0,.12,0] as [number,number,number],yaw:0};
-  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),navigation:false,humanoid:{map:{...map,spawns:[{id:'submarine',name:'submarine',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'pool'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.observation-sub',spec,object:buildSubmersibleModel()}],character:{instanceId:'person',object:new Group()}}});
+  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),navigation:false,humanoid:{map:{...map,spawns:[{id:'submarine',name:'submarine',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'pool'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.observation-submarine',spec,object:buildSubmersibleModel()}],character:{instanceId:'person',object:new Group()}}});
   try{world.step({humanoid:emptyInput()},600);expect(world.humanoid!.simulation.vehicles[0]!.position.y).toBeCloseTo(.12,2);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,-5,0],facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});expect(world.humanoid!.interact()).toBe(false);
    world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:spec.spawn,facingYawRadians:0,humanoid:{vehicleInstanceId:spec.id,mounted:true}});world.step({humanoid:{...emptyInput(),lift:-1}},420);expect(world.humanoid!.interact()).toBe(false);expect(world.humanoid!.simulation.controlledActor.message).toContain('上浮');

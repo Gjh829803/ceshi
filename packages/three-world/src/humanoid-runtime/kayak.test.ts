@@ -1,8 +1,8 @@
 import {parseFixtureGlb} from './textured-glb-fixture';
-import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
-import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
-import {CANOE_SPEC} from '../../../../shared/preset-content/canoe';
-import {buildCanoeModel} from '../../../../shared/preset-content/canoe-model';
+import {RAFT_SPEC} from '@worldkit/preset-content/raft';
+import {buildRaftModel} from '@worldkit/preset-content/raft-model';
+import {CANOE_SPEC} from '@worldkit/preset-content/canoe';
+import {buildCanoeModel} from '@worldkit/preset-content/canoe-model';
 import {CANOE_WATER,paddleGrip} from './motion-families/surface-vessel/paddling';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
@@ -14,8 +14,8 @@ import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environme
 import {createVehicle,stepVehicle as prepareVehicle,emptyInput,type Input} from './simulation';
 import {createKayakState,KAYAK_WATER,kayakPaddlePose,KAYAK_GEOMETRY} from './motion-families/surface-vessel/paddling';
 import {Character} from './character';
-import {KAYAK_SPEC} from '../../../../shared/preset-content/kayak';
-import {buildKayakModel} from '../../../../shared/preset-content/kayak-model';
+import {KAYAK_SPEC} from '@worldkit/preset-content/kayak';
+import {buildKayakModel} from '@worldkit/preset-content/kayak-model';
 import {sampleKayakVisual} from './kayak-visual';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false,spec=KAYAK_SPEC){

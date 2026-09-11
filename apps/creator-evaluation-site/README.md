@@ -7,7 +7,7 @@ objectives; tool completion and human evaluation are separate results.
 
 ## Run-specific publication
 
-Stage with `scripts/cloud/prepare-three-evaluation-site.py`. SDK evaluations select
+Stage with `apps/creator-cloud/prepare-three-evaluation-site.py`. SDK evaluations select
 up to ten explicit task IDs. References, case inputs and deliveries are validated
 against the plan, runtime lock and their actual file hashes before publication.
 
@@ -36,7 +36,7 @@ case manifest can provide the same evaluation metadata.
 Publish only the intended run:
 
 ```sh
-python3 scripts/cloud/publish-creator-evaluation-site.py \
+python3 apps/creator-cloud/publish-creator-evaluation-site.py \
   --source SITE --pod RAY_HEAD --gallery three --run-page
 ```
 
@@ -67,7 +67,7 @@ actual playing build. No feedback is submitted by opening or publishing a page.
 
 ## Verification
 
-Run `python3 scripts/cloud/prepare-three-evaluation-site.test.py` for staging,
+Run `python3 apps/creator-cloud/prepare-three-evaluation-site.test.py` for staging,
 artifact closure, source/coverage identity, ten-case selection and isolated
 publication checks. Browser verification should cover desktop and mobile,
 status/action filters, playback preservation on refresh, shared feedback identity,

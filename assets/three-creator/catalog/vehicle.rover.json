@@ -1,6 +1,6 @@
 {
   "id": "vehicle.rover",
-  "displayName": "越野车 / ROVER",
+  "displayName": "越野车 / Off-road car",
   "path": "vehicles/rover.glb",
   "uri": "./assets/subjects/10e3289df10b54a6459eaaaf82b306a0d4405eef86353ac1be551cc61de7369a.glb",
   "sha256": "10e3289df10b54a6459eaaaf82b306a0d4405eef86353ac1be551cc61de7369a",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "rover",
       "name": "越野车",
-      "en": "ROVER",
+      "en": "Off-road car",
       "mode": "wheeled",
       "kernel": "K03",
       "color": "#f0b64d",

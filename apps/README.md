@@ -1,9 +1,8 @@
 # Applications
 
-- `three-creator-playground/`: browser host/bridge for Three Creator worlds.
-- `creator-evaluation-site/`: delivered-world browsing and the existing shared
-  review surface; see its [README](creator-evaluation-site/README.md).
+- [SDK Playground](sdk-playground/README.md): interactive SDK development and calibration.
+- [Creator Cloud](creator-cloud/README.md): Creator job admission, launch, recovery and evaluation publication.
+- [Creator evaluation site](creator-evaluation-site/README.md): delivered-world browsing and shared human review.
 
-Earlier Playground, Native Creator, Studio and blueprint Site source has been
-retired. Current applications use the [Three architecture](../docs/three-sdk-architecture.md)
-and [production contract](../docs/three-sdk-data-production.md).
+Creator's production browser bridge belongs to `packages/creator-host/src/browser`;
+it is not another Playground application. See [workspace responsibilities](../docs/workspace-packages.md).

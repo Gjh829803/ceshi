@@ -1,6 +1,6 @@
 {
   "id": "vehicle.trail-rover",
-  "displayName": "远征保障车 / TRAIL",
+  "displayName": "远征保障车 / Expedition car",
   "path": "vehicles/trail-rover.glb",
   "uri": "./assets/subjects/7a3e0c8140000831e568f64cb1ea6b07b95b893f99330ee9bc5012c8be2a0887.glb",
   "sha256": "7a3e0c8140000831e568f64cb1ea6b07b95b893f99330ee9bc5012c8be2a0887",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "trail-rover",
       "name": "远征保障车",
-      "en": "TRAIL",
+      "en": "Expedition car",
       "mode": "wheeled",
       "kernel": "K03",
       "color": "#568f72",

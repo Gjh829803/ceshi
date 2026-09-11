@@ -1,6 +1,6 @@
 {
   "id": "vehicle.trainer-plane",
-  "displayName": "稳定教练机 / MENTOR",
+  "displayName": "稳定教练机 / Trainer airplane",
   "path": "vehicles/trainer-plane.glb",
   "uri": "./assets/subjects/cdfc214312a4b907ee89cf8a3fc751dbd4e55c2e8a742c972b8dc233652aa031.glb",
   "sha256": "cdfc214312a4b907ee89cf8a3fc751dbd4e55c2e8a742c972b8dc233652aa031",
@@ -41,7 +41,7 @@
     "spec": {
       "id": "trainer-plane",
       "name": "稳定教练机",
-      "en": "MENTOR",
+      "en": "Trainer airplane",
       "mode": "plane",
       "kernel": "K09",
       "color": "#f0d04f",

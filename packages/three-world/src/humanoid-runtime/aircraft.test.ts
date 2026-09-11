@@ -2,8 +2,8 @@ import {beforeAll,it,expect} from 'vitest';
 import {Vector3} from 'three';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
-import {SPECS} from '../../../../shared/preset-content/config';
-import {getMap} from '../../../../shared/preset-content/environment/maps';
+import {SPECS} from '@worldkit/preset-content/config';
+import {getMap} from '@worldkit/preset-content/environment/maps';
 beforeAll(initEnvironmentQueries);
 function fixture(){const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,0,0]});const step=(input:Partial<Input>,n:number)=>{for(let i=0;i<n;i++){stepVehicle(v,{...emptyInput(),...input},1/60,i/60,q);q.stepPhysics(1/60);}};return {q,v,step};}
 it('rests on three spring contacts and brakes after landing',()=>{const {q,v,step}=fixture();try{step({},300);expect(v.grounded).toBe(true);expect(v.motion.aircraft!.wheels.filter(w=>w.load>100).length).toBe(3);expect(v.velocity.length()).toBeLessThan(.1);v.position.y=2;v.velocity.set(0,-2,12);step({slow:true},1200);expect(v.grounded).toBe(true);expect(v.velocity.length()).toBeLessThan(.3);expect(v.position.y).toBeGreaterThan(-.15);}finally{q.dispose();}});

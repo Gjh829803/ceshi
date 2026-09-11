@@ -1,6 +1,6 @@
 {
   "id": "vehicle.carriage",
-  "displayName": "双轴马车 / CARRIAGE",
+  "displayName": "双轴马车 / Horse-drawn carriage",
   "path": "vehicles/carriage.glb",
   "uri": "./assets/subjects/949de81de7b40aacf27194f4c841c37ff2de28ebf994b46847d5e5e1dc2fe04f.glb",
   "sha256": "949de81de7b40aacf27194f4c841c37ff2de28ebf994b46847d5e5e1dc2fe04f",
@@ -70,7 +70,7 @@
     "spec": {
       "id": "carriage",
       "name": "双轴马车",
-      "en": "CARRIAGE",
+      "en": "Horse-drawn carriage",
       "mode": "carriage",
       "kernel": "K12",
       "color": "#6b4b31",

@@ -3,7 +3,7 @@ import {defineConfig} from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const browserFiles = ['apps/creator-evaluation-site/**/*.{js,mjs}', 'scripts/three-episode/human-review-ui.js', 'scripts/three-episode/presentation-runtime.js'];
+const browserFiles = ['apps/creator-evaluation-site/**/*.{js,mjs}', 'packages/episode-pipeline/src/review/web/human-review-ui.js', 'packages/episode-pipeline/src/reporting/presentation-runtime.js'];
 
 export default defineConfig([
   {
@@ -33,7 +33,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'deploy/**/*.{js,mjs,cjs}', 'apps/*/scripts/**/*.{js,mjs,cjs}'],
+    files: ['*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'deploy/**/*.{js,mjs,cjs}', 'apps/*/scripts/**/*.{js,mjs,cjs}', 'apps/creator-cloud/**/*.{js,mjs,cjs}', 'packages/{creator-host,episode-pipeline,browser-capture,cloud-generation-client}/**/*.{js,mjs,cjs}'],
     ignores: browserFiles,
     languageOptions: {globals: globals.node},
   },

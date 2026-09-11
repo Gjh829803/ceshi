@@ -17,7 +17,7 @@ Shift 增加并保持油门，Ctrl/C 收油并在地面刹车，W/S 低头/拉�
 - 每个轮子独立查询支撑面，计算预载、弹簧、阻尼、摩擦限幅与刹车；前轮转向。球形行程限位碰撞体处理压缩到底的情况，机身与机翼另有碰撞体。碰撞体为近似形状，不是可视蒙皮的精确碰撞。
 - 质量、惯量、翼面积、轮位和行程标定集中在 `packages/three-world/src/config/aircraft.ts`。当前 plane 模式使用同一轻型三轮高翼机布局，两种预设共用；其他尺寸/类别必须重新标定，尚无任意机型气动配置 API。
 - 轮位、转向和旋转经 `presentation.ts` 的既有快照插值展示，和机身共用采样。地图切换、复位及释放使用既有刚体生命周期。
-- Creator 与 Episode 共用物理；`scripts/three-episode/vehicle-route.ts` 根据实际航迹修正侧倾请求。
+- Creator 与 Episode 共用物理；`packages/episode-pipeline/src/planning/vehicle-route.ts` 根据实际航迹修正侧倾请求。
 
 ## 人物和模型
 
@@ -34,7 +34,7 @@ Shift 增加并保持油门，Ctrl/C 收油并在地面刹车，W/S 低头/拉�
 构建目录：`D:/CodexData/Builds/aircraft-turn-assist-20260910`。
 Runtime SHA-256：`bd15de93a3156fa25a858c50ca5f255c8c23b6e4b6d1756709a370f8082e5a25`。
 
-执行：`pnpm exec vitest run packages/three-world/src/humanoid-runtime/aircraft.test.ts packages/three-world/src/humanoid-runtime/runtime.test.ts packages/three-world/src/humanoid-runtime/vehicle-camera.test.ts packages/three-world/src/humanoid-runtime/wheel-physics.test.ts packages/three-world/src/humanoid-runtime/mounted-presentation.test.ts scripts/three-creator/aircraft-fit.test.ts scripts/three-episode/vehicle-route.test.ts`。
+执行：`pnpm exec vitest run packages/three-world/src/humanoid-runtime/aircraft.test.ts packages/three-world/src/humanoid-runtime/runtime.test.ts packages/three-world/src/humanoid-runtime/vehicle-camera.test.ts packages/three-world/src/humanoid-runtime/wheel-physics.test.ts packages/three-world/src/humanoid-runtime/mounted-presentation.test.ts packages/creator-host/tests/integration/aircraft-fit.test.ts packages/episode-pipeline/tests/planning/vehicle-route.test.ts`。
 另执行 `pnpm typecheck`、`pnpm test:census`、`pnpm build:editor` 和 `pnpm three:creator:prebuild --profile three-sdk --output D:/CodexData/Builds/aircraft-dynamics-20260910`。
 
 ## 简化转弯辅助
