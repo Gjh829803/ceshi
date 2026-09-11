@@ -6,9 +6,9 @@ const plan = (): EpisodePlan => ({ kind: 'worldkit-three-episode-plan', schemaVe
   segments: Array.from({ length: 6 }, (_, i) => ({ id: `segment-0${i}`, start: { positionWorldMetersXYZ: [i, i % 2, 0], facingYawRadians: .37 },
     waypoints: [{ positionWorldMetersXYZ: [i + .13, i % 2, -20.57], gait: 'walk' }], endBehavior: 'stop', purpose: 'Observe the world' })) });
 describe('Three Episode agent plan and production boundary', () => {
-  it('retains historical coverage annotations without interpreting them as commands',()=>{
-    const value=plan();value.segments[0]!.coverageTargetIds=['unresolved-legacy-label'];
-    expect(validateEpisodePlan(value,{worldBuildHash:hash}).segments[0]!.coverageTargetIds).toEqual(['unresolved-legacy-label']);
+  it('rejects removed coverage annotations instead of accepting an unused contract',()=>{
+    const value=plan();Object.assign(value.segments[0]!,{coverageTargetIds:['unused-label']});
+    expect(()=>validateEpisodePlan(value,{worldBuildHash:hash})).toThrow('PLAN_INVALID');
   });
   it('accepts free metric coordinates without a navigation catalog or region extraction', () => {
     expect(validateEpisodePlan(plan(), { worldBuildHash: hash }).segments).toHaveLength(6);
@@ -63,4 +63,16 @@ it('accepts mount and view settled goals and requires a boarding instance target
   segment.actionGoals.shift();
   segment.actionGoals[0]!.completion = { kind: 'displacement', minimumMeters: 1 };
   expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('DISPLACEMENT_UNSUPPORTED');
+});
+
+it('accepts explicit interaction slots and rejects slots unrelated to an interaction entity', () => {
+  const input = plan(), segment = input.segments[0]!;
+  const goal = { id: 'sit-right', trigger: { waypointIndex: 0, radiusMeters: .6 }, targetId: 'bench', slotId: 'right', intent: { kind: 'skill', action: 'sit' }, completion: { kind: 'settled', holdSeconds: 1 }, timeoutSeconds: 5 } as const;
+  segment.actionGoals = [goal];
+  expect(validateEpisodePlan(input, { worldBuildHash: hash }).segments[0]!.actionGoals![0]!.slotId).toBe('right');
+  const recipe = segmentRecipeHash({ worldBuildHash: hash, runtimeHash: hash }, segment);
+  segment.actionGoals = [{ ...goal, slotId: 'left' }];
+  expect(segmentRecipeHash({ worldBuildHash: hash, runtimeHash: hash }, segment)).not.toBe(recipe);
+  segment.actionGoals = [{ ...goal, intent: { kind: 'mount', action: 'enter' } }];
+  expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('SLOT_INVALID');
 });

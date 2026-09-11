@@ -24,7 +24,7 @@ import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
 import {measureEpisodeTargets} from './target-feedback.js';
-import {summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
+import {summarizePlaytestActions, summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -358,7 +358,6 @@ export class ThreeCreatorTools {
         const current = await this.bridge(session, 'worldOperation', [id]);
         if (JSON.stringify(previous) !== JSON.stringify(current)) hostEvents.push({ type: 'world-operation', worldOperationId: id, worldOperation: current, wallSeconds: elapsed() });
         worldOperations.set(id, current);
-        if (current.status === 'failed') throw new Error(`THREE_EPISODE_OPERATION_FAILED: ${JSON.stringify(current)}`);
       }
     };
     const send = async (type: 'keydown' | 'keyup', key: string, cleanup = false) => { const before = await this.bridge(session, 'read'); if (type === 'keydown') { await session.page.keyboard.down(key); held.add(key); } else { await session.page.keyboard.up(key); held.delete(key); } hostEvents.push({ type, key, cleanup, wallSeconds: elapsed(), before }); };
@@ -382,7 +381,6 @@ export class ThreeCreatorTools {
           const result = await this.bridge(session, 'executeCommand', [command, commandId]);
           hostEvents.push({ type: 'world-command', command, wallSeconds: elapsed(), ...result });
           if (result.worldCommandReceipt.status === 'accepted') worldOperations.set(result.worldCommandReceipt.operationId, null);
-          if (result.worldCommandReceipt.status === 'rejected') throw new Error(`THREE_EPISODE_COMMAND_REJECTED: ${JSON.stringify(result.worldCommandReceipt.error)}`);
         }
         for (const key of step.keysDown ?? []) await send('keydown', key);
         if (step.pointerDrag) { const drag = step.pointerDrag; await session.page.mouse.move(480, 270); await session.page.mouse.down({ button: drag.button ?? 'left' }); await session.page.mouse.move(480 + drag.deltaXPixels, 270 + drag.deltaYPixels, { steps: 8 }); await session.page.mouse.up({ button: drag.button ?? 'left' }); hostEvents.push({ type: 'pointer-drag', wallSeconds: elapsed(), ...drag }); }
@@ -430,7 +428,7 @@ export class ThreeCreatorTools {
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const feedback={actions:summarizePlaytestActions(hostEvents,[...worldOperations.values()]),characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
     const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
     const report = {...recording, readTrace:{tool:'world_read_playtest',arguments:{operationId}}, recordingReadiness: {scope: 'recording-only' as const,

@@ -41,7 +41,9 @@
     "build:editor": "pnpm --filter @worldkit/three-playground build",
     "test:editor:browser": "tsx apps/three-playground/scripts/browser-smoke.ts",
     "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix --max-warnings 0"
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "content:sync": "tsx scripts/three-creator/content-cli.ts",
+    "content:check": "tsx scripts/three-creator/content-cli.ts --check"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",

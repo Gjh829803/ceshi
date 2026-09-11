@@ -36,6 +36,7 @@ export interface MapSpawn {
 }
 /** Authored object anchors retain the original humanoid motion's +Z local yaw. */
 export interface MapInteraction {
+  slotId: string;
   id: string;
   label: string;
   kind: 'pickup' | 'seat';

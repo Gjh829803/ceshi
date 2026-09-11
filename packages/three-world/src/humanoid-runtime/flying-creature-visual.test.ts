@@ -23,11 +23,7 @@ async function fixture(id='D01'){
   vi.stubGlobal('ProgressEvent',class{constructor(public type:string){}});
   const variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
   const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
-  const length=bytes.readUInt32LE(12),json=JSON.parse(bytes.subarray(20,20+length).toString()),bin=bytes.subarray(28+length);
-  json.buffers=[{byteLength:bin.length,uri:'data:application/octet-stream;base64,'+bin.toString('base64')}];
-  // 保留真实蒙皮、骨架和动作；几何回归不需要解码像素纹理。
-  delete json.images;delete json.textures;for(const material of json.materials)for(const key of Object.keys(material))if(key!=='name')delete material[key];
-  const model=await new GLTFLoader().parseAsync(JSON.stringify(json),'');
+  const model=await parseFixtureGlb(bytes);
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockResolvedValue(model);vi.spyOn(T.TextureLoader.prototype,'loadAsync').mockResolvedValue(new T.Texture());
   const visual=new FlyingCreatureVisual();await visual.load({dragonUrl:'fixture',flameTextureUrl:'fixture',animationPrefix:id});
   const pose:MotionPose={position:new T.Vector3(),rotation:new T.Quaternion(),velocity:new T.Vector3(),yaw:0,speed:0,steering:0,flyingCreature:createFlyingCreatureStateV1()};
@@ -120,7 +116,7 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
       expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
-      const vehicle=runtime.simulation.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
+      const vehicle=runtime.simulation.controlledActor.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
       expect(offset.x).toBeLessThan(-.15);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
       world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(0);
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
@@ -129,50 +125,50 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
     expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
     runtime.setCameraMode(0);
     expect(runtime.exit()).toBe(true);world.step({},720);
-    expect(runtime.simulation.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');
+    expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');
     runtime.setCameraMode(1);
     expect(world.camera.position.distanceTo(eye()),id+':ground eye').toBeLessThan(.001);
     const sight=visual.root.getObjectByName('Head')!.getWorldPosition(new T.Vector3()).sub(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()));sight.y=0;
     expect(sight.normalize().dot(new T.Vector3(0,0,1)),id+':ground body faces rider view').toBeGreaterThan(.6);
     runtime.setCameraMode(0);
     // 长身龙额外覆盖右侧堵塞后左侧下龙，以及左侧重新登乘。
-    const human=runtime.simulation.humanoid,body=human.standingQueryBody;
+    const human=runtime.simulation.controlledActor.controller,body=human.standingQueryBody;
     const blockedRight=id==='D09'&&body.kind==='capsule'?human.world.createCollider(RAPIER.ColliderDesc.cuboid(.45,1,.45).setTranslation(Math.max(...variant.ground!.probes.map(p=>p.center[0]+p.radius))+body.radius+.18,1,variant.ground!.seat[2])):undefined;
     if(blockedRight)world.step({},1);
     const seatedHip=rider.hip!.getWorldPosition(new T.Vector3());
-    expect(runtime.exit(),runtime.simulation.message).toBe(true);
-    if(blockedRight){expect(runtime.simulation.dragonTransition!.side).toBe(-1);human.world.removeCollider(blockedRight,true);}
+    expect(runtime.exit(),runtime.simulation.controlledActor.message).toBe(true);
+    if(blockedRight){expect(runtime.simulation.controlledActor.dragonTransition!.side).toBe(-1);human.world.removeCollider(blockedRight,true);}
     expect(seatedHip.distanceTo(rider.hip!.getWorldPosition(new T.Vector3())),id+':start dismount').toBeLessThan(.6);
-    const duration=runtime.simulation.transition;
+    const duration=runtime.simulation.controlledActor.transition;
     let hip=rider.hip!.getWorldPosition(new T.Vector3());
     for(let n=0;n<Math.ceil(duration*60)+5;n++){
       world.step({},1);const current=rider.hip!.getWorldPosition(new T.Vector3());
       expect(current.distanceTo(hip),id+':dismount frame '+n).toBeLessThan(.6);hip=current;
       expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);
-      const contacts=visual.sampleMount(runtime.simulation.dragonTransition,rider.root);
+      const contacts=visual.sampleMount(runtime.simulation.controlledActor.dragonTransition,rider.root);
       if(contacts&&contacts.weight>.99){
         for(const [i,side] of ['l','r'].entries()){
-          expect(rider.root.getObjectByName('hand_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.hands[i]!),id+':ladder hand '+side+JSON.stringify({n,hip:current.toArray(),shoulder:rider.root.getObjectByName('upperarm_'+side)!.getWorldPosition(new T.Vector3()).toArray(),target:contacts.hands[i]!.toArray(),yaw:runtime.simulation.player.yaw})).toBeLessThan(.18);
+          expect(rider.root.getObjectByName('hand_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.hands[i]!),id+':ladder hand '+side+JSON.stringify({n,hip:current.toArray(),shoulder:rider.root.getObjectByName('upperarm_'+side)!.getWorldPosition(new T.Vector3()).toArray(),target:contacts.hands[i]!.toArray(),yaw:runtime.simulation.controlledActor.player.yaw})).toBeLessThan(.18);
           expect(rider.root.getObjectByName('foot_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.feet[i]!),id+':ladder foot '+side).toBeLessThan(.2);
         }
       }
     }
-    expect(runtime.simulation.active).toBe(-1);expect(runtime.simulation.humanoid.capsule.isEnabled()).toBe(true);
-    world.step({},20);expect(runtime.simulation.player.position.y).toBeLessThan(.1);
-    expect(runtime.enter('dragon'),runtime.simulation.message).toBe(true);
-    const enterSeconds=runtime.simulation.transition;
+    expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);expect(runtime.simulation.controlledActor.controller.capsule.isEnabled()).toBe(true);
+    world.step({},20);expect(runtime.simulation.controlledActor.player.position.y).toBeLessThan(.1);
+    expect(runtime.enter('dragon'),runtime.simulation.controlledActor.message).toBe(true);
+    const enterSeconds=runtime.simulation.controlledActor.transition;
     for(let n=0;n<Math.ceil(enterSeconds*60)+5;n++){
       world.step({humanoid:{...emptyInput(),boost:true}},1);
-      const contacts=visual.sampleMount(runtime.simulation.dragonTransition,rider.root);
+      const contacts=visual.sampleMount(runtime.simulation.controlledActor.dragonTransition,rider.root);
       if(contacts&&contacts.weight>.99)for(const [i,side] of ['l','r'].entries()){
         expect(rider.root.getObjectByName('hand_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.hands[i]!),id+':ascending hand '+side).toBeLessThan(.18);
         expect(rider.root.getObjectByName('foot_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.feet[i]!),id+':ascending foot '+side).toBeLessThan(.2);
       }
     }
-    expect(runtime.simulation.vehicle!.grounded).toBe(true);expect(runtime.simulation.humanoid.capsule.isEnabled()).toBe(false);
+    expect(runtime.simulation.controlledActor.vehicle!.grounded).toBe(true);expect(runtime.simulation.controlledActor.controller.capsule.isEnabled()).toBe(false);
     expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()))).toBeLessThan(.001);
     world.step({humanoid:{...emptyInput(),brake:true}},1);world.step({},180);
-    expect(runtime.simulation.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
+    expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
   }finally{world.dispose();vi.unstubAllGlobals();}
 },30000);
 

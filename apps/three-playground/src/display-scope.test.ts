@@ -5,7 +5,7 @@ import {getMap} from '../../../shared/preset-content/environment/maps';
 import {createDisplayOverlays} from './display-overlays';
 import {defaultDisplaySettings,resolveDisplaySettings,isolateDisplaySelection,exitDisplayIsolation,applyDisplayPreset} from './display-settings';
 import {createDisplayScene} from './display-scene';
-import {buildDisplayCatalog,resolveDisplayColliderId} from './display-catalog';
+import {buildDisplayCatalog} from './display-catalog';
 
 describe('object and physical helper scope',()=>{
   it('follows real pickup and loose-crate bindings after a world reset',async()=>{
@@ -13,12 +13,12 @@ describe('object and physical helper scope',()=>{
     const world=await createWorld({scene,camera:new T.PerspectiveCamera(),assetDefinitions:{},navigation:false,humanoid:{map,character:{instanceId:'person',object:new T.Group()},vehicles:[]}});
     const runtime=world.humanoid!;
     const verify=()=>{
-      const h=runtime.simulation.humanoid!;
-      const owner=(handle:number)=>resolveDisplayColliderId(h,handle=>runtime.environment.colliderId(handle),handle);
-      const target=[...h.skills.targets.values()].find(t=>t.collider?.isEnabled())!;
-      expect(target).toBeDefined();expect(owner(target.collider!.handle)).toBe(target.definition.id);
+      const h=runtime.simulation.controlledActor.controller!;
+      const owner=(handle:number)=>runtime.environment.colliderId(handle);
+      const target=[...h.skills.interactions.targets.values()].find(t=>runtime.environment.colliderForId(t.definition.id)?.isEnabled())!;
+      expect(target).toBeDefined();expect(owner(runtime.environment.colliderForId(target.definition.id)!.handle)).toBe(target.definition.id);
       expect(h.crates.length).toBe(1);
-      for(const [n,crate] of h.crates.entries())for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('crate:'+n);
+      for(const crate of h.crates)for(let c=0;c<crate.body.numColliders();c++)expect(owner(crate.body.collider(c).handle)).toBe('loose-test');
       const object=new T.Group(),context={roots:[{id:target.definition.id,object,type:'interaction' as const}],subjects:[object]};
       const overlay=createDisplayOverlays(scene,()=>({physics:h,map,targets:[],colliderId:owner}));
       try{overlay.update(resolveDisplaySettings({...defaultDisplaySettings(),scope:'selected',selectedIds:[target.definition.id],colliders:'all'}),context);
@@ -49,7 +49,7 @@ describe('object and physical helper scope',()=>{
     ]};
     const scene=new T.Scene(),actor=new T.Group(),selected=new T.Mesh(new T.BoxGeometry(1,2,1),new T.MeshBasicMaterial());selected.position.set(0,1,0);scene.add(selected);
     const world=await createWorld({scene,camera:new T.PerspectiveCamera(),assetDefinitions:{},navigation:false,humanoid:{map,character:{instanceId:'person',object:actor},vehicles:[]}});
-    const h=world.humanoid!.simulation.humanoid!,environment=world.humanoid!.environment;
+    const h=world.humanoid!.simulation.controlledActor.controller!,environment=world.humanoid!.environment;
     const owner=(handle:number)=>h.capsule.handle===handle?'person':environment.colliderId(handle);
     const overlay=createDisplayOverlays(scene,()=>({physics:h,map,targets:[],colliderId:owner,colliderDistance:(handle,centers)=>{
       const c=h.world.getCollider(handle);return centers.reduce((d,p)=>Math.min(d,p.distanceTo(new T.Vector3().copy(c.projectPoint(p,true)!.point))),Infinity);

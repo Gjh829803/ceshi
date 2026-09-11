@@ -47,3 +47,20 @@ D09 原始身体是双足长身造型：只有左右前肢骨链，没有后腿�
 7. `pnpm prepare:dragon-training` 更新 bundle 哈希，再执行飞龙运行时与可视化测试、类型检查及构建。
 
 运行不依赖游戏安装目录、解包目录或旧 Babylon 工作区。此目录的 GLB、JSON 和火焰图集是运行时所需资源；SDK 外部使用者读取 variants 配置，将 `collisionProbes` 传入 `VehicleSpec.flyingCreatureCollision`，`ground` 传入 `flyingCreatureGround`，再绑定现有 `flyingVisual` 接口。
+
+## Creator / Agent 接入
+
+`creature.dragon.d01` 至 `creature.dragon.d11` 分别注册现有 D01–D11 模型，
+与旧资源 `creature.dragon` 保持独立。源定义位于
+[`assets/three-creator/catalog`](../three-creator/catalog/)，默认资产策略允许这些 ID。
+`assets_search` / `assets_describe` 返回每条龙的 `vehicle.spec` 和
+`integrationMetadata.visual`；`creator_get_examples` 的 `flying-creature` 示例消费同一契约。
+
+模型和火焰逻辑路径分别为 `flying-creatures/D01/model.glb`（按编号替换）与
+`flying-creatures/flame.png`。用 `FlyingCreatureVisual.load` 加载，并将它作为
+`VehicleInstance.flyingVisual` 交给 SDK；Source101 骑手复用 `humanoid.source-101`，
+不加载历史 `rider.glb`。`actions:{}` 表示不提供普通资产动作播放，专用控制器仍驱动原始飞行动画。
+
+修改模型或校准后运行 `pnpm exec tsx scripts/assets/register-flying-creatures.ts`，
+只更新这 11 个独立目录源及聚合目录，不复制模型、不重导出、不修改测量数据。
+同一命令加 `--check` 验证源字节、工厂默认配置与已注册元数据一致。

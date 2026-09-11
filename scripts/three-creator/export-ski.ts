@@ -1,6 +1,7 @@
+import {writeCatalogSources,syncAssetCatalog} from './catalog-sources.js';
 /** Rebuild only the local ski asset; never re-import the donor project. */
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildSkiModel } from '../../shared/preset-content/ski-model';
@@ -16,7 +17,6 @@ const sha256=createHash('sha256').update(bytes).digest('hex');
 const sourcePath='assets/three-creator/presets/vehicles/ski.glb';
 await mkdir('assets/three-creator/presets/vehicles',{recursive:true});
 await writeFile(sourcePath,bytes);
-const file='assets/three-creator/asset-catalog.json',catalog=JSON.parse(await readFile(file,'utf8'));
 const asset={id:'vehicle.ski',displayName:'双板滑雪 / ALPINE',path:'vehicles/ski.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
@@ -24,7 +24,6 @@ const asset={id:'vehicle.ski',displayName:'双板滑雪 / ALPINE',path:'vehicles
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-ski.ts'},resources:[],
   locomotionBindingIds:['vehicle.ski'],vehicle:{schemaVersion:1,spec:SKI_SPEC},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:SKI_SPEC.seat}],collision:SKI_SPEC.envelope};
-const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
-if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;
-await writeFile(file,JSON.stringify(catalog,null,2)+'\n');
+await writeCatalogSources(process.cwd(),[asset]);
+await syncAssetCatalog(process.cwd());
 console.log(JSON.stringify({sourcePath,sha256,byteLength:bytes.length}));

@@ -1,5 +1,23 @@
 import {describe, expect, it} from 'vitest';
-import {summarizePlaytestTrace} from './playtest-summary';
+import {summarizePlaytestTrace,summarizePlaytestActions} from './playtest-summary';
+
+it('reports command rejection, failed operations and unobserved outcomes without deciding task success',()=>{
+ const events=[
+  {type:'keydown'},
+  {type:'world-command',wallSeconds:1,command:{type:'actor.stop',entityId:'player'},worldCommandReceipt:{status:'rejected',error:{code:'PLAYER_INPUT_OWNS_ACTOR',message:'Controlled actor'}}},
+  {type:'world-command',wallSeconds:2,command:{type:'actor.move-to',entityId:'npc'},worldCommandReceipt:{status:'accepted',operationId:'move'}},
+  {type:'world-command',wallSeconds:3,command:{type:'humanoid.set-camera-mode'},worldCommandReceipt:{status:'applied'}},
+ ];
+ const operations=[{id:'move',status:'failed',error:{code:'NO_PATH',message:'Target off mesh'}},null,{id:'later',status:'running'},{id:'gone',status:'missing'}];
+ const before=structuredClone({events,operations});const result=summarizePlaytestActions(events,operations);
+ expect(result).toMatchObject({scope:'recorded-command-outcomes',commandCount:3,
+  dispatchCounts:{applied:1,accepted:1,rejected:1},operationCounts:{failed:1,running:1,missing:1,unobserved:1},
+  details:expect.arrayContaining([expect.objectContaining({status:'rejected',error:{code:'PLAYER_INPUT_OWNS_ACTOR',message:'Controlled actor'}}),expect.objectContaining({status:'failed',operationId:'move',error:{code:'NO_PATH',message:'Target off mesh'}})])});
+ expect(result).not.toHaveProperty('passed');expect(result).not.toHaveProperty('status','succeeded');
+ expect({events,operations}).toEqual(before);
+ const bounded=summarizePlaytestActions(Array.from({length:12},()=>events[1]),[]);
+ expect(bounded.dispatchCounts.rejected).toBe(12);expect(bounded.details).toHaveLength(8);expect(bounded.omittedDetails).toBe(4);
+});
 
 describe('recorded playtest time windows', () => {
   it('reports sampled braking and mounting without interpolating or changing the trace', () => {

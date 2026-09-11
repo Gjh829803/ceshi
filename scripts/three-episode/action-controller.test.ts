@@ -30,13 +30,15 @@ function fixture(action: EpisodeActionGoal, withBoarding = true) {
 
 it('keeps a skill running until the operation and real target state both complete', async () => {
   const f = fixture({ ...goal({ kind: 'skill', action: 'pickup' }), targetId: 'parcel' });
-  f.targets.push({ id: 'parcel', kind: 'pickup', approachPositionWorldMetersXYZ: [0, 0, 0], eligible: true, reason: 'READY' });
+  f.targets.push({ id: 'parcel', slotId: 'grip', generation: 1, claim: null, kind: 'pickup', approachPositionWorldMetersXYZ: [0, 0, 0], eligible: true, reason: 'READY' });
   await f.controller.step(f.snapshot(), [0, 0, -1], route);
   expect(f.controller.timeline[0]!.result).toBe('running');
   f.state.activeAction = { requestId: 'ep-segment-00-0', action: 'pickup', phase: 'reach', elapsedSeconds: 0 };
   await f.observe(1); f.setStatus('succeeded'); await f.observe(2);
   expect(f.controller.timeline[0]!.result).toBe('running');
-  f.state.carrying = 'parcel'; f.state.activeAction = null; await f.observe(3);
+  f.state.carrying = 'parcel'; f.state.activeAction = null;
+  f.targets[0].claim = { actorId: 'actor', requestId: 'ep-segment-00-0', generation: 1, state: 'held', expiresAtSimulationSeconds: null };
+  await f.observe(3);
   expect(f.controller.timeline[0]).toMatchObject({ result: 'succeeded', startTick: 0, endTick: 3, targetId: 'parcel' });
   expect(f.operation).toHaveBeenCalledTimes(3);
   expect(f.controller.timeline[0]!.stateChanges.some(e => e.tick === 1 && e.state.character?.activeAction?.phase === 'reach')).toBe(true);
@@ -44,13 +46,40 @@ it('keeps a skill running until the operation and real target state both complet
 
 it('walks to a nearby actual target approach before dispatching', async () => {
   const f = fixture({ ...goal({ kind: 'skill', action: 'sit' }), targetId: 'chair' });
-  const target = { id: 'chair', kind: 'seat', approachPositionWorldMetersXYZ: [1.5, 0, 0], eligible: false, reason: 'OUT_OF_REACH' };
+  const target = { id: 'chair', slotId: 'seat', generation: 1, claim: null, kind: 'seat', approachPositionWorldMetersXYZ: [1.5, 0, 0], eligible: false, reason: 'OUT_OF_REACH' };
   f.targets.push(target);
   const result = await f.controller.step(f.snapshot(), [0, 0, -1], route);
   expect(result.input.moveXRatio).toBe(1); expect(f.execute).not.toHaveBeenCalled();
   await f.observe(10, [1, 0, 0]); target.eligible = true;
   await f.controller.step(f.snapshot(), [0, 0, -1], route);
   expect(f.execute).toHaveBeenCalledWith(expect.objectContaining({ type: 'humanoid.perform-action', request: expect.objectContaining({ targetId: 'chair' }) }));
+});
+
+it('selects the requested slot and verifies its generation and actual claimant', async () => {
+  const f = fixture({ ...goal({ kind: 'skill', action: 'sit' }), targetId: 'bench', slotId: 'right' });
+  const left = { id: 'bench', slotId: 'left', generation: 3, kind: 'seat', approachPositionWorldMetersXYZ: [-1, 0, 0], eligible: true, reason: 'READY', claim: null };
+  const right = { ...left, slotId: 'right', approachPositionWorldMetersXYZ: [1, 0, 0], eligible: false, reason: 'OUT_OF_REACH', claim: null as any };
+  f.targets.push(left, right);
+  expect((await f.controller.step(f.snapshot(), [0, 0, -1], route)).input.moveXRatio).toBe(1);
+  expect(f.execute).not.toHaveBeenCalled();
+  right.eligible = true;
+  await f.controller.step(f.snapshot(), [0, 0, -1], route);
+  expect(f.execute).toHaveBeenCalledWith({ type: 'humanoid.perform-action', request: { requestId: 'ep-segment-00-0', action: 'sit', targetId: 'bench', slotId: 'right' } });
+  f.setStatus('succeeded'); f.state.seated = 'bench';
+  await f.observe(1); expect(f.controller.timeline[0]!.result).toBe('running');
+  right.claim = { actorId: 'someone-else', requestId: 'ep-segment-00-0', generation: 3, state: 'occupied', expiresAtSimulationSeconds: null };
+  await f.observe(2); expect(f.controller.timeline[0]!.result).toBe('running');
+  right.claim.actorId = 'actor'; right.generation = 4;
+  await f.observe(3); expect(f.controller.timeline[0]!.result).toBe('running');
+  right.generation = 3;
+  await f.observe(4); expect(f.controller.timeline[0]).toMatchObject({ result: 'succeeded', slotId: 'right' });
+});
+
+it('rejects an ambiguous entity instead of choosing its first slot', async () => {
+  const f = fixture({ ...goal({ kind: 'skill', action: 'sit' }), targetId: 'bench' });
+  f.targets.push(...['left', 'right'].map(slotId => ({ id: 'bench', slotId, kind: 'seat', eligible: true, approachPositionWorldMetersXYZ: [0, 0, 0] })));
+  await expect(f.controller.step(f.snapshot(), [0, 0, -1], route)).rejects.toThrow('SLOT_REQUIRED');
+  expect(f.execute).not.toHaveBeenCalled();
 });
 
 it('requires observed displacement after a slide and does not mistake acceptance for motion', async () => {

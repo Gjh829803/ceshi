@@ -1,15 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
+import { MAPS } from "../../../shared/preset-content/environment/maps";
+import { readMapHash, writeMapHash } from "./map-route";
 
 const mapIds = ["campus", "grand-prix", "character-workshop", "aircraft-training", "flying-creature-training", "space-training"];
 
 describe("Playground map URL", () => {
-  it("opens legacy dragon links but lets explicit routes and reloads override the old query", () => {
-    expect(readInitialMap("", "?map=flying-creature-training", mapIds)).toBe("flying-creature-training");
-    expect(readInitialMap("#/scenes/aircraft-training", "?map=flying-creature-training", mapIds)).toBe("aircraft-training");
-    expect(readInitialMap("#/scenes/missing", "?map=flying-creature-training", mapIds)).toBe("campus");
-    expect(readInitialMap("", "?map=missing", mapIds)).toBe("campus");
-    expect(readInitialMap("", "", mapIds)).toBe("campus");
+  it.each(["npc-workshop", "space-training", "flying-creature-training"])("exposes %s through the real scene catalog", (id) => {
+    expect(readMapHash(`#/scenes/${id}`, MAPS.map(map => map.id))).toBe(id);
   });
   it.each(mapIds)("restores the %s map from its URL", (id) => {
     expect(readMapHash(`#/scenes/${id}`, mapIds)).toBe(id);

@@ -593,10 +593,10 @@ describe('ThreeCameraRig', () => {
     expect(camera.projectionMatrix.equals(opening.projectionMatrix)).toBe(true);
   });
 
-  it('uses the preservation damping default and honors the explicit legacy override before the new override', () => {
+  it('uses independent damping settings for preserving the opening and targeting the subject', () => {
     const variants = [
       { options: {}, halfLife: .08 },
-      { options: { targetHalfLifeSeconds: .2 }, halfLife: .2 },
+      { options: { targetHalfLifeSeconds: .2 }, halfLife: .08 },
       { options: { targetHalfLifeSeconds: .2, followHalfLifeSeconds: .04 }, halfLife: .04 },
     ];
     for (const { options, halfLife } of variants) {

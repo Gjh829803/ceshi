@@ -1193,3 +1193,13 @@ button svg {
 .rail-label{font-size:10px;line-height:14px;white-space:nowrap}
 
 .powertrain-hud{position:absolute;bottom:80px;left:24px;width:264px;padding:16px;background:#102d32ed;color:#e5eddd;border-radius:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;pointer-events:none}.powertrain-hud strong{font-size:24px;color:#c9dfa2}.powertrain-hud meter{width:100%}.powertrain-hud small{width:100%}
+
+.npc-playground { position:absolute; left:18px; bottom:90px; width:min(390px,calc(100% - 36px)); max-height:45%; overflow:auto; padding:16px; border:1px solid #d4dedb; border-radius:14px; background:rgba(250,252,251,.95); color:#233c35; box-shadow:0 8px 26px #18352a18; pointer-events:auto; font:13px/1.5 sans-serif; }
+.npc-playground[hidden] { display:none; }
+.npc-playground h2 { margin:0 0 6px; font-size:16px; }
+.npc-playground p { margin:7px 0; }
+.npc-playground-buttons { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.npc-playground button { padding:6px 9px; border:1px solid #bdcfc8; border-radius:7px; background:white; color:inherit; cursor:pointer; }
+.npc-playground button[aria-pressed=true] { background:#286c56; color:white; border-color:#286c56; }
+.npc-playground button:disabled { opacity:.45; cursor:default; }
+.npc-playground-actors { color:#586d65; font-size:12px; }

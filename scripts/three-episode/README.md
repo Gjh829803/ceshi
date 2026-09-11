@@ -23,6 +23,9 @@ copy. Project-owned SDK runtime bytes remain authoritative. Source, playable,
 reference images, target views and declared context form a portable dependency
 closure; verify it again after archive transport/extraction. The output directory
 must be new or empty. `source.json` records actual source/runtime/playable hashes.
+Every source carries `assetPolicySha256`, the matching `asset-policy.json` and
+`asset-definitions.json`; import verifies that carried snapshot without reading
+the current Host policy. Sources missing this contract are rejected.
 
 Use `--reference-image FILE --reference-image-sha256 HASH` to carry the exact user
 original for the source-reference style. Do not substitute a generated concept or
@@ -36,8 +39,7 @@ approaches, collision and water before planning. The plan schema is
 `kind:"worldkit-three-episode-plan", schemaVersion:2`, with the actual
 `worldBuildHash` and six ordered, distinct-start segments `segment-00`–`segment-05`.
 Each segment has `start`, `waypoints`, `endBehavior`, `purpose` and optional
-`actionGoals`; see [contracts.ts](contracts.ts). Historical `coverageTargetIds`
-remains accepted as annotation only: it does not steer the camera or measure visibility.
+`actionGoals`; see [contracts.ts](contracts.ts).
 
 Each waypoint supplies `positionWorldMetersXYZ` and `gait:"walk"|"run"`.
 Walk is never promoted to running; run may downshift during observation, jumps
@@ -107,6 +109,16 @@ The recorder observes actions every simulation tick. Each segment writes:
 
 `accepted` records dispatch, not completion. Only `succeeded` is complete;
 `failed`, `cancelled` and `missing` must not become successful video events.
+Interaction goals use `targetId` for the entity and `slotId` for its selected
+interaction. An entity with multiple slots requires an explicit slot. The Host
+approaches that slot, passes its identity to the SDK and checks the same generation,
+actor and persistent claim before reporting pickup/sit completion. Read current
+`snapshot.humanoid.interactionTargets`; a matching entity name alone is insufficient.
+The capture port also accepts the existing `actor.move-to`, `actor.follow` and
+`actor.stop` commands for NPCs. They share World navigation and operations; only
+`advance` progresses simulation. The controlled subject still uses recorded input.
+A command still preparing when the capture lease is released is rejected and its
+prepared resources are released. Entity transforms are not recording movement commands.
 Action evidence is hash-bound to visual/event requests and enters event-prefetch
 and render prompts. The controller permits valid stationary action segments;
 recording health checks use action results rather than demanding continuous gait
@@ -141,6 +153,13 @@ Configure the exact source archive hash, pinned image, S3 paths and cohort in
 `.codex-tmp/three-episode-runtime.json`. Capsule settings belong in
 `scripts/three-episode/episode-runtime.json`; credentials come from Host Secrets
 and are not supplied to the planner or Chromium.
+
+For an approved-account-only Codex run, set both `codexAccountIds` and
+`codexAccountRoot` to the verified isolated pool. IDs alone are provider
+preferences and do not restrict fallback. The Host pins the root in request
+identity and verifies the effective configuration; a mismatch cancels the exact
+job and retains terminal or unconfirmed-cancellation evidence. This setting
+applies to Codex planning, not the separate image-generation lane.
 
 ```sh
 pnpm three:episode:batch register --cohort production-run --cases-file /absolute/episode-ids.json

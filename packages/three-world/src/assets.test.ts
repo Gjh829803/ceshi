@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Box3, LoopOnce, LoopRepeat, Vector3, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
@@ -26,7 +28,11 @@ const pose = (asset: AssetInstance) => {
   return new Box3().setFromObject(asset.object, true);
 };
 
-afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); });
+beforeEach(()=>{
+  const parse=GLTFLoader.prototype.parse;
+  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
+});
+afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('Three asset loader against original project GLBs', () => {
   it('restores the exact idle pose immediately after stopping a different locomotion clip',async()=>{
@@ -46,9 +52,13 @@ describe('Three asset loader against original project GLBs', () => {
 
   it('binds source humanoid clips to its metric skeleton without root drift', async () => {
     const instance=await load();
-    expect(meshes(instance)).toHaveLength(2);
+    expect(meshes(instance)).toHaveLength(1);
     expect(instance.clips.map(clip=>clip.name).sort()).toEqual(Object.keys(humanoid.actions).sort());
     const mesh=meshes(instance)[0] as SkinnedMesh;
+    expect(mesh.name).toBe('UEFN_Mannequin_BlackJoints_LOD1_Medium');
+    for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){
+      expect(material.transparent).toBe(false);expect(material.depthWrite).toBe(true);
+    }
     expect(mesh.skeleton.bones).toHaveLength(101);
     instance.play('idle');instance.update(0);
     const idle=pose(instance);expect(idle.min.y).toBeGreaterThan(-.12);expect(idle.max.y).toBeGreaterThan(1.6);

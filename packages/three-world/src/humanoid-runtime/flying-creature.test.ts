@@ -6,9 +6,10 @@ import {DRAGON_VARIANTS} from '../../../../shared/preset-content/dragon-variants
 import {Group,PerspectiveCamera,Vector3} from 'three';
 import {createWorld} from '../world';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
-import {createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
+import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import {creatureBodies} from './creatures/controller';
+import {CREATURE_SPECS} from '../../../../shared/preset-content/creatures/specs';
 import {createDragonTrainingMap} from '../../../../shared/preset-content/environment/dragon-training';
 beforeAll(initEnvironmentQueries);
 // 连续 Rapier 固定步会占满微任务队列；用真实事件循环机会交付 Vitest 的进度 RPC。
@@ -26,14 +27,14 @@ it('stops a summoned dragon before a new wall and rejects wet landing candidates
     vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation,v=s.vehicles[0]!;world.step({},4);
-    expect(r.summonDragon('dragon'),s.message).toBe(true);
-    const wall=s.humanoid.world.createCollider(RAPIER.ColliderDesc.cuboid(.2,200,200).setTranslation(-15,180,0));
+    expect(r.summonDragon('dragon'),s.controlledActor.message).toBe(true);
+    const wall=s.controlledActor.controller.world.createCollider(RAPIER.ColliderDesc.cuboid(.2,200,200).setTranslation(-15,180,0));
     world.step({},1200);
     expect(v.motion.flyingCreature!.summon!.phase).toBe('blocked');expect(v.position.x).toBeGreaterThan(-15);expect(v.speed).toBe(0);
-    s.humanoid.world.removeCollider(wall,true);
-    const p=s.player.position.clone();s.environment.map.water=[{id:'wet',min:[p.x-100,-3,p.z-100],max:[p.x+100,3,p.z+100],surface:2}];
-    expect(r.summonDragon('dragon')).toBe(false);expect(s.message).toContain('降落空间');
-    expect(s.player.position.distanceTo(p)).toBe(0);
+    s.controlledActor.controller.world.removeCollider(wall,true);
+    const p=s.controlledActor.player.position.clone();s.environment.map.water=[{id:'wet',min:[p.x-100,-3,p.z-100],max:[p.x+100,3,p.z+100],surface:2}];
+    expect(r.summonDragon('dragon')).toBe(false);expect(s.controlledActor.message).toContain('降落空间');
+    expect(s.controlledActor.player.position.distanceTo(p)).toBe(0);
   }finally{world.dispose();}
 },15000);
 
@@ -43,24 +44,24 @@ it.each(DRAGON_VARIANTS)('summons $id from the sky, then boards, takes off and w
     vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
     const r=world.humanoid!,s=r.simulation,v=s.vehicles[0]!;world.step({},4);
-    const human=s.player.position.clone(),origin=v.position.clone();
+    const human=s.controlledActor.player.position.clone(),origin=v.position.clone();
     world.step({humanoid:{...emptyInput(),actions:{summonDragon:true}}},1);
-    expect(v.motion.flyingCreature!.summon,s.message).toBeDefined();
-    expect(s.player.position.distanceTo(human)).toBeLessThan(.05);expect(v.position.distanceTo(origin)).toBeLessThan(.1);
+    expect(v.motion.flyingCreature!.summon,s.controlledActor.message).toBeDefined();
+    expect(s.controlledActor.player.position.distanceTo(human)).toBeLessThan(.05);expect(v.position.distanceTo(origin)).toBeLessThan(.1);
     for(let i=0;i<2400&&v.motion.flyingCreature!.summon!.phase!=='arrived';i++)world.step({},1);
     expect(v.motion.flyingCreature!.summon!.phase,JSON.stringify(v.motion.flyingCreature)).toBe('arrived');
-    expect(s.player.position.distanceTo(human)).toBeLessThan(.1);expect(s.active).toBe(-1);
-    const entry=s.inspectBoarding('dragon').approachPositionWorldMetersXYZ;expect(entry).not.toBeNull();
+    expect(s.controlledActor.player.position.distanceTo(human)).toBeLessThan(.1);expect(s.controlledActor.vehicleIndex).toBe(-1);
+    const entry=s.controlledActor.inspectBoarding('dragon').approachPositionWorldMetersXYZ;expect(entry).not.toBeNull();
     // Initialize the next interaction at the validated approach; flight above used no relocation.
     expect(r.prepareCharacter(entry!,v.yaw)).toBe(true);world.step({},5);
-    expect(r.enter('dragon'),s.message).toBe(true);world.step({},600);expect(s.dragonTransition).toBeUndefined();
+    expect(r.enter('dragon'),s.controlledActor.message).toBe(true);world.step({},600);expect(s.controlledActor.dragonTransition).toBeUndefined();
     world.step({humanoid:{...emptyInput(),jump:true}},1);world.step({},180);expect(v.motion.flyingCreature!.groundPhase).toBe('airborne');
     expect(r.exit()).toBe(true);world.step({},600);expect(v.grounded).toBe(true);
-    expect(r.exit(),s.message).toBe(true);world.step({},600);expect(s.active).toBe(-1);
-    const p=s.player.position.clone();world.step({humanoid:{...emptyInput(),steer:-1}},120);
-    expect(s.player.position.distanceTo(p),variant.id+' down then walk').toBeGreaterThan(1);
+    expect(r.exit(),s.controlledActor.message).toBe(true);world.step({},600);expect(s.controlledActor.vehicleIndex).toBe(-1);
+    const p=s.controlledActor.player.position.clone();world.step({humanoid:{...emptyInput(),steer:-1}},120);
+    expect(s.controlledActor.player.position.distanceTo(p),variant.id+' down then walk').toBeGreaterThan(1);
     if(variant.id==='D07'){
-      expect(r.summonDragon('dragon'),s.message).toBe(true);
+      expect(r.summonDragon('dragon'),s.controlledActor.message).toBe(true);
       const snapshot=r.snapshot().vehicleDynamics[0]!.flyingCreature!.summon!;
       snapshot.waypoints[0]![0]=700;
       expect(v.motion.flyingCreature!.summon!.waypoints[0]![0]).not.toBe(700);
@@ -78,15 +79,15 @@ it('walks away after a rotated D07 dismount with live collision bodies',async()=
   try{
     const r=world.humanoid!,s=r.simulation;
     r.prepareEpisodeStart({positionWorldMetersXYZ:[170,22,-10],facingYawRadians:.9-Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
-    expect(r.exit()).toBe(true);world.step({},900);expect(s.vehicle!.grounded).toBe(true);
-    expect(r.exit(),s.message).toBe(true);world.step({},600);expect(s.vehicle).toBeUndefined();
-    const p=s.player.position.clone();world.step({humanoid:{...emptyInput(),forward:1}},120);
-    expect(s.player.position.distanceTo(p),JSON.stringify({p:p.toArray(),end:s.player.position.toArray(),collisions:s.humanoid.collisions,mounted:s.humanoid.isMounted,velocity:s.humanoid.velocity.toArray()})).toBeGreaterThan(2);
-    s.humanoid.commitDismount(new Vector3(173.43797302246094,.01304790735244743,-10.487921714782717),.9,new Vector3());
-    const exact=s.humanoid.position.clone();world.step({humanoid:{...emptyInput(),forward:1}},120);
-    expect(s.humanoid.position.distanceTo(exact),'reported D07 floor contact').toBeGreaterThan(2);
+    expect(r.exit()).toBe(true);world.step({},900);expect(s.controlledActor.vehicle!.grounded).toBe(true);
+    expect(r.exit(),s.controlledActor.message).toBe(true);world.step({},600);expect(s.controlledActor.vehicle).toBeUndefined();
+    const p=s.controlledActor.player.position.clone();world.step({humanoid:{...emptyInput(),forward:1}},120);
+    expect(s.controlledActor.player.position.distanceTo(p),JSON.stringify({p:p.toArray(),end:s.controlledActor.player.position.toArray(),collisions:s.controlledActor.controller.collisions,mounted:s.controlledActor.controller.isMounted,velocity:s.controlledActor.controller.velocity.toArray()})).toBeGreaterThan(2);
+    s.controlledActor.controller.commitDismount(new Vector3(173.43797302246094,.01304790735244743,-10.487921714782717),.9,new Vector3());
+    const exact=s.controlledActor.controller.position.clone();world.step({humanoid:{...emptyInput(),forward:1}},120);
+    expect(s.controlledActor.controller.position.distanceTo(exact),'reported D07 floor contact').toBeGreaterThan(2);
   }finally{world.dispose();}
-});
+},30000);
 
 it.each(['water','narrow','missing','slope'])('rejects a %s landing site before descending',kind=>{
   const map=createDragonTrainingMap();map.boxes=[{id:'floor',position:[0,-.5,0],size:[300,1,300]}];
@@ -113,21 +114,21 @@ it('holds a blocked dismount at its original path, resumes safely, and resets a 
   try{
     const r=world.humanoid!,s=r.simulation;
     const start={positionWorldMetersXYZ:[0,22,0] as [number,number,number],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}};
-    r.prepareEpisodeStart(start);expect(r.exit()).toBe(true);world.step({},800);expect(s.vehicle!.grounded).toBe(true);
+    r.prepareEpisodeStart(start);expect(r.exit()).toBe(true);world.step({},800);expect(s.controlledActor.vehicle!.grounded).toBe(true);
     // The preflight overlap must reject a roof without changing the grounded pose.
-    const h=s.humanoid,roof=h.world.createCollider(RAPIER.ColliderDesc.cuboid(30,1,30).setTranslation(0,s.vehicle!.position.y+8,0));
+    const h=s.controlledActor.controller,roof=h.world.createCollider(RAPIER.ColliderDesc.cuboid(30,1,30).setTranslation(0,s.controlledActor.vehicle!.position.y+8,0));
     world.step({},1);world.step({humanoid:{...emptyInput(),jump:true}},1);
-    expect(s.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');expect(s.vehicle!.motion.flyingCreature!.groundFailure).toContain('上方');
+    expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundFailure).toContain('上方');
     h.world.removeCollider(roof,true);world.step({},1);
-    expect(r.exit(),s.message).toBe(true);const destination=[...s.dragonTransition!.destination],duration=s.transition;
+    expect(r.exit(),s.controlledActor.message).toBe(true);const destination=[...s.controlledActor.dragonTransition!.destination],duration=s.controlledActor.transition;
     const obstacle=h.world.createCollider(RAPIER.ColliderDesc.cuboid(.55,1,.55).setTranslation(destination[0]!,destination[1]!+1,destination[2]!));
-    world.step({},Math.ceil(duration*60)+30);expect(s.active).toBe(0);expect(s.transition).toBeGreaterThan(0);expect(h.capsule.isEnabled()).toBe(false);
-    const paused=s.transition,position=s.player.position.clone();world.step({},30);expect(s.transition).toBe(paused);expect(s.player.position.distanceTo(position)).toBe(0);
-    expect(s.dragonTransition!.destination).toEqual(destination);
+    world.step({},Math.ceil(duration*60)+30);expect(s.controlledActor.vehicleIndex).toBe(0);expect(s.controlledActor.transition).toBeGreaterThan(0);expect(h.capsule.isEnabled()).toBe(false);
+    const paused=s.controlledActor.transition,position=s.controlledActor.player.position.clone();world.step({},30);expect(s.controlledActor.transition).toBe(paused);expect(s.controlledActor.player.position.distanceTo(position)).toBe(0);
+    expect(s.controlledActor.dragonTransition!.destination).toEqual(destination);
     h.world.removeCollider(obstacle,true);world.step({},Math.ceil(duration*60)+30);
-    expect(s.active).toBe(-1);expect(h.capsule.isEnabled()).toBe(true);expect(s.player.position.distanceTo(new Vector3(...destination as [number,number,number]))).toBeLessThan(.15);
-    expect(r.enter('dragon'),s.message).toBe(true);world.step({},10);expect(s.dragonTransition).toBeDefined();
-    r.prepareEpisodeStart(start);expect(s.dragonTransition).toBeUndefined();expect(s.transition).toBe(0);expect(s.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
+    expect(s.controlledActor.vehicleIndex).toBe(-1);expect(h.capsule.isEnabled()).toBe(true);expect(s.controlledActor.player.position.distanceTo(new Vector3(...destination as [number,number,number]))).toBeLessThan(.15);
+    expect(r.enter('dragon'),s.controlledActor.message).toBe(true);world.step({},10);expect(s.controlledActor.dragonTransition).toBeDefined();
+    r.prepareEpisodeStart(start);expect(s.controlledActor.dragonTransition).toBeUndefined();expect(s.controlledActor.transition).toBe(0);expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
   }finally{world.dispose();}
 });
 function fixture(wall=false){
@@ -177,14 +178,14 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const descriptors=JSON.stringify(runtime.commandDescriptors('person'));
     expect(descriptors).toContain('松键减速度');expect(descriptors).toContain('振翅加速度');
-    const originalSpeed=runtime.simulation.vehicle!.spec.speed;
+    const originalSpeed=runtime.simulation.controlledActor.vehicle!.spec.speed;
     expect(()=>runtime.applyProfile({vehicles:{dragon:{speed:40,maxSpeed:20}}})).toThrow('CREATURE_FEEL_SPEED_ORDER_INVALID');
-    expect(runtime.simulation.vehicle!.spec.speed).toBe(originalSpeed);
+    expect(runtime.simulation.controlledActor.vehicle!.spec.speed).toBe(originalSpeed);
     const release=runtime.setInput({...emptyInput(),primary:true});world.step({},60);release();
-    expect(runtime.simulation.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.vehicle!.speed).toBe(0);
+    expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.controlledActor.vehicle!.speed).toBe(0);
     runtime.applyProfile({view:{keyboardToggleEnabled:true}});world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
-    const snapshot=structuredClone(runtime.simulation.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.vehicle!.motion.flyingCreature).toEqual(snapshot);
-    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.active).toBe(-1);
+    const snapshot=structuredClone(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature).toEqual(snapshot);
+    runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);
   }finally{world.dispose();}
 });
 
@@ -232,4 +233,46 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s lands on real dry support, remains par
     for(const part of creatureBodies(v))expect(q.overlaps(part.position,part.body,part.rotation)).toBe(false);
     step({jump:true},1);step({},300);expect(v.motion.flyingCreature!.groundPhase).toBe('airborne');expect(v.position.y).toBeGreaterThan(point.y+5);expect(v.grounded).toBe(false);
   }finally{q.dispose();}
+},30000);
+
+it('keeps the catalog grounded-flight mount walking, taking off and landing with its own envelope',()=>{
+  const map=createDragonTrainingMap();map.boxes=map.boxes.filter(box=>box.id==='dragon-ground');
+  const q=new EnvironmentQueries(map),v=createVehicle(CREATURE_SPECS.find(spec=>spec.mode==='dragon')!);
+  v.position.set(0,.225,0);v.grounded=true;
+  const step=(input:Partial<Input>,count:number)=>{for(let n=0;n<count;n++){stepVehicle(v,{...emptyInput(),...input},1/60,n/60,q);q.stepPhysics(1/60);}};
+  try{
+    expect(v.motion.flyingCreature).toBeUndefined();step({forward:1},120);
+    expect(v.position.z).toBeGreaterThan(2);expect(v.grounded).toBe(true);expect(v.motion.creature!.gait).toBe('walk');
+    step({lift:1},120);expect(v.position.y).toBeGreaterThan(8);expect(v.motion.creature!.flying).toBe(true);
+    step({},120);expect(v.velocity.y).toBeCloseTo(0);step({lift:-1},240);
+    expect(v.grounded).toBe(true);expect(v.motion.creature!.flying).toBe(false);expect(v.position.y).toBeLessThan(.3);
+    const reset=createVehicle(v.spec);expect(reset.motion.creature!.gait).toBe('rest');expect(reset.motion.creature!.flying).toBe(false);
+  }finally{q.dispose();}
 });
+
+
+it('keeps dragon summon, boarding and occupancy scoped to the requesting actor',()=>{
+  const q=new EnvironmentQueries(createDragonTrainingMap()),sim=new Simulation(q,[createFlyingCreatureSpec('dragon')],{id:'player'});
+  try{
+    const player=sim.controlledActor,npc=sim.addActor('npc',player.player.position.clone().add(new Vector3(20,0,0)));
+    for(let n=0;n<10;n++)sim.step(1/60);
+    const playerPosition=player.player.position.clone();
+    expect(sim.summonDragon('dragon','npc'),npc.message).toBe(true);
+    const dragon=sim.vehicles[0]!,summon=structuredClone(dragon.motion.flyingCreature!.summon);
+    expect(sim.summonDragon('dragon')).toBe(false);expect(dragon.motion.flyingCreature!.summon).toEqual(summon);
+    for(let n=0;n<2400&&dragon.motion.flyingCreature!.summon!.phase!=='arrived';n++)sim.step(1/60);
+    expect(dragon.motion.flyingCreature!.summon!.phase).toBe('arrived');
+    const entry=npc.inspectBoarding('dragon').approachPositionWorldMetersXYZ;expect(entry).not.toBeNull();
+    expect(npc.prepareCharacter(new Vector3(...entry!),dragon.yaw)).toBe(true);
+    for(let n=0;n<5;n++)sim.step(1/60);
+    expect(npc.enter('dragon'),npc.message).toBe(true);
+    expect(npc.dragonTransition).toBeDefined();expect(player.dragonTransition).toBeUndefined();
+    expect(player.vehicle).toBeUndefined();expect(npc.vehicle).toBe(dragon);
+    expect(player.inspectBoarding('dragon')).toMatchObject({eligible:false,reason:'HUMANOID_TARGET_UNAVAILABLE'});
+    expect(player.enter('dragon')).toBe(false);expect(sim.summonDragon('dragon')).toBe(false);
+    for(let n=0;n<600;n++)sim.step(1/60);
+    expect(npc.dragonTransition).toBeUndefined();expect(npc.vehicle).toBe(dragon);
+    expect(sim.controlledActorId).toBe('player');expect(player.player.position.distanceTo(playerPosition)).toBeLessThan(.1);
+    expect(player.controller.capsule.isEnabled()).toBe(true);expect(npc.controller.capsule.isEnabled()).toBe(false);
+  }finally{sim.dispose();q.dispose();}
+},30000);

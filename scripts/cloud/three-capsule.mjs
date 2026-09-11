@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground', 'shared/preset-content','examples/three-creator/vehicle-sandbox','examples/three-creator/character-actions','examples/three-creator/horse-riding','examples/three-creator/custom-vehicle','examples/three-creator/custom-aircraft','examples/three-creator/vehicle-camera','examples/three-creator/nonhuman-subject'];
+const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground', 'shared/preset-content', 'assets/three-creator/catalog'];
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
 const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt','.woff','.woff2','.ttf']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -101,6 +101,14 @@ export function stageContext(repositoryRoot, outputRoot) {
   assert(/^patchedDependencies:\n(?:  '@recast-navigation\/(?:core|generators)@0\.43\.1': patches\/@recast-navigation__(?:core|generators)@0\.43\.1\.patch\n?){2}$/.test(patches.trimEnd() + '\n'), 'Review changed patch allowlist');
   put('pnpm-workspace.yaml', Buffer.from('packages:\n  - "packages/three-world"\n  - "packages/camera-collision"\n\nallowBuilds:\n  esbuild: true\n\n' + patches), true);
   source('packages/three-world/package.json', true);
+  const sdkManifest=JSON.parse(readFileSync(path.join(repositoryRoot,'packages/three-world/package.json'),'utf8'));
+  const rapierBuild=JSON.parse(readFileSync(path.join(repositoryRoot,'vendor/rapier-query-refresh/build.json'),'utf8'));
+  assert(/^rapier3d-compat-0\.20\.0-whitebox-query\.2-[a-f0-9]{16}\.tgz$/.test(rapierBuild.archive),'Review changed Rapier build');
+  const rapierArchive=`vendor/rapier-query-refresh/${rapierBuild.archive}`;
+  assert.equal(sdkManifest.dependencies['@dimforge/rapier3d-compat'],`file:../../${rapierArchive}`);
+  source(rapierArchive,true);
+  assert.equal(files.get(rapierArchive).sha256,`sha256:${rapierBuild.sha256}`,'Rapier archive SHA mismatch');
+  source('vendor/rapier-query-refresh/build.json',true);
   source('packages/camera-collision/package.json', true);
   source('patches/@recast-navigation__core@0.43.1.patch', true);
   source('patches/@recast-navigation__generators@0.43.1.patch', true);
@@ -109,11 +117,18 @@ export function stageContext(repositoryRoot, outputRoot) {
   source('config/three-creator/asset-policy.json');
   source('assets/three-creator/asset-catalog.json');
   for (const relative of SOURCE_TREES) tree(relative);
+  // Examples are registered once for discovery, source reading and capsule staging.
+  const examples = JSON.parse(readFileSync(path.join(repositoryRoot,'scripts/three-creator/example-registry.json'),'utf8'));
+  for (const relative of new Set(Object.values(examples).map(example=>example.root))) {
+    safeRelative(relative);
+    assert(relative.startsWith('examples/three-creator/') || relative==='shared/preset-content','Invalid example root');
+    if (!SOURCE_TREES.includes(relative)) tree(relative);
+  }
   const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'assets/three-creator/asset-catalog.json'), 'utf8'));
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
     for (const resource of [asset, ...(asset.resources ?? [])]) {
-      assert(/^assets\/three-creator\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
+      assert(/^assets\/(?:three-creator|dragon-training)\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
         && !resource.sourcePath.split('/').includes('..'), `Asset outside resource allowlist: ${asset.id}`);
       assert(/^[a-f0-9]{64}$/.test(resource.sha256)); source(resource.sourcePath);
       const record = files.get(resource.sourcePath);

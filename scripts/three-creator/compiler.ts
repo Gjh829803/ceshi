@@ -127,13 +127,10 @@ export class ThreeCompiler {
     if(this.profile!=='three-sdk')throw new Error('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
     return materializeWorkspaceRuntime(REPOSITORY_ROOT,this.workspace);
   }
-  async prepareRuntime(options: { cameraModulePath?: string; workspaceRuntime?:WorkspaceRuntime|null } = {}): Promise<{ root: string; hash: string; hit: boolean; cacheIdentity: string }> {
+  async prepareRuntime(options: { workspaceRuntime?:WorkspaceRuntime|null } = {}): Promise<{ root: string; hash: string; hit: boolean; cacheIdentity: string }> {
     await assertNoSymlinks(this.outputRoot);
-    if(options.cameraModulePath&&this.profile!=='three-sdk')throw new Error('THREE_CAMERA_OVERRIDE_REQUIRES_SDK');
     const workspaceRuntime=options.workspaceRuntime===undefined?await readWorkspaceRuntime(REPOSITORY_ROOT,this.workspace):options.workspaceRuntime??undefined;
     if(workspaceRuntime&&this.profile!=='three-sdk')throw new Error('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
-    if(workspaceRuntime&&options.cameraModulePath)throw new Error('THREE_RUNTIME_OVERRIDE_CONFLICT');
-    const cameraModule=options.cameraModulePath?{file:await realpath(options.cameraModulePath),bytes:await readFile(options.cameraModulePath)}:undefined;
     const sdkFiles = this.profile === 'three-sdk' ? await hashTree(path.join(REPOSITORY_ROOT, 'packages/three-world/src')) : {};
     for (const key of Object.keys(sdkFiles)) if (key.endsWith('.test.ts')) delete sdkFiles[key];
     const sharedCameraFiles: Record<string, string> = this.profile === 'three-sdk' ? {
@@ -143,7 +140,7 @@ export class ThreeCompiler {
     for (const key of Object.keys(sharedCameraFiles)) if (key.endsWith('.test.ts')) delete sharedCameraFiles[key];
     const bridge = await readFile(path.join(REPOSITORY_ROOT, 'apps/three-creator-playground/bridge.ts'));
     const versions = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'package.json'), 'utf8'));
-    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, workspaceRuntimeSourceHash: workspaceRuntime?.sourceHash??null, cameraOverrideSha256: cameraModule ? sha256(cameraModule.bytes) : null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))), workspaceRuntimeCompiler:sha256(await readFile(new URL('./workspace-runtime.ts',import.meta.url))) }));
+    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, workspaceRuntimeSourceHash: workspaceRuntime?.sourceHash??null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))), workspaceRuntimeCompiler:sha256(await readFile(new URL('./workspace-runtime.ts',import.meta.url))) }));
     const root = path.join(this.outputRoot, 'runtime', cacheIdentity);
     const sealed = this.runtimes.get(cacheIdentity);
     if (sealed) { await verifyFiles(root, sealed.files); return { root, hash: sealed.hash, hit: true, cacheIdentity }; }
@@ -161,20 +158,9 @@ export class ThreeCompiler {
     const threeEsmEntry = path.join(path.dirname(require.resolve('three')), 'three.module.js');
     await build({ ...base, entryPoints: [threeEsmEntry], outfile: path.join(root, 'three.js') });
     await build({ ...base, entryPoints: [path.join(REPOSITORY_ROOT, 'apps/three-creator-playground/bridge.ts')], external: ['three'], outfile: path.join(root, 'bridge.js') });
-    const cameraPlugins: Plugin[] = cameraModule ? [{
-      name: 'pinned-camera-compatibility',
-      setup(plugin) {
-        plugin.onResolve({ filter: /^\.\/camera\.js$/ }, args =>
-          path.resolve(args.resolveDir, 'camera.ts') === path.join(REPOSITORY_ROOT, 'packages/three-world/src/camera.ts')
-            ? { path: cameraModule.file, namespace: 'pinned-camera' } : undefined);
-        plugin.onLoad({ filter: /.*/, namespace: 'pinned-camera' }, () => ({
-          contents: cameraModule.bytes.toString(), loader: 'ts', resolveDir: path.dirname(cameraModule.file),
-        }));
-      },
-    }] : [];
     if (this.profile === 'three-sdk') await build({ ...base,
       entryPoints: [workspaceRuntime?.entry??path.join(REPOSITORY_ROOT, 'packages/three-world/src/index.ts')],
-      plugins: [...(workspaceRuntime?[workspaceRuntime.plugin]:[]), ...cameraPlugins, { name: 'shared-three-only', setup: plugin => {
+      plugins: [...(workspaceRuntime?[workspaceRuntime.plugin]:[]), { name: 'shared-three-only', setup: plugin => {
         plugin.onResolve({ filter: /^three$/ }, args => ({ path: args.path, external: true }));
       } }], outfile: path.join(root, 'worldkit-three.js') });
     const files = await hashTree(root), hash = sha256(JSON.stringify(files));

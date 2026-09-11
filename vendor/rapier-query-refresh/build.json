@@ -1,0 +1,17 @@
+{
+  "upstreamRepository": "https://github.com/dimforge/rapier",
+  "upstreamCommit": "3e12c2679cb1940a876bde93af9cec0cf2f57944",
+  "version": "0.20.0-whitebox-query.2",
+  "archive": "rapier3d-compat-0.20.0-whitebox-query.2-575cd152b6fe51d6.tgz",
+  "sha256": "575cd152b6fe51d67003e56213d9c3996c4c3aef3855977a77d0d31bb01dde5c",
+  "patchSha256": "08d3f18a8c3c2b0a1ea5341107f76021030cd803aeb05472fe2ef05463dd0f27",
+  "rustc": "1.92.0",
+  "wasmPack": "0.12.1",
+  "typescript": "5.9.2",
+  "parry": {
+    "version": "0.30.2",
+    "archiveUrl": "https://static.crates.io/crates/parry3d/parry3d-0.30.2.crate",
+    "sha256": "01b00bf3ea4e0961a3f44aeb666b7dc3b0e87027b629561bd8283a7f6b2e2ed1",
+    "patchSha256": "1efbe693807703c1ec86193a1e2f8301a9e5be015915964040b23eda3e236085"
+  }
+}

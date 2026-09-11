@@ -1,7 +1,17 @@
 import { reserved,subtype,type MotionFamilyModule } from '../types';
 import { stepNativeFlyingCreature } from './controller';
-import { stepBodyVehicle } from './dynamics';
-import { stepFamilyIntent } from './intent';
-import { stepCreature } from './legacy-creature';
+import { stepGroundedFlight } from './grounded-flight';
 import { createPhysicsState,impactMass,resetAuxiliaryState,resetRigidState,resolvePhysicsSpec } from './physics-state';
-export const flyingCreatureFamily:MotionFamilyModule={impactMass,resetAuxiliaryState,createPhysicsState,resolvePhysicsSpec,resetRigidState,id:'flying-creature',name:'飞行生物类',description:'原生动力飞行、松键悬停、俯冲滑翔、体力、闪避与喷火状态；飞鸟需单独标定模型和碰撞体。',modes:['dragon'],subtypes:[subtype('flying-creature','dragon','飞龙','D01 原生 Three/Rapier 飞行；未启用动力飞行配置的旧坐骑保持兼容。'),reserved('flying-creature','bird','飞鸟','鸟类动作与运动标定尚未接入。')],step(v,i,dt,time,q){if(v.motion.family!=='flying-creature'||!["dragon"].includes(v.spec.mode))throw Error('MOTION_PHYSICS_OWNER_MISMATCH');if(v.motion.flyingCreature){stepNativeFlyingCreature(v,i,dt,q);return;}if(v.motion.body){stepBodyVehicle(v,i,dt,time,q);return;}if(v.motion.creature){stepCreature(v,i,dt,q);return;}stepFamilyIntent(v,i,dt,time,q);}};
+
+export const flyingCreatureFamily:MotionFamilyModule={
+  id:'flying-creature',name:'飞行生物类',
+  description:'地面起降坐骑与动力飞行；各自复用所属模型的碰撞、动作和调参。',
+  modes:['dragon'],
+  subtypes:[subtype('flying-creature','dragon','飞龙','地面起降使用坐骑运动参数；flyingCreature 配置启用动力飞行、悬停、俯冲、体力、闪避和喷火。'),reserved('flying-creature','bird','飞鸟','鸟类动作与运动标定尚未接入。')],
+  impactMass,resetAuxiliaryState,createPhysicsState,resolvePhysicsSpec,resetRigidState,
+  step(v,i,dt,_time,q){
+    if(v.motion.family!=='flying-creature'||v.spec.mode!=='dragon')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
+    if(v.motion.flyingCreature)stepNativeFlyingCreature(v,i,dt,q);
+    else stepGroundedFlight(v,i,dt,q);
+  },
+};

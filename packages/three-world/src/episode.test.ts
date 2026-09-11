@@ -54,19 +54,20 @@ describe('Episode local Rapier start probes', () => {
  });
 });
 
-async function fixture(parentedCamera = false,custom=false) {
+async function fixture(parentedCamera = false,custom=false,npcNavigation=false) {
  const windowTarget = new EventTarget();const documentTarget=Object.assign(new EventTarget(),{defaultView:windowTarget,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(windowTarget,{document:documentTarget});vi.stubGlobal('window',windowTarget);
  const frames:FrameRequestCallback[]=[];vi.stubGlobal('requestAnimationFrame',(fn:FrameRequestCallback)=>{frames.push(fn);return frames.length;});vi.stubGlobal('cancelAnimationFrame',vi.fn());
  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:documentTarget,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:vi.fn(()=> 'data:image/png;base64,dGVzdA==')});
  let ratio=2;const size=new THREE.Vector2(400,300);
  const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
  const camera=new THREE.PerspectiveCamera(50,4/3,.1,500),scene=new THREE.Scene();camera.position.set(3,3,6);camera.lookAt(0,1,0);
- const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{}});
+ const world=await createWorld({scene,camera,renderer,navigation:npcNavigation,assetDefinitions:{}});
  world.addEntity({id:'floor',object:plane(),role:'terrain'});
  const actor=root();actor.rotation.y=.3;
  if(parentedCamera){actor.add(camera);camera.position.set(3,3,6);camera.lookAt(0,1,0);}
  if(custom)world.registerMovement({id:'flight',version:1,description:'Direct flight',initialState:null,update:({input,state})=>({state,velocityWorldMetersPerSecondXYZ:[0,(input.moveYRatio??0)*3,0],applyGravity:false}),episode:{startSupport:'free',input:({body,targetPositionWorldMetersXYZ})=>({moveYRatio:Math.max(-1,Math.min(1,targetPositionWorldMetersXYZ[1]-body.positionWorldMetersXYZ[1]))})}});
  world.addCharacter({id:'player',object:actor,...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{}),body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
+ if(npcNavigation){const npc=root();npc.position.set(3,0,0);world.addCharacter({id:'npc',object:npc,body:{heightMeters:1.8,radiusMeters:.35}});}
  world.setControlledEntity('player');world.setCameraFollow({targetEntityId:'player'});await world.start();
  const observer=(windowTarget as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__;
  expect(observer.controlledObject).toBe(actor);
@@ -75,6 +76,18 @@ async function fixture(parentedCamera = false,custom=false) {
  return {world,actor,camera,renderer,canvas,frames,observer,port:observer.episode!};
 }
 describe('Episode observer ownership and relative opening',()=>{
+ it('dispatches NPC navigation through the existing command owner and invalidates a released lease',async()=>{
+  const {world,port}=await fixture(false,false,true);try{
+   await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+   expect(await port.execute({type:'actor.move-to',entityId:'player',targetPositionWorldMetersXYZ:[0,0,2]})).toMatchObject({status:'rejected',error:{code:'PLAYER_INPUT_OWNS_ACTOR'}});
+   const before=world.getEntityState('npc').positionWorldMetersXYZ;
+   expect(await port.execute({type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[3,0,3]})).toMatchObject({status:'accepted'});
+   expect(world.getEntityState('npc').positionWorldMetersXYZ).toEqual(before);
+   port.advance({},60);expect(world.getEntityState('npc').positionWorldMetersXYZ[2]).toBeGreaterThan(1);
+   const pending=port.execute({type:'actor.stop',entityId:'npc'});port.release();
+   expect(await pending).toMatchObject({status:'rejected',error:{code:'EPISODE_CAPTURE_OWNS_CLOCK'}});
+  }finally{world.dispose();}
+ });
  it('records custom flight through a pure input adapter and admits free starts',async()=>{
   const {world,port}=await fixture(false,true);try{
    expect(port.capabilities().movement.episodeInput).toBe('custom');

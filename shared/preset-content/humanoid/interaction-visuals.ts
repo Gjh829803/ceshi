@@ -1,19 +1,12 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, Scene, Vector3 } from 'three';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-export interface InteractionVisualTarget {
-  id: string;
-  kind: 'pickup' | 'seat';
-  position: Vector3;
-  rotation?: Quaternion|undefined;
-  state: string;
-  size?: readonly number[]|undefined;
-}
+import type {humanoid} from '@worldkit/three';
 
-/** Snapshot-only presentation: the simulation owns target state and physics. */
-export function buildInteractionVisuals(scene: Scene) {
+/** Content construction creates map props once; observation only projects existing visuals. */
+export function buildInteractionVisuals(scene:Object3D,definitions:readonly {id:string;size:readonly number[];position:readonly number[]}[]) {
   const root = new Group(); root.name = 'humanoid-interaction-targets'; scene.add(root);
-  const parcels = new Map<string, { group: Group; size: string }>();
+  const parcels = new Map<string,Group>();
   let disposed = false;
   const release = (group: Group) => {
     const materials = new Set<MeshStandardMaterial>();
@@ -36,29 +29,23 @@ export function buildInteractionVisuals(scene: Scene) {
       group.add(new Mesh(new BoxGeometry(...dimensions), bands));
     root.add(group); return group;
   };
+  for(const definition of definitions){
+    if(parcels.has(definition.id)||definition.size.length!==3||!definition.size.every(n=>Number.isFinite(n)&&n>0)||definition.position.length!==3||!definition.position.every(Number.isFinite)){
+      parcels.forEach(release);root.removeFromParent();throw new Error('MAP_PROP_VISUAL_INVALID');
+    }
+    const group=create(definition.id,definition.size);group.position.fromArray(definition.position);parcels.set(definition.id,group);
+  }
   return {
-    update(targets: readonly InteractionVisualTarget[]) {
-      if (disposed) return;
-      const visible = new Set<string>();
-      for (const target of targets) {
-        if (target.kind !== 'pickup') continue;
-        visible.add(target.id);
-        const size = target.size?.length === 3 && target.size.every(n => Number.isFinite(n) && n > 0) ? target.size : [.13, .13, .13];
-        const signature = size.join(',');
-        let parcel = parcels.get(target.id);
-        if (!parcel || parcel.size !== signature) {
-          if (parcel) release(parcel.group);
-          parcel = { group: create(target.id, size), size: signature }; parcels.set(target.id, parcel);
-        }
-        parcel.group.position.copy(target.position);
-        if (target.rotation) parcel.group.quaternion.copy(target.rotation); else parcel.group.quaternion.identity();
-        parcel.group.visible = target.state !== 'removed';
+    update(targets:readonly humanoid.InteractionVisualTarget[]) {
+      if(disposed)return;
+      for(const group of parcels.values())group.visible=false;
+      for(const target of targets){
+        const group=parcels.get(target.id);if(!group)continue;
+        group.position.copy(target.position);
+        if(target.rotation)group.quaternion.copy(target.rotation);else group.quaternion.identity();
+        group.visible=target.state!=='removed';
       }
-      for (const [id, parcel] of parcels) if (!visible.has(id)) { release(parcel.group); parcels.delete(id); }
     },
-    dispose() {
-      if (disposed) return;
-      disposed = true; parcels.forEach(parcel => release(parcel.group)); parcels.clear(); root.removeFromParent(); root.clear();
-    },
+    dispose(){if(disposed)return;disposed=true;parcels.forEach(release);parcels.clear();root.removeFromParent();root.clear();},
   };
 }

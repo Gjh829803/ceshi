@@ -13,7 +13,8 @@ export function applyCameraProfile(runtime: Runtime, profile: AssetProfile) {
   runtime.applyProfile({camera, cameraDistanceMeters:distance});
 }
 
-export function readEffectiveProfile(runtime: Runtime, profile: AssetProfile): AssetProfile {
+/** Editor values retain the configured camera when no SDK follow camera is active. */
+export function readEditableProfile(runtime: Runtime, profile: AssetProfile): AssetProfile {
   const parsed = parseAssetProfile(profile),effective=runtime.exportProfile();
   if(parsed.assetId==='person')parsed.control=humanoid.parseMovementSettings(effective.character??{},parsed.control);
   else {
@@ -21,7 +22,7 @@ export function readEffectiveProfile(runtime: Runtime, profile: AssetProfile): A
     parsed.control=humanoid.parseMovementSettings(control,parsed.control);
   }
   const current=runtime.inspectConfiguration().effective;
-  if(current.subjectId===parsed.assetId){
+  if(current.subjectId===parsed.assetId&&current.camera.settings!==null){
     parsed.camera={...current.camera.settings,distance:effective.cameraDistanceMeters??effective.vehicles?.[parsed.assetId]?.camera??parsed.camera.distance};
   }
   return parsed;

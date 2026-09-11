@@ -33,7 +33,7 @@ try{
    const start=world.humanoid.followCamera.distance;let maxArmChange=0,previous=start;
    for(let n=0;n<120;n++){world.step(spec.walk?{moveXRatio:-1}:{},1);const distance=world.humanoid.followCamera.distance;maxArmChange=Math.max(maxArmChange,Math.abs(distance-previous));previous=distance;}
    renderer.render(scene,camera);
-   return {name:spec.name,start,distance:world.humanoid.followCamera.distance,maxArmChange,eye:camera.position.toArray(),subject:world.humanoid.simulation.player.position.toArray()};
+   return {name:spec.name,start,distance:world.humanoid.followCamera.distance,maxArmChange,eye:camera.position.toArray(),subject:world.humanoid.simulation.controlledActor.player.position.toArray()};
   };
  });
  const cases=[

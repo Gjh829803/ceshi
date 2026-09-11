@@ -1,42 +1,110 @@
 # 原生飞龙训练场
 
-顶部“飞龙 · 空中训练场”现在调用当前 Three Session 的地图切换。直接入口为 `/?map=flying-creature-training`；旧 `/dragon-training.html` 书签转到该入口。没有 iframe，也不再启动 Babylon/Havok。
+Playground 顶部选择“飞龙 · 空中训练场”，或打开
+`/#/scenes/flying-creature-training`。该地图与人物、飞机、NPC 和太空训练共用
+同一个 Three SDK 会话，通过主页面 hash 路由切换。
 
-## 运行与构建
+## 资源与绑定
 
-`pnpm dev:editor` 启动开发站点；`pnpm build:editor` 生成 `.codex-tmp/react-playground-dist`，部署整个目录即可。源码、模型、动画和贴图均在本仓库，修改或构建不需要另一份工作区或 5186 服务。
+[资源清单](../assets/dragon-training/bundle.json)包含 17 个文件，逐项记录字节数
+与 SHA-256。D01 使用 `dragon.glb`，D02–D11 分别使用同名 GLB；其余文件为
+H01 参考骑手、火焰图集及四份 JSON。模型和动作来自已有 Century 本地提取；
+[manifest.json](../assets/dragon-training/__creature-assets/manifest.json)记录 D01/H01
+装配信息，[variant-sources.json](../assets/dragon-training/__creature-assets/variant-sources.json)
+记录其他变体的源模型、材质、动作与重定向参数，
+[ground-sources.json](../assets/dragon-training/__creature-assets/ground-sources.json)
+记录地面动作来源。
 
-`assets/dragon-training/__creature-assets` 保留 D01 龙、H01 原始骑手、动画装配清单和火焰图集。当前场景使用项目原有 Source101 角色作为真实骑手，并保持其身份，切换飞机或人物时不替换成装饰骑手。H01 文件保留为动作适配参考，当前未将其完整骨架动作重定向到 Source101。资源来源仍是既有 Century D01/H01 本地提取，不改变资源权属。
+[variants.json](../assets/dragon-training/__creature-assets/variants.json)是各变体的
+模型文件、镜头距离、鞍座、空中/地面球组与支撑范围的标定源。Playground 通过
+[dragon-variants.ts](../shared/preset-content/dragon-variants.ts)读取它，并把配置
+交给 SDK；不得只换模型而沿用另一变体的碰撞与座位尺寸。顶部飞龙选择器会以
+`?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物
+的位置在通过 SDK 起点检查后保留。
 
-`pnpm prepare:dragon-training` 只重新计算上述四个资源的大小与 SHA-256。开发服务及构建验证清单并仅发布这些资源；运动代码直接编译自 Three SDK。旧 Babylon 发布包可从备份分支 `codex/dragon-before-native-20260910` 查阅。
+真实骑手始终是当前 `humanoid.source-101` 人物：UEFN 白色外形、黑色关节，
+绑定既有 Source101 骨架与动作。H01 GLB 用于适配参考，没有替换真实角色，也未
+完成其整套骨骼动作到 Source101 的重定向。
 
-## 执行结构
+Creator 可通过 `assets_search` 查找 D01–D11，再用 `assets_describe` 读取
+`creature.dragon.d01` 至 `creature.dragon.d11`。每个资产的 `vehicle.spec` 包含自身
+标定，`integrationMetadata.visual` 指定 `animationPrefix`、`modelResource` 与
+`flameResource`。资源按逻辑 `path` 在该资产的 `resources` 中解析为实际 URI。
+`requiredAssetIds` 明确该变体与 `humanoid.source-101` 的依赖。
 
-- `packages/three-world/src/humanoid-runtime/motion-families/flying-creature/state.ts`：独立飞行、体力、喷火、闪避和碰撞恢复状态。
-- `flight.ts`：输入到飞行请求，松键与 Ctrl 刹停后保持零速悬停。
-- `controller.ts` / `collision-probes.ts`：现有 Rapier 世界中的完整姿态与位移扫掠；以真实蒙皮、翼拍、尾部和混合动作标定球组。
-- `visual.ts` / `flame.ts`：GLTFLoader、Three 动画混合、仅颌骨叠加喷火、固定步粒子历史、真实座位和缰绳。
-- `HumanoidRuntime`：唯一固定步、呈现插值、角色座位与相机生命周期。第一视角与越肩视角由现有 FollowCamera 读取完成座位对齐后的真实骑手眼位，T 沿用三视角切换。显示帧完成龙与骑手插值后重新读取眼位，避免相机与身体采用不同采样。
-- `shared/preset-content/environment/dragon-training.ts`：地图几何、障碍与人物/飞机准备区；与飞机共用同一个物理世界。
+`creator_get_examples({topic:'flying-creature'})` 返回
+[完整示例](../examples/three-creator/flying-creature/README.md)。它默认声明 D01 与
+Source101，从 `asset-definitions.json` 读取上述字段，将加载后的
+`FlyingCreatureVisual.root`、`flyingVisual` 和复制的 spec 一起交给
+`createHumanoidWorld`。切换变体时同时改选中的 asset ID 与 `project.json`；
+不手写资源 URL，也不复用另一变体的碰撞标定。示例飞龙从空中开始，人物通过真实
+召唤、接近和登乘输入进入骑乘流程；附带输入计划只对应默认 D01 场地，执行结果
+仍从当前状态确认。
 
-飞行动画权重在固定步以 0.12 秒响应时间过渡，显示采样只插值已保存的权重，不额外推进动画。D01 俯冲片段在末尾 0.25 秒混合至起始姿态，消除循环接缝的鞍位跳变。第三视角遇障仍即时收近；障碍消失后保持 0.12 秒，再以 0.18 秒半衰期、最多每秒 12 米恢复镜头臂长，减少墙边反复伸缩。
+目录中的 [`creature.dragon`](../assets/three-creator/catalog/creature.dragon.json)
+是另一份 WYVERN 资源，路径为 `presets/creatures/dragon.glb`。它与这些原生变体是
+不同资产；查到该 ID 不代表加载了原生飞行、召唤、上下龙或喷火能力。
 
-这些飞行公式是本项目依据已有资产与行为分析重建的实现，不是恢复出的 Century C++ 源码。当前碰撞是保守球组的运动学扫掠，不等同于原游戏的完整碰撞组件或动力学布料。
+## 实际流程与控制
 
-## 控制与配置
+训练场以地面人物开始。站稳在干燥地面后按 **H** 召唤场内已有飞龙；SDK 规划
+飞行路线并检查附近降落空间，不移动人物、不创建另一条龙。飞龙落稳后，到鞍座
+侧面按 **F** 登乘。登乘和下龙沿经过净空检查的路径执行，途中被占用则等待。
 
-W/S 俯冲/抬头，A/D 左右转向，Shift 加速，Ctrl（现有 crouch 绑定也支持 C）刹停，松开 WASD 自动减速悬停，Space 滑翔，E 持续喷火，Q 闪避，T 切换视角，鼠标继续观察镜头。
+| 状态 | 输入与结果 |
+| --- | --- |
+| 地面骑乘 | Space 检查头顶空间并起飞；F 检查下龙路径与站立落点 |
+| 空中 | W/S 俯冲/抬头，A/D 转向，Shift 加速，Ctrl 刹停，松开 WASD 减速悬停 |
+| 空中动作 | Space 滑翔，E 持续喷火，Q 闪避，F 请求着陆 |
+| 接近/着陆 | F 取消接近或转入起飞；落稳后再次 F 才下龙 |
+| 镜头 | T 切换第三、第一与越肩视角；鼠标环绕，各视角可抬头观察天空 |
 
-`humanoid.createFlyingCreatureSpec(id)` 创建可复用飞行配置；将实例交给 `createWorld({humanoid:{vehicles:...}})`，并将已加载的 `humanoid.FlyingCreatureVisual` 绑定到该实例的 `flyingVisual`。运行时负责采样与释放，场景不要再自行推进 mixer、粒子或相机。
+按键可通过既有 controls 绑定修改；上表是默认值。读取
+`world.humanoid.snapshot().vehicleDynamics[].flyingCreature` 获取
+`groundPhase`、`groundFailure` 和 `summon` 的实际状态。
+`summon.phase` 为 `flying`、`landing`、`arrived` 或 `blocked`；请求被接受不等于
+已经落地。`world.humanoid.inspectBoarding(instanceId, actorId)` 提供当前人物的
+接近点、资格与原因。多人物的骑乘与过渡归各自 `HumanoidActor`，切换控制目标
+不转移已经接受的上下龙过程。
 
-巡航速度、加速速度、普通加速度、松键减速度、刹停减速度、低速偏航、俯仰响应和侧倾响应使用公共运动配置，是这些参数的唯一运行入口。`spec.flyingCreature` 的额外标定用于俯冲/爬升、体力推进、速度硬限、姿态极限、高速转向和碰撞恢复。飞鸟可以复用飞行状态计算，但必须重新标定模型、动画、座位及碰撞体，不能直接套用 D01 的体积。
+## 执行与碰撞边界
 
-未提供 `flyingCreature` 配置的旧程序化飞龙保持已有控制语义，保护其他消费者；当前 Playground 中的飞龙已启用原生系统。Creator/Episode 可通过同一 SDK 接入，现有资产目录中的旧飞龙预设没有被静默替换。
+`humanoid.createFlyingCreatureSpec(id)` 创建飞行配置，
+`humanoid.FlyingCreatureVisual.load({dragonUrl, animationPrefix, flameTextureUrl})`
+加载原生模型与动作。将 spec、可见 root 和该 visual 作为同一个 vehicle instance
+交给 `createWorld({humanoid:{vehicles: ...}})`；SDK 负责固定步、人物控制器、
+动画、碰撞、座位、呈现插值和相机。场景与 UI 只提交输入/命令，不另外推进
+mixer、粒子或相机循环。
 
-## 已接入与后续边界
+`motion-families/flying-creature` 中，`flight.ts`/`controller.ts` 执行飞行，
+`ground.ts` 检查起降支撑与空间，`summon.ts` 规划召唤路线，`mount.ts` 检查并
+采样上下龙路径，`visual.ts`/`flame.ts` 展示模型、缰绳、接触与火焰。
+配置使用米、秒与弧度。地面支撑范围用于拒绝狭窄平台、陡坡和水面。
 
-训练场默认已经骑在龙上，可在地图菜单切换至飞机或人物场地。当前保留悬停飞行方案，没有地面步行、降落/起飞动作、自然上下龙过渡、完整 H01 动作重定向、伤害结算和音效；不能将这些列为完成的能力。第一视角是本项目的适配设计。
+空中与地面的碰撞球组重点覆盖躯干、颈部和头部，并按地面混合比例过渡。
+翼尖、尾尖等末端不保证完整碰撞，可能擦过或穿过障碍；该实现不是逐三角形蒙皮
+碰撞，也不提供原游戏的动力学布料。地面视觉采用已加载的 Ground_Idle 与飞行
+姿态混合；D02 文件还含 Landing/Takeoff 片段，但当前 visual 不单独播放它们。
+地面步行、完整 H01 动作重定向、伤害结算和音效不属于已实现能力。
 
-## 验证
+这些飞行与交互公式是本项目依据资产和行为重建的实现，不是恢复出的 Century
+C++ 源码。Creator/Episode 消费同一 SDK 能力时仍需提供对应资产与标定条件。
 
-`pnpm verify:dragon-training <URL> <证据目录>` 提供真实键盘与地图菜单冒烟测试。核心测试为 `flying-creature.test.ts` 和 `flying-creature-visual.test.ts`，覆盖零速悬停、转向、薄墙、自己/其他碰撞代理、公共 SDK 动作与相机、地图复位、实际蒙皮的代表性混合动作、嘴部隔离、粒子暂停与重采样。蒙皮测试是离散取样回归，不是所有动画时刻的数学证明。
+## 构建与验证
+
+```sh
+pnpm dev:editor
+pnpm prepare:dragon-training
+pnpm build:editor
+pnpm verify:dragon-training http://127.0.0.1:5178 .codex-tmp/dragon-native-smoke
+```
+
+`prepare:dragon-training` 重新计算上述 17 个文件的身份，不生成模型或更改动作。
+开发插件与生产构建验证相同清单，产物位于 `.codex-tmp/react-playground-dist`。
+
+[浏览器 smoke](../apps/three-playground/scripts/dragon-training-smoke.ts)使用真实
+键盘验证地面开始、召唤、接近、登乘、起飞、飞行与喷火，并检查变体加载、地图
+切换、重载和历史路由。失败时保存实际状态、间隔采样的接近过程与截图。
+运行时测试覆盖飞行、碰撞、起降与人物过渡；visual 测试覆盖动作采样、座位、
+喷火与呈现生命周期。离散蒙皮取样不是全部动作时刻的数学证明；测试通过、
+真实浏览器完成和人工视觉验收分别报告。

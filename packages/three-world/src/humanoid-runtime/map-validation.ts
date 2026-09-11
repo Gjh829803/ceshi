@@ -1,5 +1,12 @@
 import type {EnvironmentDefinition} from './environment/types';
 
+/** Physical identities must remain unambiguous across authored and shared bodies. */
+export function validateEnvironmentIdentities(map:EnvironmentDefinition):void{
+  const physicalIds=[...map.boxes.map(box=>box.id),...(map.interactions??[]).filter(target=>target.kind==='pickup').map(target=>target.id),...(map.looseCrates??[]).map(crate=>crate.id)];
+  const targetIds=(map.interactions??[]).map(target=>target.id);
+  if(new Set(physicalIds).size!==physicalIds.length||new Set(targetIds).size!==targetIds.length)throw new Error('HUMANOID_PHYSICS_ID_CONFLICT');
+}
+
 /** Reject malformed physical data before allocating a Rapier world. */
 export function validateEnvironment(map:EnvironmentDefinition):void{
   const fail=():never=>{throw new Error('ENVIRONMENT_INVALID');};
@@ -40,8 +47,9 @@ export function validateEnvironment(map:EnvironmentDefinition):void{
     if(!Array.isArray(region.modes)||region.modes.some(m=>!text(m)))fail();
   }
   for(const spawn of map.spawns)if(!spawn||!text(spawn.id)||!vector(spawn.position)||!Number.isFinite(spawn.yaw))fail();
-  for(const target of map.interactions??[])if(!target||!text(target.id)||!['pickup','seat'].includes(target.kind)||!vector(target.position)||!vector(target.approach)||!Number.isFinite(target.yaw)||(target.size!==undefined&&(!vector(target.size)||target.size.some(n=>n<=0)))||(target.massKg!==undefined&&(!Number.isFinite(target.massKg)||target.massKg<=0)))fail();
+  for(const target of map.interactions??[])if(!target||!text(target.id)||!text(target.slotId)||!['pickup','seat'].includes(target.kind)||!vector(target.position)||!vector(target.approach)||!Number.isFinite(target.yaw)||(target.size!==undefined&&(!vector(target.size)||target.size.some(n=>n<=0)))||(target.massKg!==undefined&&(!Number.isFinite(target.massKg)||target.massKg<=0)))fail();
   for(const surface of map.climbSurfaces??[])if(!surface||!text(surface.id)||!vector(surface.center)||!vector(surface.normal)||!Number.isFinite(surface.width)||surface.width<=0||!Number.isFinite(surface.minY)||!Number.isFinite(surface.maxY)||surface.minY>=surface.maxY)fail();
   for(const crate of map.looseCrates??[])if(!crate||!text(crate.id)||!vector(crate.position)||!Number.isFinite(crate.size)||crate.size<=0)fail();
   if(map.characterCameraDistanceMeters!==undefined&&(!Number.isFinite(map.characterCameraDistanceMeters)||map.characterCameraDistanceMeters<=0))fail();
+  validateEnvironmentIdentities(map);
 }

@@ -37,7 +37,7 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
     // At rest the rider stands behind the saddle with a support foot down.
     // Use real forward input to reach the seated pedalling phase for contact checks.
     world.step({humanoid:{...humanoid.emptyInput(),forward:1}},60);
-    expect(runtime.simulation.vehicle!.motion.unicycle!.phase).toBe('riding');
+    expect(runtime.simulation.controlledActor.vehicle!.motion.unicycle!.phase).toBe('riding');
    }
    const cushion=visuals[i]!.root.getObjectByName('seat-cushion');
    expect(cushion,`${spec.id} cushion`).toBeDefined();

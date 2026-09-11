@@ -1,0 +1,285 @@
+{
+  "id": "vehicle.atv",
+  "displayName": "全地形车 / QUAD ATV",
+  "path": "vehicles/atv.glb",
+  "uri": "./assets/subjects/042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004.glb",
+  "sha256": "042ca0daefc3d304ba53a9056872a796c3a2f5fae8b1c5cc6553e59f446a0004",
+  "byteLength": 301444,
+  "sourcePath": "assets/three-creator/presets/vehicles/atv.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [
+    "Racing quad inspired by PUBG; short-wheelbase four-wheel drive with front-wheel steering and original straddle rider.",
+    "Single active driver under the current Training contract. Rear passenger socket is reserved; no fuel, damage or multiplayer passenger simulation."
+  ],
+  "provenance": {
+    "source": "Local procedural geometry",
+    "generator": "scripts/three-creator/export-atv.ts"
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "vehicle.atv"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "atv",
+      "name": "全地形车",
+      "en": "QUAD ATV",
+      "mode": "wheeled",
+      "archetype": "atv",
+      "kernel": "K01",
+      "color": "#bc3543",
+      "spawn": [
+        -212,
+        0,
+        64
+      ],
+      "yaw": 0,
+      "speed": 30.555555555555554,
+      "maxSpeed": 34.72222222222222,
+      "reverseSpeed": 6,
+      "accel": 7.5,
+      "grip": 8,
+      "steer": 0.42,
+      "coastDeceleration": 1.25,
+      "brakeDeceleration": 6,
+      "steeringResponse": 7,
+      "steeringReturn": 9,
+      "throttleResponse": 5,
+      "pitchResponse": 8,
+      "rollResponse": 7,
+      "radius": 1.48,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "characterPose": "atv",
+      "camera": 6.2,
+      "wheelbaseMeters": 1.6,
+      "rearAxleZMeters": -0.8,
+      "wheelPhysics": {
+        "chassis": {
+          "kind": "box",
+          "halfExtents": [
+            0.85,
+            0.5,
+            1.2
+          ],
+          "offset": [
+            0,
+            0.88,
+            0
+          ]
+        },
+        "mass": 360,
+        "radius": 0.39,
+        "halfTrack": 0.7,
+        "halfWheelbase": 0.8,
+        "hubHeight": 0.39,
+        "centerOfMassHeight": 0.25,
+        "tireFriction": 1.4,
+        "maxRaise": 0.03,
+        "maxDrop": 0.04,
+        "wheelWidth": 0.28,
+        "wheels": [
+          {
+            "x": 0.7,
+            "z": 0.8,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": -0.7,
+            "z": 0.8,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 0.7,
+            "z": -0.8,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -0.7,
+            "z": -0.8,
+            "steering": false,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              97.5
+            ],
+            [
+              1800,
+              135
+            ],
+            [
+              3200,
+              150
+            ],
+            [
+              4500,
+              142.5
+            ],
+            [
+              6200,
+              97.5
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 4.1,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 22.5,
+          "dragArea": 0.65,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.91,
+          0.71,
+          1.25
+        ],
+        "offset": [
+          0,
+          0.71,
+          0
+        ]
+      },
+      "hint": "W 前进 · S 制动后倒车 · A / D 转向 · Shift 加速 · Space 手刹 · F 上下车 · T 视角"
+    }
+  },
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        1,
+        -0.15
+      ]
+    },
+    {
+      "id": "seat.passenger",
+      "node": "seat.passenger",
+      "positionMetersXYZ": [
+        0,
+        1,
+        -0.68
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.420507,
+        0.309005,
+        0.012058
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.420509,
+        0.309004,
+        0.012058
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1.35,
+        0.025,
+        -0.15
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1.35,
+        0.025,
+        -0.15
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0.000542,
+        1.633,
+        0.080046
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0.29,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        -0.29,
+        0,
+        0
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      0.91,
+      0.71,
+      1.25
+    ],
+    "offset": [
+      0,
+      0.71,
+      0
+    ]
+  }
+}

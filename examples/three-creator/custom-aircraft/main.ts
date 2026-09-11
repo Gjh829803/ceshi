@@ -42,7 +42,7 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'pers
  profile:{view:{defaultPerspective:'third-person',keyboardToggleEnabled:true},cameraDistanceMeters:15}});
 world.humanoid!.onVisualUpdate((dt,sample)=>{
  const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;
- humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision});
+ humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:sample.epoch});
 });
 world.setCaptureTargets(['person',spec.id]);
 const presentation=world.createPresentation();

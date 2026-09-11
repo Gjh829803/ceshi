@@ -32,7 +32,10 @@ describe('actual player capture controller and humanoid physics integration',()=
  const assets=JSON.parse(readFileSync(new URL('../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;vehicle?:{spec:VehicleSpec}}[];
  for(const family of ['motorcycle','unicycle','raft','observation-sub','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','submarine','spacecraft'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
-   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-sub'?a.id==='vehicle.observation-sub':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':family==='kayak'?a.vehicle?.spec.archetype==='kayak':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
+   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-sub'?a.id==='vehicle.observation-sub':family==='submarine'?a.id==='vehicle.sub':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':family==='kayak'?a.vehicle?.spec.archetype==='kayak':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
+   // The two submarine assets share a mode but have different speeds and routes.
+   // Catalog order must not replace the fast submarine with the observation sub.
+   if(family==='submarine')expect(asset.id).toBe('vehicle.sub');
    const aquatic=family==='raft'||family==='jetski'||family==='observation-sub'||family==='submarine'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
    const y=(family==='raft'||family==='jetski'||family==='kayak'||family==='canoe')?.1:aquatic?-15:flight||family==='spacecraft'?100:.03;
    const floor=aquatic?-80:0;
@@ -52,7 +55,7 @@ describe('actual player capture controller and humanoid physics integration',()=
     expect(world.snapshot().humanoid!.vehicles[0]!.mode).toBe(spec.mode);
     const controller=new PlayerCaptureController(segment,{kind:'ground',walkSpeedMetersPerSecond:3.1,runSpeedMetersPerSecond:5.8,heightMeters:1.68,radiusMeters:.28},'follow',async start=>runtime.probeEpisodeStart(start));
     const frames:{snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[]=[];
-    const revision=runtime.simulation.teleportRevision;let tick=0;
+    const revision=runtime.simulation.controlledActor.teleportRevision;let tick=0;
     for(let frame=0;frame<720;frame++){
      const snapshot=world.snapshot(),forward:[number,number,number]=[Math.sin(runtime.followCamera.yaw),0,Math.cos(runtime.followCamera.yaw)];
      const decision=await controller.step(snapshot,forward,frame/24);
@@ -62,13 +65,13 @@ describe('actual player capture controller and humanoid physics integration',()=
     }
     const reachedIndex=Math.max(...frames.map(f=>f.decision.waypointIndex));
     const evidence=summarizePlayerBehavior(frames);
-    const health={family,reachedIndex,lastPosition:runtime.simulation.vehicle!.position.toArray(),lastDistance:frames.at(-1)!.decision.distanceToTargetMeters,
+    const health={family,assetId:asset.id,reachedIndex,lastPosition:runtime.simulation.controlledActor.vehicle!.position.toArray(),lastDistance:frames.at(-1)!.decision.distanceToTargetMeters,
      failures:frames.filter(f=>f.decision.mode==='failed').map(f=>f.decision.diagnostic?.code),yawTravel:evidence.renderedYawTravelDegrees};
     console.info('vehicle-route-physical-health',JSON.stringify(health));
     expect(health.failures,JSON.stringify(health)).toEqual([]);
     expect(reachedIndex,JSON.stringify(health)).toBeGreaterThanOrEqual(2);
     expect(evidence.renderedYawTravelDegrees).toBeGreaterThan(10);
-    expect(world.simulationTick).toBe(1800);expect(runtime.simulation.teleportRevision).toBe(revision);
+    expect(world.simulationTick).toBe(1800);expect(runtime.simulation.controlledActor.teleportRevision).toBe(revision);
     expect(frames.every(f=>f.snapshot.errors.length===0&&f.decision.positionWorldMetersXYZ.every(Number.isFinite))).toBe(true);
     expect(new Vector3(...world.getEntityState('subject').positionWorldMetersXYZ).distanceTo(new Vector3(...segment.start.positionWorldMetersXYZ))).toBeGreaterThan(family==='unicycle'?40:family==='observation-sub'?40:family==='canoe'?20:family==='raft'||family==='kayak'?30:100);
    }finally{world.dispose();}

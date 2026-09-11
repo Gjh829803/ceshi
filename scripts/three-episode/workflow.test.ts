@@ -1,3 +1,5 @@
+import {writeFixtureAssetPolicy} from './test-fixtures/asset-policy';
+import {hashTree} from '../three-creator/compiler';
 import {describe,expect,it} from 'vitest';
 import {RouteController} from './route-controller.js';
 import {isRepairableRouteFailure} from './workflow.js';
@@ -33,7 +35,8 @@ it.each(['downstream','producer-cleanup','publication','transient'])('preserves 
   await mkdir(path.join(root,'source'));await mkdir(path.join(root,'playable'));await mkdir(output);
   await writeFile(path.join(root,'opening.png'),'fixture');
   const image={path:'opening.png',sha256:createHash('sha256').update('fixture').digest('hex')};
-  await writeFile(sourceManifestPath,JSON.stringify({kind:'three-episode-source',schemaVersion:1,worldId:'world-one',worldBuildHash:hash,sourceHash:hash,runtimeHash:hash,sourceRoot:'source',sourceFiles:{},playableRoot:'playable',playableFiles:{},opening:image,targets:[{id:'target-one',whiteboxTriview:image}]}));
+  const assetPolicySha256=await writeFixtureAssetPolicy(path.join(root,'playable'));
+  await writeFile(sourceManifestPath,JSON.stringify({assetPolicySha256,kind:'three-episode-source',schemaVersion:1,worldId:'world-one',worldBuildHash:hash,sourceHash:hash,runtimeHash:hash,sourceRoot:'source',sourceFiles:{},playableRoot:'playable',playableFiles:await hashTree(path.join(root,'playable')),opening:image,targets:[{id:'target-one',whiteboxTriview:image}]}));
   const plan={kind:'worldkit-three-episode-plan',schemaVersion:2,worldBuildHash:hash,segments:Array.from({length:6},(_,i)=>({id:`segment-0${i}`,start:{positionWorldMetersXYZ:[i,0,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[i,0,-20],gait:'walk'}],endBehavior:'stop',purpose:'fixture'}))};
   const planPath=path.join(output,'plan.json');await writeFile(planPath,JSON.stringify(plan));
   await writeFile(path.join(output,'episode.json'),JSON.stringify({episodeId:'case-one',worldBuildHash:hash,profile:PRE_SEEDANCE_PROFILE,planPath,planHash:canonicalHash(plan),segments:[],planRepairsBySegment:{},status:'running'}));
@@ -59,11 +62,4 @@ it('isolates each shared-capsule case in planner and capture continuation config
  expect(a.planningSourceManifest).toBe(path.join('/fsx/frozen','inputs/case-a/source.json'));expect(a.sourceManifestRelativePath).toBe('inputs/case-a/source.json');
  expect(b.planningSourceManifest).toBe(path.join('/fsx/frozen','inputs/case-b/source.json'));expect(b.planningSourceManifestSha256).not.toBe(a.planningSourceManifestSha256);
  expect(base.sourceManifestRelativePath).toBe('inputs/old/source.json');expect(()=>caseRuntimeConfig(base,'/outside/source.json','/episode','a'.repeat(64))).toThrow('OUTSIDE_CAPSULE');
-});
-
-import {customMovementAdapter} from './custom-movement.js';
-it('never admits another or changed custom movement through the arborist compatibility adapter',async()=>{
- expect(await customMovementAdapter('/unused','unrelated-movement')).toBeUndefined();
- const root=await realpath(await mkdtemp(path.join(tmpdir(),'custom-movement-')));
- try{await mkdir(path.join(root,'world'));await writeFile(path.join(root,'world/movement.ts'),'changed');await expect(customMovementAdapter(root,'arborist.ground-with-steps')).rejects.toThrow('SOURCE_CHANGED');}finally{await rm(root,{recursive:true,force:true});}
 });

@@ -20,9 +20,9 @@ function interactionStation(prefix: string, tx: number, tz: number) {
   for (const side of [-1, 1]) for (const depth of [-1, 1])
     add(`chair-leg-${side}-${depth}`, 5 + side * .22, -5.51 + depth * .135, .055, .36, .055);
   const interactions: MapInteraction[] = [
-    { id: `${prefix}-parcel`, label: '搬运测试方块', kind: 'pickup', position: [tx - 5.051, .914, tz - 6.363],
+    { id: `${prefix}-parcel`, label: '搬运测试方块', kind: 'pickup',slotId:'pickup', position: [tx - 5.051, .914, tz - 6.363],
       approach: [tx - 5, .02, tz - 6], yaw: Math.PI, size: [.13, .13, .13], massKg: .3 },
-    { id: `${prefix}-chair`, label: '坐姿测试椅', kind: 'seat', position: [tx + 5, .46, tz - 5.51],
+    { id: `${prefix}-chair`, label: '坐姿测试椅', kind: 'seat',slotId:'seat', position: [tx + 5, .46, tz - 5.51],
       approach: [tx + 5, .02, tz - 6], yaw: Math.PI,
       colliderIds: ['seat-cushion', 'seat-back', 'chair-leg--1--1', 'chair-leg--1-1', 'chair-leg-1--1', 'chair-leg-1-1'].map(id => `${prefix}-${id}`) },
   ];

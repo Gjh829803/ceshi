@@ -37,11 +37,54 @@ world interfaces. `humanoid` input and snapshot fields refer to this runtime.
 uses the supplied object and optional animation. Available actions follow those
 actual bindings and scene conditions.
 
+Complete humanoid loads share a template keyed by the resolved resource URL
+closure. Keep those URLs immutable for their content version. Each instance has
+independent skeletons, inverse-bind matrices, mixer clips, materials and texture
+objects; geometry is shared read-only. Clone geometry explicitly before editing
+it and retain ownership of that authored copy. Disposing one character releases
+its instance resources; the final instance releases the shared template.
+Failed loads/bindings release partial resources, and a disposed character cannot
+be revived by an in-flight load. This resource sharing does not itself register
+additional physical actors or provide autonomous behavior.
+
+To create another complete actor in a humanoid world, call
+`await world.humanoid.createCharacter()` and then `world.addCharacter({id,humanoid:character})`.
+Registration transfers the instance lifecycle to the world. An instance can belong
+to only one world; create another instance to reuse its source. Actors present at
+the initial seal are retained for reset. Later actors release their resources on
+despawn. Keep a caller-created instance only if registration failed, and dispose
+it if it will not be retried.
+
+The same humanoid world accepts ordinary NPCs through
+`world.addCharacter({id,object,body,movement})` or an `AssetInstance` binding.
+Their own capsule dimensions, navigation, custom movement intent and asset mixer
+run in the shared fixed tick. `world.setControlledEntity(id)` can select either
+kind; `world.setCameraFollow({targetEntityId:id})` chooses the camera target
+independently. Ordinary first-person views declare a local `view.eyeOffsetLocalMetersXYZ`. Character colliders participate in physical contact
+and local avoidance, but are excluded from static navigation geometry. Full
+humanoid abilities still require a complete humanoid binding.
+
 `WorldObservation.controlledObject` is the current controlled entity's live
 `THREE.Object3D`, for both humanoid and independently controlled nonhuman worlds.
-It is separate from `world.humanoid`; observers expose runtime state through
-`snapshot().humanoid`. Input action edges are `input.humanoid.actions`, while
+It is separate from `world.humanoid`. `snapshot().humanoid`, `describe().humanoid`
+and Episode humanoid capabilities describe the currently controlled full actor;
+they are absent when an ordinary character is controlled. Full NPCs remain
+available through explicit actor IDs, including `world.humanoid.snapshot(actorId)`.
+A humanoid request without an actor ID requires a controlled full actor; it never
+selects the previous humanoid silently. Input action edges are `input.humanoid.actions`, while
 movement and vehicle axes share the same `input.humanoid` envelope.
+
+Navigation claims locomotion and animation together. Contextual actions and
+surface/traversal transitions claim the actor's locomotion, animation, pose and
+both hands before starting; conflicts return `ACTOR_RESOURCE_BUSY`. After pickup,
+the held relationship retains both hands while navigation can carry the object.
+An occupied seat retains locomotion, animation and pose until safe exit completes.
+Manual asset playback claims animation until stopped or completed. Read
+`world.getEntityState(id).controlOwners` for current ownership. Stop navigation
+before installing explicit humanoid input; clear that override with
+`humanoid.set-input` and `input:null` before requesting navigation again.
+Batch scene commands validate resource changes in order before committing them,
+so stopping navigation then playing an animation is a valid handoff.
 
 Use `humanoid.perform-action` for contextual humanoid actions, `vehicle.*` for
 boarding and recovery, and `humanoid.set-input`, `humanoid.apply-profile` and
@@ -54,7 +97,7 @@ Flying-creature bindings may supply `VehicleSpec.flyingCreatureGround` with meas
 ground-pose support bounds, root height, saddle, core collision probes and transition
 timing. `vehicle.exit` while flying requests landing (or cancels an ongoing descent);
 acceptance does not mean the rider has dismounted. Observe
-`simulation.vehicle.motion.flyingCreature.groundPhase` (`airborne`, `approach`,
+`world.humanoid.snapshot(actorId).vehicleDynamics[].flyingCreature.groundPhase` (`airborne`, `approach`,
 `landing`, `grounded`, `takeoff`) and `groundFailure`. Once grounded, `vehicle.exit`
 starts the dismount transition; `vehicle.enter` requires proximity and a clear route.
 The rider stays mounted until dismount completes, then its walking capsule resumes.
@@ -66,10 +109,10 @@ supports flat-ground parking, not ground locomotion or per-foot terrain IK.
 
 An unmounted character standing on dry ground can send the one-shot
 `input.humanoid.actions.summonDragon` (default H) or call
-`world.humanoid.summonDragon(instanceId?)`. The existing available flying creature
+`world.humanoid.summonDragon(instanceId?, actorId?)`; omitted `actorId` uses the input actor. The existing available flying creature
 flies from its current position to a checked landing beside the request position;
 a grounded creature first takes off. Neither the character nor camera is teleported.
-Read `snapshot().vehicleDynamics[].flyingCreature.summon` for `flying`, `landing`,
+Read `world.humanoid.snapshot(actorId).vehicleDynamics[].flyingCreature.summon` for `flying`, `landing`,
 `arrived` or `blocked`, the fixed target and a message. Acceptance is not arrival.
 The route checks higher cruise candidates and sweeps live collision geometry;
 it stops on an unexpected obstruction, rather than guaranteeing global pathfinding.
@@ -80,6 +123,20 @@ The character must approach the saddle after arrival and use the normal enter co
 human and binds its complete controller and actions, optionally with vehicles.
 It calls `createWorld` internally and returns the same `ThreeWorld`; both entries
 use the same runtime ownership and lifecycle.
+
+A Humanoid world also accepts ordinary `addEntity({id, object, physics})` fixed,
+dynamic and kinematic bodies. They share its Rapier world with the person and
+vehicles; authored poses, collider refresh, commands and reset use the normal
+entity interfaces. IDs must be distinct from the supplied person, vehicles and
+map colliders, including when replacing the map. A conflicting replacement is
+rejected before the active world changes. Dynamic bodies retain ordinary
+9.81 m/s² gravity; vehicle simulation retains its 120 Hz substeps inside SDK ticks.
+See the [shared physics example](../../examples/three-creator/shared-physics/main.ts).
+
+Registering, moving or enabling a body updates native scene queries without
+advancing simulation. Contact solving and collision events occur on the next
+normal physics step. Maintainers can inspect the narrow
+[Rapier query-refresh dependency](../../vendor/rapier-query-refresh/README.md).
 
 Choose the helper when its complete human kit matches the task. Otherwise bind
 the required subject and abilities through the general world API. Subject routes
@@ -170,6 +227,18 @@ simulation cost. Worlds without a renderer skip GPU preparation.
 previous running/paused state. Use `onReset` for author-owned visual state and
 `onDispose` for external cleanup; `dispose()` releases the world. Each hook returns
 an unsubscribe function.
+For synchronous headless checks, the first `world.step(input,ticks)` also seals
+both entity metadata and runtime state, even for zero ticks. Finish registration
+first. If resources or parameters need initialization, await `world.start()` and
+then stop before stepping. Invalid input and failed prototype preparation cannot
+leave a partially sealed baseline.
+The fixed engine activates one camera writer. Changing the controlled actor does
+not change the camera target. Following an ordinary actor releases the humanoid
+camera; following a full actor releases the ordinary rig. `useAuthoredCamera()`
+releases both. A rejected follow/mode request leaves the current owner intact.
+Editing an inactive humanoid camera's default perspective only stores the setting;
+explicit camera commands choose its owner. In humanoid configuration inspection,
+`effective.camera.settings` is null when that follow camera is inactive.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:nonhuman-subject -->
@@ -273,6 +342,9 @@ packages verified resources. `world.assets.search(query)` describes that selecti
 `world.assets.load(id)` creates an independent instance for ordinary
 `world.addCharacter({id,asset})` binding. Full contextual humanoid movement uses
 `createHumanoidWorld`; playback of a named clip alone does not add an ability.
+Catalog `locomotionBindingIds` describe supplied content for discovery. They do
+not select or install a controller; binding uses `asset/object` with `movement`,
+or an actual `humanoid` instance.
 
 For Creator generation, every human (including NPCs and riders) must use the
 permitted preset visible model, skeleton and motions; omit added clothing,
@@ -361,11 +433,59 @@ input. Failure such as insufficient speed, occupied hands, cooldown or blocked
 standing space must remain visible to the Agent. Runtime tuning and eligibility
 are authoritative; see `ACTION_TUNING` and the character action module.
 
-**Interactions** — `map.interactions` supplies stable `id`, `kind`, object
+**Interactions** — `map.interactions` supplies stable entity `id`, `slotId`, `kind`, object
 `position`, free `approach`, `yaw`, size/mass and target `colliderIds`. Reach the
 approach within 0.9 m and its vertical tolerance before requesting pickup/sit.
 These commands do not navigate. Render the movable object from the shared
 interaction state so it follows the hand and does not remain duplicated.
+
+Ordinary entities bind the same actions with `addEntity({id,object,physics,interactions})`
+or prototype `options.interactions`. Each slot declares `slotId`, `label`, `kind`
+(`pickup` or `seat`), `positionLocalMetersXYZ`, `approachLocalMetersXYZ`,
+`rotationLocalRadiansXYZ` (XYZ Euler, +Z facing) and `capacity:1`. Coordinates are
+relative to the entity root and follow its actual transform. A fixed bench can
+contain several independent seat slots; pickup requires a dynamic body and
+exclusively holds the entire entity. Its existing model and body are reused.
+Dynamic physics can explicitly set `lockRotations:true` when the calibrated object
+must retain its orientation (the supplied pickup prop uses this constraint).
+Rotation is free by default; binding an interaction never silently locks it.
+
+```ts
+world.addEntity({id:'bench',object:bench,role:'obstacle',physics:{kind:'fixed'},interactions:[
+  {slotId:'left',label:'Left seat',kind:'seat',capacity:1,
+   positionLocalMetersXYZ:[-.6,.46,-.49],
+   approachLocalMetersXYZ:[-.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
+  {slotId:'right',label:'Right seat',kind:'seat',capacity:1,
+   positionLocalMetersXYZ:[.6,.46,-.49],
+   approachLocalMetersXYZ:[.6,.02,0],rotationLocalRadiansXYZ:[0,0,0]},
+]});
+await world.execute({type:'humanoid.perform-action',actorId:'person',
+  request:{requestId:'sit-right',action:'sit',targetId:'bench',slotId:'right'}});
+```
+
+The example assumes the authored bench root is at floor level and its actual seat
+colliders meet those anchors. Inspect the measured `interactionTargets` approach,
+eligibility, `slotId`, `generation` and `claim` before dispatching. A request may omit
+`slotId` only for an entity with one slot; `putDown` and `standUp` can use the actor's
+current relationship. Replace bindings with
+`world.execute({type:'entity.set-interactions',entityId,slots})`; an empty array
+removes them. Replacement invalidates old reservations and releases held bodies.
+Despawn releases relationships before destroying physics; reset restores baseline
+bindings against the new physical instances.
+
+Reservations expire after five seconds of simulation time. A successful grip or
+seat contact becomes a persistent `held`/`occupied` claim; completing the operation
+does not release it. Actual body state, collider contact, mass, approach and supplied
+clip reach are checked again at contact. A label or local anchor cannot make an
+arbitrary height reachable. Source101 seated motion uses a 1.40 m capsule; standing
+requires 1.68 m clearance. Losing a seat under a low roof starts safe exit cleanup
+before the action can become terminal. Snapshots never advance these transitions.
+The `multiple-actors` example binds an offset Group and two independent seats,
+with controls for NPC approach, contention, carrying, release, cancellation,
+target removal and a low ceiling over the right seat. Navigation uses conservative
+clearance around fixed furniture; reach a nearby walkable point before the action
+controller performs its final alignment. Route around movable obstacles using
+their actual occupied space.
 
 **Dynamic objects** — the Agent decides which objects should respond to gravity,
 forces and collisions from the scene and gameplay requirements; there is no fixed
@@ -412,6 +532,67 @@ Crouch, prone, climb and swim-style changes are humanoid input fields.
 <!-- /asset-info -->
 
 <!-- topic:humanoid -->
+
+## Multiple complete humanoids
+
+```ts
+const guide = await world.humanoid!.createCharacter();
+guide.root.position.set(4, 0.04, 0);
+world.addCharacter({id:'guide', humanoid:guide,
+  movement:{kind:'ground', walkSpeedMetersPerSecond:2.4}});
+world.setAutonomy('guide', {kind:'patrol',
+  waypointPositionsWorldMetersXYZ:[[4,0,7],[4,0,-3]], pauseSeconds:0.5});
+world.setCameraFollow({targetEntityId:'guide'});
+// Input selection is independent of the camera target.
+world.setControlledEntity('person');
+```
+
+For a complete Humanoid target, `setCameraFollow` accepts only `targetEntityId`
+(or no options to follow the controlled actor) and selects camera mode 0. Other
+fields, including `view` and follow/framing parameters, are rejected with
+`WORLD_CAMERA_FOLLOW_OPTIONS_UNSUPPORTED` before changing the target or camera owner.
+Use `world.humanoid.applyProfile({cameraDistanceMeters, camera, view})` for Humanoid
+camera settings and `world.humanoid.setCameraMode(0|1|2)` for its mode. Ordinary
+targets retain the `CameraFollowOptions` configuration described above.
+
+Each actor has its own controller, skeleton, mixer and action state. All actors
+share the physics world, interaction targets and fixed clock. Ground navigation
+uses committed fixed/kinematic collider geometry, including map surfaces without
+visual meshes. Ground NPCs use Detour Crowd to steer around nearby characters from committed
+positions and velocities; their existing controllers still resolve every physical
+move. Controlled input and custom movement are not overwritten by avoidance.
+Crowd processing uses stable actor identity order and is rebuilt with navigation.
+Dynamic obstacles still require live collision; a persistently obstructed route
+can fail with a blocked result. An actor outside the navigation mesh fails only
+its own navigation task, without stopping other actors or the world.
+
+Full humanoid roots use unit scale, yaw-only rotation and automatic local matrix
+updates, directly under an untransformed Scene or without a parent. Set the root
+position before binding. For runtime generation, register a character prototype
+with `template:{kind:'character',options:{humanoid:seed}}`. Registration retains
+only an independent source factory and copied configuration, so the caller can
+then dispose `seed`; each `entity.spawn` creates a fresh rig. An unused prototype
+does not keep a hidden model, skeleton or mixer alive. Failed or cancelled preparation releases its
+unpublished instance. Spawn collision validation includes the complete candidate
+scene and the current occupancy of objects whose movement takes time.
+
+`humanoid.set-input` and `humanoid.perform-action` accept optional `actorId`;
+omitting it selects the current input actor. Accepted actions remain bound to that
+actor and its generation across input switches. `setInput()` release callbacks
+release only their own override. Full humanoid bindings accept ground walk/run/jump
+speed settings; custom movement adapters and arbitrary body dimensions are not
+accepted for this controller. Vehicle commands also accept `actorId`; omitting it
+selects the current input actor. A rider retains its vehicle across input switches,
+and another actor cannot board or prepare that occupied vehicle. Use [multiple-actors](../../examples/three-creator/multiple-actors/main.ts)
+for complete rigs and autonomous navigation.
+
+Every actor, including the initial character, uses the same controller, binding and
+lifecycle. `humanoid.createCharacter()` retains a source factory independent of
+individual models; deleting the initial character does not disable future creation.
+Each `onVisualUpdate` sample contains `actors[id]` and `vehicles`, sharing the same
+epoch, fixed interval and interpolation time. The actor pose names its
+`mountedInstanceId`; visual callbacks read this sample rather than another actor
+or a separately maintained previous pose.
 
 ### Brake-turn drift for authored vehicles
 
@@ -565,7 +746,8 @@ default. Episode starts inherit it unless `start.humanoid.cameraMode` explicitly
 selects a view for that segment; the override does not change the saved default.
 
 Use `world.humanoid.applyProfile({view: {...}})` or `humanoid.apply-profile` to update
-settings. Setting `defaultPerspective` also selects it immediately; updating only
+settings. Setting `defaultPerspective` selects it immediately only while the
+humanoid follow camera is active; otherwise it stores the next default. Updating only
 `keyboardToggleEnabled` preserves the current view. Disabling the shortcut does
 not disable programmatic `world.humanoid.setCameraMode(0 | 1 | 2)` or
 `humanoid.set-camera-mode` commands. `cameraTogglePressed` is the corresponding one-shot
@@ -739,10 +921,28 @@ While paused, instant commands apply at the pause boundary; ongoing operations
 return accepted and wait for explicit start. Wait observes state events and does
 not start the world. Reset/dispose cancel
 operations and wake waiters; AbortSignal only aborts that wait. Use operations.cancel
-to cancel the operation itself. World operation IDs are distinct from Creator tool
+to request cancellation of the operation itself. Atomic seat transitions finish a
+safe standing exit before releasing occupancy; a slide under a low roof stays low
+until directional input reaches standing clearance. These operations remain
+`running` with phase `cancelling`; wait for the terminal result. Cancelling a pickup
+after grip keeps the item held until an explicit put-down, release or actor removal.
+Sit requires enter, idle and exit clips so its cleanup is executable. Removing an
+actor ends its operations at that same boundary without requiring another tick.
+World operation IDs are distinct from Creator tool
 operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
+Successful `world.humanoid.switchMap(map)` retires the previous simulation's tasks,
+queued commands, asynchronous task scopes and entity generations. Old work cannot
+write into replacement actors or bodies. Failed candidate validation preserves the
+current world and its tasks. `onSimulationReplaced` reports `map` or `reset`.
+Map replacement pauses patrol until an explicit `actor.resume-autonomy`; world
+reset restores the sealed autonomy configuration. Switching keyboard control
+preserves other actors' explicitly assigned inputs.
+
 NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
+Mounting ends foot-navigation operations and pauses patrol. Mounted actors reject
+ground-navigation requests; send explicit humanoid vehicle input to drive, then
+exit before requesting foot navigation or resuming patrol.
 Player input owns the controlled actor, including nonhuman subjects. Single animations return to locomotion;
 loop playback requires stop-action. set-visible only affects rendering; despawn
 removes the entity/collision/tasks. Capability rejection is not SDK success.
@@ -1167,7 +1367,13 @@ For force-driven paddling, `bodyPhysics.kind` is `paddle`, with mass and water
 displacement parameters. The scene supplies actual water and collision geometry.
 Asset IDs and `visualVariant` values do not replace these driving contracts.
 `submarine` provides underwater movement; `spacecraft` provides zero-gravity
-body-local translation and rotation, not orbital mechanics. Read the current
+body-local translation and rotation, not orbital mechanics.
+`space.set-drive-mode` selects `assisted` or `inertial`; `space.dock` sets a
+configured `portId` (or `null` to cancel). Both accept an optional `actorId` and
+operate on that actor's mounted spacecraft; omission uses the input actor.
+They do not transfer input or camera ownership. A docking command sets the intent;
+read the vehicle's `spaceFlight.docking.status` to observe actual completion.
+ Read the current
 `inputGuide()` for each mode's throttle, steering and braking semantics.
 
 | Model binding | Configuration and authoring rule |
@@ -1339,7 +1545,7 @@ group mass and must agree on every part. Box positions/rotations remain authored
 world transforms. Ungrouped boxes remain fixed. EnvironmentQueries owns the body
 in the existing Rapier world, with gravity, CCD, friction and angular motion.
 `propBoxPose(id)` returns each physical part's current world pose for presentation;
-`resetProps()` restores the original group poses and clears velocities.
+`resetRigidGroups()` restores the original group poses and clears velocities.
 
 The Agent chooses which objects need this behavior from the scene and gameplay,
 not from a prescribed category list. Set `rigidGroup` when a box assembly should

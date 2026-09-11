@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {tankBarrel,TANK_CONTROLS} from './tank';
+import {tankBarrel,TANK_CONTROLS} from './motion-families/ground-vehicle/tank';
 import {sampleTankVisual} from './tank-visual';
 import {Character} from './character';
 import {TANK_SPEC,TANK_SOCKETS} from '../../../../shared/preset-content/tank';

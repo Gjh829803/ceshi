@@ -1,6 +1,7 @@
+import {writeCatalogSources,syncAssetCatalog} from './catalog-sources.js';
 /** Rebuild only the local canoe asset; never re-import the donor project. */
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildCanoeModel } from '../../shared/preset-content/canoe-model';
@@ -18,7 +19,6 @@ const sha256=createHash('sha256').update(bytes).digest('hex');
 const sourcePath='assets/three-creator/presets/vehicles/canoe.glb';
 await mkdir('assets/three-creator/presets/vehicles',{recursive:true});
 await writeFile(sourcePath,bytes);
-const file='assets/three-creator/asset-catalog.json',catalog=JSON.parse(await readFile(file,'utf8'));
 const asset={id:'vehicle.canoe',displayName:'单桨木舟 / CANOE',path:'vehicles/canoe.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
@@ -26,7 +26,6 @@ const asset={id:'vehicle.canoe',displayName:'单桨木舟 / CANOE',path:'vehicle
   provenance:{source:'Local procedural geometry',generator:'scripts/three-creator/export-canoe.ts'},resources:[],
   locomotionBindingIds:['vehicle.canoe'],vehicle:{schemaVersion:1,spec:{...defaultMovementSettings('paddled_boat',CANOE_SPEC),...CANOE_SPEC}},
   sockets:[{id:'driver',node:'seat.driver',positionMetersXYZ:CANOE_SPEC.seat}],collision:CANOE_SPEC.envelope};
-const index=catalog.assets.findIndex((entry:{id:string})=>entry.id===asset.id);
-if(index<0)catalog.assets.push(asset);else catalog.assets[index]=asset;
-await writeFile(file,JSON.stringify(catalog,null,2)+'\n');
+await writeCatalogSources(process.cwd(),[asset]);
+await syncAssetCatalog(process.cwd());
 console.log(JSON.stringify({sourcePath,sha256,byteLength:bytes.length}));

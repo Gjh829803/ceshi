@@ -1,3 +1,5 @@
+import {writeFixtureAssetPolicy} from './test-fixtures/asset-policy';
+import {hashTree} from '../three-creator/compiler';
 import { afterEach, expect, it } from 'vitest';
 import { mkdtemp, mkdir, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -21,12 +23,14 @@ async function fixture() {
     await mkdir(path.dirname(path.join(input, name)), { recursive: true }); await writeFile(path.join(input, name), body);
   }
   const image = (name: keyof typeof bodies) => ({ path: path.join(input, name), sha256: sha(bodies[name]) });
+  const assetPolicySha256=await writeFixtureAssetPolicy(path.join(input,'playable'));
   const source: EpisodeSourceManifest = {
+    assetPolicySha256,
     kind: 'three-episode-source', schemaVersion: 1, worldId: 'fixture', sourceHash: 'a'.repeat(64),
     worldBuildHash: 'b'.repeat(64), runtimeHash: 'c'.repeat(64), sourceWorldBuildHash: 'd'.repeat(64),
     sourceRuntimeHash: 'e'.repeat(64), sourceDeliveryManifestSha256: 'f'.repeat(64),
     sourceRoot: path.join(input, 'source'), playableRoot: path.join(input, 'playable'),
-    sourceFiles: { 'main.ts': sha('author') }, playableFiles: { 'index.html': sha('playable') },
+    sourceFiles: { 'main.ts': sha('author') }, playableFiles: await hashTree(path.join(input,'playable')),
     opening: image('captures/opening.png'), referenceImage: image('references/original.png'),
     worldPlan: image('plans/world.png'), contextPath: path.join(input, 'context/brief.txt'),
     targets: [{ id: 'actor', name: 'actor', role: 'primary-subject', whiteboxTriview: image('captures/triview.png') }],

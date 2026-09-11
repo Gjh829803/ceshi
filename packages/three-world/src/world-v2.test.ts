@@ -2,9 +2,30 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorld, type ThreeWorld } from './world.js';
 import type { CommandReceipt, TaskScope } from './contracts.js';
+import {ActorResources,actorResources} from './actor-resources';
 
 const liveWorlds: ThreeWorld[] = [];
 afterEach(() => { for (const world of liveWorlds.splice(0)) world.dispose(); });
+
+it('acquires actor resources atomically and retains only persistent relationship resources',()=>{
+ const resources=new ActorResources(),nav={},action={},other={};
+ expect(resources.acquire(nav,actorResources('a',['locomotion']),{kind:'navigation',id:'nav'})).toBe(true);
+ expect(resources.acquire(action,[...actorResources('b',['left-hand']),...actorResources('a',['locomotion','right-hand'])],{kind:'action',id:'pickup'})).toBe(false);
+ expect(resources.inspect('b')).toEqual([]);expect(resources.inspect('a')).toHaveLength(1);
+ resources.release(nav);expect(resources.acquire(action,actorResources('a',['locomotion','animation','left-hand','right-hand']),{kind:'action',id:'pickup'})).toBe(true);
+ resources.retain(action,actorResources('a',['left-hand','right-hand']),{kind:'relationship',id:'held'});
+ expect(resources.acquire(other,actorResources('a',['locomotion','animation']),{kind:'navigation',id:'carry'})).toBe(true);
+ expect(resources.inspect('a').filter(claim=>claim.owner.kind==='relationship').map(claim=>claim.channel)).toEqual(['left-hand','right-hand']);
+ const observed=resources.inspect('a');(observed[0]!.owner as {id:string}).id='modified';expect(resources.inspect('a')[0]!.owner.id).toBe('held');
+ resources.release(action);resources.release(other);expect(resources.inspect('a')).toEqual([]);
+ const surface={},traversal={};resources.acquire(surface,actorResources('a',['locomotion','pose']),{kind:'action',id:'climb'});
+ const preview=resources.fork();preview.release(surface);expect(resources.inspect('a')).toHaveLength(2);
+ resources.acquire(other,actorResources('b',['pose']),{kind:'action',id:'other'});
+ expect(resources.transfer(surface,traversal,[...actorResources('a',['locomotion','pose']),...actorResources('b',['pose'])],{kind:'action',id:'top'})).toBe(false);
+ expect(resources.inspect('a')[0]!.owner.id).toBe('climb');
+ expect(resources.transfer(surface,traversal,actorResources('a',['locomotion','pose']),{kind:'action',id:'top'})).toBe(true);
+ resources.release(surface);expect(resources.inspect('a')[0]!.owner.id).toBe('top');resources.clear();expect(resources.inspect('a')).toEqual([]);
+});
 
 describe('shared shadow configuration',()=>{
  it('applies project settings to the renderer and explicitly selected lights, including replacement lights',async()=>{
@@ -102,11 +123,11 @@ it.each([
   object.geometry.dispose();object.material.dispose();
 });
 
-async function fixture() {
+async function fixture(navigation=false) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, .05, 100);
   camera.position.set(0, 4, 8); camera.lookAt(0, 1, 0);
-  const world = await createWorld({ scene, camera, navigation: false });
+  const world = await createWorld({ scene, camera, navigation });
   liveWorlds.push(world);
   const ground = box(40, 1, 40); ground.position.y = -.5;
   world.addEntity({ id: 'ground', object: ground, role: 'terrain' });
@@ -134,6 +155,19 @@ function deferred() {
 const emptyInput = { type: 'object', properties: {}, required: [], additionalProperties: false } as const;
 
 describe('public Three SDK v2 authoring and control contracts', () => {
+  it('keeps an immobile actor failure in its operation without poisoning world runtime health',async()=>{
+    const {world}=await fixture(true);const npc=new THREE.Group();npc.position.set(4,0,0);
+    world.addCharacter({id:'immobile',object:npc,body:{heightMeters:1.8,radiusMeters:.3},movement:{kind:'ground',walkSpeedMetersPerSecond:0,runSpeedMetersPerSecond:0,jumpSpeedMetersPerSecond:0}});
+    await sealPaused(world);world.step({},30);
+    const id=operationId(await world.execute({type:'actor.move-to',entityId:'immobile',targetPositionWorldMetersXYZ:[8,0,0]}));
+    world.step({},300);
+    expect(world.operations.get(id)).toMatchObject({status:'failed',error:{code:'ACTOR_TASK_FAILED',message:'WORLD_ACTOR_BLOCKED',category:'content',entityIds:['immobile']}});
+    expect(world.snapshot().errors).toEqual([]);
+    const before=world.snapshot();world.step({moveZRatio:-1},60);
+    expect(world.simulationTick).toBe(before.simulationTick+60);
+    expect(world.snapshot().entities.find(e=>e.id==='hero')!.positionWorldMetersXYZ).not.toEqual(before.entities.find(e=>e.id==='hero')!.positionWorldMetersXYZ);
+    expect(world.operations.get(id).status).toBe('failed');
+  });
   it('reports disabled navigation consistently before accepting an NPC operation',async()=>{
     const {world}=await fixture();world.addCharacter({id:'npc',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
     const descriptor=world.describe({entityIds:['npc']}).entities[0]!.commands.find(c=>c.type==='actor.move-to')!;
@@ -470,4 +504,27 @@ it('preserves a structured update failure through engine capture and returns ind
  (first[0]!.entityIds as string[]).push('must-not-persist');
  expect(world.snapshot().errors[0]!.entityIds).toEqual(['hero']);
  unsubscribe();await world.reset();expect(world.snapshot().errors).toEqual([]);
+});
+
+it('keeps NPC navigation running when the controlled actor leaves the navmesh',async()=>{
+  const {world}=await fixture(true),npc=new THREE.Group();npc.position.set(4,.05,0);world.addCharacter({id:'walker',object:npc,body:{heightMeters:1.8,radiusMeters:.3}});
+  await sealPaused(world);const route=operationId(await world.execute({type:'actor.move-to',entityId:'walker',targetPositionWorldMetersXYZ:[4,0,6]}));
+  expect((await world.execute({type:'entity.set-position',entityId:'hero',positionWorldMetersXYZ:[25,3,0]})).status).toBe('applied');
+  expect(()=>world.step({},360)).not.toThrow();expect(world.operations.get(route).status).toBe('succeeded');expect(world.snapshot().errors).toEqual([]);
+});
+
+it.each(['ticks','input'] as const)('does not seal a partial initial state after invalid first step %s',async(kind)=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});liveWorlds.push(world);
+ world.addCharacter({id:'a',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.3}});world.setControlledEntity('a');
+ expect(()=>kind==='ticks'?world.step({},-1):world.step({moveXRatio:2},0)).toThrow();
+ world.addCharacter({id:'b',object:new THREE.Group(),body:{heightMeters:1.2,radiusMeters:.3}});world.step({},0);
+ await world.reset();expect(world.snapshot().entities.map(entity=>entity.id).sort()).toEqual(['a','b']);
+ expect(()=>world.step({},1)).not.toThrow();
+});
+
+it('rejects synchronous initialization after prototype preparation has failed',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});liveWorlds.push(world);
+ const object=new THREE.Group();object.clone=()=>{throw new Error('prototype clone failed');};
+ await expect(world.registerPrototype({id:'broken',description:'Failed source',template:{kind:'entity',options:{role:'decoration',object}}})).rejects.toThrow('prototype clone failed');
+ expect(()=>world.step({},0)).toThrow();await expect(world.start()).rejects.toMatchObject({message:expect.stringContaining('prototype clone failed')});
 });

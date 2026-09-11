@@ -2,8 +2,8 @@ import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleBody,type EnvironmentQueries } from '../../environment/queries';
 import { stepPowertrain } from '../../powertrain';
 import type { Input,VehicleState } from '../../simulation';
-import { finishSubmersibleStep } from '../../submersible';
-import { TANK_GEOMETRY } from '../../tank';
+import { finishSubmersibleStep } from './submersible';
+import { TANK_GEOMETRY } from '../ground-vehicle/tank';
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 const blend = (a: number, b: number, k: number, h: number) => a + (b - a) * (1 - Math.exp(-k * h));
 export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time: number, q: EnvironmentQueries): void {

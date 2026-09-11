@@ -1,0 +1,106 @@
+{
+  "id": "vehicle.glider",
+  "displayName": "无动力滑翔机 / SOAR",
+  "path": "vehicles/glider.glb",
+  "uri": "./assets/subjects/47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169.glb",
+  "sha256": "47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169",
+  "byteLength": 87228,
+  "sourcePath": "assets/three-creator/presets/vehicles/glider.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "limitations": [],
+  "provenance": {
+    "repository": "vehicle-training-ground",
+    "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+    "notices": "resources",
+    "importedWithoutChangingAssetBytes": true
+  },
+  "resources": [],
+  "locomotionBindingIds": [
+    "locomotion.glider"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "glider",
+      "name": "无动力滑翔机",
+      "en": "SOAR",
+      "mode": "glider",
+      "kernel": "K08",
+      "color": "#e2e8eb",
+      "spawn": [
+        -130,
+        33,
+        -146
+      ],
+      "yaw": 0,
+      "speed": 32,
+      "accel": 0,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 1.8,
+      "seat": [
+        0,
+        0.46,
+        0
+      ],
+      "camera": 11,
+      "hint": "W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚 · Shift 释放滑翔",
+      "archetype": "glider",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.6,
+          1.1,
+          3.3
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    }
+  },
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.46,
+        0
+      ]
+    }
+  ],
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      5.6,
+      1.1,
+      3.3
+    ],
+    "offset": [
+      0,
+      0.9,
+      0
+    ]
+  }
+}

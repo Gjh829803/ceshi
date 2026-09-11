@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Vec3, WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from './contracts.js';
-import { assertPlayerBehavior, PlayerCaptureController } from './player-controller.js';
+import { playerBehaviorFeedback, PlayerCaptureController } from './player-controller.js';
 import { RouteController, routeDirectionInput } from './route-controller.js';
 
 const movement = { kind: 'ground', walkSpeedMetersPerSecond: 4, runSpeedMetersPerSecond: 7, heightMeters: 1.8, radiusMeters: 0.3, jumpSpeedMetersPerSecond: 5 };
@@ -83,7 +83,7 @@ it('does not treat the deliberate observation pause as a blocked route', async (
 });
 
 it('keeps optional camera and generated jump evidence advisory',()=>{
- expect(()=>assertPlayerBehavior([], {camera:{mode:'follow'},movement:{walkSpeedMetersPerSecond:2,runSpeedMetersPerSecond:5}} as any)).not.toThrow();
+ expect(playerBehaviorFeedback([], {camera:{mode:'follow'},movement:{walkSpeedMetersPerSecond:2,runSpeedMetersPerSecond:5}} as any).diagnostics).toEqual([expect.objectContaining({code:'CAMERA_VARIATION_LOW'})]);
 });
 
 it('passes the requested gait to custom vertical movement independently of ground input axes',async()=>{

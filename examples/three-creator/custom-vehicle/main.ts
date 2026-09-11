@@ -55,7 +55,7 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'pers
  vehicles:[{instanceId:'custom-bike',assetId:'custom.motorcycle',object:bike,spec}]});
 // Optional mechanical presentation; the SDK still owns chassis movement and time.
 const mechanical={wheelRigs,steering:[wheelRigs[1]!.steering]};
-world.humanoid!.onVisualUpdate((dt,sample)=>{const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:runtime.simulation.teleportRevision,active:runtime.simulation.vehicle===state});});
+world.humanoid!.onVisualUpdate((dt,sample)=>{const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:sample.epoch,active:Object.values(sample.actors).some(actor=>actor.mountedInstanceId===state.spec.id)});});
 // createHumanoidWorld owns the one preset character for walking, riding and reset.
 // Never hide/recreate it when mounted; vehicle and character keep separate SDK-owned roots.
 world.setCaptureTargets(['person','custom-bike']);

@@ -6,7 +6,7 @@ import { AUTHORING_TOPICS, COMMON_OBSERVATION, guideTopic, publicContractTopic, 
 import { humanoid } from '@worldkit/three';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { RAW_EXAMPLE, sdkExample } from './examples.js';
-import { readExampleFiles, type ExampleTopic } from './example-files.js';
+import { EXAMPLE_REGISTRY, readExampleFiles, type ExampleTopic } from './example-files.js';
 import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
@@ -42,7 +42,7 @@ export class CreatorDiscovery {
     const humanoidExampleTopic = includesHumanoid && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
     const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
-    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
+    if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid-runtime/humanoid/action-schema.ts', 'humanoid-runtime/simulation.ts');
     const humanoidSourceContracts = includesHumanoid && wants('humanoidSourceContracts') ? Object.fromEntries(await Promise.all(
       sourceFiles.filter(name=>guidance.shouldDescribeSource(name)).map(async name => [name, runtimeContractSource(await guidance.source(name))]),
@@ -91,10 +91,7 @@ export class CreatorDiscovery {
   }
 
   private exampleRoot(topic: ExampleTopic) {
-    if (topic === 'preset-assets' || topic === 'environment-maps') return path.join(REPOSITORY_ROOT, 'shared/preset-content');
-    const folder = topic === 'custom-aircraft' ? 'custom-aircraft' : topic === 'vehicle-camera' ? 'vehicle-camera' : topic === 'nonhuman-subject' ? 'nonhuman-subject' : (topic === 'custom-vehicle' || topic === 'presentation-ui') ? 'custom-vehicle' : topic === 'mounted-interaction' ? 'horse-riding' :
-      topic === 'character-actions' ? 'character-actions' : 'vehicle-sandbox';
-    return path.join(REPOSITORY_ROOT, 'examples/three-creator', folder);
+    return path.join(REPOSITORY_ROOT, EXAMPLE_REGISTRY[topic].root);
   }
 
   private async missingExampleAssets(topic: ExampleTopic) {
@@ -118,7 +115,7 @@ export class CreatorDiscovery {
       return {
         ...authority, profile: this.profile, topic,
         ...await readExampleFiles(this.exampleRoot(topic), topic, selectedFiles),
-        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox humanoid runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
+        sdkExample: (guidance.isWorkspace?'Host baseline example; verify compatibility with the workspace SDK before reuse. ':'')+(topic==='flying-creature'?'A supplied humanoid and a native dragon selected from asset-definitions.json. Read vehicle.spec and integrationMetadata.visual from the selected asset, and keep model, animation prefix, core collision and ground calibration together. Inspect real boarding, takeoff and landing states.':topic==='nonhuman-subject'?'A standalone nonhuman actor with SDK movement, camera, collision, reset and capture.':'Whitebox humanoid runtime: one SDK clock, supplied humanoid and reusable vehicle families.')+' Compilation is not behavioral acceptance.',
       };
     }
     const isSdk = this.profile === 'three-sdk';

@@ -8,7 +8,7 @@ import {Character} from './character';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {BUS_SPEC} from '../../../../shared/preset-content/bus';
-import {busWheelAngle} from './bus';
+import {busWheelAngle} from './motion-families/ground-vehicle/bus';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
  const q=new EnvironmentQueries({id:'road',name:'Road',description:'',bounds:{min:[-500,-10,-500],max:[500,100,500]},boxes:[{id:'floor',position:[0,-1,0],size:[1000,2,1000]},...(wall?[{id:'wall',position:[0,5,20] as const,size:[100,10,1] as const}]:[])],water:[],spawns:[],regions:[],playerSpawn:[-10,.03,0]});

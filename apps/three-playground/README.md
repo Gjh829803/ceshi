@@ -93,3 +93,61 @@ notifications use the shadcn Sonner Toaster. No native dialogs or HTML title
 tooltips remain in the editor. Modal state calls the existing pause callback;
 Radix owns focus trapping, outside dismissal and Escape. Equipment preview
 resources are created on modal mount and released on close.
+
+
+## NPC workshop
+
+Select **NPC 交互试验场** in the scene selector, or open `/#/scenes/npc-workshop`.
+One player and two full humanoid NPCs share the existing SDK world. NPC A and B
+patrol automatically. The scene panel switches gameplay control and camera follow;
+WASD controls the selected character. “接近并争用物品” approaches the shared parcel
+and shows both acceptance and rejection. Continue with “搬运并放下”, “分别就座”,
+and “起身”; “恢复巡逻” resumes NPC behavior. Invalid requests display the real reason.
+
+`src/npc-playground.ts` owns scene-local actor lifetime, Presentation DOM controls
+and SDK command sequences. `shared/preset-content/environment/npc-workshop.ts`
+provides geometry and physical interaction anchors. Movement, action arbitration,
+physics, animation and camera execution remain with the SDK. Reset recreates these
+transient NPCs; switching away removes them. Equipment editing selects the player.
+
+```sh
+pnpm exec tsx apps/three-playground/scripts/npc-smoke.ts http://127.0.0.1:5178
+```
+
+This browser case verifies patrol displacement, real keyboard control transfer,
+shared pickup, carrying/placing, seats, cancellation, reset and map cleanup.
+
+
+## Page lifetime
+
+Page event listeners, render warmup and browser tool registrations use the same
+abort signal. `pagehide` retires them before disposing the SDK, so late focus,
+visibility, keyboard, resize and route events cannot access the released runtime.
+Verify teardown, tool revocation and real input after reload with:
+
+```sh
+pnpm exec tsx apps/three-playground/scripts/lifecycle-smoke.ts http://127.0.0.1:5178
+```
+
+## Flight training
+
+The scene selector opens aircraft, flying-creature and space training in the same
+SDK session. Deep links use `/#/scenes/flying-creature-training` and
+`/#/scenes/space-training`. The dragon scene starts with the supplied humanoid on
+the ground: **H** summons the existing dragon, **F** boards after it lands,
+**Space** takes off, and **F** requests landing before dismounting on the ground.
+The dragon selector uses the native D01–D11 model and animation variants. A variant
+change reloads the same scene route and preserves the unmounted person's position
+when the SDK validates it. `?dragon=D02#/scenes/flying-creature-training` selects a
+variant directly. The renderer, physics and camera remain owned by the SDK.
+
+Space training exposes assisted/inertial drive and docking through the existing
+SDK command contracts in Presentation UI. `?space=survey-space#/scenes/space-training`
+selects that spacecraft's preparation point; boarding still uses **F**.
+
+```sh
+pnpm verify:dragon-training -- http://127.0.0.1:5178
+```
+
+This browser case exercises ground start, real summon/boarding/takeoff inputs,
+flight and flame, native variant loading, map/reset/reload and history navigation.

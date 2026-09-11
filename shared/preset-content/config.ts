@@ -46,15 +46,20 @@ export const SPECS: VehicleSpec[] = [
 for(const spec of SPECS){if(spec.mode==='wheeled'){
   const sporty=spec.archetype==='racer',utility=spec.id==='trail-rover';
   spec.reverseSpeed=spec.speed*.3;
-  spec.speed=(sporty?180:160)/3.6;spec.maxSpeed=(sporty?220:200)/3.6;
-  const powertrain:humanoid.PowertrainConfig={idleRpm:850,maxRpm:sporty?7200:6200,upshiftRpm:sporty?6200:5200,downshiftRpm:2100,
-    torqueCurve:sporty?[[850,180],[2500,280],[4500,340],[6000,320],[7200,240]]:utility?[[850,290],[1800,410],[2800,440],[4500,350],[6200,230]]:[[850,230],[1800,330],[3200,380],[4500,360],[6200,250]],
-    forwardRatios:[3.8,2.3,1.55,1.1,.85,.68],reverseRatio:3.3,finalDrive:utility?4.6:sporty?3.9:4.1,
-    efficiency:.88,shiftSeconds:sporty?.24:.38,engineBrakeTorque:65,dragArea:sporty?.65:utility?1.3:1.1,rollingResistance:.018,boostTorqueMultiplier:3};
+  const defaults=humanoid.createRoadVehicleSpec('car');
+  spec.speed=sporty?180/3.6:defaults.speed;spec.maxSpeed=sporty?220/3.6:defaults.maxSpeed;
+  const powertrain:humanoid.PowertrainConfig={...defaults.wheelPhysics.powertrain,
+    ...(sporty?{maxRpm:7200,upshiftRpm:6200,torqueCurve:[[850,180],[2500,280],[4500,340],[6000,320],[7200,240]] as const,finalDrive:3.9,shiftSeconds:.24,dragArea:.65}:
+      utility?{torqueCurve:[[850,290],[1800,410],[2800,440],[4500,350],[6200,230]] as const,finalDrive:4.6,dragArea:1.3}:{})};
   // 短行程底盘：低障碍超过轮子行程后，由物理压缩限位抬升车身；显示仍读取实际悬架状态。
-  spec.wheelPhysics={centerOfMassHeight:sporty?.5:utility?.75:.65,tireFriction:sporty?1.55:1.4,mass:utility?1900:sporty?1250:1600,radius:sporty?.39:.52,hubHeight:sporty?.39:.52,halfTrack:1.1,halfWheelbase:1.27,maxRaise:sporty?.02:utility?.04:.025,maxDrop:sporty?.025:utility?.045:.025,wheelWidth:sporty?.32:.4,powertrain};
+  spec.wheelPhysics={...defaults.wheelPhysics,powertrain,
+    ...(sporty?{centerOfMassHeight:.5,tireFriction:1.55,mass:1250,radius:.39,hubHeight:.39,maxRaise:.02,wheelWidth:.32}:
+      utility?{centerOfMassHeight:.75,mass:1900,maxRaise:.04,maxDrop:.045}:{})};
   if(spec.id==='supercar'){
     spec.wheelPhysics={...spec.wheelPhysics,centerOfMassHeight:.45,radius:.37,hubHeight:.37,halfTrack:1.02,halfWheelbase:1.5,wheelWidth:.32};
+    // The authored dimensions previously drove the implicit four-wheel layout.
+    const {halfTrack,halfWheelbase}=spec.wheelPhysics;
+    spec.wheelPhysics.wheels=[-halfTrack,halfTrack].flatMap(x=>[-halfWheelbase,halfWheelbase].map(z=>({x,z,steering:z>0,driven:true})));
     spec.speed=65;spec.maxSpeed=65*1.15;
   }
   if(spec.id==='kart'){
@@ -65,7 +70,7 @@ for(const spec of SPECS){if(spec.mode==='wheeled'){
   spec.envelope={...spec.envelope,halfExtents:[spec.envelope.halfExtents[0],spec.envelope.halfExtents[1]-.16,spec.envelope.halfExtents[2]],offset:[0,spec.envelope.offset[1]+.16,0]};
 }}
 for(const spec of SPECS)if(spec.mode==='motorcycle'){
-  spec.wheelPhysics=humanoid.createRoadPhysicsProfile('motorcycle',{mass:spec.id==='touring-bike'?320:260});
+  spec.wheelPhysics=humanoid.createRoadPhysicsProfile('motorcycle',spec.id==='touring-bike'?{mass:320}:{});
   spec.speed=150/3.6;spec.maxSpeed=180/3.6;spec.reverseSpeed=2;
 }
 SPECS.push(...CREATURE_SPECS,UNICYCLE_SPEC,SUBMERSIBLE_SPEC,CANOE_SPEC,KAYAK_SPEC,RAFT_SPEC,JETSKI_SPEC,ATV_SPEC,SKI_SPEC,SLED_SPEC,TANK_SPEC,BUS_SPEC);

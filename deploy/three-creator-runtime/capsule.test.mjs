@@ -69,8 +69,12 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
   try {
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
+    const nativeBuild = JSON.parse(readFileSync(path.join(repositoryRoot, 'vendor/rapier-query-refresh/build.json'), 'utf8'));
+    const nativeArchive = readFileSync(path.join(sourceRoot, 'vendor/rapier-query-refresh', nativeBuild.archive));
+    assert.equal(sha256(nativeArchive), `sha256:${nativeBuild.sha256}`, 'Cloud install must include the current SDK native archive');
+    assert.equal(JSON.parse(readFileSync(path.join(sourceRoot, 'packages/three-world/package.json'), 'utf8')).dependencies['@dimforge/rapier3d-compat'], `file:../../vendor/rapier-query-refresh/${nativeBuild.archive}`);
     for (const name of ['index.html', 'main.ts', 'project.json', 'episode.json']) {
-      for (const example of ['vehicle-sandbox','character-actions','horse-riding','custom-vehicle','vehicle-camera','nonhuman-subject']) {
+      for (const example of ['vehicle-sandbox','character-actions','horse-riding','custom-vehicle','vehicle-camera','nonhuman-subject','flying-creature']) {
         const relative = `examples/three-creator/${example}/${name}`;
         assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
       }
@@ -102,8 +106,14 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     assert(!existsSync(path.join(sourceRoot, 'scripts/three-creator/asset-catalog.json')));
     assert(!existsSync(path.join(sourceRoot, 'config/three-creator/account-policy.json')), 'Account routing is Host-only');
     const catalog = JSON.parse(catalogBytes);
+    const dragons=catalog.assets.filter(asset=>/^creature\.dragon\.d\d{2}$/.test(asset.id));
+    assert.equal(dragons.length,11);
+    for(const dragon of dragons)for(const resource of dragon.resources){
+      const bytes=readFileSync(path.join(sourceRoot,resource.sourcePath));assert.equal(bytes.length,resource.byteLength);assert.equal(sha256(bytes),`sha256:${resource.sha256}`);
+    }
+    assert(!existsSync(path.join(sourceRoot,'assets/dragon-training/__creature-assets/rider.glb')), 'Source101 remains the only supplied rider in this closure');
     for (const asset of catalog.assets) {
-      assert(asset.sourcePath.startsWith('assets/three-creator/'), 'Three assets must not depend on an application directory');
+      assert(/^assets\/(?:three-creator|dragon-training)\//.test(asset.sourcePath), 'Three assets must not depend on an application directory');
       const bytes = readFileSync(path.join(sourceRoot, asset.sourcePath));
       assert.equal(sha256(bytes), `sha256:${asset.sha256}`);
       assert.equal(bytes.length, asset.byteLength);

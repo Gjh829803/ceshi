@@ -13,6 +13,7 @@ export type RigidPhysics = Readonly<{
   frictionRatio?: number;
   restitutionRatio?: number;
   massKilograms?: number;
+  lockRotations?: boolean;
 }>;
 export type CharacterOptions = Readonly<{
   heightMeters?: number;
@@ -109,6 +110,7 @@ export type EntityOptions = Readonly<{
   frontYawRadians?: number;
 }>;
 export type CharacterEntityOptions = EntityOptions & Readonly<{
+  runtimeActor?: import('./humanoid-runtime/character-binding').RuntimeActorBinding;
   character?: CharacterOptions;
   asset?: AssetInstance;
 }>;

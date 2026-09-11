@@ -86,7 +86,7 @@ describe('world input follows the presented surface and UI focus', () => {
         const presentation=world.createPresentation({container:document.getElementById('player-stage')});
         const ui=document.createElement('button');ui.id='playground-ui';ui.textContent='UI';ui.style.cssText='position:absolute;left:10px;top:10px;width:80px;height:40px';presentation.ui.mount(ui);
         world.humanoid.enter('car');await world.start();presentation.focus();
-        window.humanoidWheelTest={world,presentation,state:()=>({mode:world.humanoid.followCamera.mode,distance:world.humanoid.followCamera.distance,transition:world.humanoid.simulation.transition,zoom:world.humanoid.followCamera.zoom,position:world.camera.position.toArray()}),mode:n=>world.humanoid.setCameraMode(n),authored:()=>world.humanoid.useAuthoredCamera(),dispose:()=>world.dispose()};
+        window.humanoidWheelTest={world,presentation,state:()=>({mode:world.humanoid.followCamera.mode,distance:world.humanoid.followCamera.distance,transition:world.humanoid.simulation.controlledActor.transition,zoom:world.humanoid.followCamera.zoom,position:world.camera.position.toArray()}),mode:n=>world.humanoid.setCameraMode(n),authored:()=>world.humanoid.useAuthoredCamera(),dispose:()=>world.dispose()};
       })();
     `},bundle:true,write:false,format:'iife',platform:'browser',target:'es2022',logLevel:'silent'});
     await page.addScriptTag({content:compiled.outputFiles[0]!.text});

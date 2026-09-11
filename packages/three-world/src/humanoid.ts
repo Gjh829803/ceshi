@@ -1,3 +1,4 @@
+import {claimCharacter} from './humanoid-runtime/character-ownership';
 import { createWorld, type ThreeWorld, type WorldOptions } from './world.js';
 import { Character } from './humanoid-runtime/character.js';
 import type { EnvironmentDefinition } from './humanoid-runtime/environment/types.js';
@@ -36,6 +37,7 @@ export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<
     definitions=Object.fromEntries(catalog.assets.map(asset=>[asset.id,asset]));
   }
   const character=provided??new Character();
+  const releasePreparation=claimCharacter(character);
   let world:ThreeWorld|undefined;
   try{
     if(!character.loaded){
@@ -47,6 +49,7 @@ export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<
       });
       await character.load(resolve);
     }
+    releasePreparation();
     world=await createWorld({...worldOptions,assetDefinitions:definitions??{},humanoid:{map,vehicles,character:{instanceId:characterId,object:character.root,animation:character}}});
     if(profile)world.humanoid!.applyProfile(profile);
     world.setCaptureTargets([characterId]);
@@ -54,5 +57,5 @@ export async function createHumanoidWorld(options:HumanoidWorldOptions):Promise<
   }catch(error){
     if(world)world.dispose();else character.dispose();
     throw error;
-  }
+  }finally{releasePreparation();}
 }

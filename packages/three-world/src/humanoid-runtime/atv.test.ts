@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './atv';
+import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './motion-families/ground-vehicle/atv';
 import {Character} from './character';
 import {ATV_SPEC,ATV_SOCKETS} from '../../../../shared/preset-content/atv';
 import {buildAtvModel} from '../../../../shared/preset-content/atv-model';
@@ -51,7 +51,7 @@ it('exchanges impulses with a parked vehicle and displays the solver tyre travel
    {instanceId:'parked',assetId:'vehicle.atv',spec:{...ATV_SPEC,spawn:[0,.035,4]},object:buildAtvModel()}],
   character:{instanceId:'person',object:new Group()}}});
  try{world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.035,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-  world.step({humanoid:{...emptyInput(),forward:1}},180);const v=world.humanoid!.simulation.vehicle!,p=v.position.clone(),angles=[...v.motion.atv!.wheelAngles];
+  world.step({humanoid:{...emptyInput(),forward:1}},180);const v=world.humanoid!.simulation.controlledActor.vehicle!,p=v.position.clone(),angles=[...v.motion.atv!.wheelAngles];
   world.step({humanoid:{...emptyInput(),forward:1}},60);const parked=world.humanoid!.simulation.vehicles[1]!;expect(parked.position.z).toBeGreaterThan(4);expect(parked.position.z-v.position.z).toBeGreaterThan(2.3);expect(v.motion.atv!.wheelAngles).toEqual(v.motion.wheelPhysics!.wheels.map(w=>w.angle));
  }finally{world.dispose();f.q.dispose();}
 });

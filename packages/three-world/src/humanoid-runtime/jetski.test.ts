@@ -7,11 +7,11 @@ import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createVehicle,emptyInput,stepVehicle as prepareVehicle,type Input} from './simulation';
 import {EnvironmentQueries,initEnvironmentQueries,vehicleBody} from './environment/queries';
-import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './atv';
+import {createAtvState,sampleAtvVisual,ATV_GEOMETRY} from './motion-families/ground-vehicle/atv';
 import {Character} from './character';
 import {JETSKI_SPEC,JETSKI_SOCKETS} from '../../../../shared/preset-content/jetski';
 import {buildJetSkiModel} from '../../../../shared/preset-content/jetski-model';
-import {createJetSkiState,copyJetSkiState} from './jetski';
+import {createJetSkiState,copyJetSkiState} from './motion-families/surface-vessel/jetski';
 import {sampleJetSkiVisual,disposeJetSkiVisual} from './jetski-visual';
 beforeAll(initEnvironmentQueries);
 function fixture(water=true,wall=false){
@@ -52,7 +52,7 @@ it('floats unoccupied, pushes another craft through native contact, preserves pa
  try{
   world.step({},120);const parked=world.humanoid!.simulation.vehicles[1]!;expect(Math.abs(parked.position.y)).toBeLessThan(.1);expect(parked.motion.jetski!.particles).toHaveLength(0);
   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'driver',mounted:true}});
-  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.vehicle!;expect(parked.position.z).toBeGreaterThan(8);expect(parked.position.z-v.position.z).toBeGreaterThan(2.8);expect(v.motion.jetski!.sprayStrength).toBeGreaterThan(0);
+  world.step({humanoid:{...emptyInput(),forward:1}},360);const v=world.humanoid!.simulation.controlledActor.vehicle!;expect(parked.position.z).toBeGreaterThan(8);expect(parked.position.z-v.position.z).toBeGreaterThan(2.8);expect(v.motion.jetski!.sprayStrength).toBeGreaterThan(0);
   const state=JSON.stringify(v.motion.jetski);world.step({},0);expect(JSON.stringify(v.motion.jetski)).toBe(state);
   await world.reset();expect(world.humanoid!.snapshot().mountedInstanceId).toBeNull();expect(world.humanoid!.simulation.vehicles.every(v=>!v.motion.jetski!.particles.length)).toBe(true);
  }finally{world.dispose();f.q.dispose();}

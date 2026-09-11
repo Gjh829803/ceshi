@@ -10,7 +10,7 @@ export type CameraRigFollowOptions = Readonly<{
   targetEntityId: string;
   /** Without orbit values, follow adopts the current authored pose and framing. */
   framingMode?: 'preserve-opening' | 'target';
-  /** Translation damping for preserve-opening; an explicit targetHalfLifeSeconds remains a fallback. */
+  /** Translation damping for preserve-opening framing. */
   followHalfLifeSeconds?: number;
   distanceMeters?: number;
   targetHeightMeters?: number;
@@ -129,7 +129,7 @@ export class ThreeCameraRig {
     const follow: Follow = {
       targetEntityId: options.targetEntityId, framingMode,
       ...(view?{view}:{}),
-      followHalfLifeSeconds: bounded(options.followHalfLifeSeconds ?? options.targetHalfLifeSeconds ?? FOLLOW_CAMERA_DEFAULTS.followHalfLifeSeconds, 0, 10, 'followHalfLifeSeconds'),
+      followHalfLifeSeconds: bounded(options.followHalfLifeSeconds ?? FOLLOW_CAMERA_DEFAULTS.followHalfLifeSeconds, 0, 10, 'followHalfLifeSeconds'),
       distanceMeters: bounded(options.distanceMeters ?? FOLLOW_CAMERA_DEFAULTS.distanceMeters, .05, 10_000, 'distanceMeters'),
       targetHeightMeters: height,
       pitchRadians: bounded(options.pitchRadians ?? FOLLOW_CAMERA_DEFAULTS.pitchRadians, -Math.PI / 2, Math.PI / 2, 'pitchRadians'),

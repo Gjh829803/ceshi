@@ -2,6 +2,11 @@
 
 面向资产生产和接入同事。完成标准是：**资产已提交，Agent 能找到、知道怎么接入，并能使用已声明的能力。** 提交资源、登记信息和使用说明；有新行动模式时，再附实现或明确的接入需求。
 
+日常路径是 **Playground 调好 → Codex 按 [接入 Skill](../.agents/skills/whitebox-content-integration/SKILL.md)
+整理与绑定 → Creator 实际发现/执行 → Episode 使用同一运行时验证**。
+AI 可以编辑所属资源、binding、配置和必要代码，不要求内容全部套入统一注册框架。
+工程工具用于减少重复和核对身份；资产定义与实例、clip 与行为、共享资源与实例状态分别维护。
+
 ## 1. 从目标分支另开资产分支
 
 拉取 `main` 最新版本，从它新建自己的资产分支。PR 的目标分支选择 `main`，不直接推送共享分支。
@@ -33,12 +38,16 @@
 
 | 注册内容 | 放在哪里 | Agent 如何获取 |
 | --- | --- | --- |
-| 资产及能力信息 | [asset-catalog.json](../assets/three-creator/asset-catalog.json)：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制 | `assets_search` 查找，`assets_describe` 读取详情 |
+| 资产及能力信息 | [catalog/](../assets/three-creator/catalog/) 下各自 `<assetId>.json`：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制；`pnpm content:sync` 派生 Host 的 asset-catalog.json | `assets_search` 查找，`assets_describe` 读取详情 |
 | 可用权限 | [asset-policy.json](../config/three-creator/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
 | 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../scripts/three-creator/authoring-schema.ts) / [creator-discovery.ts](../scripts/three-creator/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、player 等接口 |
-| 可复用示例 | `examples/three-creator/`；新示例在 [example-files.ts](../scripts/three-creator/example-files.ts) 的 `EXAMPLE_TOPICS` 和 `creator-discovery.ts` 的 `exampleRoot` 注册，并纳入[运行包](../scripts/cloud/three-capsule.mjs) | `creator_get_examples` 取得可用代码和文件清单 |
+| 可复用示例 | `examples/three-creator/`；在 [example-registry.json](../scripts/three-creator/example-registry.json) 登记 topic、root 和默认文件一次，工具与运行包共用它 | `creator_get_examples` 取得可用代码和文件清单 |
 
 包内文件不会自动全部加载，依赖的其他资产 ID 也不会自动被选中：文件依赖登记到条目的 `resources`，需要组合的资产 ID 在项目中一并选择。
+
+`pnpm content:check --asset <assetId>` 核对派生目录和选中资源实际 hash/字节数，分别报告目录、
+policy、资源验证状态；动作、视觉和发布仍需要各自的实际证据。独立源减少多人编辑聚合目录的冲突。
+已有 import/export 脚本写回所属源，随后更新派生目录；不手工维护两份可变 metadata。
 
 同类资产复用已有能力、topic 和示例；只有新增能力时才扩展接口和工具说明。接入同事要确保资产描述能指向正确的使用入口；新增能力的指导信息需实际接入工具返回内容。
 

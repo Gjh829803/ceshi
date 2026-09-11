@@ -6,9 +6,9 @@ Use `createHumanoidWorld` for contextual traversal, swimming, posture and
 interaction. `world.assets.load` provides the same subject for ordinary SDK
 actor binding; clip playback alone does not activate contextual physics.
 
-The supplied body, rig, colors and visual descendants may be reused or
-customized. Keep the animation skeleton compatible. Source hashes and conversion
-details are in `provenance.json`; notices and licenses accompany the action files.
+Keep the supplied visible body, colors, animation skeleton and actions by default.
+Source hashes and conversion details are in `provenance.json`; notices and
+licenses accompany the action files.
 
 The default visible skin is now the user-supplied
 `UEFN_Mannequin_BlackJoints_LOD1_Medium.fbx` (3,481 vertices / 4,660 triangles),

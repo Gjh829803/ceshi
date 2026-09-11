@@ -136,7 +136,7 @@ const canvas=document.createElement('canvas');document.body.append(canvas);
 const world=await createWorld({scene:new Scene(),canvas,camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{
  map:{id:'audit',name:'Audit',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
  character:{instanceId:'person',object:new Group()},vehicles:[]}});
-world.humanoid.simulation.setHumanoidAssets(new Set(['slide-start','slide-loop','slide-exit']),[]);
+world.humanoid.actorController('person').setAvailableClips(new Set(['slide-start','slide-loop','slide-exit']),[]);
 await world.start();world.stop();world.step({moveZRatio:-1},120);
 `);
  const schema=await call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['humanoid']});

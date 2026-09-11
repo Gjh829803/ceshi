@@ -103,9 +103,9 @@ describe('native space family',()=>{
  it('reuses mounted SDK input, all three camera modes, runtime commands and reset',async()=>{
   const model=buildSpaceModel(spec),world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'space',assetId:'space',spec,object:model.root}]}});
   try{const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'space',mounted:true,cameraMode:0}});
-   r.applyProfile({view:{keyboardToggleEnabled:true}});r.command({type:'space.set-drive-mode',mode:'assisted'});world.step({humanoid:{...emptyInput(),forward:1}},60);const speed=r.simulation.vehicle!.speed;world.step({humanoid:emptyInput()},120);expect(r.simulation.vehicle!.speed).toBeLessThan(speed*.1);
+   r.applyProfile({view:{keyboardToggleEnabled:true}});r.command({type:'space.set-drive-mode',mode:'assisted'});world.step({humanoid:{...emptyInput(),forward:1}},60);const speed=r.simulation.controlledActor.vehicle!.speed;world.step({humanoid:emptyInput()},120);expect(r.simulation.controlledActor.vehicle!.speed).toBeLessThan(speed*.1);
    for(const mode of [1,2,0]){world.step({cameraTogglePressed:true},1);expect(r.snapshot().cameraMode).toBe(mode);world.step({},1);}
-   const rotation=r.simulation.vehicle!.rotation.clone();world.step({cameraYawRatio:1,cameraPitchRatio:1},30);expect(r.simulation.vehicle!.rotation.angleTo(rotation)).toBeLessThan(.001);
+   const rotation=r.simulation.controlledActor.vehicle!.rotation.clone();world.step({cameraYawRatio:1,cameraPitchRatio:1},30);expect(r.simulation.controlledActor.vehicle!.rotation.angleTo(rotation)).toBeLessThan(.001);
    expect(r.snapshot().vehicles[0]!.spaceFlight).not.toHaveProperty('fuelKilograms');r.snapshot().vehicles[0]!.spaceFlight!.thrustNewtonsXYZ[0]=999;expect(r.snapshot().vehicles[0]!.spaceFlight!.thrustNewtonsXYZ[0]).not.toBe(999);
    r.reset();expect(r.snapshot().vehicles[0]!.spaceFlight).toMatchObject({driveMode:'inertial'});expect(()=>r.command({type:'space.set-drive-mode',mode:'assisted'})).toThrow('SPACE_VEHICLE_NOT_MOUNTED');
   }finally{world.dispose();}
@@ -113,13 +113,17 @@ describe('native space family',()=>{
  });
 });
 
-// 实际可见人物、骨架与驾驶动作；只替代 Node 中的纹理解码。
-it.each(['space','survey-space'])('fits the current Source101 driver in %s through thrust and bank, with an eye camera',async id=>{
+async function loadSpaceDriver(){
  const assetRoot=new URL('../../../../assets/three-creator/presets/humanoid/source/',import.meta.url);
  const entries=await Promise.all(['idle-loop','walk-loop','run-loop','climb-2m5'].map(async id=>{const gltf=await parseFixtureGlb(await readFile(new URL(`gasp-research/${id}.experimental.glb`,assetRoot)));return {id,clip:gltf.animations[0]!,model:gltf.scene};}));
  const gltf=await parseFixtureGlb(await readFile(new URL('uefn-mannequin-lod1.glb',assetRoot)));
  const seated=AnimationClip.parse(JSON.parse(await readFile(new URL('actions/sit-idle.clip.json',assetRoot),'utf8')));
- const character=new Character(new SourceCharacter(gltf.scene,[...entries,{id:'sit-idle',clip:seated}]));
+ return new Character(new SourceCharacter(gltf.scene,[...entries,{id:'sit-idle',clip:seated}]));
+}
+
+// 实际可见人物、骨架与驾驶动作；只替代 Node 中的纹理解码。
+it.each(['space','survey-space'])('fits the current Source101 driver in %s through thrust and bank, with an eye camera',async id=>{
+ const character=await loadSpaceDriver();
  const config={...SPECS.find(s=>s.id===id)!,spawn:[0,20,0] as [number,number,number]},model=buildSpaceModel(config);
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:character.root,animation:character},vehicles:[{instanceId:'craft',assetId:id,spec:config,object:model.root}]}});
  try{
@@ -150,8 +154,37 @@ it('registers a separate space training map with safe real berths and no foreign
    const v=sim.vehicles.find(v=>v.spec.id===id)!,spawn=training.spawns.find(s=>s.vehicleId===id)!;
    expect(r.prepare(id,spawn)).toBe(true);expect(r.enter(id)).toBe(true);world.step({},60);
    expect(v.position.y).toBeCloseTo(.8,3);r.command({type:'space.dock',portId:'home'});world.step({},60);expect(spaceTelemetry(v)!.docking?.status).toBe('docked');
-   expect(r.exit()).toBe(true);world.step({},60);expect(sim.player.position.y).toBeGreaterThan(-.1);
+   expect(r.exit()).toBe(true);world.step({},60);expect(sim.controlledActor.player.position.y).toBeGreaterThan(-.1);
   }
-  r.switchMap(getMap('campus'));expect(r.snapshot().mapId).toBe('campus');expect(sim.vehicles.some(v=>v.spec.mode==='plane'&&sim.available(v))).toBe(true);
+  r.switchMap(getMap('campus'));expect(r.snapshot().mapId).toBe('campus');expect(r.simulation.vehicles.some(v=>v.spec.mode==='plane'&&r.simulation.available(v))).toBe(true);
+ }finally{world.dispose();}
+});
+
+
+it('routes space commands and descriptors to the named mounted actor without changing the selected driver',async()=>{
+ const training=createSpaceTrainingMap(),vehicles=SPECS.filter(spec=>spec.mode==='spacecraft').map(spec=>({instanceId:spec.id,assetId:spec.id,spec,object:new Group()}));
+ const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:training,character:{instanceId:'player',object:new Group()},vehicles}});
+ try{
+  const runtime=world.humanoid!,character=await loadSpaceDriver();character.root.position.set(30,.04,0);world.addCharacter({id:'npc',humanoid:character});
+  for(const [actorId,instanceId] of [['player','space'],['npc','survey-space']] as const){
+   const spawn=training.spawns.find(spawn=>spawn.vehicleId===instanceId)!;
+   runtime.command({type:'vehicle.prepare',actorId,instanceId,spawn});runtime.command({type:'vehicle.enter',actorId,instanceId});
+  }
+  world.step({},60);
+  const playerShip=runtime.simulation.actor('player').vehicle!,npcShip=runtime.simulation.actor('npc').vehicle!;
+  const originalPlayer=spaceTelemetry(playerShip),camera=world.camera.matrixWorld.clone();
+  for(const type of ['space.set-drive-mode','space.dock'])expect(runtime.commandDescriptors('npc').find(command=>command.type===type)?.schema).toMatchObject({properties:{actorId:{const:'npc'}},required:expect.arrayContaining(['actorId'])});
+  expect((await world.execute({type:'space.set-drive-mode',actorId:'npc',mode:'assisted'})).status).toBe('applied');
+  expect(spaceTelemetry(npcShip)!.driveMode).toBe('assisted');expect(spaceTelemetry(playerShip)).toEqual(originalPlayer);
+  expect((await world.execute({type:'space.dock',actorId:'npc',portId:'home'})).status).toBe('applied');
+  expect(spaceTelemetry(npcShip)!.docking).toMatchObject({portId:'home'});expect(spaceTelemetry(playerShip)).toEqual(originalPlayer);
+  expect(runtime.simulation.controlledActorId).toBe('player');expect(world.camera.matrixWorld.equals(camera)).toBe(true);
+  const beforeInvalid=spaceTelemetry(npcShip);
+  for(const command of [{type:'space.set-drive-mode',mode:'inertial'},{type:'space.dock',portId:null}] as const)expect((await world.execute({...command,actorId:'missing'})).status).toBe('rejected');
+  expect(spaceTelemetry(npcShip)).toEqual(beforeInvalid);expect(spaceTelemetry(playerShip)).toEqual(originalPlayer);
+  runtime.command({type:'vehicle.exit',actorId:'npc'});world.step({},60);
+  const afterExit=spaceTelemetry(npcShip),playerAfterExit=spaceTelemetry(playerShip);
+  for(const command of [{type:'space.set-drive-mode',mode:'inertial'},{type:'space.dock',portId:null}] as const)expect((await world.execute({...command,actorId:'npc'})).status).toBe('rejected');
+  expect(spaceTelemetry(npcShip)).toEqual(afterExit);expect(spaceTelemetry(playerShip)).toEqual(playerAfterExit);
  }finally{world.dispose();}
 });

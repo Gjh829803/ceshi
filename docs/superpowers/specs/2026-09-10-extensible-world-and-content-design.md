@@ -2,7 +2,23 @@
 
 状态：已完成独立设计审查，并获用户授权分阶段实施；不表示 R1–R6 已实现。车辆按需诊断和固定翼自绘入口是本次独立的局部实现。本文不将它们算作运行时重构完成。
 
+当前交付边界：用户于 2026-09-11 明确 R4、R5 留作后续规划。
+本次落实 R0–R3、C1 内容接入与对应深度验收；本文中的持续任务、动作事件、
+新姿态管线和依赖它们的动作 binding 变体描述为未来设计，不是本次已实现能力。
+
 ## 1. 结论与边界
+
+2026-09-10 实施中用户进一步明确：内容在 Playground 调好后，由 Codex 按接入 Skill
+完成整理、绑定与验证。长期目标是资产数量增长不要求重构核心加载和执行流程，同时允许
+后续 NPC 自主行为及 Agent 叙事通过现有实体/命令/任务/事件边界扩展。
+以下包构建、索引和检查工具作为可选辅助，不要求所有内容完全工程化注册。
+需要稳定的是内容与运行实例的分离、共享依赖/释放、行为合同和真实消费闭环；
+具体资源、binding、配置和代码接线可以由 AI 按 Skill 维护。
+
+参考的业界职责划分是稳定 ID 与依赖加载（[Unreal Asset Manager](https://dev.epicgames.com/documentation/en-us/unreal-engine/asset-management-in-unreal-engine)）、
+共享资源引用生命周期（[Unity Addressables](https://docs.unity.cn/Packages/com.unity.addressables%402.3/manual/MemoryManagement.html)）
+以及跨帧行为任务（[Unreal Ability Tasks](https://dev.epicgames.com/documentation/unreal-engine/gameplay-ability-tasks-in-unreal-engine?lang=en-US)）。
+在本 SDK 中落实这些原则，仍保留普通 Three 与已有 owner，不照搬完整引擎框架。
 
 保留“普通 Three 创作 + SDK 稳定执行”。将“先在 Playground 调好，再人工教 Agent 接入”改为：**能力与资源具有同源定义，Playground 调试它，SDK 执行它，Creator 发现并绑定它，Episode 独立验证同一份定义和运行时。** Playground 是调试客户端，不是发布源，也不是与 SDK 平行的实现。
 
@@ -80,7 +96,7 @@
 - Agent 索引：用途、可绑定对象、参数、约束、schema/示例入口。生成自资源和能力定义，不从目录 README 猜能力。
 - 开发接入报告：注册与重复 ID、缺失依赖、rig/clip 引用、示例打包、实际工具可达性、内容与源码身份。
 
-已有 `asset-catalog.json` 在迁移期作为兼容消费产物保留；选中的包逐个迁移为独立源文件，构建确定性合成目录。迁移包不再直接编辑聚合条目，export/import 脚本同步改为更新所属源包。未迁移条目明确只读入旧目录，不允许“fragment 覆盖同 ID”这种双权威。删除资源前检查反向依赖，不能让发布包依赖开发机器上碰巧存在的文件。
+`assets/three-creator/catalog/<asset-id>.json` 是资产条目的唯一来源，export/import 脚本更新所属源文件。`asset-catalog.json` 由这些文件确定性生成，供 Host 消费，不直接编辑，也不作为旧条目的回退来源。SDK、Host、示例和测试同步使用当前契约，不保留旧目录读取、覆盖合并或双协议解析。删除资源前检查反向依赖，不能让发布包依赖开发机器上碰巧存在的文件。
 
 示例 topic、源码目录与胶囊打包清单由一个构建清单派生，消除新增示例要改三个位置的问题。包只需登记示例一次。生成物排序稳定，构建/CI 只比对漂移，不在 CI 自动写回仓库。发布任务消费同一份已验证依赖闭包。
 

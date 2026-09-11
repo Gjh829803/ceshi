@@ -1,6 +1,7 @@
 import { HUMANOID_BINDINGS } from '../input';
 /** Portable interaction descriptions: metres, Y up, heading in radians about Y. */
 export interface InteractionTarget {
+  slotId: string;
   id: string;
   label: string;
   kind: 'pickup' | 'seat';
@@ -14,11 +15,12 @@ export interface InteractionTarget {
 }
 
 export type SkillId = 'roll' | 'slide' | 'pickup' | 'putDown' | 'sit' | 'standUp';
-export interface SkillRequest { requestId: string; action: SkillId; targetId?: string|undefined }
+export interface SkillRequest { requestId: string; action: SkillId; targetId?: string|undefined;slotId?:string|undefined }
 export interface SkillResult {
   requestId: string;
   action: string;
   targetId?: string|undefined;
+  slotId?:string|undefined;
   status: 'running' | 'completed' | 'rejected' | 'cancelled';
   code: string;
   message: string;

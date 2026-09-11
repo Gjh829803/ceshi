@@ -1,0 +1,419 @@
+{
+  "id": "creature.dragon.d09",
+  "displayName": "D09 · 长身龙 / Flying dragon",
+  "path": "flying-creatures/D09/model.glb",
+  "uri": "./assets/subjects/a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833.glb",
+  "sha256": "a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833",
+  "byteLength": 9227060,
+  "sourcePath": "assets/dragon-training/__creature-assets/D09.glb",
+  "usage": "reusable",
+  "rootTransform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  },
+  "actions": {},
+  "resources": [
+    {
+      "path": "flying-creatures/D09/model.glb",
+      "uri": "./assets/resources/a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833.glb",
+      "sha256": "a147373ecfe092f118dee1ab553404d3a4e3401e58697f60e2ce8bf0c8c45833",
+      "byteLength": 9227060,
+      "sourcePath": "assets/dragon-training/__creature-assets/D09.glb"
+    },
+    {
+      "path": "flying-creatures/flame.png",
+      "uri": "./assets/resources/5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7.png",
+      "sha256": "5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7",
+      "byteLength": 1584772,
+      "sourcePath": "assets/dragon-training/__creature-assets/FireGenLoop01_8x8.png"
+    },
+    {
+      "path": "flying-creatures/README.md",
+      "uri": "./assets/resources/fc0414c5edad14adae48dd44ad020e8f3018653cfa3a2a820829bf40418d9020.md",
+      "sha256": "fc0414c5edad14adae48dd44ad020e8f3018653cfa3a2a820829bf40418d9020",
+      "byteLength": 8993,
+      "sourcePath": "assets/dragon-training/README.md"
+    },
+    {
+      "path": "flying-creatures/variants.json",
+      "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
+      "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "byteLength": 50268,
+      "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
+    },
+    {
+      "path": "flying-creatures/variant-sources.json",
+      "uri": "./assets/resources/520d710224bb6461763da7cab3f3753e5f52954a0857b5a30b689ef40e4e4a14.json",
+      "sha256": "520d710224bb6461763da7cab3f3753e5f52954a0857b5a30b689ef40e4e4a14",
+      "byteLength": 573950,
+      "sourcePath": "assets/dragon-training/__creature-assets/variant-sources.json"
+    },
+    {
+      "path": "flying-creatures/ground-sources.json",
+      "uri": "./assets/resources/6408d76a6b0d67189a9e15d749bd09e52f66da516f27d3fbfcb59976bcde0faa.json",
+      "sha256": "6408d76a6b0d67189a9e15d749bd09e52f66da516f27d3fbfcb59976bcde0faa",
+      "byteLength": 39219,
+      "sourcePath": "assets/dragon-training/__creature-assets/ground-sources.json"
+    },
+    {
+      "path": "flying-creatures/manifest.json",
+      "uri": "./assets/resources/49fdc10d4169bcec3ee83a96746e1d138ef423da7427774571707ab40216039d.json",
+      "sha256": "49fdc10d4169bcec3ee83a96746e1d138ef423da7427774571707ab40216039d",
+      "byteLength": 7158,
+      "sourcePath": "assets/dragon-training/__creature-assets/manifest.json"
+    }
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {
+      "id": "creature.dragon.d09",
+      "name": "D09 · 长身龙",
+      "en": "DRAGON",
+      "mode": "dragon",
+      "kernel": "creature-flight",
+      "archetype": "dragon",
+      "color": "#527a59",
+      "spawn": [
+        0,
+        40,
+        0
+      ],
+      "yaw": 0,
+      "speed": 18,
+      "maxSpeed": 31,
+      "accel": 7,
+      "grip": 4,
+      "steer": 1.4,
+      "radius": 1.8299999999999998,
+      "seat": [
+        -0.08957363615376446,
+        2.7633648122450754,
+        -1.9658638496740712
+      ],
+      "camera": 34,
+      "brakeDeceleration": 22,
+      "coastDeceleration": 7,
+      "pitchResponse": 3.4,
+      "rollResponse": 5,
+      "characterPose": "ride",
+      "flyingCreature": {},
+      "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          3.231,
+          3.1235000000000004,
+          8.341999999999999
+        ],
+        "offset": [
+          -0.17700000000000027,
+          1.2055000000000002,
+          2.463
+        ]
+      },
+      "flyingCreatureCollision": [
+        {
+          "id": "D09-core-0",
+          "center": [
+            -1.182,
+            0.459,
+            6.705
+          ],
+          "radius": 1.638
+        },
+        {
+          "id": "D09-core-1",
+          "center": [
+            -1.161,
+            1.189,
+            -3.612
+          ],
+          "radius": 2.233
+        },
+        {
+          "id": "D09-core-2",
+          "center": [
+            0.872,
+            0.293,
+            2.115
+          ],
+          "radius": 2.182
+        },
+        {
+          "id": "D09-core-3",
+          "center": [
+            -0.463,
+            2.289,
+            -1.387
+          ],
+          "radius": 2.04
+        },
+        {
+          "id": "D09-core-4",
+          "center": [
+            -1.353,
+            0.218,
+            2.41
+          ],
+          "radius": 2.055
+        },
+        {
+          "id": "D09-core-5",
+          "center": [
+            0.773,
+            0.415,
+            4.197
+          ],
+          "radius": 2.028
+        },
+        {
+          "id": "D09-core-6",
+          "center": [
+            -0.272,
+            -0.06,
+            9.073
+          ],
+          "radius": 1.732
+        },
+        {
+          "id": "D09-core-7",
+          "center": [
+            0.334,
+            2.2,
+            -2.837
+          ],
+          "radius": 1.916
+        },
+        {
+          "id": "D09-core-8",
+          "center": [
+            -0.337,
+            1.775,
+            0.864
+          ],
+          "radius": 1.857
+        },
+        {
+          "id": "D09-core-9",
+          "center": [
+            -0.8,
+            0.012,
+            4.678
+          ],
+          "radius": 1.93
+        },
+        {
+          "id": "D09-core-10",
+          "center": [
+            0.559,
+            0.231,
+            6.661
+          ],
+          "radius": 1.866
+        },
+        {
+          "id": "D09-core-11",
+          "center": [
+            0.331,
+            0.822,
+            -3.936
+          ],
+          "radius": 1.943
+        }
+      ],
+      "flyingCreatureGround": {
+        "rootHeight": 0.04,
+        "seat": [
+          0.333,
+          6.257,
+          0.509
+        ],
+        "probes": [
+          {
+            "id": "D09-core-0",
+            "center": [
+              -0.12,
+              2.937,
+              2.873
+            ],
+            "radius": 0.941
+          },
+          {
+            "id": "D09-core-1",
+            "center": [
+              0.922,
+              4.954,
+              -1.996
+            ],
+            "radius": 0.85
+          },
+          {
+            "id": "D09-core-2",
+            "center": [
+              0.614,
+              5.893,
+              0.905
+            ],
+            "radius": 0.905
+          },
+          {
+            "id": "D09-core-3",
+            "center": [
+              0.745,
+              4.68,
+              2.349
+            ],
+            "radius": 0.917
+          },
+          {
+            "id": "D09-core-4",
+            "center": [
+              0.482,
+              5.238,
+              -0.749
+            ],
+            "radius": 0.853
+          },
+          {
+            "id": "D09-core-5",
+            "center": [
+              0.823,
+              4.418,
+              -1.276
+            ],
+            "radius": 0.929
+          },
+          {
+            "id": "D09-core-6",
+            "center": [
+              0.502,
+              5.249,
+              0.399
+            ],
+            "radius": 0.878
+          },
+          {
+            "id": "D09-core-7",
+            "center": [
+              0.373,
+              3.707,
+              3.106
+            ],
+            "radius": 0.937
+          },
+          {
+            "id": "D09-core-8",
+            "center": [
+              0.228,
+              3.728,
+              2.508
+            ],
+            "radius": 0.956
+          },
+          {
+            "id": "D09-core-9",
+            "center": [
+              0.754,
+              5.381,
+              1.628
+            ],
+            "radius": 0.916
+          },
+          {
+            "id": "D09-core-10",
+            "center": [
+              0.771,
+              5.338,
+              -1.386
+            ],
+            "radius": 0.916
+          },
+          {
+            "id": "D09-core-11",
+            "center": [
+              0.625,
+              5.822,
+              -0.149
+            ],
+            "radius": 0.902
+          }
+        ],
+        "support": [
+          -3.83,
+          8.225,
+          -7.607,
+          5.017
+        ],
+        "landingSeconds": 1.8,
+        "takeoffSeconds": 1.4
+      }
+    }
+  },
+  "collision": {
+    "kind": "box",
+    "halfExtents": [
+      3.231,
+      3.1235000000000004,
+      8.341999999999999
+    ],
+    "offset": [
+      -0.17700000000000027,
+      1.2055000000000002,
+      2.463
+    ]
+  },
+  "locomotionBindingIds": [
+    "locomotion.dragon"
+  ],
+  "provenance": {
+    "source": "Local Century D09 extraction",
+    "variantId": "D09",
+    "registeredWithoutChangingAssetBytes": true,
+    "registrationScript": "scripts/assets/register-flying-creatures.ts",
+    "noticesResource": "flying-creatures/README.md",
+    "sourceRecords": [
+      "flying-creatures/variants.json",
+      "flying-creatures/variant-sources.json",
+      "flying-creatures/ground-sources.json",
+      "flying-creatures/manifest.json"
+    ]
+  },
+  "limitations": [
+    "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount.",
+    "Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles.",
+    "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
+  ],
+  "integrationMetadata": {
+    "classification": "flying-mount",
+    "exampleTopic": "flying-creature",
+    "requiredAssetIds": [
+      "humanoid.source-101",
+      "creature.dragon.d09"
+    ],
+    "visual": {
+      "animationPrefix": "D09",
+      "modelResource": "flying-creatures/D09/model.glb",
+      "flameResource": "flying-creatures/flame.png"
+    },
+    "useWhen": "使用 D09 飞龙及其实际骨架、飞行、落地和骑乘能力；编号不代表已确认的官方龙名。",
+    "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
+    "capabilities": [
+      "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
+      "Landing, takeoff and Source101 rope-ladder mount/dismount after ground support and clearance checks.",
+      "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
+    ]
+  }
+}

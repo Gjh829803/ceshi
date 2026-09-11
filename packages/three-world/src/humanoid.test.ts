@@ -25,14 +25,13 @@ it.each([
   expect((error as Error).message).toContain('regions[0].center');
 });
 
-it('identifies Humanoid content that must be registered in creation options',async()=>{
+it('binds ordinary obstacles into the same world after Humanoid creation',async()=>{
   const person=new THREE.Group();
   const world=await createWorld({navigation:false,humanoid:{map,vehicles:[],character:{instanceId:'player',object:person}}});worlds.push(world);
-  const landmark=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial());
-  let error:unknown;try{world.addEntity({id:'town-hall',object:landmark,role:'obstacle'});}catch(caught){error=caught;}
-  expect(error).toMatchObject({code:'HUMANOID_CONTENT_REGISTER_IN_OPTIONS',category:'content',phase:'physics',entityIds:['town-hall'],path:'world.addEntity',actual:'physical entity registration after Humanoid creation',expected:'map, vehicles or characters in Humanoid creation options'});
-  expect((error as {suggestedAction:string}).suggestedAction).toContain("role:'decoration'");
-  expect(world.snapshot().entities.some(entity=>entity.id==='town-hall')).toBe(false);
+  const landmark=new THREE.Mesh(new THREE.BoxGeometry(1,2,1),new THREE.MeshBasicMaterial());landmark.position.set(3,1,0);
+  world.addEntity({id:'town-hall',object:landmark,role:'obstacle',physics:{kind:'fixed',shape:'box'}});
+  expect(world.snapshot().entities.some(entity=>entity.id==='town-hall')).toBe(true);
+  expect(world.humanoid!.probe([0,1,0],[1,0,0],5)?.entityId).toBe('town-hall');
   landmark.geometry.dispose();landmark.material.dispose();
 });
 
