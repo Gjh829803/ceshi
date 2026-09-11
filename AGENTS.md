@@ -102,6 +102,20 @@ For GPT-6 task classification, consult the user-confirmed
 Match exact identities through its private mapping and check live availability
 separately; unlisted capability is unknown.
 
+## Naming
+
+All names must be clear, unambiguous and faithful to their actual referents,
+responsibilities and behavior. Use current, established terminology and naming
+conventions from the relevant technical domain so AI maintainers and production
+Agents can interpret and use them correctly. Apply this principle to code,
+APIs, configuration, tools, documentation and production artifacts.
+Use consistent terminology for the same concept across these surfaces and
+distinct names for different concepts. Avoid vague abbreviations, invented
+jargon and names that imply unsupported capabilities or incorrect ownership.
+Make scope, units and lifecycle state explicit where their omission could
+cause confusion. Optimize naming for lower AI maintenance cost and fewer
+Agent misunderstandings, incorrect actions and retries in production.
+
 ## Engineering
 
 For parallel edits, assign exclusive file ownership and agree shared interfaces

@@ -55,7 +55,7 @@ import {
 } from "../../../shared/preset-content/humanoid/capsule-debug";
 import { createDisplayPreview } from './display-preview';
 import { createDisplayOverlays, type DisplayInteractionTarget } from './display-overlays';
-import { defaultDisplaySettings, type DisplaySettings, type DisplayType } from './display-settings';
+import { defaultDisplaySettings, isDisplayPreviewActive, type DisplaySettings, type DisplayType } from './display-settings';
 import {buildDisplayCatalog} from './display-catalog';
 import {resolveDisplayScope} from './display-context';
 import {
@@ -188,7 +188,7 @@ const session = {
     const selectedIds=displaySettings.selectedIds.filter(id=>stableIds.has(id));
     displaySettings={...displaySettings,selectedIds,hiddenIds:displaySettings.hiddenIds.filter(id=>stableIds.has(id)),isolation:null,
       scope:displaySettings.scope==='selected'&&!selectedIds.length?'all':displaySettings.scope};
-    displayPreview.setSettings(displaySettings);shell.update({display:displaySettings});refreshDisplayMetadata();
+    displayPreview.setSettings(displaySettings);shell.update({display:displaySettings});refreshDisplayMetadata(true);
     writeMapHash(window, next.id);
     void npcLab?.setMap(next.id);
   },
@@ -264,7 +264,9 @@ function readDisplayCatalog() {
     ...(sim.controlledActor.vehicle?{currentVehicleId:sim.controlledActor.vehicle.spec.id}:{}),colliderIds});
 }
 let displayCatalog=readDisplayCatalog();
-function refreshDisplayMetadata() {
+function refreshDisplayMetadata(force=false) {
+  // Ordinary gameplay must not pay for an unopened diagnostic inspector.
+  if(!force&&!shell.get().flags.displayOpen&&!isDisplayPreviewActive(displaySettings))return;
   displayCatalog=readDisplayCatalog();
   if(JSON.stringify(displayCatalog.rows)!==JSON.stringify(shell.get().displayRows))shell.update({displayRows:displayCatalog.rows});
   const scope=resolveDisplayScope(displaySettings,displayCatalog.context),matches=(id:string)=>scope.ids===null||scope.ids.has(id);
@@ -283,7 +285,8 @@ function refreshDisplayMetadata() {
 const displayPreview = createDisplayPreview({
   scene, camera, source: renderer, mount: canvas.parentElement!,
   context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[sim.controlledActor.vehicleIndex]!.root]:[controlledCharacter().root]}),
-  overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map, targets: readDisplayTargets(),colliderId:displayColliderId,
+  overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
+    targets:displaySettings.anchors&&displaySettings.helperOnly==='none'?readDisplayTargets():[],colliderId:displayColliderId,
     colliderDistance:(handle,centers)=>{const c=sim.controlledActor.controller?.world.getCollider(handle);if(!c)return Infinity;
       return centers.reduce((distance,center)=>{const projected=c.projectPoint(center,true);return projected?Math.min(distance,center.distanceTo(new T.Vector3().copy(projected.point))):distance;},Infinity);}
   })),
@@ -308,12 +311,12 @@ function setCollisionMode(value: CollisionDebugMode) {
 }
 function setDisplaySettings(value: DisplaySettings) {
   displaySettings = value; collisionMode = value.helperOnly === 'collision' ? 'all' : value.colliders;
-  refreshDisplayMetadata();
+  refreshDisplayMetadata(true);
   displayPreview.setSettings(value); shell.update({display: value, collider: collisionMode, displayError: ''});
   clearInput(); sdk.render();
 }
 shell.on('displayChange', value => setDisplaySettings(JSON.parse(value!) as DisplaySettings));
-shell.on('displayOpen', () => clearInput());
+shell.on('displayOpen', value => {clearInput();if(value==='true')refreshDisplayMetadata(true);});
 shell.on('displayPin', value => {shell.update({displayPinned:value==='true'});clearInput();});
 const fpsMeter = new FrameRateMeter();
 let pacingFrame = 0;

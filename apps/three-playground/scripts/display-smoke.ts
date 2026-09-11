@@ -6,10 +6,20 @@ const page=await browser.newPage({viewport:{width:1500,height:950}}),errors:stri
 page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.setDefaultTimeout(10000);
 try {
   await mkdir('.codex-tmp/display-evidence',{recursive:true});
+  // Observe the real app's catalog work without adding production instrumentation.
+  await page.route('**/src/main.ts*',async route=>{
+    const response=await route.fetch(),body=await response.text(),marker='function readDisplayCatalog() {';
+    assert(body.includes(marker),'display catalog instrumentation is available');
+    await route.fulfill({response,body:body.replace(marker,marker+' window.__displayCatalogReads=(window.__displayCatalogReads??0)+1;')
+      .replace('function readDisplayTargets() {','function readDisplayTargets() { window.__displayTargetReads=(window.__displayTargetReads??0)+1;')});
+  });
   await page.goto(process.argv[2]??'http://127.0.0.1:5186');
   await page.waitForFunction(()=>!!(window as any).playground,{}, {timeout:60000});
   // Let the initial presentation complete before freezing the source-pixel baseline.
   await page.waitForFunction(()=>(window as any).playground.getState().simulationTime>0);
+  const idle=await page.evaluate(()=>({reads:(window as any).__displayCatalogReads,time:(window as any).playground.getState().simulationTime}));
+  await page.waitForFunction(time=>(window as any).playground.getState().simulationTime>time+.25,idle.time);
+  assert.equal(await page.evaluate(()=>(window as any).__displayCatalogReads),idle.reads,'closed/default display must not rebuild its catalog while playing');
   await page.evaluate(()=>window.__WORLDKIT_EVAL__!.stopLive());
   const settings=()=>page.evaluate(()=>(window as any).playground.getState().display);
   const state=()=>page.evaluate(()=>{const s=(window as any).playground.getState();return {position:s.position,time:s.simulationTime,camera:s.camera};});
@@ -23,7 +33,9 @@ try {
   const baseline=await capture(),before=await state();
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
   for(const [label,mode] of [['白模','clay'],['深度图','depth'],['类型着色','semantic'],['法线方向','normal'],['无光照','unlit'],['正常材质','material']] as const){
+    const targetReads=await page.evaluate(()=>(window as any).__displayTargetReads??0);
     await page.getByRole('radio',{name:label,exact:true}).check();assert.equal((await settings()).mode,mode);
+    assert((await page.evaluate(()=>(window as any).__displayTargetReads??0))-targetReads<=1,'picture-only rendering must not resample helper anchors beyond the settings metadata refresh');
     assert.deepEqual(await capture(),baseline);assert.deepEqual(await state(),before);
   }
   await page.getByRole('radio',{name:'白模',exact:true}).check();
