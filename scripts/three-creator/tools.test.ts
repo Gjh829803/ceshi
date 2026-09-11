@@ -403,6 +403,19 @@ describe('v2 command and discovery boundary', () => {
       expect(example.runtimeGuidance.runtimeSourceHash).toBe(selected.runtimeGuidance.runtimeSourceHash);
     }finally{await service.close();}
   });
+  it('omits absent optional workspace modules without substituting Host aircraft configuration',async()=>{
+    const service=new ThreeCreatorTools(await fixture(),'three-sdk');
+    try{
+      await service.materializeRuntime();
+      for(const file of ['aircraft-spec.ts','vehicle-inspection.ts'])await rm(path.join(service.workspace,'sdk/three-world/src/humanoid-runtime',file));
+      const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['humanoid','contracts']});
+      expect(selected).not.toHaveProperty('aircraftConfigurations');
+      expect(selected.humanoidSourceContracts).not.toHaveProperty('humanoid-runtime/aircraft-spec.ts');
+      expect(selected.runtimeDefinitions).not.toHaveProperty('humanoid-runtime/vehicle-inspection.ts');
+      expect(selected.runtimeDefinitions['humanoid-runtime/road-vehicle.ts']).toContain('createRoadVehicleSpec');
+      expect(selected.runtimeGuidance.runtimeSourceHash).toMatch(/^[a-f0-9]{64}$/);
+    }finally{await service.close();}
+  });
   it('keeps Player camera offsets out of raw and standalone nonhuman guidance',async()=>{
     const raw=new ThreeCreatorTools(await fixture(),'three-raw'),sdk=new ThreeCreatorTools(await fixture(),'three-sdk');
     try{
@@ -452,14 +465,21 @@ describe('v2 command and discovery boundary', () => {
       {type:'entity.set-scale',entityId:'a',scaleLocalXYZ:[1,NaN,1]},
       {type:'actor.stop',entityId:'a',priority:100},
       {type:'action.invoke',actionId:'x',arguments:{callback:{eval:'evil'}}},
+      {type:'space.set-drive-mode',mode:'automatic'},
+      {type:'space.dock',portId:''},
+      {type:'space.dock'},
+      {type:'space.dock',portId:'home',teleport:true},
     ]) expect(check(command)).toBe(false);
     expect(check({type:'parameter.set',parameterId:'sky.mode',value:'aurora'})).toBe(true);
     expect(check({type:'entity.set-geometry',entityId:'bridge',geometryId:'long'})).toBe(true);
+    for(const mode of ['assisted','inertial'])expect(check({type:'space.set-drive-mode',mode})).toBe(true);
+    for(const portId of ['home',null])expect(check({type:'space.dock',portId})).toBe(true);
   });
   it('keeps input v1 unchanged and permits closed v2 lifecycle/command steps', () => {
     const check=new Ajv({strict:false,strictNumbers:true}).compile(EPISODE_SCHEMA);
     const episode={schemaVersion:2,steps:[{lifecycle:'pause',durationSeconds:.5},{lifecycle:'start',commands:[{type:'actor.stop',entityId:'npc'}],keysDown:['w'],durationSeconds:1}],targets:[]};
     expect(check(episode)).toBe(true); expect(check({...episode,schemaVersion:1})).toBe(false);
+    expect(check({...episode,steps:[{commands:[{type:'space.set-drive-mode',mode:'inertial'},{type:'space.dock',portId:'home'},{type:'space.dock',portId:null}],durationSeconds:1}]})).toBe(true);
     expect(check({...episode,steps:[{commands:[{type:'eval',source:'anything'}],durationSeconds:1}]})).toBe(false);
   });
   it('keeps caller command receipt and World operation ID distinct from Creator operations', async () => {

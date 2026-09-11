@@ -77,3 +77,17 @@ it('reports unavailable raw telemetry as null',async()=>{
  expect(result.snapshot).toBeNull();expect(result.description).toBeNull();expect(result.diagnostics).toBeNull();
  expect(result.characterContinuity).toMatchObject({status:'unavailable'});
 });
+
+it('keeps vehicle diagnostics opt-in and degrades a missing or throwing sampler locally',async()=>{
+ const {observer,host,world}=await fixture(),before=world.snapshot();
+ const inspectVehicles=vi.fn(()=>({worldRevision:0,simulationTick:0,simulationSeconds:0,isRunning:false,physicsStepSequence:null,vehicles:[]}));
+ observer.inspectVehicles=inspectVehicles;
+ expect(host.inspect()).not.toHaveProperty('vehicles');expect(inspectVehicles).not.toHaveBeenCalled();
+ expect(host.inspect({sections:['vehicles'],entityIds:[],vehicleDetail:'wheels'}).vehicles).toMatchObject({vehicles:[]});
+ expect(inspectVehicles).toHaveBeenCalledWith({entityIds:[],detail:'wheels'});
+ observer.inspectVehicles=()=>{throw new Error('older runtime');};
+ expect(host.inspect({sections:['vehicles']}).vehicles).toBeNull();
+ delete observer.inspectVehicles;
+ expect(host.inspect({sections:['vehicles']}).vehicles).toBeNull();
+ expect(world.snapshot()).toEqual(before);
+});

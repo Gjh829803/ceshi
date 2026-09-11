@@ -62,13 +62,14 @@ export function createCollisionDebug(scene:Scene){
     else all.geometry.setAttribute(name,new BufferAttribute(data,size));
   }
   return {person,all,
-    update(source:PhysicsSource|undefined,mode:CollisionDebugMode,boxes:readonly EnvironmentBox[]=noBoxes){
+    update(source:PhysicsSource|undefined,mode:CollisionDebugMode,boxes:readonly EnvironmentBox[]=noBoxes,includeGround=false,filter?:(collider:DebugCollider)=>boolean){
       person.update(source?.capsule,mode==='person');
       all.visible=mode==='all'&&!!source;
       if(!all.visible||!source)return;
       // Read the current world each time: map switches replace and free the old world.
       updateGroundFilter(source.world,boxes);
-      const {vertices,colors}=source.world.debugRender(undefined,showCollider);
+      const predicate=filter?(collider:DebugCollider)=>(includeGround||showCollider(collider))&&filter(collider):includeGround?undefined:showCollider;
+      const {vertices,colors}=source.world.debugRender(undefined,predicate);
       const previous=all.geometry.getAttribute('position');
       if(previous&&previous.array.length!==vertices.length){all.geometry.dispose();all.geometry=new BufferGeometry();}
       writeAttribute('position',vertices,3);writeAttribute('color',colors,4);

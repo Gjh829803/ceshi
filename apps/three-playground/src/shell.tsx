@@ -24,12 +24,15 @@ import type { AssetEntry } from "../../../shared/preset-content/platform/catalog
 import { MAPS } from "../../../shared/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
 import { DRAGON_VARIANTS } from '../../../shared/preset-content/dragon-variants';
+import { DisplayPanel } from './display-panel';
+import { defaultDisplaySettings, type DisplayObjectRow } from './display-settings';
 
 type Flags =
   | "libraryOpen"
   | "inspectorClosed"
   | "inspectorMobileOpen"
   | "quickOpen"
+  | "displayOpen"
   | "mapExpanded"
   | "performanceOpen"
   | "paused"
@@ -45,6 +48,11 @@ export function mountShell(host: HTMLElement) {
     mapId: "campus",
     dragonId: 'D01',
     collider: "off",
+    display: defaultDisplaySettings(),
+    displayAvailable: {anchors:false,climbSurfaces:false,water:false,physics:false,unmappedColliders:0},
+    displayRows: [] as DisplayObjectRow[],
+    displayPinned: false,
+    displayError: '',
     quick: [] as AssetEntry[],
     activeId: "person",
     controls: [] as [string, string][],
@@ -222,21 +230,10 @@ export function mountShell(host: HTMLElement) {
             </ChoiceSelect>
           </label>}
           {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
-          <label
-            className={`subtle-button collider-toggle ${s.collider !== "off" ? "active" : ""}`}
-          >
-            碰撞体
-            <ChoiceSelect
-              id="colliderSelect"
-              aria-label="碰撞体显示"
-              value={s.collider}
-              onValueChange={(value) => action("colliderSelect", value)}
-            >
-              <ChoiceOption value="person">人</ChoiceOption>
-              <ChoiceOption value="all">全部</ChoiceOption>
-              <ChoiceOption value="off">关闭</ChoiceOption>
-            </ChoiceSelect>
-          </label>
+          <DisplayPanel settings={s.display} available={s.displayAvailable} error={s.displayError}
+            rows={s.displayRows} pinned={s.displayPinned} onPinnedChange={value=>action('displayPin',String(value))}
+            open={!!f('displayOpen')} onOpenChange={open => { flag('displayOpen', open); action('displayOpen', String(open)); }}
+            change={next => action('displayChange', JSON.stringify(next))}/>
           <Popover
             open={!!f("quickOpen")}
             onOpenChange={(open) => {
@@ -344,7 +341,7 @@ export function mountShell(host: HTMLElement) {
     return (
       <>
         <main
-          className={`workspace ${f("libraryOpen") ? "library-open" : ""} ${f("inspectorClosed") ? "inspector-closed" : ""} ${f("inspectorMobileOpen") ? "inspector-mobile-open" : ""}`}
+          className={`workspace ${f("libraryOpen") ? "library-open" : ""} ${f("inspectorClosed")&&!s.displayPinned ? "inspector-closed" : ""} ${f("inspectorMobileOpen") ? "inspector-mobile-open" : ""}`}
           id="workspace"
         >
           <header className="workspace-header">
@@ -462,7 +459,8 @@ export function mountShell(host: HTMLElement) {
             />
           </section>
           <div id="libraryHost" className="library-host" />
-          <aside className="inspector-shell">
+          <aside className={`inspector-shell ${s.displayPinned?'display-inspector-pinned':''}`}>
+            <div id="displayInspectorHost" hidden={!s.displayPinned}/>
             <div className="inspector-top">
               <span>主体属性</span>
               {btn(

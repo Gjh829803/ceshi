@@ -114,7 +114,9 @@ Creator 生成中的所有人形（含 NPC 和骑手）使用许可的预设人�
 和资产条件为准。非人形生物优先复用提供的资源。车辆外观由 Agent 自绘，
 不使用预设或外部车辆模型：先按操控方式选择不含模型的车辆配置，再依据其
 轮组、物理尺寸、碰撞范围和座位锚点绘制 Mesh，通过 SDK 载具接口组合。
-当前汽车与摩托使用 `humanoid.createRoadVehicleSpec`；轮胎动画读取 SDK 的
+当前汽车与摩托使用 `humanoid.createRoadVehicleSpec`，轻型固定翼使用
+`humanoid.createAircraftSpec('plane')`；固定翼须匹配返回的固定 airframe 标定，
+该字段不是任意机型的物理覆盖。轮胎动画读取 SDK 的
 同一份显示采样。配置不创建模型、物理世界或额外控制循环。
 省去装饰细节、氛围、反射和复杂阴影，创作精力用于可玩功能。
 

@@ -37,6 +37,7 @@ for(const box of map.boxes){
 // Optional first-person opening and T switching: add profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}.
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player'});
 world.setCaptureTargets(['player']);
+// Keep loading UI visible until initial materials and the opening frame are ready.
 await world.start();
 // Add scene conditions for contextual actions: see character-actions capability cards.
 // Choose dynamic objects for your scene; character-actions shows rigidGroup and physical pose display.

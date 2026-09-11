@@ -17,6 +17,8 @@ const humanoidProfile=objectSchema({character:objectSchema(humanoid.CONTROL_SCHE
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
+ command('space.set-drive-mode',{mode:{enum:['assisted','inertial']}}),
+ command('space.dock',{portId:{anyOf:[string,{type:'null'}]}}),
  command('vehicle.prepare',{instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])}),
  {...command('vehicle.approach',{instanceId:string}),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string}),command('vehicle.exit',{}),command('vehicle.recover',{}),
  command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{input:{anyOf:[humanoidInput,{type:'null'}]}}),

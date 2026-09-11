@@ -11,11 +11,12 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
-export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics';
+export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles';
 export interface InspectionQuery {
   query?: string;
   entityIds?: string[];
-  /** Omit to inspect all sections. */
+  vehicleDetail?: 'summary' | 'wheels';
+  /** Omit for standard sections; vehicles is opt-in. */
   sections?: InspectionSection[];
 }
 function observation(): WorldObservation {
@@ -114,7 +115,7 @@ function createBridge() {
     ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
     inspect(query?: InspectionQuery) {
       const world = observation();
-      const {sections, ...selection} = query ?? {};
+      const {sections, vehicleDetail, ...selection} = query ?? {};
       const includes = (section: InspectionSection) => !sections || sections.includes(section);
       const snapshot = world.snapshot?.() ?? null;
       const hierarchy = () => {
@@ -142,6 +143,7 @@ function createBridge() {
         ...(includes('snapshot') ? {snapshot, characterContinuity: characterContinuity.read(world, snapshot)} : {}),
         ...(includes('description') ? {description: world.capabilities?.(selection) ?? null} : {}),
         ...(includes('diagnostics') ? {diagnostics: world.inspect?.() ?? null} : {}),
+        ...(sections?.includes('vehicles') ? {vehicles: (()=>{try{return world.inspectVehicles?.({...selection,...(vehicleDetail?{detail:vehicleDetail}:{})})??null;}catch{return null;}})()} : {}),
       };
     },
     async executeCommand(command: WorldCommand, commandId: string) {

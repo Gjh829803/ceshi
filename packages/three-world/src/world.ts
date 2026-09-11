@@ -1,3 +1,4 @@
+import {inspectVehicle,type VehicleInspectionQuery} from './humanoid-runtime/vehicle-inspection';
 import { humanoidHost } from './humanoid-runtime/host-access';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
@@ -65,7 +66,7 @@ export class ThreeWorld implements API.World {
  private readonly humanoidActivities=new Map<string,string>();
  private baseline: {entries:Map<string,Registration>;prototypes:Map<string,Prototype>;geometries:Map<string,Geometry>;parameters:Map<string,Parameter>;actions:Map<string,API.ActionDefinition<API.ObjectSchema>>;movements:Map<string,API.MovementDefinition<API.JsonValue>>;autonomies:Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>;geometryById:Map<string,THREE.BufferGeometry>;captureTargets:readonly SelectedCaptureTarget[]}|undefined;
  private presentation:ThreePresentation|undefined;private readonly changes=new Set<()=>void>();private changeQueued=false;
- private captureTargets:readonly SelectedCaptureTarget[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;
+ private captureTargets:readonly SelectedCaptureTarget[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;private startGeneration=0;
  private activeWriter:string|undefined;private observer:API.WorldObservation|undefined;
  private episodeLease:{state:'preparing'|'prepared';restoreViewport:()=>void}|undefined;
  private constructor(private readonly engine:WorldEngine,assets:WorldAssets,shadows:Readonly<API.ShadowSettings>){
@@ -535,15 +536,22 @@ export class ThreeWorld implements API.World {
  }
  async start():Promise<void>{
   this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(this.engine.isRunning)return;if(this.starting)return this.starting;
-  const epoch=this.epoch;const start=(async()=>{await this.initialise();if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.installObserver();this.engine.start();this.engine.render();})();
+  const epoch=this.epoch,generation=this.startGeneration;
+  const check=()=>{if(epoch!==this.epoch||generation!==this.startGeneration||this.disposed)throw failure('STALE_TASK');if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');};
+  const start=(async()=>{
+   await this.initialise();check();
+   await this.engine.prepareRendering();check();
+   this.engine.render();check();
+   this.engine.start();this.installObserver();
+  })();
   this.starting=start;try{await start;}finally{if(this.starting===start)this.starting=undefined;}
  }
- stop():void{if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.stop();}
+ stop():void{if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.startGeneration++;this.starting=undefined;this.engine.stop();}
  async reset():Promise<void>{
   if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.resetState();
  }
  private async resetState():Promise<void>{
-  this.alive();this.epoch++;this.presentation?.reset();for(const scope of this.scopes)scope.abort();this.scopes.clear();this.retireHumanoidActivities();this.operations.cancelAll();
+  this.alive();this.epoch++;this.starting=undefined;this.presentation?.reset();for(const scope of this.scopes)scope.abort();this.scopes.clear();this.retireHumanoidActivities();this.operations.cancelAll();
   for(const queued of this.queued.splice(0))queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('STALE_TASK')});
   const wasRunning=this.engine.isRunning;this.engine.stop();if(!this.baseline)await this.initialise();
   const baseline=this.baseline!;
@@ -611,6 +619,13 @@ export class ThreeWorld implements API.World {
   if(!reason&&type==='actor.resume-autonomy'&&!this.autonomies.has(entry.id))reason=failure('AUTONOMY_NOT_REGISTERED');
   return {type,schema:{type:'object',properties,required:['type',...fields.filter(field=>!optional.has(field))],additionalProperties:false},isAvailable:!reason,...(reason?{unavailableReason:reason}:{})};
  }
+ inspectVehicles(query:VehicleInspectionQuery={}) {
+  this.alive();
+  const text=query.query?.toLowerCase();
+  const ids=new Set([...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text))).map(entry=>entry.id));
+  return {worldRevision:this.revision,simulationTick:this.simulationTick,simulationSeconds:this.simulationTick*this.engine.fixedTimeStepSeconds,
+   isRunning:this.isRunning,physicsStepSequence:this.humanoid?.environment.physicsStepSequence??null,vehicles:this.humanoid?.simulation.vehicles.filter(v=>ids.has(v.spec.id)).map(v=>inspectVehicle(v,query.detail,this.humanoid!.environment.physicsStepSequence))??[]};
+ }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
   return {...(this.humanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>entry.id!==this.humanoid!.options.character.instanceId&&this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
@@ -634,7 +649,7 @@ export class ThreeWorld implements API.World {
    get controlledObject(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
-   startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
+   startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),inspectVehicles:query=>world.inspectVehicles(query),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
   const target=window as unknown as Record<string,unknown>;target.__WORLDKIT_EVAL__=observer;target.__WORLDKIT_CREATOR__=observer;this.observer=observer;
  }
  private episodePort():EpisodeRuntimePort{

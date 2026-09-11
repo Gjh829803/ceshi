@@ -85,3 +85,6 @@ export type {FlyingCreatureTuning} from './motion-families/flying-creature/state
 
 export type {MotionFamilyState} from './motion-families/state';
 export {dragonGroundHeading} from './motion-families/flying-creature/ground-pose';
+
+export {createAircraftSpec,type AircraftSpec,type AircraftKind} from './aircraft-spec';
+export type {VehicleInspection,VehicleInspectionResult,VehicleInspectionQuery,VehicleWheelInspection} from './vehicle-inspection';

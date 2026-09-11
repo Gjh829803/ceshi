@@ -7,6 +7,7 @@ import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { DRAGON_VARIANTS, readDragonVariant } from '../../../shared/preset-content/dragon-variants';
 import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
+import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
 import { controlsFor } from "../../../shared/preset-content/ui/shortcuts";
@@ -53,9 +54,13 @@ import { createAccessoryPreview } from "../../../shared/preset-content/humanoid/
 import { mountEquipmentPanel } from "./equipment-panel";
 import { mountHumanoidLab } from "./humanoid-panel";
 import {
-  createCollisionDebug,
   type CollisionDebugMode,
 } from "../../../shared/preset-content/humanoid/capsule-debug";
+import { createDisplayPreview } from './display-preview';
+import { createDisplayOverlays, type DisplayInteractionTarget } from './display-overlays';
+import { defaultDisplaySettings, isDisplayPreviewActive, type DisplaySettings, type DisplayType } from './display-settings';
+import {buildDisplayCatalog,resolveDisplayColliderId} from './display-catalog';
+import {resolveDisplayScope} from './display-context';
 import {
   HumanoidDemo,
   humanoidTraversalReady,
@@ -177,8 +182,15 @@ const session = {
       throw error;
     }
     world.dispose();
+    displayPreview.clearMaterials();
     world = visual;
     currentMap = next;
+    // Scene-local selections retire with the map; keep stable actors and picture settings.
+    const stableIds=new Set(['person',...SPECS.map(spec=>spec.id)]);
+    const selectedIds=displaySettings.selectedIds.filter(id=>stableIds.has(id));
+    displaySettings={...displaySettings,selectedIds,hiddenIds:displaySettings.hiddenIds.filter(id=>stableIds.has(id)),isolation:null,
+      scope:displaySettings.scope==='selected'&&!selectedIds.length?'all':displaySettings.scope};
+    displayPreview.setSettings(displaySettings);shell.update({display:displaySettings});refreshDisplayMetadata(true);
     writeMapHash(window, next.id);
   },
   dispose() {
@@ -233,17 +245,67 @@ const presentation = {
   },
   snap(_sim: unknown) {},
 };
+const renderPreparation = new AbortController();
 const pressed = new Set<string>();
 let jumpPressed = false,
   paused = false,
-  ready = true,
+  ready = false,
+  preparingRender = true,
   lastMessage = "",
   lastActive = -99;
 let humanCommands: HumanoidActionInput = {},
   humanDemo: HumanoidDemo | null = null;
 let collisionMode: CollisionDebugMode = "off";
 let disposeThumbnails: (() => void) | undefined;
-const collisionDebug = createCollisionDebug(scene);
+let displaySettings = defaultDisplaySettings();
+function displayColliderId(handle:number) {
+  return resolveDisplayColliderId(sim.humanoid,handle=>runtime.environment.colliderId(handle),handle);
+}
+function readDisplayTargets():DisplayInteractionTarget[] {
+  const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.humanoid)];
+  sim.vehicles.forEach((vehicle,n)=>{
+    if(!sim.available(vehicle))return;
+    const root=visuals[n]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
+    targets.push({id:'vehicle-seat:'+vehicle.spec.id,ownerIds:[vehicle.spec.id],kind:'seat',state:'available',
+      position:new T.Vector3(...vehicle.spec.seat).applyQuaternion(rotation).add(root.getWorldPosition(new T.Vector3()))});
+  });
+  return targets;
+}
+function readDisplayCatalog() {
+  const colliderIds=new Set<string>();sim.humanoid?.world.forEachCollider(c=>{if(c.isEnabled())colliderIds.add(displayColliderId(c.handle));});
+  return buildDisplayCatalog({scene,map:session.map,environment:world.root,person:character.root,
+    vehicles:visuals.map((visual,n)=>({id:SPECS[n]!.id,name:SPECS[n]!.name,object:visual.root,available:sim.available(sim.vehicles[n]!),type:(SPECS[n]!.mode==='mount'||SPECS[n]!.mode==='dragon'?'creature':'vehicle') as DisplayType})),
+    ...(sim.vehicle?{currentVehicleId:sim.vehicle.spec.id}:{}),colliderIds});
+}
+let displayCatalog=readDisplayCatalog();
+function refreshDisplayMetadata(force=false) {
+  // Ordinary gameplay must not pay for an unopened diagnostic inspector.
+  if(!force&&!shell.get().flags.displayOpen&&!isDisplayPreviewActive(displaySettings))return;
+  displayCatalog=readDisplayCatalog();
+  if(JSON.stringify(displayCatalog.rows)!==JSON.stringify(shell.get().displayRows))shell.update({displayRows:displayCatalog.rows});
+  const scope=resolveDisplayScope(displaySettings,displayCatalog.context),matches=(id:string)=>scope.ids===null||scope.ids.has(id);
+  let unmappedColliders=0,scopedColliders=0;const knownIds=new Set(displayCatalog.rows.map(r=>r.id));
+  sim.humanoid?.world.forEachCollider(c=>{if(!c.isEnabled())return;const id=displayColliderId(c.handle);if(!knownIds.has(id))unmappedColliders++;if(matches(id))scopedColliders++;});
+  const map=session.map;
+  const targets=readDisplayTargets();
+  const available={physics:!!sim.humanoid,unmappedColliders,scopedColliders,
+    scene:{anchors:targets.some(t=>t.state!=='removed'),water:map.water.length>0,
+      climbSurfaces:!!map.climbSurfaces?.some(s=>map.boxes.some(b=>b.id===s.colliderId&&b.collision!==false))},
+    anchors:targets.some(t=>t.state!=='removed'&&(matches(t.id)||t.ownerIds?.some(matches)||map.interactions?.find(a=>a.id===t.id)?.colliderIds?.some(matches))),
+    climbSurfaces:!!map.climbSurfaces?.some(s=>matches(s.colliderId)&&map.boxes.some(b=>b.id===s.colliderId&&b.collision!==false)),
+    water:map.water.some(w=>matches('water:'+w.id))};
+  if(JSON.stringify(available)!==JSON.stringify(shell.get().displayAvailable))shell.update({displayAvailable:available});
+}
+const displayPreview = createDisplayPreview({
+  scene, camera, source: renderer, mount: canvas.parentElement!,
+  context: () => ({...displayCatalog.context,subjects:sim.active>=0?[character.root,visuals[sim.active]!.root]:[character.root]}),
+  overlay: createDisplayOverlays(scene, () => ({physics: sim.humanoid, map: session.map,
+    targets:displaySettings.anchors&&displaySettings.helperOnly==='none'?readDisplayTargets():[],colliderId:displayColliderId,
+    colliderDistance:(handle,centers)=>{const c=sim.humanoid?.world.getCollider(handle);if(!c)return Infinity;
+      return centers.reduce((distance,center)=>{const projected=c.projectPoint(center,true);return projected?Math.min(distance,center.distanceTo(new T.Vector3().copy(projected.point))):distance;},Infinity);}
+  })),
+  onError: error => { shell.update({displayError: `预览暂不可用，已显示原始画面：${error instanceof Error ? error.message : String(error)}`}); },
+});
 let panelOpen = false,
   quickSlots: AssetEntry[] = [];
 const elementCache = new Map<string, HTMLElement>();
@@ -259,14 +321,17 @@ const setText = shell.text;
 const setHTML = (_id: string, value: string) =>
   shell.update({ interaction: value });
 function setCollisionMode(value: CollisionDebugMode) {
-  collisionMode = value;
-  shell.update({ collider: value });
-  collisionDebug.update(sim.humanoid, collisionMode, session.map.boxes);
-  if (paused || panelOpen) renderPausedState();
+  setDisplaySettings({...displaySettings, colliders: value, helperOnly:'none'});
 }
-shell.on("colliderSelect", (value) =>
-  setCollisionMode(value as CollisionDebugMode),
-);
+function setDisplaySettings(value: DisplaySettings) {
+  displaySettings = value; collisionMode = value.helperOnly === 'collision' ? 'all' : value.colliders;
+  refreshDisplayMetadata(true);
+  displayPreview.setSettings(value); shell.update({display: value, collider: collisionMode, displayError: ''});
+  clearInput(); sdk.render();
+}
+shell.on('displayChange', value => setDisplaySettings(JSON.parse(value!) as DisplaySettings));
+shell.on('displayOpen', value => {clearInput();if(value==='true')refreshDisplayMetadata(true);});
+shell.on('displayPin', value => {shell.update({displayPinned:value==='true'});clearInput();});
 const fpsMeter = new FrameRateMeter();
 let pacingFrame = 0;
 function resetFPS(state: string) {
@@ -349,7 +414,7 @@ function visit(n: number) {
 function pause(value = !paused, showOverlay = true) {
   paused = value;
   if (value) sdk.stop();
-  else void sdk.start();
+  else if (ready && !preparingRender && !panelOpen) void sdk.start();
   frameClock.reset();
   presentation.snap(sim);
   visuals.forEach(resetVehicleWheels);
@@ -393,6 +458,7 @@ function interact() {
 }
 window.addEventListener("keydown", (e) => {
   if (
+    !ready ||
     e.defaultPrevented ||
     e.altKey ||
     e.metaKey ||
@@ -466,7 +532,7 @@ shell.on("quickSelect", (id) => {
 const onPanelChange = (open: boolean) => {
   panelOpen = open;
   if (open) sdk.stop();
-  else if (!paused) void sdk.start();
+  else if (ready && !preparingRender && !paused) void sdk.start();
   clearInput();
   frameClock.reset();
   resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
@@ -845,6 +911,7 @@ document.addEventListener("focusin", releaseUIInput);
 window.addEventListener(
   "pagehide",
   () => {
+    renderPreparation.abort();
     window.removeEventListener("hashchange", restoreMapFromHash);
     disposeThumbnails?.();
     spacePanel.dispose();
@@ -854,7 +921,7 @@ window.addEventListener(
     humanPanel.dispose();
     equipmentPanel.dispose();
     accessories.dispose();
-    collisionDebug.dispose();
+    displayPreview.dispose();
     interactionVisuals.dispose();
     visuals.forEach((v) => v.creature?.dispose());
     library.dispose();
@@ -866,6 +933,7 @@ window.addEventListener(
   { once: true },
 );
 shell.on("touchDown", (code) => {
+  if (!ready) return;
   const bindings = sdk.getKeyBindings();
   if (!pressed.has(code!)) {
     const action = actionForKey(code!, !!sim.vehicle, pressed, bindings);
@@ -1012,6 +1080,7 @@ let lastUIUpdate = -Infinity,
 function updateUI() {
   if (performance.now() - lastUIUpdate < 100) return;
   lastUIUpdate = performance.now();
+  refreshDisplayMetadata();
   const v = sim.vehicle,
     p = sim.player,
     nearest = sim.nearest(),
@@ -1177,6 +1246,7 @@ function updateUI() {
     `相机 · ${["第三人称", "第一人称", "沉浸越肩"][follow.mode]}`,
   );
   const inspectorVisible =
+    !shell.get().displayPinned &&
     !shell.get().flags.inspectorClosed &&
     (innerWidth > 720 || shell.get().flags.inspectorMobileOpen) &&
     !(innerWidth <= 1000 && library.isOpen());
@@ -1214,7 +1284,6 @@ function updateCreatureVisual(n: number, dt: number) {
     );
 }
 function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
-  collisionDebug.update(sim.humanoid, collisionMode, session.map.boxes);
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
     if(state.motion.family==='space')updateSpaceExhaust(vis.engine,state.motion.appliedForceNewtonsXYZ,state.rotation,state.spec.spaceFlight!.thrustNewtonsXYZ[2]);
@@ -1277,10 +1346,40 @@ sdk.onReset(() => {
   humanDemo = null;
   lastActive = -99;
 });
+// Keep loading visible while first-use shaders and camera geometry are prepared.
+// The SDK remains the only clock; render() samples display state without stepping.
+try {
+  let preparedMap: string;
+  do {
+    // Apply URL edits made during loading before preparing that map's materials.
+    ready = true;
+    restoreMapFromHash();
+    ready = false;
+    preparedMap = session.map.id;
+    shell.text("loadText", "正在准备画面与材质…");
+    shell.flush();
+    await preparePlaygroundRendering({
+      prepareVisuals: () => {
+        runtime.setCameraMode(follow.mode as 0 | 1 | 2);
+        updateVisuals(0);
+      },
+      compile: () => renderer.compileAsync(scene, camera),
+      render: () => sdk.render(),
+      signal: renderPreparation.signal,
+    });
+  } while (readMapHash(location.hash, mapIds) !== preparedMap);
+  clearInput();
+  preparingRender = false;
+  if (!paused && !panelOpen) await sdk.start();
+  ready = true;
+} catch (error) {
+  if (!renderPreparation.signal.aborted) {
+    shell.text("loadText", "画面准备失败：" + String(error));
+    shell.flush();
+  }
+  throw error;
+}
 window.addEventListener("hashchange", restoreMapFromHash);
-// Also catches URL edits made while the initial assets/runtime were loading.
-restoreMapFromHash();
-await sdk.start();
 // Read-only browser callback cadence; no simulation, animation or camera writes.
 const observePacing = (now: number) => {
   if (!paused && !panelOpen) {
@@ -1335,6 +1434,8 @@ const labAPI = {
     spaceFlight:sim.vehicle?humanoid.spaceTelemetry(sim.vehicle):null,
     inputState:runtime.inspectControls(),
     dragon: (()=>{const v=sim.vehicles.find(v=>v.motion.flyingCreature);return v?{position:v.position.toArray(),state:structuredClone(v.motion.flyingCreature),boarding:sim.inspectBoarding(v.spec.id)}:null;})(),
+    display: displaySettings,
+    diagnosticVisible: !!displayPreview.canvas && !displayPreview.canvas.hidden,
     flyingCreature:sim.vehicle?.motion.flyingCreature?{...sim.vehicle.motion.flyingCreature}:undefined,
     dragonVariant:dragonVariant.id,
     dragonVisual:nativeDragon.inspect(),
