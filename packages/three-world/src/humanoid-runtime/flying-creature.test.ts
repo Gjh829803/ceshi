@@ -38,7 +38,11 @@ it('stops a summoned dragon before a new wall and rejects wet landing candidates
   }finally{world.dispose();}
 },15000);
 
-it.each(DRAGON_VARIANTS)('summons $id from the sky, then boards, takes off and walks after dismount',async variant=>{
+// Exercise the shared lifecycle on the baseline and the D07 repeat-summon regression.
+// Every variant still runs collision/support checks below and real rig, boarding,
+// dismount and camera checks in flying-creature-visual.test.ts.
+it.each(['D01','D07'])('summons %s from the sky, then boards, takes off and walks after dismount',async id=>{
+  const variant=DRAGON_VARIANTS.find(variant=>variant.id===id)!;
   const map=createDragonTrainingMap();
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
     vehicles:[{instanceId:'dragon',assetId:'creature.dragon',spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,flyingCreatureCollision:variant.collisionProbes!},object:new Group()}],character:{instanceId:'person',object:new Group()}}});
