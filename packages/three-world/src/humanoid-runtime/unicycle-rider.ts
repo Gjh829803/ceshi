@@ -15,6 +15,8 @@ export function fitUnicycleFeet(actor:Object3D,seatRoot:Object3D,s:UnicycleState
     if(!thigh||!calf||!foot||!ball)continue;
     const contact=unicyclePedal(s.wheelAngle,side);contact.y+=UNICYCLE_GEOMETRY.soleOffset;
     if(side===1&&s.supportLocal){contact.lerp(new Vector3(...s.supportLocal),s.footDown);contact.y+=Math.sin(Math.PI*s.footDown)*.09;}
+    // UEFN's level shoe has a 110 mm ball-to-sole offset, versus the old 55 mm proxy.
+    contact.y+=.055;
     contact.sub(new Vector3(...UNICYCLE_GEOMETRY.seat)).applyMatrix4(seatRoot.matrixWorld);
     const a=thigh.getWorldPosition(new Vector3()),b=calf.getWorldPosition(new Vector3()),c=foot.getWorldPosition(new Vector3());
     const toe=new Vector3(0,-.02,1).normalize().transformDirection(seatRoot.matrixWorld).multiplyScalar(c.distanceTo(ball.getWorldPosition(new Vector3())));

@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -17,7 +18,7 @@ function fixture(wall=false){
 }
 describe('minibus handling',()=>{
  it('keeps the actual Source101 driver above the cabin floor and inside its windows',async()=>{
-  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');});
+  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return parseFixtureGlb(bytes);});
   const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();try{
    await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...BUS_SPEC.seat);

@@ -1,9 +1,11 @@
+import {spaceControlFields} from '../humanoid-runtime/motion-families/space/control-fields';
 import {CONTROL_RANGES,type ControlKey} from './control';
 type Key=ControlKey;
 export type ControlField={key:Key;label:string;unit:string;step:number;note:string;section:'速度范围'|'加速与减速'|'转向与稳定'|'专项运动';disabled?:boolean};
 
 /** UI descriptions only; defaults and numeric validation live in the SDK. */
 export function controlFields(family:string,powertrain=false):ControlField[]{
+ if(family==='spacecraft')return spaceControlFields();
  if(family==='flying-creature')return [
   {key:'speed',label:'巡航速度',unit:'m/s',step:.5,note:'有飞行输入时逐步接近；无输入不会自动巡航。',section:'速度范围'},
   {key:'maxSpeed',label:'加速速度',unit:'m/s',step:.5,note:'Shift 消耗体力并加速。',section:'速度范围'},

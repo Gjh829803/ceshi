@@ -1,3 +1,5 @@
+import {setSpaceDriveMode,requestSpaceDock,spaceTelemetry} from './motion-families/space/commands';
+import type {SpaceDriveMode} from './motion-families/space/config';
 import {copyFlyingCreatureState} from './motion-families/flying-creature/state';
 import {resolveConfiguredFlyingCreatureFeel} from './motion-families/flying-creature/state';
 import type {FlyingCreatureVisual} from './motion-families/flying-creature/visual';
@@ -86,6 +88,8 @@ import {HUMANOID_BODY,RADIUS,CENTER} from './humanoid/controller';
 import type { SkillRequest, SkillResult } from './humanoid/action-schema';
 
 export type HumanoidCommand =
+ | {readonly type:'space.set-drive-mode';readonly mode:SpaceDriveMode}
+ | {readonly type:'space.dock';readonly portId:string|null}
  | {readonly type:'vehicle.prepare';readonly instanceId:string;readonly spawn:MapSpawn}
  | {readonly type:'vehicle.approach'|'vehicle.enter';readonly instanceId:string}
  | {readonly type:'vehicle.exit'}
@@ -95,7 +99,7 @@ export type HumanoidCommand =
  | {readonly type:'humanoid.apply-profile';readonly profile:HumanoidProfile}
  | {readonly type:'humanoid.perform-action';readonly request:SkillRequest};
 const HUMANOID_COMMAND_TYPES:ReadonlySet<string>=new Set<HumanoidCommand['type']>([
- 'vehicle.prepare','vehicle.approach','vehicle.enter','vehicle.exit','vehicle.recover',
+ 'space.set-drive-mode','space.dock','vehicle.prepare','vehicle.approach','vehicle.enter','vehicle.exit','vehicle.recover',
  'humanoid.set-camera-mode','humanoid.set-input','humanoid.apply-profile','humanoid.perform-action',
 ]);
 export function isHumanoidCommand(command:{type:string}):command is HumanoidCommand{return HUMANOID_COMMAND_TYPES.has(command.type);}
@@ -175,7 +179,7 @@ export interface HumanoidSnapshot {
   }|null};
   readonly characterCapabilities:readonly CharacterCapabilityAvailability[];
   readonly character:{readonly instanceId:string;readonly state:string;readonly swimming:boolean;readonly swimStyle:'breaststroke'|'freestyle';readonly stance:string;readonly carrying:string|null;readonly seated:string|null;readonly activeAction:{readonly requestId:string;readonly action:string;readonly phase:string;readonly elapsedSeconds:number}|null};
-  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:VehicleSpec['mode'];readonly available:boolean;readonly speedMetersPerSecond:number;readonly throttle:number;readonly steering:number;readonly grounded:boolean;readonly submerged:boolean}[];
+  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:VehicleSpec['mode'];readonly available:boolean;readonly speedMetersPerSecond:number;readonly throttle:number;readonly steering:number;readonly grounded:boolean;readonly submerged:boolean;readonly spaceFlight?:NonNullable<ReturnType<typeof spaceTelemetry>>}[];
   readonly transition:{readonly kind:''|'enter'|'exit';readonly remainingSeconds:number};
   readonly traversal:{readonly kind:string;readonly phase:string;readonly progress:number;readonly elapsedSeconds:number;readonly durationSeconds:number;readonly sourceActionId:string}|null;
   readonly surface:{readonly mode:string;readonly surfaceId:string|null;readonly pose:{readonly actionId:string;readonly timeSeconds:number;readonly phase:string}|null};
@@ -284,10 +288,12 @@ export class HumanoidRuntime implements PhysicsPort {
   get cameraMode():'authored'|'follow'{return this.authored?'authored':'follow';}
   command(command:HumanoidCommand):SkillResult|undefined{this.assertExternalMutation();return this.commandOwned(command);}
   private commandOwned(command:HumanoidCommand):SkillResult|undefined{
-    const fields:Record<HumanoidCommand['type'],readonly string[]>={'vehicle.prepare':['instanceId','spawn'],'vehicle.approach':['instanceId'],'vehicle.enter':['instanceId'],'vehicle.exit':[],'vehicle.recover':[],'humanoid.set-camera-mode':['mode'],'humanoid.set-input':['input'],'humanoid.apply-profile':['profile'],'humanoid.perform-action':['request']};
+    const fields:Record<HumanoidCommand['type'],readonly string[]>={'space.set-drive-mode':['mode'],'space.dock':['portId'],'vehicle.prepare':['instanceId','spawn'],'vehicle.approach':['instanceId'],'vehicle.enter':['instanceId'],'vehicle.exit':[],'vehicle.recover':[],'humanoid.set-camera-mode':['mode'],'humanoid.set-input':['input'],'humanoid.apply-profile':['profile'],'humanoid.perform-action':['request']};
     if(!Object.hasOwn(fields,command.type)||Object.keys(command).some(k=>k!=='type'&&!fields[command.type].includes(k)))throw new Error('HUMANOID_COMMAND_INVALID');
     let accepted=true;
     switch(command.type){
+      case 'space.set-drive-mode':setSpaceDriveMode(this.simulation.vehicle,command.mode);break;
+      case 'space.dock':requestSpaceDock(this.simulation.vehicle,command.portId);break;
       case 'vehicle.prepare':if(!command.spawn||!Array.isArray(command.spawn.position)||command.spawn.position.length!==3||command.spawn.position.some(n=>!Number.isFinite(n))||!Number.isFinite(command.spawn.yaw))throw new Error('HUMANOID_SPAWN_INVALID');accepted=this.prepareOwned(command.instanceId,command.spawn);break;
       case 'vehicle.approach':accepted=this.approachOwned(command.instanceId);break;
       case 'vehicle.enter':accepted=this.enterOwned(command.instanceId);break;
@@ -325,7 +331,7 @@ export class HumanoidRuntime implements PhysicsPort {
     const create=(type:HumanoidCommand['type'],properties:Record<string,import('../contracts').JsonValue>):import('../contracts').CommandDescriptor=>({type,isAvailable:true,schema:{...object({type:{const:type},...properties}),...(type==='vehicle.approach'?{description:VEHICLE_APPROACH_DESCRIPTION}:{})}});
     if(id!==this.options.character.instanceId)return [create('vehicle.prepare',{instanceId:{const:id},spawn:object({id:{type:'string'},name:{type:'string'},position:vec,yaw:{type:'number'},regionId:{type:'string'},vehicleId:{type:'string'}},['id','name','position','yaw','regionId'])}),create('vehicle.approach',{instanceId:{const:id}}),create('vehicle.enter',{instanceId:{const:id}})];
     const profile=object({view:object(HUMANOID_VIEW_SCHEMA_PROPERTIES,[]),character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object({...controlSchemaForFamily(vehicle.motion.flyingCreature?'flying-creature':vehicle.spec.mode,!!(vehicle.motion.wheelPhysics||vehicle.motion.body?.powertrain)),camera:VEHICLE_CAMERA_DISTANCE_SCHEMA},[])])),[]),cameraDistanceMeters:{anyOf:[CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},camera:object(CAMERA_SCHEMA_PROPERTIES,[])},[]);
-    return [create('vehicle.exit',{}),create('vehicle.recover',{}),create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
+    return [...(this.simulation.vehicle?.motion.family==='space'?[create('space.set-drive-mode',{mode:{enum:['assisted','inertial']}}),create('space.dock',{portId:{enum:[null,...(this.simulation.vehicle.spec.spaceFlight!.dockingPorts?.map(p=>p.id)??[])]}})]:[]),create('vehicle.exit',{}),create('vehicle.recover',{}),create('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),create('humanoid.set-input',{input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'}},['requestId','action'])})];
   }
   snapshot():HumanoidSnapshot{
     const s=this.simulation,h=s.humanoid,tr=h?.traversal,surface=h?.surface;
@@ -342,7 +348,7 @@ export class HumanoidRuntime implements PhysicsPort {
           entrySpeedMetersPerSecond:contact.entrySpeed,entrySerial:contact.entrySerial}:null},
       characterCapabilities:this.characterCapabilities().map(({id,eligible,reason,message,targetId})=>({id,eligible,reason,message,...(targetId?{targetId}:{})})),
       character:{swimStyle:h?.swimStyle??'breaststroke',instanceId:this.options.character.instanceId,state:h?.state??s.player.animation,swimming:!s.vehicle&&s.player.swimming,stance:h?.stance??'stand',carrying:h?.skills.carrying??null,seated:h?.skills.seated??null,activeAction:h?.skills.active?{requestId:h.skills.active.requestId,action:h.skills.active.id,phase:h.skills.active.phase,elapsedSeconds:h.skills.active.elapsed}:null},
-      vehicles:s.vehicles.map((v,i)=>({instanceId:v.spec.id,assetId:this.options.vehicles[i]!.assetId,mode:v.spec.mode,available:s.available(v),speedMetersPerSecond:v.velocity.length(),throttle:v.throttle,steering:v.steering,grounded:v.grounded,submerged:v.submerged})),
+      vehicles:s.vehicles.map((v,i)=>({instanceId:v.spec.id,assetId:this.options.vehicles[i]!.assetId,mode:v.spec.mode,available:s.available(v),speedMetersPerSecond:v.velocity.length(),throttle:v.throttle,steering:v.steering,grounded:v.grounded,submerged:v.submerged,...(v.motion.family==='space'?{spaceFlight:spaceTelemetry(v)!}:{})})),
       transition:{kind:s.transitionKind,remainingSeconds:s.transition},
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},

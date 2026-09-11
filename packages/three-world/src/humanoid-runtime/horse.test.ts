@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import * as T from 'three';
@@ -17,7 +18,7 @@ function resolveFixtureResource(path: string): string {
 }
 const transport = vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation(async url => {
   const bytes = await readFile(fileURLToPath(url));
-  const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
+  const gltf = await parseFixtureGlb(bytes);
   parsed.push(gltf);
   return gltf;
 });

@@ -1,6 +1,7 @@
 import {fitUnicycleFeet} from './unicycle-rider';
 import {poseKayakHands} from './kayak-visual';
 import {fitAtvHands} from './atv-rider';
+import {raiseMountedFeet,RIDER_SHOE_CONTACT_RISE} from './rider-foot-clearance';
 import {fitDragonClimb,type DragonClimbContacts} from './motion-families/flying-creature/mount-ladder';
 import * as T from 'three';
 import {CharacterAttachments,type CharacterAttachmentPoint,type CharacterAttachmentTransform} from './character-attachments';
@@ -248,14 +249,16 @@ export class Character {
         const down=pose.unicyclePose.footDown;
         const smooth=(t:number)=>t*t*(3-2*t);
         // Step behind the saddle to plant a foot without carrying the opposite
-        // hip across the fork. Source101's visible pelvis extends below its bone:
-        // lift it 55 mm onto the cushion, then clear the rear edge before lowering.
+        // hip across the fork. UEFN's visible pelvis extends below its bone:
+        // lift it 74 mm onto the cushion, then clear the rear edge before lowering.
         this.actor.position.x+=.02*down;
-        this.actor.position.y+=.055-.175*smooth(Math.max(0,(down-.6)/.4));
+        this.actor.position.y+=.074-.175*smooth(Math.max(0,(down-.6)/.4));
         this.actor.position.z-=.30*smooth(Math.min(1,down/.6));
         fitUnicycleFeet(source.root,this.root,pose.unicyclePose);
       }
       if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
+      if(mode==='atv'||mode==='tank'||mode==='submarine'||mode==='paddling')raiseMountedFeet(source.root,this.root,RIDER_SHOE_CONTACT_RISE);
+      if(mode==='sled')raiseMountedFeet(source.root,this.root,.006);
     }
     this.root.updateWorldMatrix(true, true);
     if(mode==='paddling'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);

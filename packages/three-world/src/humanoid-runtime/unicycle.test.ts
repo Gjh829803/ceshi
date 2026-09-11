@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,expect,it,vi} from 'vitest';
 import {Group,PerspectiveCamera,Vector3,SkinnedMesh,Box3} from 'three';
 import {readFile} from 'node:fs/promises';
@@ -54,7 +55,7 @@ it('requires ground beside the wheel for foot support and follows real ramps',()
   }finally{ramp.dispose();g.q.dispose();}
 });
 it('retains the original skeleton and fits alternating pedals, ground support and the lift arc',async()=>{
-  const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');});
+  const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();
   try{
@@ -68,7 +69,7 @@ it('retains the original skeleton and fits alternating pedals, ground support an
       const s={...createUnicycleState(),wheelAngle:angle,footDown:down,balanceTime:angle,supportLocal:[.30,.055,-.06] as [number,number,number]};
       rider.root.position.set(...UNICYCLE_SPEC.seat);rider.update(1/60,{...frame,unicyclePose:s});rider.root.updateMatrixWorld(true);
       for(const [suffix,side] of [['l',1],['r',-1]] as const){
-        const target=unicyclePedal(angle,side);target.y+=.055;if(side===1){target.lerp(new Vector3(...s.supportLocal),down);target.y+=Math.sin(Math.PI*down)*.09;}
+        const target=unicyclePedal(angle,side);target.y+=.055;if(side===1){target.lerp(new Vector3(...s.supportLocal),down);target.y+=Math.sin(Math.PI*down)*.09;}target.y+=.055; // UEFN level-shoe sole calibration.
         const actual=rider.root.getObjectByName(`ball_${suffix}`)!.getWorldPosition(new Vector3());expect(actual.distanceTo(target),JSON.stringify({angle,down,side,actual,target})).toBeLessThan(.015);
       }
       const bounds=new Box3(),point=new Vector3();let legVertices=0,minClearance=Infinity,pelvisBottom=Infinity,saddleIntersections=0;
@@ -80,7 +81,7 @@ it('retains the original skeleton and fits alternating pedals, ground support an
           if(saddleInterior.containsPoint(point))saddleIntersections++;
           for(let j=0;j<4;j++)if(mesh.skeleton.bones[indices.getComponent(i,j)]!.name==='pelvis'&&weights.getComponent(i,j)>.5){
             pelvisBottom=Math.min(pelvisBottom,point.y);
-            expect(saddleBounds.containsPoint(point),`pelvis intersects saddle: pedal=${angle}, support=${down}`).toBe(false);
+            expect(saddleBounds.containsPoint(point),`pelvis intersects saddle: pedal=${angle}, support=${down}, point=${point.toArray()}`).toBe(false);
           }
           let rightLegWeight=0;
           for(let j=0;j<4;j++)if(/^(thigh|calf)_r$/.test(mesh.skeleton.bones[indices.getComponent(i,j)]!.name))rightLegWeight+=weights.getComponent(i,j);

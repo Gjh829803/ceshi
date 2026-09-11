@@ -1,3 +1,6 @@
+export {spaceTelemetry} from './motion-families/space/commands';
+export {SPACE_FLIGHT_PRESETS} from './motion-families/space/config';
+export type {SpaceFlightConfig,SpaceDriveMode,SpaceDockPort} from './motion-families/space/config';
 export {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 export {createFlyingCreatureStateV1,resolveFlyingCreatureFeelV1} from './motion-families/flying-creature/state';
 export type {FlyingCreatureStateV1,FlyingCreatureFeelV1} from './motion-families/flying-creature/state';

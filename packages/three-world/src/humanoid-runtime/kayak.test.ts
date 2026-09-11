@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {RAFT_SPEC} from '../../../../shared/preset-content/raft';
 import {buildRaftModel} from '../../../../shared/preset-content/raft-model';
 import {CANOE_SPEC} from '../../../../shared/preset-content/canoe';
@@ -57,7 +58,7 @@ describe('kayak water and paddle mechanics',()=>{
  });
  it.each([KAYAK_SPEC,CANOE_SPEC,RAFT_SPEC])('keeps Source101 feet inside and hands on $id paddle in the runtime',async(spec)=>{
   expect(spec.mode).toBe('paddled_boat');expect(spec.archetype).toBe(spec.id);expect(spec.characterPose).toBe('paddling');expect(spec).not.toHaveProperty('visualVariant');
-  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');});
+  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return parseFixtureGlb(bytes);});
   const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...spec.seat);
    for(const side of ((spec.archetype==='canoe'||spec.archetype==='raft')?[-1,1]:[-1]))for(const phase of [0,.25,.5,.85,1.25,1.5]){const k={...createVehicle(spec).motion.kayak!,...((spec.archetype==='canoe'||spec.archetype==='raft')?{side}:{}),phase,effort:1};

@@ -44,10 +44,10 @@ def floats(document, binary, index):
 
 
 def build():
-    source_files = [SOURCE / 'gasp-research/climb-2m5.experimental.glb']
+    source_files = [SOURCE / 'uefn-mannequin-lod1.glb']
     document, original = glb(source_files[0])
     document = copy.deepcopy(document)
-    # The source model and skin stay intact. Only its presentation offset changes.
+    # The offline UEFN skin and Source101 rig stay intact; attach existing locomotion clips.
     nodes = {node['name']: i for i, node in enumerate(document['nodes'])}
     assert len(nodes) == len(document['nodes'])
     document['nodes'][nodes['GASP_DirectFK_Research']]['translation'] = [0, 0, 0]

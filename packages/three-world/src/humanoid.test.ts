@@ -1,6 +1,8 @@
 import {readFile} from 'node:fs/promises';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import {createHumanoidWorld,type HumanoidAssetDefinition} from './humanoid';
 import {createWorld,type ThreeWorld} from './world';
@@ -9,7 +11,7 @@ import {Character} from './humanoid-runtime/character';
 
 const worlds:ThreeWorld[]=[];
 const map:EnvironmentDefinition={id:'room',name:'Room',description:'Supported floor',bounds:{min:[-30,-5,-30],max:[30,20,30]},boxes:[{id:'floor',position:[0,-.5,0],size:[60,1,60]}],water:[],regions:[],spawns:[],playerSpawn:[0,.04,0]};
-afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();});
+afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
 it.each([
   {center:[0,24],actual:[0,24]},
@@ -47,6 +49,8 @@ it('uses explicit standalone resources without requiring a Creator catalog',asyn
 });
 
 it('loads the complete humanoid and performs a physical action through the public world',async()=>{
+  const parse=GLTFLoader.prototype.parse;
+  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
   const definition=catalog.assets.find(asset=>asset.id==='humanoid.source-101')!;
   const resources=new Map(definition.resources!.map(resource=>[resource.path,resource.sourcePath]));
   vi.stubGlobal('ProgressEvent',class extends Event{constructor(type:string,init:object){super(type);Object.assign(this,init);}});
@@ -61,6 +65,13 @@ it('loads the complete humanoid and performs a physical action through the publi
   expect(world).toHaveProperty('humanoid');
   const animation=world.humanoid!.options.character.animation!;
   expect(animation.availableHumanoidClips.size).toBe(48);
+  let triangles=0;animation.root.traverse(o=>{if(o instanceof THREE.SkinnedMesh){
+    triangles+=(o.geometry.index?.count??0)/3;
+    for(const material of Array.isArray(o.material)?o.material:[o.material]){
+      expect(material.transparent).toBe(false);expect(material.depthWrite).toBe(true);
+    }
+  }});
+  expect(triangles).toBe(4660);
   expect(world.snapshot().controlledEntityId).toBe('person');
   const bounds=new THREE.Box3().setFromObject(animation.root,true);expect(bounds.getSize(new THREE.Vector3()).y).toBeGreaterThan(1.5);
   world.step({},30);

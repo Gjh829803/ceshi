@@ -3,7 +3,7 @@ import {expect,it,vi} from 'vitest';
 import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld,humanoid} from '@worldkit/three';
-import {SourceCharacter} from '@worldkit/three/testing';
+import {SourceCharacter,parseFixtureGlb} from '@worldkit/three/testing';
 import {buildVehicle} from '../../shared/preset-content/models';
 import {SPECS} from '../../shared/preset-content/config';
 import {getMap} from '../../shared/preset-content/environment/maps';
@@ -18,7 +18,8 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
   return {id,clip:gltf.animations[0]!,model:gltf.scene};
  }));
  const seated=AnimationClip.parse(JSON.parse(await readFile(new URL('actions/sit-idle.clip.json',assetRoot),'utf8')));
- const source=new SourceCharacter(entries[3]!.model,[...entries,{id:'sit-idle',clip:seated}]);
+ const model=await parseFixtureGlb(await readFile(new URL('uefn-mannequin-lod1.glb',assetRoot)));
+ const source=new SourceCharacter(model.scene,[...entries,{id:'sit-idle',clip:seated}]);
  const character=new humanoid.HumanoidCharacter(source);
  // Only label rasterization is stubbed. Vehicle meshes, source bones, skinned
  // vertices, physics, mounted placement and the camera all use real code.

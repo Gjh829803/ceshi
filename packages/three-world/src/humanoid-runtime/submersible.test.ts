@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {getMap} from '../../../../shared/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -57,7 +58,7 @@ describe('observation submersible',()=>{
 });
 
 it('places the original rider inside the sealed cabin from the first mounted frame',async()=>{
- const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');});
+ const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...SUBMERSIBLE_SPEC.seat);
   for(const dt of [0,1/60,.5]){rider.update(dt,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'submarine'});

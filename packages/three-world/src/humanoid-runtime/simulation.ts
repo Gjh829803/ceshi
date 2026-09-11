@@ -412,6 +412,7 @@ export class Simulation {
     const vehicleBefore=this.vehicle?.position.clone();
     const before=this.vehicle?{unicycle:copyUnicycleState(this.vehicle.motion.unicycle),submersible:copySubmersibleState(this.vehicle.motion.submersible),jetski:copyJetSkiState(this.vehicle.motion.jetski),atv:copyAtvState(this.vehicle.motion.atv),rotation:this.vehicle.rotation.clone(),yaw:this.vehicle.yaw,pitch:this.vehicle.pitch,roll:this.vehicle.roll,creature:this.vehicle.motion.creature?{...this.vehicle.motion.creature,leadPosition:this.vehicle.motion.creature.leadPosition?.clone()}:undefined}:undefined;
     for (const v of this.vehicles) {
+      if(v.motion.family==='space')v.motion.body.riderMounted=v===this.vehicle&&this.transition===0;
       // 只有驾驶中的载具接收输入；四轮车停车后仍计算重力、悬架和驻车制动。
       if (v === this.vehicle && this.transition === 0)
         stepVehicle(v, i, dt, this.time, this.environment);

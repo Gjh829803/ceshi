@@ -1,6 +1,6 @@
 {
   "schema": "preserved-traversal-lab-source/1",
-  "model": "gasp-research/climb-2m5.experimental.glb",
+  "model": "uefn-mannequin-lod1.glb",
   "boneCount": 101,
   "runtimeClipCount": 48,
   "runtimeClips": [

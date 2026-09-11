@@ -1,0 +1,4 @@
+.space-flight-panel{position:absolute;left:18px;bottom:112px;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:min(680px,calc(100% - 36px));padding:10px 14px;background:rgba(248,250,252,.94);border:1px solid #ccd7e0;border-radius:12px;color:#283b4b;font-size:12px;pointer-events:auto}
+.space-flight-panel[hidden]{display:none}
+.space-flight-panel button{border:1px solid #bdcbd7;border-radius:7px;padding:6px 9px;background:white;color:#203b53;cursor:pointer}
+.space-flight-panel small:empty{display:none}

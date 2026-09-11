@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,expect,it,vi} from 'vitest';
 import {Box3,Group,Mesh,SkinnedMesh,Vector3} from 'three';
 import {readFile} from 'node:fs/promises';
@@ -56,7 +57,7 @@ it('sweeps the barrel before the hull reaches a wall, and rejects obstructed tur
  }finally{side.q.dispose();}
 });
 it('keeps the full original rider inside the cabin with fixed hand/foot contact, including zero-time entry',async()=>{
- const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return new GLTFLoader().parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');});
+ const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character(),model=buildTankModel();
  try{
@@ -81,7 +82,7 @@ it('keeps the full original rider inside the cabin with fixed hand/foot contact,
    expect([...intersections]).toEqual([]);
    expect(bounds.min.y).toBeGreaterThan(.88);expect(bounds.max.y).toBeLessThan(2.5);expect(bounds.min.z).toBeGreaterThan(1.9);expect(bounds.max.z).toBeLessThan(3);
    for(const [bone,socket] of [['hand_l','control.hand.left'],['hand_r','control.hand.right'],['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
-    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());expect(point.distanceTo(new Vector3(...TANK_SOCKETS[socket]))).toBeLessThan(.002);
+    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());expect(point.distanceTo(new Vector3(...TANK_SOCKETS[socket]).add(new Vector3(0,socket.startsWith('control.foot')?.035:0,0)))).toBeLessThan(.002);
    }
    expect(rider.root.scale.toArray()).toEqual([1,1,1]);samples.push({dt,min:bounds.min.toArray(),max:bounds.max.toArray()});
   }

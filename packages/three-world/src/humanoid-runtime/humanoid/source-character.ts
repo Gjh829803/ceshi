@@ -105,7 +105,7 @@ export class Character {
       const metadata = await metadataResponse.json() as CharacterClipEntry['metadata'];
       return { id, clip, metadata, model: gltf.scene };
     }));
-    const model = entries.find(e => e.id === 'climb-2m5')!.model;
+    const model = (await loader.loadAsync(url('uefn-mannequin-lod1.glb'))).scene;
     const swimming = await Promise.all(SWIMMING_ASSET_IDS.map(async id => {
       const response = await fetch(url(`swimming/${id}.clip.json`));
       if (!response.ok) throw new Error(`游泳动画加载失败: ${id}`);
@@ -128,9 +128,7 @@ export class Character {
   }
 
   constructor(model: Group, entries: CharacterClipEntry[]) {
-    // GLBs contain raw root tracks plus an origin-normalizing parent offset.
-    // Physics owns translation in the playable scene, so remove that offset
-    // and only root.position in cloned clips. Do not resize or rebind the rig.
+    // UEFN 外形已离线绑定到原有骨架。物理仍负责位移；运行时不缩放或重定向骨架。
     const stage = model.getObjectByName('GASP_DirectFK_Research');
     if (!stage) throw new Error('缺少 GASP 原始骨架节点');
     stage.position.set(0, 0, 0);

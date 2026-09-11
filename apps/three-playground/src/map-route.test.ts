@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readInitialMap, readMapHash, writeMapHash } from "./map-route";
 
-const mapIds = ["campus", "grand-prix", "character-workshop", "aircraft-training", "flying-creature-training"];
+const mapIds = ["campus", "grand-prix", "character-workshop", "aircraft-training", "flying-creature-training", "space-training"];
 
 describe("Playground map URL", () => {
   it("opens legacy dragon links but lets explicit routes and reloads override the old query", () => {

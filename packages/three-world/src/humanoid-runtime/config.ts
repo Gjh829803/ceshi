@@ -8,6 +8,8 @@ export function vehicleImpactMass(spec:VehicleSpec):number{return familyImpactMa
 export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, number]; offset: [number, number, number] }
 import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {
+  /** 太空大类专用标定；只由 space 家族消费。 */
+  spaceFlight?:import('./motion-families/space/config').SpaceFlightConfig;
   /** 原生动力飞行标定；缺省时保留现有地面起降坐骑。 */
   flyingCreatureGround?:import('./motion-families/flying-creature/ground').FlyingCreatureGround;
   flyingCreature?:import('./motion-families/flying-creature/state').FlyingCreatureTuning;

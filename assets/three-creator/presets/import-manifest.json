@@ -4,7 +4,8 @@
     "repository": "vehicle-training-ground",
     "commit": "c293622a63716b8473cc2a95cb485c515265945e",
     "notices": "resources",
-    "importedWithoutChangingAssetBytes": true
+    "importedWithoutChangingAssetBytes": false,
+    "modelModification": "User-supplied UEFN BlackJoints LOD1 skin bound offline to preserved Source101 animation rig."
   },
   "character": {
     "boneCount": 101,
@@ -37,13 +38,6 @@
     "character-workshop"
   ],
   "resources": [
-    {
-      "path": "humanoid/source/manifest.json",
-      "uri": "./assets/resources/f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff.json",
-      "sha256": "f09e1f8b91e5f8b2110e6afc95d9eb7cf570f07d8ebb53b435800ffbd9fcb8ff",
-      "byteLength": 38260,
-      "sourcePath": "assets/three-creator/presets/humanoid/source/manifest.json"
-    },
     {
       "path": "humanoid/source/gasp-research/climb-2m5.experimental.glb",
       "uri": "./assets/resources/c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1.glb",
@@ -610,6 +604,20 @@
       "sha256": "de990ef6fc68cffd7fd1ae342c4d0c823b541b8848d8f76bca5d3339f4de6f6e",
       "byteLength": 374,
       "sourcePath": "assets/three-creator/presets/creatures/LICENSE-MONSTERS.txt"
+    },
+    {
+      "path": "humanoid/source/manifest.json",
+      "uri": "./assets/resources/53f24eb12664813e33e597fb32c56d9d3b7bd77633f6f9733fdd7d8cda2c132f.json",
+      "sha256": "53f24eb12664813e33e597fb32c56d9d3b7bd77633f6f9733fdd7d8cda2c132f",
+      "byteLength": 38243,
+      "sourcePath": "assets/three-creator/presets/humanoid/source/manifest.json"
+    },
+    {
+      "path": "humanoid/source/uefn-mannequin-lod1.glb",
+      "uri": "./assets/resources/364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3.glb",
+      "sha256": "364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3",
+      "byteLength": 3355000,
+      "sourcePath": "assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb"
     }
   ]
 }

@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 import { toast as notify } from "sonner";
 import * as T from "three";
+import {updateSpaceExhaust} from '../../../shared/preset-content/space-model';
+import {mountSpacePanel} from './space-panel';
 import { mountShell } from "./shell";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { DRAGON_VARIANTS, readDragonVariant } from '../../../shared/preset-content/dragon-variants';
@@ -845,6 +847,7 @@ window.addEventListener(
   () => {
     window.removeEventListener("hashchange", restoreMapFromHash);
     disposeThumbnails?.();
+    spacePanel.dispose();
     inspector.dispose();
     stageObserver.disconnect();
     footerObserver.disconnect();
@@ -1003,6 +1006,7 @@ function drawMap() {
   ctx.fill();
   ctx.restore();
 }
+const spacePanel=mountSpacePanel(canvas.parentElement!,command=>{runtime.command(command);sdkPresentation.focus();});
 let lastUIUpdate = -Infinity,
   lastBindings = "";
 function updateUI() {
@@ -1012,7 +1016,8 @@ function updateUI() {
     p = sim.player,
     nearest = sim.nearest(),
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
-  const drive=v?humanoid.vehicleDriveTelemetry(v):null;
+  spacePanel.update(v?humanoid.spaceTelemetry(v):null);
+  const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
   shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.humanoid,
     traversalPrompt = humanoidTraversalReady(h)
@@ -1212,6 +1217,7 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   collisionDebug.update(sim.humanoid, collisionMode, session.map.boxes);
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
+    if(state.motion.family==='space')updateSpaceExhaust(vis.engine,state.motion.appliedForceNewtonsXYZ,state.rotation,state.spec.spaceFlight!.thrustNewtonsXYZ[2]);
     updateCreatureVisual(n, dt);
     updateVehicleWheels(vis, sample?.vehicles[n]??state, {
       grounded: state.grounded && !state.submerged,
@@ -1288,6 +1294,9 @@ const observePacing = (now: number) => {
   pacingFrame = requestAnimationFrame(observePacing);
 };
 pacingFrame = requestAnimationFrame(observePacing);
+// 太空深链接只选择太空实例；进入仍使用主项目 F 操作。
+const requestedSpace=new URLSearchParams(location.search).get('space');
+if(requestedSpace&&['space','survey-space'].includes(requestedSpace)&&session.map.regions.some(r=>r.modes.includes('spacecraft')))visit(SPECS.findIndex(s=>s.id===requestedSpace));
 shell.flag("loading", false);
 shell.flush();
 sdkPresentation.focus();
@@ -1323,6 +1332,7 @@ shell.on("exportProfiles", () => {
 // Small local command surface for repeatable player selections and state inspection.
 const labAPI = {
   getState: () => ({
+    spaceFlight:sim.vehicle?humanoid.spaceTelemetry(sim.vehicle):null,
     inputState:runtime.inspectControls(),
     dragon: (()=>{const v=sim.vehicles.find(v=>v.motion.flyingCreature);return v?{position:v.position.toArray(),state:structuredClone(v.motion.flyingCreature),boarding:sim.inspectBoarding(v.spec.id)}:null;})(),
     flyingCreature:sim.vehicle?.motion.flyingCreature?{...sim.vehicle.motion.flyingCreature}:undefined,

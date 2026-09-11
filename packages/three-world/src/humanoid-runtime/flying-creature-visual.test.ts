@@ -1,3 +1,4 @@
+import {parseFixtureGlb} from './textured-glb-fixture';
 import {fileURLToPath} from 'node:url';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type {WorldEngine} from '../engine';
@@ -84,7 +85,7 @@ it('flame history advances only on commits and clears on reset',()=>{
 it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 eyes through orbit, flight and T switches',async id=>{
   const {visual}=await fixture(id),variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{
-    const bytes=readFileSync(fileURLToPath(url));return new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+    const bytes=readFileSync(fileURLToPath(url));return parseFixtureGlb(bytes);
   });
   vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(readFileSync(fileURLToPath(String(input)))));
   const rider=new Character();await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
