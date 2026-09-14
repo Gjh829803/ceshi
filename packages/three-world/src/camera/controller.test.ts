@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { Box3, Ray, Quaternion, Vector3 } from "three";
 import {
   parseCameraDocument,
@@ -1021,4 +1021,78 @@ it('uses the displayed aircraft heading for heading-space anchors at both endpoi
     if(alpha===1)expect(projected.positionWorldMetersXYZ).toEqual(before.current!.positionWorldMetersXYZ);
     expect(c.inspect()).toEqual(before);
   }
+});
+
+
+function inspectionCloneMetadata(value:unknown) {
+  const data=value as {kind?:string;document?:{kind?:string};values?:unknown;subjectId?:string;resolved?:{values?:unknown}}|null|undefined;
+  return {
+    document:data?.kind==='world-camera'||data?.document?.kind==='world-camera',
+    configuration:Boolean((data?.values&&data.subjectId)||data?.resolved?.values),
+  };
+}
+
+it('copies detached inspection metadata once across commits without trusting caller shallow freezes',()=>{
+  const {controller:c}=fixture();
+  const source=Object.freeze(document({activation:'immediate'}));
+  c.install(source,frame());
+  const cloned=vi.spyOn(globalThis,'structuredClone');
+  try{
+    const first=c.inspect();
+    expect(first.document).not.toBe(source);
+    expect(Reflect.set(source.views.orbit!.overrides!.position!,'distanceMeters',9)).toBe(true);
+    expect(first.document!.views.orbit!.overrides!.position).toMatchObject({distanceMeters:4});
+    for(let tick=1;tick<=20;tick++){
+      step(c,tick,{orbitDeltaRadiansXY:[.01,0]});const value=c.inspect();
+      expect(value.document).toEqual(first.document);expect(value.resolved).toEqual(first.resolved);
+      expect(value.current!.simulationTick).toBe(tick);
+      expect(Object.isFrozen(value.document!.views.orbit!.overrides!.position)).toBe(true);
+      expect(Reflect.set(value.document!.views.orbit!.overrides!.position!,'distanceMeters',99)).toBe(false);
+      expect(Reflect.set(value.resolved!.values.position,'distanceMeters',99)).toBe(false);
+      expect(Reflect.set(value.current!.positionWorldMetersXYZ,'0',99)).toBe(false);
+    }
+    const documents=cloned.mock.calls.filter(([value])=>inspectionCloneMetadata(value).document);
+    const configurations=cloned.mock.calls.filter(([value])=>inspectionCloneMetadata(value).configuration);
+    expect(documents).toHaveLength(1);expect(configurations).toHaveLength(1);
+    expect(first.current!.simulationTick).toBe(0);expect(c.inspect().resolved!.values.position).toMatchObject({distanceMeters:4});
+  }finally{cloned.mockRestore();c.dispose();}
+});
+
+it('refreshes cached inspection metadata for edits, view changes, checkpoints, reset and retarget',()=>{
+  const f=fixture(),c=f.controller;
+  c.install(document({activation:'immediate'}),frame());
+  const initialInspection=c.inspect(),checkpoint=c.captureCheckpoint();c.commitBaseline();
+  c.setView('other',frame());
+  expect(c.inspect().configurationRevision).toBe(initialInspection.configurationRevision);
+  expect(c.inspect().resolved).toMatchObject({viewId:'other',values:{position:{distanceMeters:6}}});
+  c.setView('orbit',frame());
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{distanceMeters:7}}}}}),frame());
+  expect(c.inspect().resolved!.values.position).toMatchObject({distanceMeters:7});
+  expect(initialInspection.resolved!.values.position).toMatchObject({distanceMeters:4});
+  c.restoreConfiguration(initialInspection.document!,frame());
+  expect(c.inspect().document).toEqual(initialInspection.document);
+  expect(c.inspect().resolved!.values.position).toMatchObject({distanceMeters:4});
+  c.restoreCheckpoint(checkpoint,c.inspect().cameraCommitRevision);
+  expect(c.inspect().document).toEqual(initialInspection.document);
+  expect(c.inspect().resolved).toEqual(initialInspection.resolved);
+  c.reset(frame(0,2));
+  expect(c.inspect().resolved).toEqual(initialInspection.resolved);
+  const mounted={...initial,id:'mounted-subject',generation:2};f.setSubject(mounted);
+  c.applyLifecycle({kind:'retarget',operationId:'mount-for-inspection',previousSubject:initial,subject:mounted},frame(0,2));
+  expect(c.inspect().resolved).toMatchObject({subjectId:'mounted-subject',subjectGeneration:2});
+  expect(initialInspection.resolved).toMatchObject({subjectId:'actor',subjectGeneration:1});c.dispose();
+});
+
+it('refreshes diagnostic-only inspection samples without recopying static metadata',()=>{
+  const {controller:c}=fixture();c.install(document({activation:'immediate'}),frame());c.setCollisionDiagnosticsEnabled(true);
+  const before=c.inspect(),cloned=vi.spyOn(globalThis,'structuredClone');
+  try{
+    c.sampleProjection({epoch:0,previousTick:0,currentTick:0,alpha:1,cut:false},1.5);
+    const after=c.inspect();expect(after.cameraCommitRevision).toBe(before.cameraCommitRevision);
+    expect(after.collisionQueries!.presentation!.probes.length).toBeGreaterThan(0);
+    expect(before.collisionQueries!.presentation).toBeUndefined();
+    expect(Reflect.set(after.collisionQueries!.presentation!,'simulationTick',99)).toBe(false);
+    expect(cloned.mock.calls.filter(([value])=>{const metadata=inspectionCloneMetadata(value);return metadata.document||metadata.configuration;})).toHaveLength(0);
+    c.setCollisionDiagnosticsEnabled(false);expect(c.inspect().collisionQueries).toBeUndefined();
+  }finally{cloned.mockRestore();c.dispose();}
 });

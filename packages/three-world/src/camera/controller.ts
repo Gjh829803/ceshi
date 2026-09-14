@@ -72,12 +72,22 @@ export type {
   CameraBaseline,
 } from "./state";
 const clone = <T>(value: T): T => structuredClone(value);
+// Only subtrees recursively frozen here are trusted. A caller's shallow
+// Object.freeze must never bypass deep immutability or input detachment.
+const deeplyImmutable = new WeakSet<object>();
 function immutable<T>(value: T): T {
-  if (value && typeof value === "object") {
+  if (value && typeof value === "object" && !deeplyImmutable.has(value)) {
     for (const item of Object.values(value)) immutable(item);
     Object.freeze(value);
+    deeplyImmutable.add(value);
   }
   return value;
+}
+function inspectionMetadata<T extends object>(source:T|undefined,cache:WeakMap<T,T>):T|undefined {
+  if(source===undefined)return undefined;
+  let snapshot=cache.get(source);
+  if(!snapshot){snapshot=immutable(clone(source));cache.set(source,snapshot);}
+  return snapshot;
 }
 const none = (): CameraTransition => ({
   kind: "none",
@@ -1164,19 +1174,19 @@ export class CameraController {
     this.admit();
     this.constraints.setDiagnosticsEnabled(enabled);
   }
+  private readonly inspectionDocuments=new WeakMap<CameraDocument,CameraDocument>();
+  private readonly inspectionConfigurations=new WeakMap<ResolvedCameraConfiguration,ResolvedCameraConfiguration>();
   private inspectionCache:{diagnosticsRevision:number;state:ControllerState;failure:CameraInspection["failure"];value:CameraInspection}|undefined;
   inspect(): CameraInspection {
     const s = this.state;
     if(this.inspectionCache?.diagnosticsRevision===this.constraints.diagnosticsRevision&&this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
-    const value=immutable(
-      clone({
+    const value=immutable({
+      ...clone({
         collisionQueries: this.constraints.inspectQueries(),
         mode: s.mode,
-        document: s.document,
         documentHash: s.hash,
         configurationRevision: s.configurationRevision,
         cameraCommitRevision: s.cameraCommitRevision,
-        resolved: s.resolved,
         intent: s.intent,
         desired: s.mode === "authored" ? undefined : (s.pendingPose ?? s.base),
         previous: s.previous,
@@ -1186,7 +1196,9 @@ export class CameraController {
         adaptations: s.adaptations,
         ...(this.failureState ? { failure: this.failureState } : {}),
       }),
-    );
+      document:inspectionMetadata(s.document,this.inspectionDocuments),
+      resolved:inspectionMetadata(s.resolved,this.inspectionConfigurations),
+    });
     this.inspectionCache={diagnosticsRevision:this.constraints.diagnosticsRevision,state:s,failure:this.failureState,value};
     return value;
   }
