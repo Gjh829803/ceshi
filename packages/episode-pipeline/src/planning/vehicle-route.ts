@@ -1,5 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { humanoid, emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot } from '@worldkit/three';
+import { humanoid, emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot, type AircraftSubtype } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from '../contracts.js';
 import type {
   RouteCursor,
@@ -32,14 +32,24 @@ export type VehicleFamily=typeof VEHICLE_FAMILIES[number];
 const clamp=(n:number)=>Math.max(-1,Math.min(1,n));
 const angle=(n:number)=>Math.atan2(Math.sin(n),Math.cos(n));
 /** Steering is body-relative; camera orbit never steers a vehicle. No transforms are written. */
-export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotation:Vec3,velocity:Vec3,target:Vec3):WorldInput {
+export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotation:Vec3,velocity:Vec3,target:Vec3,aircraft?:{subtype?:AircraftSubtype|undefined;throttle:number}):WorldInput {
   const delta=new Vector3(...target).sub(new Vector3(...position));
   const q=new Quaternion().setFromEuler(new Euler(...rotation));
   const heading=new Vector3(0,0,1).applyQuaternion(q);
   const yaw=Math.atan2(heading.x,heading.z),desiredYaw=Math.atan2(delta.x,delta.z);
   const yawError=angle(desiredYaw-yaw),horizontal=Math.hypot(delta.x,delta.z);
   const input={forward:Math.max(.15,Math.cos(yawError)),steer:clamp(-yawError*1.8),roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false};
-  if(family==='tank'){
+  if(family==='plane'&&aircraft?.subtype==='balloon'){
+    input.forward=0;input.steer=0;input.boost=delta.y-velocity[1]*2>1;input.slow=delta.y-velocity[1]*2< -1;
+  } else if(family==='plane'&&aircraft?.subtype&&['helicopter','multirotor','tiltrotor'].includes(aircraft.subtype)){
+    const desiredVelocity=new Vector3(delta.x,0,delta.z).multiplyScalar(.45).clampLength(0,6);
+    const acceleration=desiredVelocity.sub(new Vector3(velocity[0],0,velocity[2])).multiplyScalar(.65).addScaledVector(new Vector3(velocity[0],0,velocity[2]),.12).applyQuaternion(q.clone().invert());
+    input.steer=horizontal>8?input.steer*.5:0;
+    input.forward=clamp(acceleration.z/(9.81*.32));
+    input.roll=clamp((-acceleration.x/9.81-input.steer*Math.max(0,Math.min(1,Math.hypot(velocity[0],velocity[2])/35))*.3)/.38);
+    const throttleTarget=Math.max(.2,Math.min(.8,.5+clamp((delta.y*.6-velocity[1]*.15)/3)*3/8));
+    input.boost=aircraft.throttle<throttleTarget-.015;input.slow=aircraft.throttle>throttleTarget+.015;
+  } else if(family==='tank'){
     input.forward=Math.abs(yawError)>1?0:input.forward;
     input.brake=horizontal<Math.hypot(velocity[0],velocity[2])**2/12+.5;
   } else if(family==='spacecraft'){
@@ -93,11 +103,13 @@ export class VehicleRouteController {
     const position=actor.positionWorldMetersXYZ,target=this.route[this.index]!,velocity=actor.motion?.velocityWorldMetersPerSecondXYZ??[0,0,0];
     const distance=Math.hypot(...position.map((v,i)=>v-target[i]!));
     const base={waypointIndex:Math.max(0,this.cursor.waypointIndex),positionWorldMetersXYZ:position,targetPositionWorldMetersXYZ:target,distanceToTargetMeters:distance};
-    if(this.finished)return {...base,mode:'finished',input:{humanoid:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:true,slow:true,jump:false}}};
+    const rotary=vehicle.mode==='plane'&&vehicle.aircraftSubtype&&['helicopter','multirotor','tiltrotor'].includes(vehicle.aircraftSubtype);
+    const hover=rotary&&!vehicle.grounded?vehicleDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,target,{subtype:vehicle.aircraftSubtype,throttle:vehicle.throttle}):undefined;
+    if(this.finished)return {...base,mode:'finished',input:hover??{humanoid:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:true,slow:true,jump:false}}};
     const held = this.waypointHold?.waypointIndex === base.waypointIndex ? this.waypointHold : undefined;
     if (held && distance <= held.radiusMeters) {
       this.anchor = position; this.lastProgress = time;
-      return { ...base, mode: 'action', input: { humanoid: { ...emptyHumanoidInput(), brake: true, slow: true } } };
+      return { ...base, mode: 'action', input: hover??{ humanoid: { ...emptyHumanoidInput(), brake: true, slow: true } } };
     }
     if(!this.anchor||Math.hypot(...position.map((v,i)=>v-this.anchor![i]!))>.25){this.anchor=position;this.lastProgress=time;}
     if(time-this.lastProgress>5)return {...base,mode:'failed',input:{},diagnostic:{code:'EPISODE_PLAYER_ROUTE_BLOCKED',message:'Real vehicle input made no progress for five seconds.',collisionEntityIds:actor.motion?.collisionEntityIds??[]}};
@@ -105,6 +117,6 @@ export class VehicleRouteController {
     const tolerance=held?.radiusMeters ?? (airborne?2:1);
     // All axes remain checked: a bridge below a waypoint is never counted as arrival.
     if(distance<=tolerance)this.advanceWaypoint();
-    return {...base,mode:'travel',input:vehicleDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,this.route[this.index]!)};
+    return {...base,mode:'travel',input:vehicleDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,this.route[this.index]!,{subtype:vehicle.aircraftSubtype,throttle:vehicle.throttle})};
   }
 }

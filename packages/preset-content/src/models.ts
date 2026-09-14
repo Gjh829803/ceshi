@@ -7,6 +7,8 @@ import {buildRaftModel} from './vehicles/raft/model';
 import {buildJetSkiModel} from './vehicles/jetski/model';
 import {buildAtvModel} from './vehicles/atv/model';
 import {buildAircraftCockpit} from './vehicles/aircraft/cockpit';
+import {buildSoaringShell} from './vehicles/aircraft/soaring-shell';
+import {buildAircraftShell} from './vehicles/aircraft/shell';
 import * as T from 'three';
 import { SPECS, type VehicleSpec } from './config';
 import { ROAD_CUSHIONS } from './vehicles/road/seating';
@@ -21,7 +23,7 @@ export function box(parent:T.Object3D,w:number,h:number,d:number,x:number,y:numb
 function ball(parent:T.Object3D,x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:T.Material){const m=new T.Mesh(new T.SphereGeometry(1,24,16),mat);m.scale.set(sx,sy,sz);m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;}
 function rod(parent:T.Object3D,a:T.Vector3,b:T.Vector3,r:number,mat:T.Material){const d=b.clone().sub(a);const m=new T.Mesh(new T.CylinderGeometry(r,r,d.length(),10),mat);m.position.copy(a).add(b).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.normalize());m.castShadow=true;parent.add(m);return m;}
 export interface WheelRig { steering:T.Group; spin:T.Group; radius:number }
-export interface VehicleVisual {aircraftCockpit?:ReturnType<typeof buildAircraftCockpit>;root:T.Group;seat:T.Group;wheels:T.Object3D[];wheelRigs:WheelRig[];rotors:T.Object3D[];steering:T.Object3D[];engine:T.Mesh[];label:T.Sprite;creature?:CreatureVisual}
+export interface VehicleVisual {soaringShell?:ReturnType<typeof buildSoaringShell>;aircraftShell?:ReturnType<typeof buildAircraftShell>;aircraftCockpit?:ReturnType<typeof buildAircraftCockpit>;root:T.Group;seat:T.Group;wheels:T.Object3D[];wheelRigs:WheelRig[];rotors:T.Object3D[];steering:T.Object3D[];engine:T.Mesh[];label:T.Sprite;creature?:CreatureVisual}
 export function labelSprite(text:string,color='#233746',width=5,height=.9):T.Sprite {
   const canvas=document.createElement('canvas');canvas.width=768;canvas.height=128;const c=canvas.getContext('2d')!;
   c.fillStyle='rgba(245,250,251,.95)';c.beginPath();c.roundRect(0,0,768,128,20);c.fill();c.fillStyle=color;c.font='600 49px "Segoe UI", "Microsoft YaHei", sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(text,384,65);
@@ -37,6 +39,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     const label=labelSprite(s.name);label.position.y=3.2;visual.root.add(label);
     return {...visual,seat,label,rotors:[],engine:[]};
   }
+  let aircraftShell:ReturnType<typeof buildAircraftShell>|undefined;
   if(['horse','carriage','dragon'].includes(s.archetype)){
     const root=new T.Group(),creature=buildCreatureVisual(s);root.name=s.id;root.add(creature.content,creature.seat);
     const label=labelSprite(s.name);label.position.y=s.mode==='dragon'?6.8:3.9;root.add(label);
@@ -45,6 +48,10 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   const root=new T.Group(),seat=new T.Group(),wheels:T.Object3D[]=[],wheelRigs:WheelRig[]=[],rotors:T.Object3D[]=[],steering:T.Object3D[]=[],engine:T.Mesh[]=[];
   const paint=material(s.color,.32,.34),accent=material('#f4f4ec',.1,.6);
   root.name=s.id;seat.position.set(...s.seat);root.add(seat);
+  if(s.aircraftSubtype==='paraglider'||s.aircraftSubtype==='wingsuit'||s.aircraftSubtype==='balloon'){
+    const soaringShell=buildSoaringShell(root,s.aircraftSubtype,paint),label=labelSprite(s.aircraftSubtype==='wingsuit'?'翼装装备 · 靠近按 F':s.name);label.position.y=s.aircraftSubtype==='balloon'?18:s.aircraftSubtype==='wingsuit'?1.7:7;root.add(label);
+    return {root,seat,wheels,wheelRigs,rotors,steering,engine,label,soaringShell};
+  }
   const tube=(a:number[],b:number[],r=.05,mat:T.Material=dark)=>rod(root,new T.Vector3(a[0],a[1],a[2]),new T.Vector3(b[0],b[1],b[2]),r,mat);
   function wheel(x:number,y:number,z:number,r=.45,w=.3) {
     // The axle steers around Y; its child rolls around local X. Mixing both on
@@ -181,23 +188,14 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     const prop=new T.Group();prop.position.set(0,-.3,-2.8);box(prop,.15,1.25,.12,0,0,0,dark);box(prop,1.25,.15,.12,0,0,0,dark);root.add(prop);rotors.push(prop);
     for(const x of [-.65,.65])ball(root,x,-.05,2.2,.12,.12,.1,new T.MeshBasicMaterial({color:'#e9fff9'}));
   } else if(archetype==='plane') {
-    // 有空腔的座舱：地板、侧壳和前后机身分别建模，不用实心椭球吞掉乘员。
-    box(root,1.12,.10,1.65,0,.67,.30,paint).name='aircraft-floor';
-    for(const x of [-.54,.54])box(root,.10,.60,1.65,x,1.02,.30,paint).name='aircraft-side';
-    ball(root,0,1.30,2.02,.52,.46,.98,paint).name='aircraft-nose';
-    ball(root,0,1.10,-1.66,.48,.38,1.46,paint).name='aircraft-tail';
-    box(root,8,.12,1.35,0,2.20,.05,accent).name='aircraft-wing';
-    box(root,3.15,.10,.72,0,1.30,-2.55,paint);
-    box(root,.10,1.20,.85,0,1.87,-2.63,paint);
+    aircraftShell=buildAircraftShell(root,paint,accent,s.aircraftSubtype);rotors.push(...aircraftShell.rotors);
     box(root,.72,.13,.50,0,1.11,.10,dark).name='seat-cushion';
     box(root,.64,.64,.10,0,1.49,-.23,dark).name='seat-back';
     box(root,.42,.37,.40,0,.86,.10,dark);
     for(const x of [-1.10,1.10]){tube([x*.45,.85,.0],[x,.32,.0],.055,chrome);wheel(x,.32,.0,.32,.20);}
     tube([0,1.05,2.10],[0,.26,2.10],.055,chrome);wheel(0,.26,2.10,.26,.18);
-    const prop=new T.Group();prop.name='aircraft-propeller';prop.position.set(0,1.30,3.10);
-    box(prop,.10,2,.06,0,0,0,dark);ball(prop,0,0,.05,.13,.13,.17,chrome);root.add(prop);rotors.push(prop);
-    for(const x of [-.54,.54]){tube([x,.80,.40],[x*5.5,2.14,.05],.035,chrome);box(root,.38,.06,.48,x*1.5,.48,-.25,chrome);}
-    for(const x of [-3.9,3.9])ball(root,x,2.23,.05,.09,.06,.10,new T.MeshBasicMaterial({color:x<0?'#fb6a51':'#79f0c5'}));
+    for(const x of [-.54,.54]){if(aircraftShell.winged)tube([x,.80,.40],[x*5.5,2.14,.05],.035,chrome);box(root,.38,.06,.48,x*1.5,.48,-.25,chrome);}
+    if(aircraftShell.winged)for(const x of [-3.9,3.9])ball(root,x,2.23,.05,.09,.06,.10,new T.MeshBasicMaterial({color:x<0?'#fb6a51':'#79f0c5'}));
   } else if(archetype==='glider') {
     ball(root,0,.12,0,.64,.28,3.25,paint);pilotSeat(s.seat[1],s.seat[2]);
     box(root,11,.13,1.4,0,.3,-.2,accent);box(root,3.3,.1,.8,0,.65,-2.4,paint);box(root,.12,1.6,1,0,1.1,-2.5,paint);
@@ -210,9 +208,9 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   else if(s.visualVariant==='patrol'){box(root,1.35,.8,1.15,0,.75,-.35,paint);box(root,1.1,.5,.04,0,.94,.25,glass);tube([0,1.15,-.3],[0,2,-.3],.035,chrome);}
   else if(s.visualVariant==='trainer'){for(const x of [-3.7,3.7])box(root,.55,.025,1.34,x,2.273,.05,paint);}
   else if(s.visualVariant==='survey'){for(const x of [-2.3,2.3]){const panel=box(root,.9,.04,1.8,x,.35,-.2,new T.MeshBasicMaterial({color:'#4577a5'}));panel.rotation.z=x<0?.08:-.08;}ball(root,0,1.15,-.6,.35,.35,.35,accent);}
-  const aircraftCockpit=archetype==='plane'?buildAircraftCockpit(root):undefined;
+  const aircraftCockpit=archetype==='plane'?buildAircraftCockpit(root,aircraftShell?.winged):undefined;
   const label=labelSprite(`${String(SPECS_INDEX(s)).padStart(2,'0')}  /  ${s.name}`);label.position.set(0,s.mode==='plane'||s.mode==='glider'?3.7:s.mode==='submarine'?3.4:3.5,0);root.add(label);
   root.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
-  return {root,seat,wheels,wheelRigs,rotors,steering,engine,label,...(aircraftCockpit?{aircraftCockpit}:{})};
+  return {root,seat,wheels,wheelRigs,rotors,steering,engine,label,...(aircraftShell?{aircraftShell}:{}),...(aircraftCockpit?{aircraftCockpit}:{})};
 }
 function SPECS_INDEX(s:VehicleSpec){return SPECS.findIndex(spec=>spec.id===s.id)+1;}

@@ -8,4 +8,6 @@ export interface CreatureState {
   leadPosition?: Vector3|undefined;
   leadYaw?: number|undefined;
   leadVerticalSpeed?: number|undefined;
+  /** 马的重力速度；不包含贴坡、台阶与去穿透产生的位置修正。 */
+  mountFallSpeed?: number|undefined;
 }

@@ -56,7 +56,8 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, time: number
         speed = clamp(speed, -s.reverseSpeed, max);
         if (driveDisabled)
             speed *= Math.exp(-2.5 * dt);
-        const yawRate = road ? roadYawRate(speed, s.steer) : s.steer * (mode === 'boat' ? Math.min(Math.abs(speed) / 4, 1) * Math.sign(speed) : 1);
+        // 动力船保留静止转向辅助；A/D 不产生前进推力，倒船时沿用原有反向舵效。
+        const yawRate = road ? roadYawRate(speed, s.steer) : s.steer * (mode === 'boat' ? Math.max(.35, Math.min(Math.abs(speed) / 4, 1)) * (speed < -.05 ? -1 : 1) : 1);
         v.yaw -= v.steering * yawRate * dt * (driftEnabled ? 1 + drift * .35 : 1);
         const newF = scratch.set(Math.sin(v.yaw), 0, Math.cos(v.yaw));
         {

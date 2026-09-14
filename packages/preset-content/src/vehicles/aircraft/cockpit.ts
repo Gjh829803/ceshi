@@ -1,8 +1,8 @@
 import * as T from 'three';
 
-export interface AircraftReadout {speed:number;throttle:number;pitch:number;roll:number;steering:number;position:T.Vector3;velocity:T.Vector3;grounded:boolean;aircraft?:{stalled:boolean;hardLanding:boolean}|undefined}
+export interface AircraftReadout {speed:number;throttle:number;pitch:number;roll:number;steering:number;position:T.Vector3;velocity:T.Vector3;grounded:boolean;aircraft?:{stalled:boolean;hardLanding:boolean;subtype?:string;tilt?:number}|undefined}
 /** 普通 Three 几何与仪表；调用者使用 SDK 的展示回调，不建立第二时钟。 */
-export function buildAircraftCockpit(root:T.Group){
+export function buildAircraftCockpit(root:T.Group,winged=true){
  const dark=new T.MeshStandardMaterial({color:'#243039',roughness:.9});
  const white=new T.MeshStandardMaterial({color:'#e4e8e8'});
  const part=(w:number,h:number,d:number,x:number,y:number,z:number,mat:T.Material=dark)=>{
@@ -23,12 +23,16 @@ export function buildAircraftCockpit(root:T.Group){
  }
  const left=part(1.8,.045,.30,-2.9,2.20,-.76,white),right=part(1.8,.045,.30,2.9,2.20,-.76,white);
  const elevator=part(2.6,.04,.26,0,1.30,-3.0,white);
+ const elevatorHinge=new T.Group();elevatorHinge.name='aircraft-elevator-hinge';elevatorHinge.position.set(0,1.30,-2.87);root.add(elevatorHinge);
+ elevatorHinge.add(elevator);elevator.position.set(0,0,-.13);
+ if(!winged){root.remove(left,right);}
  let last=-1;
  function update(state:AircraftReadout,time:number){
-  left.rotation.x=state.steering*.25;right.rotation.x=-state.steering*.25;elevator.rotation.x=-state.pitch;
+  left.rotation.x=state.steering*.25;right.rotation.x=-state.steering*.25;elevatorHinge.rotation.x=T.MathUtils.clamp(-state.pitch,-.35,.35);
   const frame=Math.floor(time*12);if(frame===last)return;last=frame;
   const c=context;c.fillStyle='#142029';c.fillRect(0,0,1024,384);
-  const labels=['空速 km/h','姿态','高度 m','油门 %','升降 m/s','飞行状态'];
+  const rotor=['helicopter','multirotor','tiltrotor'].includes(state.aircraft?.subtype??'');
+  const labels=['空速 km/h','姿态','高度 m',rotor?'升力指令 %':'油门 %','升降 m/s',state.aircraft?.subtype==='tiltrotor'?`倾转 ${Math.round((state.aircraft.tilt??0)*90)}°`:'飞行状态'];
   const values=[String(Math.round(state.speed*3.6)),'',state.position.y.toFixed(0),String(Math.round(state.throttle*100)),state.velocity.y.toFixed(1),state.aircraft?.hardLanding?'重着陆':state.aircraft?.stalled?'失速':state.grounded?'地面':'飞行'];
   for(let n=0;n<6;n++){
    const x=175+(n%3)*337,y=99+Math.floor(n/3)*188;

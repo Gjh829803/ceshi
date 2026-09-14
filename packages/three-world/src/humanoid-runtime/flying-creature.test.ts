@@ -1,8 +1,9 @@
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {requestDragonLanding} from './motion-families/flying-creature/ground';
+import {dragonStandingPoint} from './motion-families/flying-creature/mount';
 import {actionForKey,createKeyBindings} from './input';
 import RAPIER from '@dimforge/rapier3d-compat';
-import {afterEach,beforeAll,expect,it} from 'vitest';
+import {beforeAll,expect,it} from 'vitest';
 import {DRAGON_VARIANTS} from '@worldkit/preset-content/dragon-variants';
 import {Group,PerspectiveCamera,Vector3} from 'three';
 import {createWorld} from '../world';
@@ -13,8 +14,6 @@ import {creatureBodies} from './creatures/controller';
 import {CREATURE_SPECS} from '@worldkit/preset-content/creatures/specs';
 import {createDragonTrainingMap} from '@worldkit/preset-content/environment/dragon-training';
 beforeAll(initEnvironmentQueries);
-// 连续 Rapier 固定步会占满微任务队列；用真实事件循环机会交付 Vitest 的进度 RPC。
-afterEach(()=>new Promise<void>(resolve=>setImmediate(resolve)));
 
 it('routes H and remapped summon keys through the shared unmounted action channel',()=>{
   expect(actionForKey('KeyH',false)).toEqual({kind:'humanoid',input:{summonDragon:true}});
@@ -113,7 +112,7 @@ it('rejects invalid ground configurations and isolates per-instance tuning',()=>
   expect(b.spec.flyingCreatureGround!.seat).toEqual(spec.flyingCreatureGround.seat);
 });
 
-it('holds a blocked dismount at its original path, resumes safely, and resets a pending mount',async()=>{
+it('rejects blocked exits and switches dragon mounting immediately when a safe point is available',async()=>{
   const map=createDragonTrainingMap();map.boxes=[{id:'floor',position:[0,-.5,0],size:[300,1,300]}];
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
     vehicles:[{instanceId:'dragon',assetId:'creature.dragon.d01',spec:createFlyingCreatureSpec('dragon'),object:new Group()}],character:{instanceId:'person',object:new Group()}}});
@@ -126,14 +125,24 @@ it('holds a blocked dismount at its original path, resumes safely, and resets a 
     world.step({},1);world.step({humanoid:{...emptyInput(),jump:true}},1);
     expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundFailure).toContain('上方');
     h.world.removeCollider(roof,true);world.step({},1);
-    expect(r.exit(),s.controlledActor.message).toBe(true);const destination=[...s.controlledActor.dragonTransition!.destination],duration=s.controlledActor.transition;
-    const obstacle=h.world.createCollider(RAPIER.ColliderDesc.cuboid(.55,1,.55).setTranslation(destination[0]!,destination[1]!+1,destination[2]!));
-    world.step({},Math.ceil(duration*60)+30);expect(s.controlledActor.vehicleIndex).toBe(0);expect(s.controlledActor.transition).toBeGreaterThan(0);expect(h.capsule.isEnabled()).toBe(false);
-    const paused=s.controlledActor.transition,position=s.controlledActor.player.position.clone();world.step({},30);expect(s.controlledActor.transition).toBe(paused);expect(s.controlledActor.player.position.distanceTo(position)).toBe(0);
-    expect(s.controlledActor.dragonTransition!.destination).toEqual(destination);
-    h.world.removeCollider(obstacle,true);world.step({},Math.ceil(duration*60)+30);
-    expect(s.controlledActor.vehicleIndex).toBe(-1);expect(h.capsule.isEnabled()).toBe(true);expect(s.controlledActor.player.position.distanceTo(new Vector3(...destination as [number,number,number]))).toBeLessThan(.15);
-    expect(r.enter('dragon'),s.controlledActor.message).toBe(true);world.step({},10);expect(s.controlledActor.dragonTransition).toBeDefined();
+    const context={environment:s.environment,humanoid:h,vehicles:s.vehicles,available:()=>true,transitionSeconds:0,mountedInstanceId:'dragon'};
+    const obstacles=[-1,1].map(side=>{
+      const p=dragonStandingPoint(context,s.controlledActor.vehicle!,side)!;expect(p).not.toBeNull();
+      return h.world.createCollider(RAPIER.ColliderDesc.cuboid(.55,1,.55).setTranslation(p.x,p.y+1,p.z));
+    });
+    world.step({},1);
+    expect(r.exit()).toBe(false);expect(s.controlledActor.vehicleIndex).toBe(0);expect(h.capsule.isEnabled()).toBe(false);
+    expect(s.controlledActor.dragonTransition).toBeUndefined();expect(s.controlledActor.transition).toBe(0);
+    for(const obstacle of obstacles)h.world.removeCollider(obstacle,true);world.step({},1);
+    expect(r.exit(),s.controlledActor.message).toBe(true);
+    expect(s.controlledActor.vehicleIndex).toBe(-1);expect(h.capsule.isEnabled()).toBe(true);
+    expect(s.controlledActor.dragonTransition).toBeUndefined();expect(s.controlledActor.transition).toBe(0);
+    expect(s.controlledActor.player.animation).not.toBe('Sitting_Exit');
+    world.step({},20);
+    expect(r.enter('dragon'),s.controlledActor.message).toBe(true);
+    expect(s.controlledActor.vehicleIndex).toBe(0);expect(h.capsule.isEnabled()).toBe(false);
+    expect(s.controlledActor.dragonTransition).toBeUndefined();expect(s.controlledActor.transition).toBe(0);
+    expect(s.controlledActor.player.animation).toBe('Driving_Loop');
     r.prepareEpisodeStart(start);expect(s.controlledActor.dragonTransition).toBeUndefined();expect(s.controlledActor.transition).toBe(0);expect(s.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
   }finally{world.dispose();}
 });
@@ -272,7 +281,7 @@ it('keeps dragon summon, boarding and occupancy scoped to the requesting actor',
     expect(npc.prepareCharacter(new Vector3(...entry!),dragon.yaw)).toBe(true);
     for(let n=0;n<5;n++)sim.step(1/60);
     expect(npc.enter('dragon'),npc.message).toBe(true);
-    expect(npc.dragonTransition).toBeDefined();expect(player.dragonTransition).toBeUndefined();
+    expect(npc.dragonTransition).toBeUndefined();expect(npc.transition).toBe(0);expect(player.dragonTransition).toBeUndefined();
     expect(player.vehicle).toBeUndefined();expect(npc.vehicle).toBe(dragon);
     expect(player.inspectBoarding('dragon')).toMatchObject({eligible:false,reason:'HUMANOID_TARGET_UNAVAILABLE'});
     expect(player.enter('dragon')).toBe(false);expect(sim.summonDragon('dragon')).toBe(false);

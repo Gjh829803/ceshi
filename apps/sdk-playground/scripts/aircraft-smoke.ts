@@ -13,9 +13,10 @@ try{
  await page.waitForFunction(()=>!!(window as any).playground?.getState().ready,{},{timeout:60000});
  await page.locator('#mapSelect').click();await page.getByRole('option',{name:'飞机 · 起降训练场',exact:true}).click();
  await page.waitForFunction(()=>(window as any).playground.getState().mapId==='aircraft-training');
+ await page.evaluate(()=>(window as any).playground.selectVehicle('plane'));
  await page.locator('[data-worldkit-surface]').click();await page.keyboard.press('f');
  await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle==='plane');
- await page.keyboard.press('t');await page.locator('#inspectorClose').click();
+ await page.keyboard.press('t');if(await page.locator('#inspectorClose').isVisible())await page.locator('#inspectorClose').click();
  await page.screenshot({path:path.join(output,'cockpit-ground.png')});
  await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('Shift');
  await page.waitForFunction(()=>(window as any).playground.getState().speed>27,{},{timeout:30000});

@@ -74,7 +74,7 @@ createWorld({camera:'front'});
 `;
  const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
  const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
- host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
+ host.getSourceFile=(name,version,onError,fresh)=>name.replace(/\\/g,'/')===filename.replace(/\\/g,'/')?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
  const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename);
  if(!consumer)throw new Error('Missing factory consumer');
  expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
@@ -93,7 +93,7 @@ const binding=setObjectColor(object,color);binding.setColor(color);binding.dispo
 setObjectColor(object,123);`;
   const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
   const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
-  host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,body,version,true):readSource(name,version,onError,fresh);
+  host.getSourceFile=(name,version,onError,fresh)=>name.replace(/\\/g,'/')===filename.replace(/\\/g,'/')?ts.createSourceFile(name,body,version,true):readSource(name,version,onError,fresh);
   const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename)!;
   expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
  },20000);
@@ -179,7 +179,7 @@ it('exposes the actual humanoid factory options and signature without runtime im
  const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,
   moduleResolution:ts.ModuleResolutionKind.Bundler,strict:true,skipLibCheck:true,noEmit:true,types:[]};
  const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
- host.getSourceFile=(name,version,onError,fresh)=>name===filename
+ host.getSourceFile=(name,version,onError,fresh)=>name.replace(/\\/g,'/')===filename.replace(/\\/g,'/')
   ? ts.createSourceFile(name,contract,version,true) : readSource(name,version,onError,fresh);
  const program=ts.createProgram([filename],options,host);
  expect(ts.getPreEmitDiagnostics(program,program.getSourceFile(filename)).map(diagnostic=>

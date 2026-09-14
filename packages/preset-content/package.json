@@ -53,6 +53,7 @@
     "./unicycle-model": "./src/vehicles/unicycle/model.ts",
     "./vehicle-animation": "./src/vehicles/animation.ts",
     "./world": "./src/world.ts",
+    "./soaring-shell": "./src/vehicles/aircraft/soaring-shell.ts",
     "./cameras/presets.json": "./config/cameras/presets.json",
     "./cameras/dragon-variants.json": "./config/cameras/dragon-variants.json"
   },

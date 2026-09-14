@@ -13,12 +13,50 @@ import type {VehicleSpec} from './config';
 import {createVehicle,emptyInput,stepVehicle,Simulation} from './simulation';
 import {PresentationState} from './presentation';
 import {updateVehicleWheels} from './vehicle-animation';
+import {buildVehicle} from '@worldkit/preset-content/models';
+// 程序化汽车不加载生物资源目录；测试中禁止无关浏览器资源请求。
+vi.mock('@worldkit/preset-content/assets/resources',()=>({definitions:{},resolvePresetResource:()=>{throw new Error('UNEXPECTED_CREATURE_RESOURCE');}}));
 const map:EnvironmentDefinition={id:'wheel-test',name:'Wheel test',description:'',bounds:{min:[-200,-30,-200],max:[200,80,200]},boxes:[{id:'floor',position:[0,-.5,0],size:[400,1,400]}],water:[],regions:[],spawns:[],playerSpawn:[20,0,20]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[0,0,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,.91,.1],hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,.99,2.15],offset:[0,1.31,0]},wheelPhysics:{mass:1600,radius:.52,hubHeight:.52,halfTrack:1.1,halfWheelbase:1.27}};
 beforeAll(initEnvironmentQueries);
 function fixture(extra:EnvironmentDefinition['boxes']=[],floorSize=400){return {q:new EnvironmentQueries({...map,boxes:[{...map.boxes[0]!,size:[floorSize,1,floorSize]},...extra]}),v:createVehicle(spec)};}
 function run(f:ReturnType<typeof fixture>,n:number,input=emptyInput()){for(let i=0;i<n;i++){stepVehicle(f.v,input,1/60,i/60,f.q);f.q.stepPhysics(1/60);}}
 describe('per-wheel road vehicle',()=>{
+ it.each(['rover','trail-rover'])('covers %s visible body vertices with persistent solver colliders',id=>{
+  vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({beginPath(){},roundRect(){},fill(){},fillText(){}})})});
+  const selected=playgroundVehicles.find(v=>v.id===id)!,visual=buildVehicle(selected),f=fixture();
+  f.v=createVehicle({...selected,spawn:[0,0,0],yaw:.7});
+  try{
+   run(f,120);visual.root.position.copy(f.v.position);visual.root.quaternion.copy(f.v.rotation);visual.root.updateMatrixWorld(true);
+   const rig=f.q.vehicleRig(f.v.spec.id,f.v.motion.wheelPhysics!,f.v.position,f.v.rotation,1,1,1,1,1),uncovered:string[]=[];
+   let samples=0;
+   visual.root.traverse(node=>{
+    if(!(node instanceof Mesh))return;
+    for(let parent:typeof node.parent=node;parent;parent=parent.parent)if(visual.wheelRigs.some(w=>w.steering===parent))return;
+    const vertices=node.geometry.getAttribute('position');
+    for(let n=0;n<vertices.count;n++){
+     const point=new Vector3().fromBufferAttribute(vertices,n).applyMatrix4(node.matrixWorld);
+     const gap=Math.min(...rig.colliders.map(c=>point.distanceTo(new Vector3().copy(c.projectPoint(point,true)!.point))));
+     if(gap>.002)uncovered.push(`${node.name||node.geometry.type}: ${point.toArray()} gap=${gap}`);
+     samples++;
+    }
+   });
+   expect(samples).toBeGreaterThan(300);expect(uncovered).toEqual([]);
+   const handles=rig.colliders.map(c=>c.handle),setShape=vi.spyOn(RAPIER.Collider.prototype,'setShape');
+   try{run(f,180,{...emptyInput(),forward:1});expect(rig.colliders.map(c=>c.handle)).toEqual(handles);expect(setShape).not.toHaveBeenCalled();}finally{setShape.mockRestore();}
+  }finally{f.q.dispose();visual.root.traverse(n=>{if(n instanceof Mesh)n.geometry.dispose();});vi.unstubAllGlobals();}
+ });
+ it.each([['trail-rover',1,1.22,1.75],['trail-rover',-1,1.70,1.40],['rover',1,1.22,1.75],['rover',-1,1.27,1.65]] as const)('%s body stops at an elevated obstacle in direction %s', (id,direction,height,reach)=>{
+  const f=fixture([{id:'body-bar',position:[0,height,direction*7],size:[20,.08,.2]}]);
+  f.v=createVehicle({...playgroundVehicles.find(v=>v.id===id)!,spawn:[0,0,0],yaw:0});
+  try{
+   run(f,120);run(f,360,{...emptyInput(),forward:direction});
+   expect(direction*f.v.position.z).toBeLessThan(6.9-reach+.06);
+   expect(direction*f.v.position.z).toBeGreaterThan(3);
+   const before=f.v.position.z;run(f,240,{...emptyInput(),forward:-direction});
+   expect(direction*(f.v.position.z-before)).toBeLessThan(-1);
+  }finally{f.q.dispose();}
+ });
  it.each(['rover','racer','trail-rover','atv','bus'])('holds S to brake into reverse, then W to drive forward again: %s',id=>{
   const f=fixture([],4000);f.v=createVehicle({...playgroundVehicles.find(v=>v.id===id)!,spawn:[0,0,0],yaw:0});
   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.enabled=true;keyboard.setHumanoidMode(()=>f.v.spec.mode);
@@ -110,7 +148,8 @@ describe('per-wheel road vehicle',()=>{
   for(const kmh of [60,100,160,200]){const f=fixture([],4000);f.v=createVehicle({...playgroundVehicles.find(v=>v.id===id)!,spawn:[0,0,0],yaw:0});
    try{run(f,180);f.v.velocity.set(0,0,kmh/3.6);for(const w of f.v.motion.wheelPhysics!.wheels)w.omega=kmh/3.6/f.v.spec.wheelPhysics!.radius;
     for(const sign of [1,-1,1,-1]){let responded=false;
-     for(let n=0;n<90;n++){run(f,1,{...emptyInput(),steer:sign});if(n<30&&f.v.motion.wheelPhysics!.angularVelocity.y*sign<-.02)responded=true;expect(new Vector3(0,1,0).applyQuaternion(f.v.rotation).y).toBeGreaterThan(.9);}
+     // 持续转向测试保持油门；松油门收停另有独立回归，不能要求已经停下的车继续产生偏航。
+     for(let n=0;n<90;n++){run(f,1,{...emptyInput(),forward:1,steer:sign});if(n<30&&f.v.motion.wheelPhysics!.angularVelocity.y*sign<-.02)responded=true;expect(new Vector3(0,1,0).applyQuaternion(f.v.rotation).y).toBeGreaterThan(.9);}
      expect(responded).toBe(true);expect(f.v.motion.wheelPhysics!.angularVelocity.y*sign).toBeLessThan(-.02);
      const front=f.v.motion.wheelPhysics!.wheels.filter(w=>Math.abs(w.steer)>0);expect(front.length).toBeGreaterThan(0);for(const w of front){expect(w.steer*sign).toBeLessThan(-.07);}
     }
@@ -298,5 +337,48 @@ describe('model-free road vehicle configurations',()=>{
  });
  it('rejects an unknown handling family instead of silently selecting a car',()=>{
   expect(()=>publicHumanoid.createRoadVehicleSpec('boat' as 'car')).toThrow('VEHICLE_ROAD_KIND_INVALID');
+ });
+});
+
+
+describe('opt-in training car response',()=>{
+ it.each(['rover','racer','trail-rover','supercar','kart'])('coasts to rest, stays stopped and drives again: %s',id=>{
+  const f=fixture([],4000);f.v=createVehicle({...structuredClone(playgroundVehicles.find(v=>v.id===id)!),spawn:[0,.04,0],yaw:0});
+  try{
+   run(f,120);let frames=0;
+   while(f.v.velocity.z<60/3.6&&frames++<1800)run(f,1,{...emptyInput(),forward:1});
+   expect(f.v.velocity.z).toBeGreaterThanOrEqual(60/3.6);
+   let stopFrame=0,slowFrame=0;
+   for(let n=1;n<=900;n++){run(f,1);expect(f.v.velocity.z).toBeGreaterThan(-.02);if(!slowFrame&&f.v.speed<5/3.6)slowFrame=n;if(f.v.speed<.1){stopFrame=n;break;}}
+   expect(stopFrame/60).toBeGreaterThan(6);expect(stopFrame/60).toBeLessThan(12);
+   expect((stopFrame-slowFrame)/60).toBeLessThan(2);
+   run(f,120);const parked=f.v.position.clone();run(f,180);expect(f.v.position.distanceTo(parked)).toBeLessThan(.02);
+   run(f,120,{...emptyInput(),forward:1});expect(f.v.velocity.z).toBeGreaterThan(5);
+  }finally{f.q.dispose();}
+ });
+ it('coasts in reverse without changing direction or preventing the next W input',()=>{
+  const f=fixture();f.v=createVehicle({...structuredClone(playgroundVehicles.find(v=>v.id==='rover')!),spawn:[0,.04,0],yaw:0});
+  try{run(f,120);run(f,240,{...emptyInput(),forward:-1});expect(f.v.velocity.z).toBeLessThan(-2);
+   for(let n=0;n<600;n++){run(f,1);expect(f.v.velocity.z).toBeLessThan(.02);}
+   expect(f.v.speed).toBeLessThan(.1);run(f,180,{...emptyInput(),forward:1});expect(f.v.velocity.z).toBeGreaterThan(5);
+  }finally{f.q.dispose();}
+ });
+ it.each(['throttle','S','Space','air'] as const)('does not add braking during %s',mode=>{
+  const a=fixture([],4000),b=fixture([],4000);
+  const selected=structuredClone(playgroundVehicles.find(v=>v.id==='rover')!);
+  a.v=createVehicle({...selected,spawn:[0,.04,0],yaw:0});
+  const disabled=structuredClone(selected);disabled.wheelPhysics!.coastBrakeDeceleration=0;b.v=createVehicle({...disabled,spawn:[0,.04,0],yaw:0});
+  try{
+   for(const f of [a,b]){run(f,120);run(f,180,{...emptyInput(),forward:1});if(mode==='air')f.v.position.y=40;
+    run(f,60,{...emptyInput(),forward:mode==='throttle'?1:mode==='S'?-1:0,brake:mode==='Space'});}
+   expect(a.v.position.distanceTo(b.v.position)).toBeLessThan(1e-6);expect(a.v.velocity.distanceTo(b.v.velocity)).toBeLessThan(1e-6);
+  }finally{a.q.dispose();b.q.dispose();}
+ });
+ it.each([-1,6,NaN,Infinity])('rejects invalid coast deceleration %s',value=>{
+  expect(()=>createRoadPhysicsProfile('car',{coastBrakeDeceleration:value})).toThrow('VEHICLE_WHEEL_CONFIG_INVALID:coastBrakeDeceleration');
+ });
+ it('leaves other presets and model-free defaults opted out',()=>{
+  for(const v of playgroundVehicles.filter(v=>!['rover','racer','trail-rover','supercar','kart'].includes(v.id)))expect(v.wheelPhysics?.coastBrakeDeceleration).toBeUndefined();
+  for(const kind of ['car','motorcycle'] as const)expect(publicHumanoid.createRoadVehicleSpec(kind).wheelPhysics.coastBrakeDeceleration).toBeUndefined();
  });
 });

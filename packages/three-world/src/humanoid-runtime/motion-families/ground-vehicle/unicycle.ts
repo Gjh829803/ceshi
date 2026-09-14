@@ -10,7 +10,7 @@ export interface UnicycleState {
   phase:'supported'|'lowering'|'lifting'|'riding'|'airborne';
   wheelAngle:number; footDown:number; balanceTime:number; balance:number;
   supportLocal:[number,number,number]|null;
-  blockedSeconds:number;
+  blockedSeconds:number; blockedDirection?:number;
 }
 export const createUnicycleState=():UnicycleState=>({phase:'supported',wheelAngle:0,footDown:1,balanceTime:0,balance:0,supportLocal:null,blockedSeconds:0});
 export const copyUnicycleState=(s?:UnicycleState):UnicycleState|undefined=>s?{...s,supportLocal:s.supportLocal?[...s.supportLocal]:null}:undefined;
@@ -59,8 +59,8 @@ export function finishUnicycleStep(v:VehicleState,old:Vector3,i:Input,dt:number,
   s.balanceTime+=dt;
   s.balance+=(Math.max(-1,Math.min(1,v.steering*v.speed*.2))-s.balance)*(1-Math.exp(-5*dt));
   const request=Math.abs(i.forward)>.01&&!i.brake;
-  if(!request)s.blockedSeconds=0;
-  else if(s.footDown===0&&v.grounded&&Math.abs(travel)/dt<.015)s.blockedSeconds+=dt;
+  if(!request || (s.blockedDirection && Math.sign(i.forward)!==s.blockedDirection)){s.blockedSeconds=0;s.blockedDirection=0;}
+  else if(s.footDown===0&&v.grounded&&Math.abs(travel)/dt<.015){s.blockedSeconds+=dt;s.blockedDirection=Math.sign(i.forward);}
   else if(Math.abs(travel)/dt>.03)s.blockedSeconds=0;
   // Probe beside the tyre, not under it: a wheel on a ledge cannot supply a foot support.
   const reachable=refreshUnicycleSupport(v,q);
@@ -76,4 +76,9 @@ export function sampleUnicycleVisual(root:Object3D,s:UnicycleState):void {
     const pedal=root.getObjectByName(`unicycle.pedal.${side}`);if(pedal)pedal.position.copy(unicyclePedal(s.wheelAngle,side));
     const crank=root.getObjectByName(`unicycle.crank.${side}`);if(crank)crank.rotation.x=s.wheelAngle+(side===1?0:Math.PI);
   }
+}
+
+/** 横坡支撑法线转换为此小类的 YXZ 侧倾目标。 */
+export function unicycleSupportRoll(normal:{x:number;y:number;z:number},forward:{x:number;z:number}):number {
+  return Math.atan2(normal.z*forward.x-normal.x*forward.z,normal.y);
 }

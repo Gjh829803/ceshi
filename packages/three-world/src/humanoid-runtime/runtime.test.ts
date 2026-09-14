@@ -15,13 +15,19 @@ import {Simulation} from './simulation';
 import type {EnvironmentDefinition} from './environment/types';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
-import {DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints} from './input';
+import {DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls} from './input';
 import {ACTION_TUNING} from './humanoid/action-schema';
 import type {MovementSettings} from '../config/control';
 const map:EnvironmentDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]},{id:'wall',position:[0,2,10],size:[30,4,1]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'car',name:'Car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],playerSpawn:[0,.03,0]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer?{renderer}:{}),camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'car-1',assetId:'car',spec,object:new Group()},{instanceId:'car-2',assetId:'car',spec:{...spec,spawn:[-40,.03,0]},object:new Group()}]}});}
 describe('SDK humanoid runtime',()=>{
+ it('preserves a released Space takeoff edge for dragons without changing other vehicle controls',()=>{
+  const released=new Set<string>();
+  expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,'dragon')).toMatchObject({jump:true,brake:false});
+  expect(readControls(released,true,false,{},DEFAULT_KEY_BINDINGS,'dragon').jump).toBe(false);
+  for(const mode of ['plane','wheeled'] as const)expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,mode).jump).toBe(false);
+ });
  it('invalidates measured wheel evidence on reset while retaining the world physics sequence',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
    character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'road',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new Group()}]}});

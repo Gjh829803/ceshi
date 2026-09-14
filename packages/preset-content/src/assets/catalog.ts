@@ -1,4 +1,5 @@
 import { SPECS, type VehicleSpec } from '../config';
+import { DRAGON_VARIANTS } from '../creatures/dragon-variants';
 
 /** Catalog identity is independent of the local vehicle instance ID. */
 export function assetIdForPreset(spec: Pick<VehicleSpec, 'id' | 'mode'>, flyingCreatureVariantId?: string): string {
@@ -26,6 +27,8 @@ export type AssetEntry = {
   summary?: string;
   /** Real image of this asset. Omit when only a model is available. */
   thumbnail?: string;
+  /** Selects a numbered dragon model while the scene keeps one dragon instance. */
+  dragonVariantId?: string;
 };
 
 export function filterAssets(assets: readonly AssetEntry[], query: string, environment: string): AssetEntry[] {
@@ -97,10 +100,13 @@ const metadata: Record<VehicleSpec['mode'], Pick<AssetEntry, 'environment' | 'ic
   dragon: { environment: 'air', icon: 'bird', tags: ['动物', '生物', '飞龙', '翅膀', '飞行', '骑乘'] },
 };
 
+const aircraftTags:Record<NonNullable<VehicleSpec['aircraftSubtype']>,string[]>={
+ 'fixed-wing':['固定翼','空域','动力飞行'],pusher:['尾推飞机','空域','动力飞行'],helicopter:['直升机','空域','悬停'],multirotor:['多旋翼','空域','悬停'],tiltrotor:['倾转旋翼','空域','垂直起降'],glider:['滑翔机','空域','无动力'],paraglider:['滑翔伞','空域','伞降'],wingsuit:['翼装','空域','开伞'],balloon:['热气球','空域','热浮力'],
+};
 export function buildAssetCatalog(specs: readonly VehicleSpec[] = SPECS): AssetEntry[] {
-  return specs.map(({ id, name, en, mode, archetype, kernel, color, flyingCreature }) => ({
+  return specs.map(({ id, name, en, mode, archetype, kernel, color, aircraftSubtype, flyingCreature }) => ({
     id, name, en, mode, kernel, color,
-    ...metadata[mode],...(archetype==='kayak'?{tags:[...metadata.paddled_boat.tags,'皮划艇','双头桨']}:{}),...(archetype==='raft'?{tags:['橡皮艇','充气艇','PUBG','划桨','陆地滑行','回弹','缓冲']}:{}),...(id==='observation-submarine'?{tags:['潜艇','观景','单人','球舱','水下','浮力','压载','推进器']}:{}),...(id==='jetski'?{tags:['水上摩托','喷射','水花','尾流','跨坐','加速']}:{}),...(archetype==='canoe'?{tags:['木舟','独木舟','单桨','单叶桨','水面','浮力','惯性','单人']}:{}),...(id==='atv'?{tags:['ATV','Quad','PUBG','全地形车','四轮','越野','跨坐','车把','手刹']}:{}),
+    ...metadata[mode],...(mode==='plane'&&aircraftSubtype?{tags:[...aircraftTags[aircraftSubtype]]}:{}),...(archetype==='kayak'?{tags:[...metadata.paddled_boat.tags,'皮划艇','双头桨']}:{}),...(archetype==='raft'?{tags:['橡皮艇','充气艇','PUBG','划桨','陆地滑行','回弹','缓冲']}:{}),...(id==='observation-submarine'?{tags:['潜艇','观景','单人','球舱','水下','浮力','压载','推进器']}:{}),...(id==='jetski'?{tags:['水上摩托','喷射','水花','尾流','跨坐','加速']}:{}),...(archetype==='canoe'?{tags:['木舟','独木舟','单桨','单叶桨','水面','浮力','惯性','单人']}:{}),...(id==='atv'?{tags:['ATV','Quad','PUBG','全地形车','四轮','越野','跨坐','车把','手刹']}:{}),
     kind: ['mount', 'carriage', 'dragon'].includes(mode) ? 'creature' : 'vehicle',
     version: 'local',
     contributor: '工作区内置',
@@ -112,7 +118,7 @@ export function buildAssetCatalog(specs: readonly VehicleSpec[] = SPECS): AssetE
   }));
 }
 
-/** Workspace registry: the preserved character and every configured vehicle. */
+/** Workspace registry: configured vehicles plus every available numbered dragon model. */
 export function buildWorkspaceCatalog(specs: readonly VehicleSpec[] = SPECS): AssetEntry[] {
   return [{
     id: 'person', name: '主体人物', en: 'CHARACTER', mode: 'character', kernel: '101 BONES',
@@ -120,5 +126,14 @@ export function buildWorkspaceCatalog(specs: readonly VehicleSpec[] = SPECS): As
     tags: ['人物', '步行', '穿越', '攀爬', '游泳', '48 个动画片段', '101 骨骼'],
     version: 'local', contributor: '工作区导入', source: 'traversal-lab 原人物场', status: 'local',
     summary: 'UEFN 人形 · Source101 骨架 · 48 个动画片段',
-  }, ...buildAssetCatalog(specs)];
+  }, ...buildAssetCatalog(specs).flatMap(asset => {
+    if (!specs.find(spec => spec.id === asset.id)?.flyingCreature) return [asset];
+    return DRAGON_VARIANTS.map(variant => ({
+      ...asset,
+      // Preserve the original D01 library identity and its saved favorites.
+      id: variant.id === 'D01' ? asset.id : `creature.dragon.${variant.id.toLowerCase()}`,
+      name: variant.name, en: `DRAGON ${variant.id}`, dragonVariantId: variant.id,
+      summary: '前往飞龙训练场 · 按 H 召唤，落稳后到鞍侧按 F 骑乘',
+    }));
+  })];
 }

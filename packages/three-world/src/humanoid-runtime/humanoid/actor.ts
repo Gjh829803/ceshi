@@ -54,6 +54,7 @@ export class HumanoidActor {
   }
   resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
   beginStep(dt:number):void{
+    if(this.vehicle?.motion.aircraft?.wearable?.phase==='stowed'&&this.vehicle.grounded&&this.vehicle.speed<.5&&this.transition===0)this.exit();
     const transition=this.dragonTransition;
     if(!transition||dragonTransitionClear(this.mountContext(),transition,1-this.transition/transition.duration,Math.min(1,1-(this.transition-dt)/transition.duration)))this.transition=Math.max(0,this.transition-dt);
     else this.message='上下龙路径被占用，等待障碍移开';
@@ -290,9 +291,18 @@ export class HumanoidActor {
     const plan=planDragonMount(this.mountContext(),v,entering);
     if(typeof plan==='string'){this.failureCode='VEHICLE_MOUNT_GROUND_REQUIRED';this.message=plan;return false;}
     if(entering&&!this.controller.setMounted(true))return false;
-    this.vehicleIndex=this.vehicles.indexOf(v);this.dragonTransition=plan;this.transition=plan.duration;this.transitionKind=entering?'enter':'exit';
-    this.player.position.copy(dragonMountPosition(plan,0));this.player.velocity.set(0,0,0);this.player.yaw=v.yaw;
-    this.message=entering?'正在攀上鞍座':'正在离开鞍座';this.failureCode=undefined;this.teleportRevision++;this.world.syncActorBodies();return true;
+    // 飞龙上下乘直接切换；仍使用原有净空和安全落点检查，不启动攀爬或绳梯显示。
+    if(entering){
+      this.vehicleIndex=this.vehicles.indexOf(v);
+      this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=v.yaw;
+      this.player.animation='Driving_Loop';
+    }else{
+      this.controller.commitDismount(new Vector3(...plan.destination),v.yaw,new Vector3());
+      this.vehicleIndex=-1;syncPlayer(this.controller,this.player);
+    }
+    this.dragonTransition=undefined;this.transition=0;this.transitionKind='';
+    this.message=entering?'已骑乘 · Space 起飞':'已安全下龙 · 靠近鞍座侧面按 F 上龙';
+    this.failureCode=undefined;this.teleportRevision++;this.world.syncActorBodies();return true;
   }
   enter(id: string): boolean {
     this.failureCode = undefined;

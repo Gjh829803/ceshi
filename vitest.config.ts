@@ -5,6 +5,7 @@ import { sharedVitestTestConfig } from "./vitest.shared";
 export default defineConfig({
   test: {
     ...sharedVitestTestConfig,
+    setupFiles: ["./scripts/testing/resource-heavy-setup.ts"],
     // The suite includes real Rapier, Playwright subprocesses, Recast, and
     // temporary Git repositories. Letting Vitest use every host core makes
     // those integration tests compete for process and CPU budgets until their

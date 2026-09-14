@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 import { executeThreeCreatorTool, THREE_CREATOR_TOOLS } from '../../src/cli/mcp.js';
 import * as THREE from 'three';
 import { targetTriviewBasis } from '../../src/browser/bridge.js';
-import {recordedVideoEncodingArgs} from '../../src/tools/video.js';
+import {recordedVideoEncodingArgs,ffmpegFrameSyncOption,frameSyncOptionFromHelp} from '../../src/tools/video.js';
 import {RAW_EXAMPLE} from '../../src/discovery/examples.js';
 import {measureEpisodeTargets} from '../../src/tools/target-feedback.js';
 
@@ -524,8 +524,8 @@ describe('real episode and video timing boundaries', () => {
  it('preserves irregular browser frame timestamps and frame count in the actual MP4 encoder',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'three-video-timing-'));roots.push(root);
   const input=path.join(root,'irregular.webm'),output=path.join(root,'recorded.mp4'),execFile=promisify(execFileCallback);
-  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=64x64:rate=10:duration=1','-vf',"select='eq(n,0)+eq(n,1)+eq(n,4)+eq(n,9)'",'-vsync','passthrough','-c:v','libvpx-vp9','-enc_time_base','1:1000',input]);
-  await execFile('ffmpeg',recordedVideoEncodingArgs(input,output));
+  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=64x64:rate=10:duration=1','-vf',"select='eq(n,0)+eq(n,1)+eq(n,4)+eq(n,9)'",await ffmpegFrameSyncOption(),'passthrough','-c:v','libvpx-vp9','-enc_time_base','1:1000',input]);
+  await execFile('ffmpeg',await recordedVideoEncodingArgs(input,output));
   const probe=async(file:string)=>JSON.parse((await execFile('ffprobe',['-v','error','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time:format=duration','-of','json',file])).stdout);
   const source=await probe(input),encoded=await probe(output);
   const times=(value:any):number[]=>value.frames.map((frame:any)=>Number(frame.best_effort_timestamp_time));
@@ -571,4 +571,11 @@ describe('recording callback deadlines', () => {
   const close=vi.fn(async()=>{}); expect(await withStageDeadline(async()=>42,5,'timeout',close)).toBe(42);
   await new Promise(resolve=>setTimeout(resolve,10));expect(close).not.toHaveBeenCalled();
  });
+});
+
+// Both supported FFmpeg generations must preserve timestamps, without retrying a failed encode.
+it('selects a supported frame-sync option from the actual executable help contract',()=>{
+ expect(frameSyncOptionFromHelp('  -fps_mode[:stream_specifier] <string>  set framerate mode\n-vsync <string> video sync')).toBe('-fps_mode');
+ expect(frameSyncOptionFromHelp('-vsync <string> video sync method')).toBe('-vsync');
+ expect(()=>frameSyncOptionFromHelp('unrelated help')).toThrow('THREE_FFMPEG_FRAME_SYNC_UNSUPPORTED');
 });

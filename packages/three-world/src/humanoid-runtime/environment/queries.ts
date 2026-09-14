@@ -32,9 +32,9 @@ function extents(body:QueryBody,rotation:Quaternion){
   const e=new Vector3();body.halfExtents.forEach((half,axis)=>{const v=new Vector3().setComponent(axis,half).applyQuaternion(rotation);e.add(new Vector3(Math.abs(v.x),Math.abs(v.y),Math.abs(v.z)));});return e;
 }
 const maximumEnvironmentColliders=4096;
-function boxSubdivision(box:EnvironmentBox):{nx:number;nz:number}{
-  const horizontal=!box.rigidGroup&&box.size[1]<=10&&(!box.rotation||box.rotation.every(angle=>angle===0));
-  return {nx:horizontal?Math.ceil(box.size[0]/64):1,nz:horizontal?Math.ceil(box.size[2]/64):1};
+function boxSubdivision(box:EnvironmentBox,tileEdgeMeters:number):{nx:number;nz:number}{
+  const horizontal=!box.rigidGroup&&!box.liftId&&box.size[1]<=10&&(!box.rotation||box.rotation.every(angle=>angle===0));
+  return {nx:horizontal?Math.ceil(box.size[0]/tileEdgeMeters):1,nz:horizontal?Math.ceil(box.size[2]/tileEdgeMeters):1};
 }
 export interface BodyPose {
   position: Vector3;
@@ -92,6 +92,8 @@ export class EnvironmentQueries {
   private cameraTransparentBoundaryHandles=new Set<number>();
   private propBodies=new Map<string,{body:RAPIER.RigidBody;origin:Vector3}>();
   private propBoxes=new Map<string,string>();
+  private liftBoxIds=new Set<string>();
+  private lifts=new Map<string,{body:RAPIER.RigidBody;offsetYMeters:number;waitSeconds:number;targetOffsetYMeters:number}>();
   private rigs=new Set<HumanoidRig>();
   private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string;actorId:string}>();
   private actorColliderHandles=new Set<number>();
@@ -107,13 +109,15 @@ export class EnvironmentQueries {
   constructor(readonly map:EnvironmentDefinition,resources=new ActorResources()){
     if(!ready)throw new Error('await initEnvironmentQueries() before creating a map');
     validateEnvironmentIdentities(map);
+    const tileEdgeMeters=map.collisionTileEdgeMeters??64;
+    if(!Number.isFinite(tileEdgeMeters)||tileEdgeMeters<16||tileEdgeMeters>128)throw new Error('HUMANOID_ENVIRONMENT_TILE_SIZE_INVALID');
     const boundaries=compileBoundaryBoxes(map.boundaries??[]),boundaryById=new Map(boundaries.map(b=>[b.id,b]));
     const physicalBoxes:readonly EnvironmentBox[]=[...map.boxes,...boundaries];
     if(map.boxes.some(box=>boundaryById.has(box.id)))throw new Error('HUMANOID_BOUNDARY_ID_CONFLICT');
     let plannedColliders=0;
     for(const box of physicalBoxes){
       if(box.collision===false)continue;
-      const {nx,nz}=boxSubdivision(box);plannedColliders+=nx*nz;
+      const {nx,nz}=boxSubdivision(box,tileEdgeMeters);plannedColliders+=nx*nz;
       if(!Number.isSafeInteger(plannedColliders)||plannedColliders>maximumEnvironmentColliders)
         throw new Error(`HUMANOID_ENVIRONMENT_COLLIDER_BUDGET_EXCEEDED: ${box.id}; plannedColliderCount=${plannedColliders}, maximumColliderCount=${maximumEnvironmentColliders}`);
     }
@@ -134,14 +138,23 @@ export class EnvironmentQueries {
         this.staticColliders.set(b.id,[collider]);this.staticColliderIds.set(collider.handle,b.id);this.propBoxes.set(b.id,id);
       }
     }
+    for(const lift of map.lifts??[]){
+      const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(lift.position[0],lift.position[1],lift.position[2]));
+      this.lifts.set(lift.id,{body,offsetYMeters:0,waitSeconds:0,targetOffsetYMeters:0});
+      for(const box of map.boxes.filter(b=>b.liftId===lift.id&&b.collision!==false)){
+        this.liftBoxIds.add(box.id);
+        const rotation=new Quaternion().setFromEuler(new Euler(...(box.rotation??[0,0,0]),'XYZ'));
+        const c=this.world.createCollider(RAPIER.ColliderDesc.cuboid(box.size[0]/2,box.size[1]/2,box.size[2]/2).setTranslation(box.position[0]-lift.position[0],box.position[1]-lift.position[1],box.position[2]-lift.position[2]).setRotation(rotation).setCollisionGroups(0x0001ffff),body);
+        this.staticColliders.set(box.id,[c]);this.staticColliderIds.set(c.handle,box.id);
+      }
+    }
     const fixedBoxes=new FixedBoxColliderFactory(this.world);
     try{for(const box of physicalBoxes){
-      if(box.collision===false||box.rigidGroup)continue;
+      if(box.collision===false||box.rigidGroup||box.liftId)continue;
       const rotation=new Quaternion().setFromEuler(new Euler(...(box.rotation??[0,0,0]),'XYZ'));
       // Broadphase tiles share precise native box partitions by dimensions.
       // Their outer volume and map identity remain unchanged.
-      const horizontal=box.size[1]<=10&&(!box.rotation||box.rotation.every(angle=>angle===0));
-      const nx=horizontal?Math.ceil(box.size[0]/64):1,nz=horizontal?Math.ceil(box.size[2]/64):1;
+      const {nx,nz}=boxSubdivision(box,tileEdgeMeters);
       const width=box.size[0]/nx,depth=box.size[2]/nz;
       for(let ix=0;ix<nx;ix++)for(let iz=0;iz<nz;iz++){
         const x=box.position[0]-box.size[0]/2+(ix+.5)*width,z=box.position[2]-box.size[2]/2+(iz+.5)*depth;
@@ -165,6 +178,17 @@ export class EnvironmentQueries {
     }catch(error){this.world.free();throw error;}
   }
   private assertLive(){if(this.disposed)throw new Error('Environment queries disposed');}
+  hasUpwardContact(colliders:readonly RAPIER.Collider[]):boolean{
+    this.assertLive();let supported=false;
+    for(const collider of colliders)this.world.contactPairsWith(collider,other=>{
+      if(other.isSensor())return;
+      this.world.contactPair(collider,other,(manifold,flipped)=>{
+        if(manifold.normal().y*(flipped?1:-1)<.35)return;
+        for(let n=0;n<manifold.numContacts();n++)if(manifold.contactDist(n)<.04){supported=true;break;}
+      });
+    });
+    return supported;
+  }
   get colliderCount():number{this.assertLive();return this.world.colliders.len();}
   colliderId(handle:number):string{
     this.assertLive();
@@ -186,7 +210,7 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.boundaryColliderHandles.clear();this.cameraTransparentBoundaryHandles.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.interactionProps.dispose();this.world.free();this.disposed=true;}}
+  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.lifts.clear();this.liftBoxIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.boundaryColliderHandles.clear();this.cameraTransparentBoundaryHandles.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.interactionProps.dispose();this.world.free();this.disposed=true;}}
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)?.[0]??this.interactionProps.colliderForId(id);}
   private interactionAnchor(boxId:string,point:readonly number[]){
     const collider=this.staticColliders.get(boxId)?.[0];if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
@@ -195,9 +219,9 @@ export class EnvironmentQueries {
     const r=group.body.rotation(),rotation=new Quaternion(r.x,r.y,r.z,r.w),p=group.body.translation();
     return {position:new Vector3(point[0],point[1],point[2]).sub(group.origin).applyQuaternion(rotation).add(new Vector3(p.x,p.y,p.z)),rotation,stable:new Vector3(0,1,0).applyQuaternion(rotation).y>.98&&new Vector3().copy(group.body.linvel()).length()<.2&&new Vector3().copy(group.body.angvel()).length()<.3};
   }
-  propBoxPose(id:string){if(!this.propBoxes.has(id))return null;const c=this.staticColliders.get(id)![0]!;return {position:c.translation(),rotation:c.rotation()};}
+  propBoxPose(id:string){if(!this.propBoxes.has(id)&&!this.liftBoxIds.has(id))return null;const c=this.staticColliders.get(id)![0]!;return {position:c.translation(),rotation:c.rotation()};}
   resetContents():void{this.interactions.reset(()=>{this.resetRigidGroups();this.interactionProps.reset();});}
-  resetRigidGroups(){for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.updateSceneQueries();}
+  resetRigidGroups(){for(const spec of this.map.lifts??[]){const l=this.lifts.get(spec.id)!;l.offsetYMeters=l.targetOffsetYMeters=l.waitSeconds=0;l.body.setTranslation({x:spec.position[0],y:spec.position[1],z:spec.position[2]},true);}for(const {body,origin} of this.propBodies.values()){body.setTranslation(origin,true);body.setRotation({x:0,y:0,z:0,w:1},true);body.setLinvel({x:0,y:0,z:0},false);body.setAngvel({x:0,y:0,z:0},false);body.resetForces(false);body.resetTorques(false);body.sleep();}this.world.updateSceneQueries();}
   /** Movement envelopes block the character, but are not authored traversal surfaces.
    * Cached handles are safe to inspect from Rapier query predicates. */
   isActorCollider(collider:RAPIER.Collider){this.assertLive();return this.actorColliderHandles.has(collider.handle);}
@@ -421,6 +445,18 @@ export class EnvironmentQueries {
       for(const n of this.world.solverContactNormals(collider,other))normals.push(new Vector3(-n.x,-n.y,-n.z));
     });
     return normals;
+  }
+  /** Advance each lift once; return support displacement separately for each actor. */
+  stepLifts(dt:number,passengers:readonly {id:string;feet:Vector3;grounded:boolean}[]):ReadonlyMap<string,number>{
+    const carried=new Map<string,number>();
+    for(const spec of this.map.lifts??[]){const l=this.lifts.get(spec.id)!,platformY=spec.position[1]+l.offsetYMeters;
+      const inside=passengers.filter(p=>Math.abs(p.feet.x-spec.position[0])<2.6&&Math.abs(p.feet.z-spec.position[2])<2.6&&Math.abs(p.feet.y-platformY)<.3);
+      const centered=inside.some(p=>Math.abs(p.feet.x-spec.position[0])<1.8&&Math.abs(p.feet.z-spec.position[2])<1.8);
+      if(l.offsetYMeters===l.targetOffsetYMeters){l.waitSeconds+=(l.offsetYMeters===0?centered:inside.length===0)?dt:-l.waitSeconds;if(l.waitSeconds>1.5){l.targetOffsetYMeters=l.offsetYMeters===0?spec.height:0;l.waitSeconds=0;}}
+      const difference=l.targetOffsetYMeters-l.offsetYMeters,delta=Math.sign(difference)*Math.min(Math.abs(difference),spec.speed*dt);
+      if(delta){l.offsetYMeters+=delta;l.body.setTranslation({x:spec.position[0],y:spec.position[1]+l.offsetYMeters,z:spec.position[2]},true);for(const p of inside)if(p.grounded)carried.set(p.id,(carried.get(p.id)??0)+delta);}
+    }
+    if(this.lifts.size)this.world.updateSceneQueries();return carried;
   }
   stepPhysics(dt:number){
     this.assertLive();if(dt<=0)return;

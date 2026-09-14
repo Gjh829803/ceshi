@@ -1,3 +1,4 @@
+import {mountedPose} from './motion-families/aircraft/wearable-flight';
 import {copyFlyingCreatureState} from './motion-families/flying-creature/state';
 import { Quaternion,Vector3 } from 'three';
 import { AIRCRAFT } from '../config/aircraft';
@@ -15,7 +16,8 @@ import type { RaftState } from './motion-families/surface-vessel/raft';
 import { copySubmersibleState,type SubmersibleState } from './motion-families/underwater/submersible';
 import { Simulation,angleDelta } from './simulation';
 export const FIXED_STEP=1/60;
-export interface MotionPose {flyingCreature?:import("./motion-families/flying-creature/state").FlyingCreatureStateV1|undefined;wheels?:SimulatedWheel[]|undefined;position:Vector3;rotation:Quaternion;velocity:Vector3;yaw:number;speed:number;steering:number;creature?:CreatureState|undefined;humanoid?:HumanoidRenderState|undefined;cameraHeight?:number|undefined;kayak?:KayakState|undefined;tank?:TankState|undefined;atv?:AtvState|undefined;raft?:RaftState|undefined;jetski?:JetSkiState|undefined;submersible?:SubmersibleState|undefined;unicycle?:UnicycleState|undefined}
+export interface AircraftPose {rotorPhases:number[];tilt:number;rotorSpeedFraction?:number}
+export interface MotionPose {aircraft?:AircraftPose|undefined;flyingCreature?:import("./motion-families/flying-creature/state").FlyingCreatureStateV1|undefined;wheels?:SimulatedWheel[]|undefined;position:Vector3;rotation:Quaternion;velocity:Vector3;yaw:number;speed:number;steering:number;creature?:CreatureState|undefined;humanoid?:HumanoidRenderState|undefined;cameraHeight?:number|undefined;kayak?:KayakState|undefined;tank?:TankState|undefined;atv?:AtvState|undefined;raft?:RaftState|undefined;jetski?:JetSkiState|undefined;submersible?:SubmersibleState|undefined;unicycle?:UnicycleState|undefined}
 export interface HumanoidDisplaySample {
   readonly epoch:number;
   readonly previousTick:number;
@@ -28,11 +30,13 @@ export interface HumanoidDisplaySample {
 export interface ActorPose extends MotionPose {readonly mountedInstanceId:string|null}
 function copyCreature(from?:CreatureState):CreatureState|undefined{return from?{...from,leadPosition:from.leadPosition?.clone()}:undefined;}
 const pose=():MotionPose=>({position:new Vector3(),rotation:new Quaternion(),velocity:new Vector3(),yaw:0,speed:0,steering:0});
-const copy=(out:MotionPose,from:MotionPose)=>{out.flyingCreature=from.flyingCreature?copyFlyingCreatureState(from.flyingCreature):undefined;out.position.copy(from.position);out.rotation.copy(from.rotation);out.velocity.copy(from.velocity);out.yaw=from.yaw;out.speed=from.speed;out.steering=from.steering;out.wheels=from.wheels?.map(w=>({...w}));out.creature=copyCreature(from.creature);out.humanoid=copyHumanoid(from.humanoid);out.cameraHeight=from.cameraHeight;out.unicycle=copyUnicycleState(from.unicycle);out.submersible=copySubmersibleState(from.submersible);out.raft=from.raft?{...from.raft}:undefined;out.jetski=copyJetSkiState(from.jetski);out.atv=copyAtvState(from.atv);out.kayak=from.kayak?{...from.kayak}:undefined;out.tank=from.tank?{...from.tank}:undefined;};
+const copy=(out:MotionPose,from:MotionPose)=>{out.aircraft=from.aircraft?{rotorSpeedFraction:from.aircraft.rotorSpeedFraction??0,tilt:from.aircraft.tilt,rotorPhases:[...from.aircraft.rotorPhases]}:undefined;out.flyingCreature=from.flyingCreature?copyFlyingCreatureState(from.flyingCreature):undefined;out.position.copy(from.position);out.rotation.copy(from.rotation);out.velocity.copy(from.velocity);out.yaw=from.yaw;out.speed=from.speed;out.steering=from.steering;out.wheels=from.wheels?.map(w=>({...w}));out.creature=copyCreature(from.creature);out.humanoid=copyHumanoid(from.humanoid);out.cameraHeight=from.cameraHeight;out.unicycle=copyUnicycleState(from.unicycle);out.submersible=copySubmersibleState(from.submersible);out.raft=from.raft?{...from.raft}:undefined;out.jetski=copyJetSkiState(from.jetski);out.atv=copyAtvState(from.atv);out.kayak=from.kayak?{...from.kayak}:undefined;out.tank=from.tank?{...from.tank}:undefined;};
 function readActor(actor:HumanoidActor,player:MotionPose){
   player.position.copy(actor.player.position);player.velocity.copy(actor.player.velocity);player.yaw=actor.player.yaw;player.rotation.set(0,Math.sin(player.yaw/2),0,Math.cos(player.yaw/2));player.speed=actor.player.velocity.length();
   player.humanoid=readHumanoid(actor.controller);player.cameraHeight=actor.controller?(actor.controller.swimming?1.4:actor.controller.capsuleHeight*.655):1.25;
-  if(player.humanoid){player.humanoid.mounted=actor.vehicle?(actor.vehicle.spec.characterPose??'drive'):null;
+  if(player.humanoid){player.humanoid.mounted=actor.vehicle?mountedPose(actor.vehicle):null;
+    player.humanoid.wearablePose=actor.vehicle?.motion.aircraft?.wearable?{spread:actor.vehicle.motion.aircraft.wearable.spread,seated:actor.vehicle.motion.aircraft.wearable.seated,landing:actor.vehicle.motion.aircraft.wearable.landingSeconds}:undefined;
+    if(actor.vehicle&&player.humanoid.mounted==='wingsuit-ready')player.humanoid.speed=Math.hypot(actor.vehicle.velocity.x,actor.vehicle.velocity.z);
     const t=actor.dragonTransition;if(t)player.humanoid.dragonMount={progress:1-actor.transition/t.duration,entering:t.entering,side:t.side};
     if(actor.vehicle?.motion.kayak)player.humanoid.kayakPose={...actor.vehicle.motion.kayak};
     if(actor.vehicle?.motion.jetski)player.humanoid.atvSteeringAngle=actor.vehicle.motion.jetski.steeringAngle;
@@ -41,7 +45,7 @@ function readActor(actor:HumanoidActor,player:MotionPose){
     if(actor.vehicle?.motion.sled)player.humanoid.sledPose={...actor.vehicle.motion.sled};}
 }
 function readVehicles(sim:Simulation,vehicles:MotionPose[]){
-  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.flyingCreature=v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.motion.wheelPhysics?.wheels.map(w=>({...w}))??v.motion.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.motion.creature);p.unicycle=copyUnicycleState(v.motion.unicycle);p.submersible=copySubmersibleState(v.motion.submersible);p.raft=v.motion.raft?{...v.motion.raft}:undefined;p.jetski=copyJetSkiState(v.motion.jetski);p.atv=copyAtvState(v.motion.atv);p.kayak=v.motion.kayak?{...v.motion.kayak}:undefined;p.tank=v.motion.tank?{...v.motion.tank}:undefined;});
+  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.aircraft=v.motion.aircraft?{rotorSpeedFraction:v.motion.aircraft.rotorSpeedFraction,tilt:v.motion.aircraft.tilt,rotorPhases:[...v.motion.aircraft.rotorPhases]}:undefined;p.flyingCreature=v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.motion.wheelPhysics?.wheels.map(w=>({...w}))??v.motion.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.motion.creature);p.unicycle=copyUnicycleState(v.motion.unicycle);p.submersible=copySubmersibleState(v.motion.submersible);p.raft=v.motion.raft?{...v.motion.raft}:undefined;p.jetski=copyJetSkiState(v.motion.jetski);p.atv=copyAtvState(v.motion.atv);p.kayak=v.motion.kayak?{...v.motion.kayak}:undefined;p.tank=v.motion.tank?{...v.motion.tank}:undefined;});
 }
 function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flyingCreature=b.flyingCreature?copyFlyingCreatureState(b.flyingCreature):undefined;
   if(out.flyingCreature&&a.flyingCreature&&b.flyingCreature){
@@ -56,9 +60,10 @@ function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flying
   out.jetski=copyJetSkiState(b.jetski);if(out.jetski&&a.jetski&&b.jetski)out.jetski.steeringAngle=a.jetski.steeringAngle+(b.jetski.steeringAngle-a.jetski.steeringAngle)*alpha;
   out.atv=copyAtvState(b.atv);
   if(out.atv&&a.atv&&b.atv){out.atv.steeringAngle=a.atv.steeringAngle+(b.atv.steeringAngle-a.atv.steeringAngle)*alpha;for(let i=0;i<4;i++){out.atv.wheelAngles[i]=a.atv.wheelAngles[i]!+(b.atv.wheelAngles[i]!-a.atv.wheelAngles[i]!)*alpha;out.atv.suspension[i]=a.atv.suspension[i]!+(b.atv.suspension[i]!-a.atv.suspension[i]!)*alpha;if(out.atv.wheelSteers&&a.atv.wheelSteers&&b.atv.wheelSteers)out.atv.wheelSteers[i]=a.atv.wheelSteers[i]!+(b.atv.wheelSteers[i]!-a.atv.wheelSteers[i]!)*alpha;}}
-  out.kayak=b.kayak?{...b.kayak}:undefined;if(out.kayak&&a.kayak&&b.kayak)out.kayak.phase=a.kayak.phase+(b.kayak.phase-a.kayak.phase)*alpha;
+  out.kayak=b.kayak?{...b.kayak}:undefined;if(out.kayak&&a.kayak&&b.kayak){out.kayak.phase=a.kayak.phase+(b.kayak.phase-a.kayak.phase)*alpha;if(a.kayak.sideBlend!==undefined&&b.kayak.sideBlend!==undefined)out.kayak.sideBlend=a.kayak.sideBlend+(b.kayak.sideBlend-a.kayak.sideBlend)*alpha;}
   out.tank=b.tank?{...b.tank}:undefined;
   if(out.tank&&a.tank&&b.tank)for(const k of ['turretYaw','gunElevation','leftTravel','rightTravel'] as const)out.tank[k]=a.tank[k]+(b.tank[k]-a.tank[k])*alpha;
+  out.aircraft=b.aircraft?{rotorSpeedFraction:(a.aircraft?.rotorSpeedFraction??b.aircraft.rotorSpeedFraction??0)+((b.aircraft.rotorSpeedFraction??0)-(a.aircraft?.rotorSpeedFraction??b.aircraft.rotorSpeedFraction??0))*alpha,tilt:(a.aircraft?.tilt??b.aircraft.tilt)+(b.aircraft.tilt-(a.aircraft?.tilt??b.aircraft.tilt))*alpha,rotorPhases:b.aircraft.rotorPhases.map((p,n)=>(a.aircraft?.rotorPhases[n]??p)+(p-(a.aircraft?.rotorPhases[n]??p))*alpha)}:undefined;
   out.wheels=b.wheels?.map((w,i)=>{const prior=a.wheels?.[i]??w;return {...w,length:prior.length+(w.length-prior.length)*alpha,steer:prior.steer+(w.steer-prior.steer)*alpha,angle:prior.angle+(w.angle-prior.angle)*alpha};});
   out.creature=copyCreature(b.creature);
   if(out.creature&&a.creature&&b.creature){out.creature.phase=a.creature.phase+(b.creature.phase-a.creature.phase)*alpha;

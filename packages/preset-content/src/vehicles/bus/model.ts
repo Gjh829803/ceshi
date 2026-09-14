@@ -86,5 +86,6 @@ export function buildBusModel(){
   steeringWheel.add(new T.Mesh(new T.TorusGeometry(.23,.018,8,24),dark));
   for(const angle of [0,2.1,4.2]){const spoke=new T.Mesh(new T.BoxGeometry(.018,.23,.018),steel);spoke.position.set(Math.sin(angle)*.11,Math.cos(angle)*.11,0);spoke.rotation.z=-angle;steeringWheel.add(spoke);}
   for(const x of [.31,.58])box('pedal',[.12,.03,.19],[x,.55,2.01],dark);
+  root.traverse(node=>{if(node instanceof T.Mesh){node.castShadow=node.material!==glass;node.receiveShadow=node.material!==glass;}});
   return {root,wheels,wheelRigs,steering};
 }

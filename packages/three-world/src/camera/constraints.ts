@@ -45,11 +45,54 @@ export interface CameraConstraintStep {
   readonly cut: boolean;
   readonly previous?: CameraProposal | undefined;
 }
+/** One bounded recording of queries that the camera solver actually executed. */
+export interface CameraCollisionProbeSample {
+  readonly sampleId: number;
+  readonly source: 'fixed' | 'prediction' | 'presentation';
+  readonly simulationTick: number;
+  readonly probes: readonly {
+    readonly from: CameraVector3;
+    readonly to: CameraVector3;
+    readonly radius: number;
+    readonly hit: ReturnType<CameraCollisionProbe>;
+  }[];
+  readonly droppedProbes: number;
+}
+export type CameraCollisionQuerySamples = Partial<Record<CameraCollisionProbeSample['source'], CameraCollisionProbeSample>>;
+const MAX_CAPTURED_PROBES = 256;
 export class CameraConstraints {
   private probe: CameraCollisionProbe | undefined;
+  private captureEnabled = false;
+  private sampleId = 0;
+  private samples: CameraCollisionQuerySamples = {};
+  private activeSample: {sampleId:number;source:CameraCollisionProbeSample['source'];simulationTick:number;probes:CameraCollisionProbeSample['probes'][number][];droppedProbes:number} | undefined;
+  get diagnosticsRevision(): number { return this.sampleId; }
+  setDiagnosticsEnabled(enabled: boolean): void {
+    if (enabled === this.captureEnabled) return;
+    this.captureEnabled = enabled;
+    this.samples = {};
+    this.sampleId++;
+  }
+  inspectQueries(): CameraCollisionQuerySamples | undefined {
+    return this.captureEnabled ? structuredClone(this.samples) : undefined;
+  }
+  private recordQueries<T>(source: CameraCollisionProbeSample['source'], simulationTick: number, run: () => T): T {
+    if (!this.captureEnabled) return run();
+    const sample = {sampleId: ++this.sampleId, source, simulationTick, probes: [] as CameraCollisionProbeSample['probes'][number][], droppedProbes: 0};
+    if(source === 'fixed') { const {presentation: _presentation, ...remaining} = this.samples; this.samples = remaining; }
+    this.activeSample = sample;
+    try { return run(); }
+    finally { this.samples = {...this.samples, [source]: sample}; this.activeSample = undefined; }
+  }
   private readonly solver = new CameraCollisionSolver((...args) => {
     if (!this.probe) throw failure("CAMERA_QUERY_UNAVAILABLE");
-    return this.probe(...args);
+    const hit = this.probe(...args);
+    const sample = this.activeSample;
+    if (sample) {
+      if (sample.probes.length < MAX_CAPTURED_PROBES) sample.probes.push(structuredClone({from: args[0], to: args[1], radius: args[2], hit}));
+      else sample.droppedProbes++;
+    }
+    return hit;
   });
   constructor(private readonly geometry: CameraGeometryProvider) {}
   capture() {
@@ -133,7 +176,9 @@ export class CameraConstraints {
     configuration: ResolvedCameraConfiguration,
     subject: CameraSubjectFacts,
     step: CameraConstraintStep,
+    source: CameraCollisionProbeSample['source'] = 'fixed',
   ): { proposal: CameraProposal; diagnostics: CameraConstraintDiagnostics } {
+    return this.recordQueries(source, step.simulationTick, () => {
     if (!configuration.values.constraints.collision.enabled)
       return {
         proposal,
@@ -179,6 +224,7 @@ export class CameraConstraints {
       this.restore(before);
       throw error;
     }
+    });
   }
   /** Pre-physics input prediction shares the solver without committing recovery
    * time. An unsolved pre-movement pose must not prevent movement out of it;
@@ -186,7 +232,7 @@ export class CameraConstraints {
   predict(proposal: CameraProposal, configuration: ResolvedCameraConfiguration, subject: CameraSubjectFacts, step: CameraConstraintStep): CameraProposal {
     const before = this.capture();
     try {
-      return this.solve(proposal, configuration, subject, step).proposal;
+      return this.solve(proposal, configuration, subject, step, 'prediction').proposal;
     } catch {
       return step.previous ?? proposal;
     } finally {
@@ -199,11 +245,15 @@ export class CameraConstraints {
     subject: CameraSubjectFacts,
     aspect: number,
     current: CameraProposal,
+    simulationTick = 0,
+    source: CameraCollisionProbeSample['source'] = 'presentation',
   ): CameraProjectedProposal {
+    return this.recordQueries(source, simulationTick, () => {
     if (!configuration.values.constraints.collision.enabled) return {...proposal,constraintDiagnostics:{status:'disabled'}};
     return this.withGeometry(subject, proposal, aspect, () => {
       const result=this.solver.project(this.request(proposal,configuration,subject,current,false));
       return {...this.corrected(proposal,result.position,configuration,subject),constraintDiagnostics:this.measured(result)};
+    });
     });
   }
 }

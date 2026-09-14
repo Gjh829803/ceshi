@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {describe,it,expect,vi} from 'vitest';
 import {createWorld,type ThreeWorld} from './world';
 import {WorldEngine} from './engine';
+import type {World} from './contracts';
 import type {CameraDocument} from './config/camera/index';
 import {createMountedFixture} from './humanoid-runtime/mounted-test-fixture';
 import {WorldPresentationContext} from './camera/presentation-context';
@@ -382,4 +383,22 @@ it('keeps valid speed FOV after a hot edit with a smaller effect envelope',async
   expect(world.inspectCamera().current!.lens.verticalFovDegrees).toBeLessThan(180);
   expect(world.snapshot().errors).toEqual([]);
  }finally{world.dispose();}
+});
+
+it('notifies render observers after restoring subject presentation without another simulation step',async()=>{
+ const world=await createWorld({navigation:false});
+ const geometry=new THREE.BoxGeometry(.6,1.8,.4),material=new THREE.MeshBasicMaterial(),person=new THREE.Mesh(geometry,material);
+ try{
+  world.addCharacter({id:'person',object:person,body:{heightMeters:1.8,radiusMeters:.3}});
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:.7},constraints:{collision:{enabled:false}}}}}}});
+  const order:string[]=[];
+  Object.defineProperty(engine(world),'renderer',{value:{render(){expect(person.material).not.toBe(material);order.push('source');},dispose(){}}});
+  const publicWorld:World=world;
+  publicWorld.setCameraCollisionDiagnosticsEnabled(true);
+  const release=publicWorld.onRender(()=>{expect(person.material).toBe(material);expect(person.visible).toBe(true);order.push('observer');});
+  const tick=world.simulationTick,revision=world.inspectCamera().cameraCommitRevision;
+  engine(world).render(.5);expect(order).toEqual(['source','observer']);
+  expect(world.simulationTick).toBe(tick);expect(world.inspectCamera().cameraCommitRevision).toBe(revision);
+  release();engine(world).render(1);expect(order).toEqual(['source','observer','source']);
+ }finally{world.dispose();geometry.dispose();material.dispose();}
 });

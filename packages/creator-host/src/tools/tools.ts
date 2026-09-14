@@ -426,7 +426,7 @@ export class ThreeCreatorTools {
       if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
       const raw = path.join(root, 'playtest.webm');
       await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', recordedVideoEncodingArgs(raw, videoFile));
+      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', await recordedVideoEncodingArgs(raw, videoFile));
       videoMetadata = await probeVideo(videoFile);
       validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }

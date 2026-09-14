@@ -18,12 +18,13 @@ export function readHumanoid(h?:HumanoidController):HumanoidRenderState|undefine
   };
 }
 export function copyHumanoid(s?:HumanoidRenderState):HumanoidRenderState|undefined {
-  return s?{...s,unicyclePose:copyUnicycleState(s.unicyclePose),...(s.kayakPose?{kayakPose:{...s.kayakPose}}:{}),...(s.sledPose?{sledPose:{...s.sledPose}}:{}),position:s.position.clone(),facing:s.facing.clone(),traversal:s.traversal?{...s.traversal}:null,completedMotion:s.completedMotion?{...s.completedMotion}:null,
+  return s?{...s,...(s.wearablePose?{wearablePose:{...s.wearablePose}}:{}),unicyclePose:copyUnicycleState(s.unicyclePose),...(s.kayakPose?{kayakPose:{...s.kayakPose}}:{}),...(s.sledPose?{sledPose:{...s.sledPose}}:{}),position:s.position.clone(),facing:s.facing.clone(),traversal:s.traversal?{...s.traversal}:null,completedMotion:s.completedMotion?{...s.completedMotion}:null,
     animationEvent:s.animationEvent?{...s.animationEvent}:null,surface:s.surface?{pose:s.surface.pose?{...s.surface.pose}:null}:null,
     skills:s.skills?{...s.skills,pose:s.skills.pose?{...s.skills.pose}:null,active:s.skills.active?{...s.skills.active}:null}:null}:undefined;
 }
 export function blendHumanoid(a:HumanoidRenderState|undefined,b:HumanoidRenderState|undefined,alpha:number){
   const out=copyHumanoid(b);if(!out||!a||!b||a.simulationIdentity!==b.simulationIdentity)return out;
+  if(out.wearablePose&&a.wearablePose&&b.wearablePose)for(const k of ['spread','seated','landing'] as const)out.wearablePose[k]=a.wearablePose[k]+(b.wearablePose[k]-a.wearablePose[k])*alpha;
   if(a.dragonMount&&b.dragonMount)out.dragonMount={...b.dragonMount,progress:a.dragonMount.progress+(b.dragonMount.progress-a.dragonMount.progress)*alpha};
   if(a.atvSteeringAngle!==undefined&&b.atvSteeringAngle!==undefined)out.atvSteeringAngle=a.atvSteeringAngle+(b.atvSteeringAngle-a.atvSteeringAngle)*alpha;
   out.unicyclePose=blendUnicycleState(a.unicyclePose,b.unicyclePose,alpha);

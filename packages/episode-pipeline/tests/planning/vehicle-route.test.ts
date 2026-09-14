@@ -97,3 +97,16 @@ it('holds mounted action waypoints without route timeout, then synchronizes segm
  controller.holdWaypoint({ waypointIndex: 0, radiusMeters: .6 });
  expect(controller.step(snapshot, 20).mode).toBe('action');
 });
+
+for(const subtype of ['helicopter','multirotor','tiltrotor'] as const)it(`${subtype} follows an Episode route using rotor inputs`,async()=>{
+ const assets=JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets;
+ const spec={...structuredClone(assets.find((a:any)=>a.vehicle?.spec.mode==='plane').vehicle.spec),aircraftSubtype:subtype};
+ const map:EnvironmentDefinition={id:'rotor-route',name:'Rotor route',description:'',bounds:{min:[-2000,-100,-2000],max:[2000,1000,2000]},boxes:[{id:'floor',position:[0,-1,0],size:[4000,2,4000]}],water:[],regions:[{id:'route',name:'Route',description:'',center:[0,0,0],size:[3800,3800],color:'#aaa',modes:['character','plane']}],spawns:[{id:'parked',name:'Parked',vehicleId:'subject',position:[0,0,0],yaw:0,regionId:'route'}],playerSpawn:[-10,0,0]};
+ const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:'rotor',spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
+ try{
+ const segment:EpisodeSegmentPlan={id:'rotor',purpose:'Rotor input integration',endBehavior:'stop',start:{positionWorldMetersXYZ:[0,20,0],facingYawRadians:0,humanoid:{vehicleInstanceId:'subject',mounted:true,throttle:.5}},waypoints:[{positionWorldMetersXYZ:[0,23,25],gait:'walk'},{positionWorldMetersXYZ:[10,25,60],gait:'walk'}]};
+ world.humanoid!.prepareEpisodeStart(segment.start);const controller=new VehicleRouteController(segment);let last:RouteDecision|undefined;
+ for(let n=0;n<1800;n++){last=controller.step(world.snapshot(),n/60);expect(last.mode).not.toBe('failed');world.step(last.input,1);}
+ expect(last!.mode,JSON.stringify(last)).toBe('finished');expect(world.humanoid!.simulation.controlledActor.vehicle!.position.y).toBeGreaterThan(20);
+ }finally{world.dispose();}
+});

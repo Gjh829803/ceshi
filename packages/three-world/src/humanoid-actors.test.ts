@@ -12,6 +12,7 @@ import {Character} from './humanoid-runtime/character';
 import type {AssetDefinition} from './engine-contracts';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
 import type {CameraFollowOptions} from './contracts';
+import {SPECS} from '@worldkit/preset-content/config';
 
 const worlds:ThreeWorld[]=[];
 
@@ -32,6 +33,26 @@ function rendererFixture(){
   const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
   return {win,renderer};
 }
+
+it('keeps aircraft commands and cancellation scoped to their driver alongside another actor input',async()=>{
+  const spec=SPECS.find(v=>v.id==='plane')!;
+  const world=await setup(undefined,{map:{...map,playerSpawn:[-12,.04,0],regions:[{id:'flight',name:'Flight',description:'',center:[0,0,0],size:[40,40],color:'#aaa',modes:['plane','character']}],spawns:[{id:'plane-slot',name:'Plane',vehicleId:spec.id,position:[0,0,0],yaw:0,regionId:'flight'}]},vehicles:[{instanceId:spec.id,assetId:'vehicle.plane',spec,object:new THREE.Group()}]});
+  const runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(8,.04,0);world.addCharacter({id:'npc',humanoid:npc});
+  runtime.simulation.controlledActor.vehicleIndex=0;runtime.simulation.controlledActor.transition=0;
+  await world.execute({type:'humanoid.set-input',actorId:'npc',input:{...emptyInput(),forward:.4}});
+  const cancel=runtime.setAircraftActions([{action:'increaseThrottle'}],2);
+  world.step({},1);
+  expect(runtime.inspectControls().lastApplied?.source).toBe('aircraft-actions');
+  expect(runtime.inspectControls('npc').override?.input.forward).toBe(.4);
+  expect(runtime.inspectControls('npc').lastApplied?.input.forward).toBe(.4);
+  expect(()=>runtime.setInput({...emptyInput(),forward:Number.NaN})).toThrow();
+  expect(runtime.inspectAircraftActionExecution().active).toBe(true);
+  cancel();world.step({},1);
+  expect(runtime.inspectAircraftActionExecution().active).toBe(false);
+  expect(runtime.inspectControls('npc').lastApplied?.input.forward).toBe(.4);
+  runtime.setAircraftActions([{action:'increaseThrottle'}],2);await world.execute({type:'entity.despawn',entityId:'npc'});world.step({},1);
+  expect(runtime.inspectAircraftActionExecution().active).toBe(true);
+});
 
 it('binds three full rigs, routes explicit actor input and preserves independent mixer ownership',async()=>{
   const world=await setup(),runtime=world.humanoid!;
@@ -520,5 +541,8 @@ it('recovers only the displaced actor while retaining another actor input and sh
 });
 
 it('forwards explicit character model texture options through createHumanoidWorld',async()=>{
-  await expect(setup(undefined,{characterLoadOptions:{loadTextures:true}})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  const world=await setup(undefined,{characterLoadOptions:{loadTextures:true}});
+  const clone=await world.humanoid!.createCharacter();
+  try{let maps=0;clone.root.traverse(node=>{if(node instanceof THREE.Mesh)for(const material of Array.isArray(node.material)?node.material:[node.material]){if(material.map instanceof THREE.DataTexture){maps++;expect(material.map.image.width).toBeGreaterThan(0);}}});expect(maps).toBeGreaterThan(0);}
+  finally{clone.dispose();}
 });

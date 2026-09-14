@@ -49,6 +49,11 @@ appearance explicitly. Factories and NPC clones retain the resolved choice. Crea
 explicitly select `characterLoadOptions:{loadTextures:false}`; these SDK defaults
 do not override the Creator task requirements.
 
+Node consumers can explicitly set `loadTextures:true` to decode embedded PNG/JPEG
+images into actual Three DataTextures, including color and normal maps. This applies
+to `loadAsset` and complete humanoid loading/factories. No DOM globals are installed;
+invalid or unsupported embedded images reject the load and release partial textures.
+
 Complete humanoid loads share a template keyed by the resolved resource URL
 closure and model texture loading choice. Keep those URLs immutable for their content version. Each instance has
 independent skeletons, inverse-bind matrices, mixer clips, materials and any loaded
@@ -386,6 +391,14 @@ factories preserve the texture choice when creating another instance.
 Catalog `locomotionBindingIds` describe supplied content for discovery. They do
 not select or install a controller; binding uses `asset/object` with `movement`,
 or an actual `humanoid` instance.
+
+The public asset loader verifies self-contained GLB bytes before parsing. In Node,
+embedded PNG/JPEG images (buffer views or data URIs) decode into real RGBA
+`DataTexture` pixels without DOM globals or texture mocks. Corrupt or unsupported
+image formats reject the load. Browser loading continues to use Three's native
+image path. Geometry and textures are shared immutable resources: dispose the
+asset instance, not its borrowed textures; clones retain them until the final
+instance releases them.
 
 For Creator generation, every human (including NPCs and riders) must use the
 permitted preset visible model, skeleton and motions; omit added clothing,
@@ -1622,3 +1635,23 @@ actual movement modes and speeds. Check jump/sprint or mounted contact, camera
 clearance and NPC routing where relevant. A readable overview or a successful
 reset does not prove the edge is safe. Keep these checks inside normal authoring
 and reuse the original case inputs.
+
+### Camera query diagnostics
+
+`world.setCameraCollisionDiagnosticsEnabled(true)` records the shared camera's
+existing queries; `world.inspectCamera().collisionQueries` exposes detached,
+immutable `fixed`, `prediction` and `presentation` samples. Each sample identifies
+its batch sequence, simulation tick and source, with actual sweep endpoints,
+radii and returned hit data. Recording is off by default and does not add physics
+queries. Up to 256 probes are retained per batch; `droppedProbes` reports overflow.
+Disabling capture clears samples. Check ownership and sample timing before drawing
+queries; authored cameras do not run follow collision. These are observations,
+not physics colliders or a reason to advance simulation.
+
+`world.onRender(callback)` subscribes to the existing completed-render event and
+returns an unsubscribe function. Temporary subject fading, body visibility and
+actor presentation have been restored before this callback; the gameplay camera
+retains its actual displayed pose. Observers may draw an independent view here,
+but must not advance World or take ownership of the gameplay camera. An observer
+using committed subjects may differ from the gameplay interpolation by one fixed
+tick; a live gameplay monitor should copy the source render pixels instead.

@@ -1,3 +1,4 @@
+import {launchAccess,launchLift} from './aircraft-launch-access';
 import {createSpaceTrainingMap} from './space-training';
 import {createNpcWorkshop} from './npc-workshop';
 import {createDragonTrainingMap} from './dragon-training';
@@ -7,6 +8,7 @@ import { block, indoorModule, ramp } from './modules';
 import { createCampusCharacterCourse, createCharacterWorkshop } from '../humanoid/workshop';
 import { SPECS } from '../config';
 import { createGrandPrix } from './grand-prix';
+const elevator=launchLift(-130,-176);
 const characterCourse=createCampusCharacterCourse();
 const groundModes=['character','wheeled','bus','tank','motorcycle', 'unicycle','skateboard','sled','ski','hover','mount','carriage'];
 const regions:MapRegion[]=[
@@ -15,7 +17,7 @@ const regions:MapRegion[]=[
  {id:'grades',name:'03 / 地形测试',description:'5° / 12° / 22° 梯度、横坡与台阶',center:[35,0,170],size:[140,100],color:'#d49d7c',modes:groundModes},
  {id:'water',name:'04 / 水域实验场',description:'浅滩、码头桩、水下顶棚与深水',center:[324,-2,0],size:[308,490],color:'#5cafbb',modes:['character','paddled_boat','boat','submarine','hover']},
  {id:'airfield',name:'05 / 航空跑道',description:'宽门机库、起飞、空中门框',center:[-285,0,0],size:[46,620],color:'#e4a17f',modes:['plane','glider','hover','dragon']},
- {id:'launch',name:'06 / 滑翔高台',description:'33 米高台、释放与着陆',center:[-130,33,-155],size:[32,41],color:'#b3c8d5',modes:['glider']},
+ {id:'launch',name:'06 / 滑翔高台',description:'电梯自动上台 / 折返坡道 · F 穿戴 · Shift 助跑离场',center:[-130,120,-155],size:[32,90],color:'#b3c8d5',modes:['character','plane','glider']},
  {id:'six-dof',name:'07 / 六向空间',description:'垂直、横移、俯仰与滚转框架',center:[-84,0,-70],size:[50,65],color:'#b9ace1',modes:['spacecraft','hover','dragon']},
  {id:'circuit',name:'08 / 环道与绕桩',description:'高速转向、刹车与低速绕桩',center:[-28,0,73],size:[300,300],color:'#96bfa5',modes:groundModes},
  {id:'creatures',name:'09 / 生物骑乘场',description:'骑马步态 · 马车牵引 · 飞龙起降',center:[60,0,35],size:[90,70],color:'#a6b57f',modes:['character','mount','carriage','dragon']},
@@ -23,12 +25,14 @@ const regions:MapRegion[]=[
  {id:'sled-slope',name:'11 / 滑雪与雪橇坡道',description:'12° 雪坡 · 松键滑行 · 双板压弯 / 雪橇拖脚 · 制动',center:[-390,0,110],size:[58,150],color:'#b8d4df',modes:['character','sled','ski']},
 ];
 const originalSpawns:MapSpawn[]=SPECS.map(spec=>({id:`vehicle-${spec.id}`,vehicleId:spec.id,name:spec.name,position:[...spec.spawn],yaw:spec.yaw,
- regionId:spec.mode==='paddled_boat'||spec.mode==='boat'||spec.mode==='submarine'?'water':spec.mode==='plane'?'airfield':spec.mode==='glider'?'launch':spec.mode==='spacecraft'?'six-dof':['mount','carriage','dragon'].includes(spec.mode)?'creatures':'staging'}));
+ regionId:['wingsuit','paraglider'].includes(spec.id)?'launch':spec.mode==='paddled_boat'||spec.mode==='boat'||spec.mode==='submarine'?'water':spec.mode==='plane'?'airfield':spec.mode==='glider'?'launch':spec.mode==='spacecraft'?'six-dof':['mount','carriage','dragon'].includes(spec.mode)?'creatures':'staging'}));
 function campusBoxes():EnvironmentBox[]{
  const b:EnvironmentBox[]=[block('ground-main',[-165,-2.5,0],[670,5,1000]),block('ground-north',[335,-2.5,372.5],[330,5,255]),block('ground-south',[335,-2.5,-372.5],[330,5,255]),block('ground-east',[489,-2.5,0],[22,5,490]),block('basin-floor',[324,-45,0],[308,2,490],'#607f7d'),...indoorModule(-180,-20)];
  const add=(id:string,x:number,y:number,z:number,w:number,h:number,d:number,color?:string,collision=true)=>b.push(block(id,[x,y,z],[w,h,d],color,undefined,collision));
  add('basin-west-wall',168,-23,0,4,42,490);add('basin-east-wall',479,-23,0,2,42,490);add('basin-north-wall',324,-23,246,310,42,2);add('basin-south-wall',324,-23,-246,310,42,2);
- add('launch-deck',-130,16.5,-155.5,32,33,41);
+ add('launch-deck',-130,60,-155.5,32,120,41,'#386779');
+ for(let z=-164;z<-137;z+=5)add('wingsuit-runway-'+z,-122,120.015,z,.35,.03,2,'#f1c35d',false);
+ add('launch-edge',-130,120.02,-135.4,32,.04,.6,'#f1c35d',false);b.push(...launchAccess(-130,-176),...elevator.boxes);
  b.push(ramp('elevation-ramp',-109,127.5,30,65,22));add('elevation-deck',-94,11,181,60,22,42);
  // Low boarding pontoon and a walkable ramp from the existing bank.
  const kayakAngle=-Math.atan2(1.8,35);
@@ -73,8 +77,8 @@ function campusBoxes():EnvironmentBox[]{
  add('sled-runout',-390,-.10,44,46,.2,52,'#eef1f2');
  return b;
 }
-const campus:EnvironmentDefinition={id:'campus',name:'VECTOR 综合训练园区',description:'连续驾驶、室内、多层地形、水域与飞行测试场',bounds:{min:[-500,-50,-500],max:[500,300,500]},boxes:campusBoxes(),water:[{id:'basin',min:[170,-44,-245],max:[478,-2,245],surface:-2}],regions,playerSpawn:[-24,0,55],spawns:[...originalSpawns,...[
- ['staging',-24,0,55],['indoor',-180,0,-51],['grades',5,0,139],['water',210,-2,-95],['airfield',-285,0,-250],['launch',-130,33,-166],['six-dof',-84,1,-70],['circuit',-28,0,220],
+const campus:EnvironmentDefinition={lifts:[elevator.lift],id:'campus',name:'VECTOR 综合训练园区',description:'连续驾驶、室内、多层地形、水域与飞行测试场',bounds:{min:[-500,-50,-500],max:[500,300,500]},boxes:campusBoxes(),water:[{id:'basin',min:[170,-44,-245],max:[478,-2,245],surface:-2}],regions,playerSpawn:[-24,0,55],spawns:[...originalSpawns,...[
+ ['staging',-24,0,55],['indoor',-180,0,-51],['grades',5,0,139],['water',210,-2,-95],['airfield',-285,0,-250],['launch',-120,0,-184],['six-dof',-84,1,-70],['circuit',-28,0,220],
  ['creatures',60,0,10],
 ].map(([id,x,y,z])=>({id:`prepare-${id}`,name:regions.find(r=>r.id===id)!.name,position:[Number(x),Number(y),Number(z)] as const,yaw:0,regionId:String(id)})),characterCourse.spawn],interactions:characterCourse.interactions,climbSurfaces:characterCourse.climbSurfaces,characterTrials:characterCourse.characterTrials};
 campus.spawns=[...campus.spawns,{id:'prepare-sled-slope',name:'雪橇坡顶',position:[-390,Math.tan(Math.PI/15)*80,155],yaw:Math.PI,regionId:'sled-slope'}];

@@ -47,6 +47,7 @@ export interface CameraStrategyHistory<K extends CameraKind = CameraKind> {
   readonly speedDistanceMeters: number;
   readonly speedFovDegrees: number;
   readonly headingRadians: number;
+  readonly headingQuaternionWorldXYZW?: CameraQuaternion | undefined;
   readonly horizonQuaternionWorldXYZW: CameraQuaternion;
 }
 export interface CameraOpeningReference {
@@ -61,6 +62,8 @@ export interface CameraStrategyInput<K extends CameraKind> {
   readonly configuration: Extract<ResolvedCameraConfiguration, { kind: K }>;
   readonly intent: CameraIntent;
   readonly history?: CameraStrategyHistory<K> | undefined;
+  /** Continuity survives view changes while pose damping history resets. */
+  readonly headingHistory?: CameraStrategyHistory | undefined;
   readonly opening?: CameraOpeningReference | undefined;
   readonly deltaSeconds: number;
 }

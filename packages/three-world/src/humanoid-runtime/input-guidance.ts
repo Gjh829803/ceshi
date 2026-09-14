@@ -52,8 +52,8 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
   },
 
   sled: {
-    forward: 'Positive pushes forward at low speed; negative drags the feet to brake and does not reverse.',
-    steer: 'Positive drags one side to turn right; steering requires movement and loses speed.',
+    forward: 'Positive pushes forward at low speed; negative brakes forward motion, then pushes backwards at low speed.',
+    steer: 'Positive turns right, including at rest; backward travel retains reversed steering response.',
     brake: 'Drags both feet to slow the sled.',
   },
 
@@ -76,9 +76,9 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
   mount: MOUNT_INPUT_FIELDS,
   carriage: MOUNT_INPUT_FIELDS,
   plane: {
-    forward:'Positive pitches the nose down; negative pitches up. This is not throttle.',
-    steer:'Positive turns right and adds bank.',roll:'Adds signed bank around local Z.',
-    boost:'Increases persistent throttle while held.',slow:'Decreases persistent throttle and applies wheel brakes on ground.',brake:'Applies wheel brakes; no airborne braking force.',
+    forward:'Positive pitches the nose down; negative pitches up. This is not throttle. Balloon ignores pitch, steer and roll; horizontal movement follows wind.',
+    steer:'Positive turns right. Fixed-wing banks into the turn; rotorcraft yaws in hover and banks during forward flight.',roll:'Adds signed bank around local Z.',
+    boost:'Glider: limited launch tow, not engine power. Paraglider/wingsuit: ground launch assist only. Balloon: heats envelope while held, consumes fuel, coasts thermally on release. Increases persistent throttle for powered aircraft. For helicopter, multirotor and tiltrotor: increases vertical-speed demand; 50% requests hover, above 50% climb. Tiltrotor automatically tilts forward with airspeed from 12 to 32 m/s and returns upright when slowing.',slow:'Decreases persistent throttle/vertical-speed demand and applies wheel brakes on ground. Rotorcraft at zero throttle shuts down.',brake:'Applies wheel brakes. Wingsuit: starts a two-second canopy deployment while airborne; holding does not deploy faster. Paraglider or fully deployed wingsuit: canopy brake for landing. Balloon slow vents heat; glider slow extends spoilers.',
   },
   glider: {
     forward:'Positive pitches the nose down; negative pitches up.',

@@ -8,6 +8,8 @@ export interface EnvironmentBox {
   color?: string;
   surface?: 'concrete' | 'asphalt' | 'grip' | 'ice' | 'metal';
   collision?: boolean;
+  /** Lift ownership; boxes move together with their named platform. */
+  liftId?: string;
   rigidGroup?: {id:string;massKg:number};
 }
 export interface WaterVolume {
@@ -68,6 +70,11 @@ export interface CharacterTrial {
 }
 export interface LooseCrate { id: string; position: Vec3; size: number }
 export interface EnvironmentDefinition {
+  /** Outer collision tile edge; defaults and limits are defined by the SDK. */
+  collisionTileEdgeMeters?:NonNullable<import('@worldkit/three').humanoid.EnvironmentDefinition['collisionTileEdgeMeters']>;
+  lifts?: NonNullable<import('@worldkit/three').humanoid.EnvironmentDefinition['lifts']>;
+  /** Optional airflow consumed by aircraft aerodynamics. */
+  airflow?:{wind:Vec3;shearPerMeter?:Vec3;thermals?:readonly {center:Vec3;radius:number;updraft:number}[]};
   id: string;
   name: string;
   description: string;

@@ -1,3 +1,4 @@
+import type {AircraftSubtype} from '../config/aircraft';
 import {familyImpactMass} from './motion-families/registry';
 import type {WheelPhysicsConfig} from './motion-families/ground-vehicle/wheel-physics';
 import type {BodyPhysicsConfig} from './vehicle-dynamics';
@@ -8,6 +9,7 @@ export function vehicleImpactMass(spec:VehicleSpec):number{return familyImpactMa
 export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, number]; offset: [number, number, number] }
 import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {
+  aircraftSubtype?:AircraftSubtype;
   /** 太空大类专用标定；只由 space 家族消费。 */
   spaceFlight?:import('./motion-families/space/config').SpaceFlightConfig;
   /** 原生动力飞行标定；缺省时保留现有地面起降坐骑。 */
@@ -25,7 +27,7 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
   steer: number; radius: number; seat: [number, number, number]; hint: string;
   /** Rider pose, not propulsion. paddling is shared by kayak, canoe and raft;
    * the runtime binds hands to the stroke state. Omission uses the drive pose. */
-  characterPose?: 'unicycle' | 'atv' | 'stand' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'paddling';
+  characterPose?: 'unicycle' | 'atv' | 'stand' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'paddling' | 'wingsuit' | 'paraglider';
   /** Vehicle subtype that selects mechanics and model bindings, not a free-form visual label.
    * With mode paddled_boat: kayak uses alternating double-blade strokes;
    * canoe and raft use single-blade strokes. This does not load a vehicle model. */

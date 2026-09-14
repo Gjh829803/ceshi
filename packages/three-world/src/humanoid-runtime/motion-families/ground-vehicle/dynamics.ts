@@ -2,8 +2,9 @@ import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleBody,type EnvironmentQueries } from '../../environment/queries';
 import { stepPowertrain } from '../../powertrain';
 import type { Input,VehicleState } from '../../simulation';
-import { TANK_CONTROLS,TANK_GEOMETRY,tankBarrel } from './tank';
-import { finishUnicycleStep,UNICYCLE_GEOMETRY } from './unicycle';
+import { TANK_CONTROLS,TANK_GEOMETRY,tankBarrel,tankSupportRoll } from './tank';
+import { finishUnicycleStep,unicycleSupportRoll,UNICYCLE_GEOMETRY } from './unicycle';
+import { sledSupportRoll,sledDriveControl,sledYawRate } from './sled';
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 const blend = (a: number, b: number, k: number, h: number) => a + (b - a) * (1 - Math.exp(-k * h));
 export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, _time: number, q: EnvironmentQueries): void {
@@ -93,7 +94,8 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, _time
             state.cadence = v.grounded ? Math.abs(speed) / UNICYCLE_GEOMETRY.wheelRadius * 60 / (2 * Math.PI) : 0;
         }
         else if (c.kind === 'sled') {
-            const k = v.motion.sled!, brake = input.brake || input.forward < -.01, push = dryGround && !brake && input.forward > .01 && Math.abs(speed) < s.groundSpeed;
+            const k = v.motion.sled!, control=sledDriveControl(s,input,speed),brake=control.brake,
+                push = dryGround && !brake && control.direction!==0 && Math.abs(speed) < control.limit;
             k.push = blend(k.push, push ? 1 : 0, 10, h);
             k.brake = blend(k.brake, brake ? 1 : 0, 10, h);
             k.steer = v.steering;
@@ -101,12 +103,12 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, _time
                 k.phase += h / .85;
             const pulse = push ? Math.max(0, Math.sin(k.phase * Math.PI * 2)) : 0;
             if (dryGround) {
-                driveForce = mass * s.accel * pulse + resist(s.coastDeceleration + s.dragQuadratic * speed * speed + (brake ? s.brakeDeceleration : 0) + Math.abs(v.steering) * .15);
-                yawTarget = -v.steering * s.steer * Math.min(Math.abs(speed) / 4, 1) * Math.sign(speed);
+                driveForce = mass * s.accel * pulse * control.direction + resist(s.coastDeceleration + s.dragQuadratic * speed * speed + (brake ? s.brakeDeceleration : 0) + Math.abs(v.steering) * .15);
+                yawTarget = sledYawRate(s,v.steering,speed);
             }
             state.effort = pulse;
             state.cadence = push ? 60 / .85 : 0;
-            v.throttle = pulse;
+            v.throttle = pulse * control.direction;
         }
         else if (c.kind === 'tracks') {
             if (dryGround) {
@@ -145,7 +147,7 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, _time
         if (normal) {
             const n = q.support(v.position, 3, .15)?.normal ?? normal;
             pitch += Math.atan2(-(n.x * f.x + n.z * f.z), n.y);
-            roll += Math.atan2(n.x * f.z - n.z * f.x, n.y);
+            roll += c.kind === 'unicycle' ? unicycleSupportRoll(n, f) : c.kind === 'tracks' ? tankSupportRoll(n, f) : c.kind === 'sled' ? sledSupportRoll(n, f) : Math.atan2(n.x * f.z - n.z * f.x, n.y);
         }
         if (v.grounded || immersion > .05) {
             const desired = new Quaternion().setFromEuler(new Euler(-pitch, v.yaw, roll, 'YXZ')), error = desired.multiply(v.rotation.clone().invert());

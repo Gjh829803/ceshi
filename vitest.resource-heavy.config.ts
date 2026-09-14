@@ -6,6 +6,7 @@ import { sharedVitestTestConfig } from "./vitest.shared";
 export default defineConfig({
   test: {
     ...sharedVitestTestConfig,
+    setupFiles: ["./scripts/testing/resource-heavy-setup.ts"],
     include: TEST_GATE_MANIFEST_V1
       .filter((entry) => entry.lane === "resource-heavy")
       .map((entry) => entry.path),

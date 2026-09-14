@@ -17,6 +17,8 @@ export interface CameraSubjectFacts {
   /** Optional measured semantic orientation: local -Z forward, +Y up. */
   readonly semanticQuaternionWorldXYZW?: CameraQuaternion;
   readonly speedMetersPerSecond: number;
+  /** Aircraft yaw fact used only to seed continuous world-up twist after a cut. */
+  readonly continuousHeadingSeedRadians?: number;
   /** Local, already metre-valued body height range; not multiplied by model scale. */
   readonly body?: {
     readonly minimumHeightMeters: number;
@@ -92,8 +94,8 @@ export function anchorOffset(
 }
 
 /** One unsmoothed anchor for opening measurement, strategies and display samples. */
-export function cameraPositionAnchor(subject: CameraSubjectFacts, position: CameraPosition, fallbackHeading = 0): Vector3 {
+export function cameraPositionAnchor(subject: CameraSubjectFacts, position: CameraPosition, fallbackHeading?: number): Vector3 {
   return subjectAnchor(subject, position.anchor).add(
-    anchorOffset(subject, position.anchorOffset, subjectHeading(subject) ?? fallbackHeading),
+    anchorOffset(subject, position.anchorOffset, subject.continuousHeadingSeedRadians !== undefined ? fallbackHeading ?? subject.continuousHeadingSeedRadians : subjectHeading(subject) ?? fallbackHeading ?? 0),
   );
 }

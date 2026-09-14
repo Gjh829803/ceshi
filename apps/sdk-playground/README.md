@@ -29,6 +29,39 @@ does not change gameplay control or the camera. Search and grouped rows operate 
 actual scene roots; selection, visibility and temporary isolation are independent.
 Exiting isolation restores the previous scope, hidden objects and type filters.
 
+The camera checkbox switches the main viewport to an external world camera and
+frames the current subject with the actual gameplay camera model. Frustum length
+does not push the world view farther away.
+Left-drag orbits, right/middle-drag pans and the wheel zooms this world view.
+Clicking the viewport retains keyboard gameplay: movement, mounting and T camera
+switching still go to the SDK. Simulation continues; there is no observer toolbar
+or separate input mode. The world view shows full characters even when the gameplay
+camera uses first person. Unchecking restores the current gameplay view without
+resetting its mode or the controlled actor. Camera guides follow real camera poses
+and projection; the distance setting only caps their visual length. A live camera
+preview appears at the lower right of the world viewport; **放大 / 还原** changes
+its size without pausing or changing control. **定位摄像机** immediately reframes
+the current camera and subject, resetting the orbit centre. **跟随位置** (off by
+default) translates the world view with the gameplay camera while retaining the
+manually chosen viewing angle and distance. It does not inherit camera rotation.
+World-view pan and zoom respond faster; their scale remains distance-dependent. It copies the original gameplay
+frame at full source resolution, preserves its aspect ratio, follows T camera
+changes and disappears when camera display is disabled. It is UI only and is
+absent from model-input captures.
+With camera display and all-type colliders enabled together, cyan spheres and
+lines show the recorded camera sweep radius/path, orange marks blocked sweeps,
+and red marks returned surface contacts/normals. These are actual query samples,
+not added physics bodies. The world observer draws after the SDK restores its
+display transaction and shows committed subjects without gameplay body clipping
+or fade. The camera model follows the actual displayed camera pose and uses the
+presentation sample from `world.inspectCamera().collisionQueries`, falling back
+to fixed only before a presentation sample exists. Input-prediction samples are
+never drawn. The live monitor copies the actual interpolated gameplay frame;
+the observer's committed subject poses may differ by up to one fixed tick.
+Each sample carries its source,
+simulation tick and sequence; first-person views without sweeps show no stale probe. Source captures
+omit these guides, and turning inspection off stops query recording.
+
 Helpers independently show colliders, mesh edges, interaction anchors, declared
 climb surfaces and water volumes. Collider scope can follow the shared scope,
 include nearby shapes within a distance in metres, or show the whole physics world.
@@ -47,8 +80,9 @@ Anchor/region markers describe bindings, not current action eligibility.
 Picture, Objects and Helpers have independent reset buttons. Desktop inspection can
 be pinned into the existing right sidebar; mobile uses a bottom drawer. Settings
 are session-local. Map changes retire scene-local object selection, hidden IDs and
-isolation while retaining picture and helper choices. The optional diagnostic renderer shares the current scene and interpolated
-camera, draws only after a source frame, and never steps the SDK. Its canvas sits
+isolation while retaining picture and helper choices. The optional diagnostic renderer
+shares the current scene and draws after source frames or world-view mouse changes.
+It never steps the SDK or writes the gameplay camera. Its canvas sits
 below Presentation UI/output. Original source pixels, model-input captures and
 streams remain unchanged. Temporary visibility, materials and lighting are restored
 even on errors. Diagnostic passes omit source shadows to avoid rewriting shadow

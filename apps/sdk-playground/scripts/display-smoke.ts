@@ -27,11 +27,23 @@ try {
     const frame=await window.__WORLDKIT_EVAL__!.presentation!.modelInput.captureFrame();
     try{const canvas=document.createElement('canvas');canvas.width=frame.image.width;canvas.height=frame.image.height;
       const ctx=canvas.getContext('2d')!;ctx.drawImage(frame.image,0,0);const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
-      let hash=2166136261;for(const value of data)hash=Math.imul(hash^value,16777619);return {hash:hash>>>0,tick:frame.source.simulationTick};
+      const baseline=(window as any).__displaySourcePixels as Uint8ClampedArray|undefined;
+      if(!baseline)(window as any).__displaySourcePixels=new Uint8ClampedArray(data);
+      else {
+        {
+          if(baseline.length!==data.length)throw new Error('Source pixel dimensions changed');
+          let changed=0,maxDifference=0;
+          for(let i=0;i<data.length;i++){const difference=Math.abs(data[i]!-baseline[i]!);if(difference)changed++;maxDifference=Math.max(maxDifference,difference);}
+          // Different GPU passes can round a few 8-bit edge samples by one level.
+          // Compare every channel; reject larger changes and widespread pixel changes.
+          if(maxDifference>1||changed>data.length*.001)throw new Error(`Source pixels changed: max=${maxDifference}, channels=${changed}/${data.length}`);
+        }
+      }
+      return {width:canvas.width,height:canvas.height,tick:frame.source.simulationTick};
     }finally{frame.image.close();}
   });
-  const baseline=await capture(),before=await state();
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
+  const baseline=await capture(),before=await state();
   for(const [label,mode] of [['白模','clay'],['深度图','depth'],['类型着色','semantic'],['法线方向','normal'],['无光照','unlit'],['正常材质','material']] as const){
     const targetReads=await page.evaluate(()=>(window as any).__displayTargetReads??0);
     await page.getByRole('radio',{name:label,exact:true}).check();assert.equal((await settings()).mode,mode);
@@ -70,10 +82,53 @@ try {
   await page.screenshot({path:'.codex-tmp/display-evidence/view-inspector-pinned.png'});
   await page.getByRole('button',{name:'关闭显示检查',exact:true}).click();
   assert(!await page.locator('#displayInspectorHost').isVisible());
+  await page.getByRole('button',{name:'显示检查',exact:true}).click();
+  await page.getByRole('tab',{name:/辅助/}).click();
+  await page.getByRole('checkbox',{name:'摄像机和取景范围',exact:true}).check();
+  await page.getByRole('checkbox',{name:'碰撞体',exact:true}).check();
+  await page.getByRole('button',{name:'关闭显示检查',exact:true}).click();
+  const observer=page.locator('[data-world-camera-view]');assert(await observer.isVisible());
+  assert.deepEqual(await capture(),baseline);assert.deepEqual(await state(),before);
+  const observerBox=await observer.boundingBox();assert(observerBox);
+  await page.mouse.move(observerBox.x+120,observerBox.y+100);await page.mouse.down();
+  await page.mouse.move(observerBox.x+190,observerBox.y+140,{steps:4});await page.mouse.up();
+  assert.deepEqual(await state(),before,'world orbit cannot write the gameplay camera or advance simulation');
+  await page.getByRole('button',{name:'定位摄像机',exact:true}).click();
+  await page.getByRole('switch',{name:'跟随位置',exact:true}).click();
+  await page.getByRole('button',{name:'放大取景窗口',exact:true}).click();
+  assert.equal(await page.getByRole('switch',{name:'跟随位置',exact:true}).getAttribute('aria-checked'),'true');
+  assert(await page.evaluate(()=>document.activeElement?.hasAttribute('data-worldkit-surface')),'monitor controls restore SDK keyboard focus');
+  assert.deepEqual(await capture(),baseline);assert.deepEqual(await state(),before);
+  assert(await page.evaluate(()=>{
+    const source=document.querySelector<HTMLCanvasElement>('#viewport')!,monitor=document.querySelector<HTMLCanvasElement>('[data-camera-monitor-frame]')!;
+    return monitor.width===source.width&&monitor.height===source.height;
+  }),'monitor retains full source resolution');
+  await page.getByRole('button',{name:'还原取景窗口',exact:true}).click();
   await page.evaluate(()=>window.__WORLDKIT_EVAL__!.startLive());
-  await page.locator('#mapSelect').click();await page.getByRole('option',{name:'大奖赛 · 驾驶测试赛道',exact:true}).click();
+  const viewBefore=(await state()).camera.viewId;
+  await page.keyboard.press('t');
+  await page.waitForFunction(view=>(window as any).playground.getState().camera.viewId!==view,viewBefore);
+  const movementBefore=(await state()).position;
+  await page.keyboard.down('w');
+  try{await page.waitForFunction(before=>{const current=(window as any).playground.getState().position;return Math.hypot(...current.map((v:number,i:number)=>v-before[i]))>.1;},movementBefore);}
+  finally{await page.keyboard.up('w');}
+  // Input is verified live; reset and display inspection use one frozen frame,
+  // matching the source-pixel checks above instead of racing software rendering.
+  await page.evaluate(()=>window.__WORLDKIT_EVAL__!.stopLive());
+  await page.locator('#resetButton').click({noWaitAfter:true});
+  await page.waitForFunction(view=>(window as any).playground.getState().camera.viewId===view,viewBefore);
+  assert.equal((await state()).camera.viewId,viewBefore);assert(await observer.isVisible());
+  await page.getByRole('button',{name:'显示检查',exact:true}).click();
+  await page.getByRole('tab',{name:/辅助/}).click();
+  const currentView=(await state()).camera.viewId;
+  await page.getByRole('checkbox',{name:'摄像机和取景范围',exact:true}).uncheck();
+  assert.equal((await state()).camera.viewId,currentView);assert(!await page.locator('[data-camera-monitor]').isVisible());
+  await page.getByRole('checkbox',{name:'碰撞体',exact:true}).uncheck();
+  await page.getByRole('button',{name:'关闭显示检查',exact:true}).click();
+  await page.evaluate(()=>window.__WORLDKIT_EVAL__!.startLive());
+  await page.locator('#mapSelect').click();await page.getByRole('option',{name:'大奖赛 · 驾驶测试赛道',exact:true}).click({noWaitAfter:true});
   await page.waitForFunction(()=>(window as any).playground.getState().mapId==='grand-prix');
-  await page.locator('#resetButton').click();assert.equal((await settings()).mode,'clay');
+  await page.locator('#resetButton').click({noWaitAfter:true});assert.equal((await settings()).mode,'clay');
   await page.setViewportSize({width:390,height:760});
   await page.getByRole('button',{name:'显示检查',exact:true}).click();
   await page.getByRole('tab',{name:/辅助/}).click();
@@ -81,5 +136,5 @@ try {
   const box=await page.locator('.display-mobile-drawer').boundingBox();assert(box&&box.x>=0&&box.x+box.width<=391&&box.y>=0&&box.y+box.height<=761,JSON.stringify(box));
   await page.getByRole('button',{name:'关闭显示检查',exact:true}).click();assert.equal(await page.locator('.display-mobile-drawer').count(),0);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({pictureModes:6,helperOnlyModes:2,cleanSource:true,scopeAndOwnership:true,isolationRestore:true,groundFilter:true,independentReset:true,pinned:true,mapReset:true,mobile:true,errors}));
-}catch(error){await page.screenshot({path:'.codex-tmp/display-evidence/view-inspector-failure.png'});console.log(JSON.stringify(await page.evaluate(()=>({width:innerWidth,dialogs:[...document.querySelectorAll('[role=dialog]')].map(el=>({class:el.className,text:el.textContent?.slice(0,140),rect:el.getBoundingClientRect().toJSON()}))}))));throw error;}finally{await browser.close();}
+  console.log(JSON.stringify({pictureModes:6,helperOnlyModes:2,cleanSource:true,scopeAndOwnership:true,isolationRestore:true,groundFilter:true,independentReset:true,pinned:true,observerInput:true,namedCameraViews:true,monitorFocus:true,mapReset:true,mobile:true,errors}));
+}catch(error){console.error(error);console.log(JSON.stringify({errors}));await page.screenshot({path:'.codex-tmp/display-evidence/view-inspector-failure.png'});console.log(JSON.stringify(await page.evaluate(()=>({width:innerWidth,dialogs:[...document.querySelectorAll('[role=dialog]')].map(el=>({class:el.className,text:el.textContent?.slice(0,140),rect:el.getBoundingClientRect().toJSON()}))}))));throw error;}finally{await browser.close();}

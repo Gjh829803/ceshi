@@ -11,6 +11,7 @@ import type {
 import type { RuntimeError } from "../contracts";
 import type {
   CameraConstraints,
+  CameraCollisionQuerySamples,
   CameraConstraintDiagnostics,
   CameraGeometryProvider,
 } from "./constraints";
@@ -136,6 +137,7 @@ export interface ControllerState {
   readonly operations: ReadonlySet<string>;
 }
 export interface CameraInspection {
+  readonly collisionQueries?: CameraCollisionQuerySamples | undefined;
   readonly mode: ControllerState["mode"];
   readonly document?: CameraDocument | undefined;
   readonly documentHash?: string | undefined;

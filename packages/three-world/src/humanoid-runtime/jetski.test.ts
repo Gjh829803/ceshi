@@ -57,16 +57,19 @@ it('floats unoccupied, pushes another craft through native contact, preserves pa
   await world.reset();expect(world.humanoid!.snapshot().mountedInstanceId).toBeNull();expect(world.humanoid!.simulation.vehicles.every(v=>!v.motion.jetski!.particles.length)).toBe(true);
  }finally{world.dispose();f.q.dispose();}
 });
-it('keeps the original straddle rider clear of body panels and hands on the turning handlebar without scaling',async()=>{
+it('keeps the fixed straddle rider clear of panels with supported feet while the handlebar turns',async()=>{
  const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character(),model=buildJetSkiModel();
  try{
   await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
   const identities=new Map<SkinnedMesh,unknown>();rider.root.traverse(n=>{if(n instanceof SkinnedMesh)identities.set(n,n.geometry);});
-  const samples=[];
+  const samples=[];const fixedBones=new Map<string,number[]>();
   for(const angle of [0,-.42,.42,0]){
    rider.root.position.set(...JETSKI_SPEC.seat);
+   sampleJetSkiVisual(model,{...createJetSkiState(),steeringAngle:angle},0);
+   const grip=model.getObjectByName('control.hand.left')!;model.updateMatrixWorld(true);
+   expect(grip.getWorldPosition(new Vector3()).distanceTo(new Vector3(...ATV_GEOMETRY.grips[0]!).applyAxisAngle(new Vector3(0,1,0),angle).add(new Vector3(...ATV_GEOMETRY.handlebar)))).toBeLessThan(.002);
    rider.update(0,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'atv',atvSteeringAngle:angle});
    // SkinnedMesh.updateMatrixWorld refreshes bindMatrixInverse, as the renderer does.
    rider.root.updateMatrixWorld(true);model.updateMatrixWorld(true);
@@ -83,9 +86,10 @@ it('keeps the original straddle rider clear of body panels and hands on the turn
    expect([...intersections]).toEqual([]);
    expect(bounds.min.y).toBeGreaterThan(.24);expect(bounds.max.y).toBeLessThan(1.85);
    // Foot sockets retain their physical calibration; the thicker UEFN shoe raises its ball bone 35 mm.
-   for(const [bone,socket] of [['hand_l','control.hand.left'],['hand_r','control.hand.right'],['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
-    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());const target=socket.startsWith('control.hand')?new Vector3(...ATV_GEOMETRY.grips[bone==='hand_l'?0:1]!).applyAxisAngle(new Vector3(0,1,0),angle).add(new Vector3(...ATV_GEOMETRY.handlebar)):new Vector3(...JETSKI_SOCKETS[socket as keyof typeof JETSKI_SOCKETS]).add(new Vector3(0,.035,0));expect(point.distanceTo(target)).toBeLessThan(.002);
+   for(const [bone,socket] of [['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
+    const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());const target=new Vector3(...JETSKI_SOCKETS[socket]).add(new Vector3(0,.035,0));expect(point.distanceTo(target)).toBeLessThan(.002);
    }
+   rider.actor.traverse(n=>{if(n.type==='Bone'){n.updateMatrix();const values=n.matrix.toArray();if(!fixedBones.has(n.name))fixedBones.set(n.name,values);else values.forEach((v,k)=>expect(v,`${n.name} fixed pose`).toBeCloseTo(fixedBones.get(n.name)![k]!,5));}});
    expect(rider.root.scale.toArray()).toEqual([1,1,1]);samples.push({angle,min:bounds.min.toArray(),max:bounds.max.toArray()});
   }
   console.log('JETSKI_RIDER_CLEARANCE',JSON.stringify(samples));

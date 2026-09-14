@@ -43,16 +43,16 @@ export function controlFields(family:string,powertrain=false):ControlField[]{
   {key:'steer',label:'前轮最大转角',unit:'rad',step:.01,note:'结合 3.3 米轴距计算转弯；高速减小转角。',section:'转向与稳定'},
   ...(['steeringResponse','steeringReturn','throttleResponse','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回正',throttleResponse:'油门响应',pitchResponse:'俯仰响应',rollResponse:'车身侧倾响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
  ];
- if(family==='ski')return controlFields('sled').map(field=>({...field,label:field.label.replaceAll('蹬地','撑杖').replaceAll('滑条','雪板').replaceAll('拖脚','压刃'),note:field.note.replaceAll('蹬地','撑杖').replace('收脚','停止撑杖').replaceAll('滑条','雪板').replaceAll('雪橇','双板').replace('S / Space 双脚刹车；A / D 单侧拖脚产生部分阻力。','S / Space 制动；A / D 压刃转弯并损失部分速度。')}));
+ if(family==='ski')return controlFields('sled').map(field=>({...field,label:field.label.replaceAll('蹬地','撑杖').replaceAll('滑条','雪板').replaceAll('拖脚','压刃'),note:field.key==='brakeDeceleration'?'S / Space 制动；A / D 压刃转弯并损失部分速度。':field.key==='steer'?'随速度建立转向效果；静止不能原地转圈。':field.note.replaceAll('蹬地','撑杖').replace('收脚','停止撑杖').replaceAll('滑条','雪板').replaceAll('雪橇','双板')}));
  if(family==='sled')return [
   {key:'speed',label:'下坡安全限速',unit:'m/s',step:.1,note:'重力滑行的速度上限；Shift 不提供动力。',section:'速度范围'},
   {key:'groundSpeed',label:'蹬地速度上限',unit:'m/s',step:.1,note:'超过此速度收脚；W 不能在高速时继续加速。',section:'速度范围'},
   {key:'accel',label:'蹬地峰值加速度',unit:'m/s²',step:.1,note:'每 0.85 秒一次的蹬地脉冲。',section:'加速与减速'},
   {key:'coastDeceleration',label:'滑条摩擦减速度',unit:'m/s²',step:.01,note:'持续摩擦；默认模拟压实雪面。',section:'加速与减速'},
-  {key:'brakeDeceleration',label:'拖脚制动减速度',unit:'m/s²',step:.1,note:'S / Space 双脚刹车；A / D 单侧拖脚产生部分阻力。',section:'加速与减速'},
+  {key:'brakeDeceleration',label:'拖脚制动减速度',unit:'m/s²',step:.1,note:'Space 双脚刹车；S 先制动再低速倒退；A / D 拖脚转向产生部分阻力。',section:'加速与减速'},
   {key:'dragQuadratic',label:'空气阻力系数',unit:'1/m',step:.001,note:'减速度 = 系数 × 速度平方。',section:'加速与减速'},
   {key:'grip',label:'滑条侧向阻尼',unit:'/s',step:.1,note:'低值允许横滑；转向后动量逐渐跟随雪橇。',section:'转向与稳定'},
-  {key:'steer',label:'拖脚转向速率',unit:'rad/s',step:.01,note:'随速度建立转向效果；静止不能原地转圈。',section:'转向与稳定'},
+  {key:'steer',label:'拖脚转向速率',unit:'rad/s',step:.01,note:'接地时静止也能调整朝向；随滑行速度增大转向效果，倒滑时舵效反向。',section:'转向与稳定'},
   ...(['steeringResponse','steeringReturn','pitchResponse','rollResponse'] as const).map(key=>({key,label:({steeringResponse:'转向响应',steeringReturn:'转向回弹',pitchResponse:'顺坡俯仰响应',rollResponse:'横坡姿态响应'})[key],unit:'/s',step:.1,note:'数值越大响应越快。',section:'转向与稳定' as const})),
  ];
  const person=family==='character',road=['wheeled','motorcycle'].includes(family),creature=['mount','carriage'].includes(family),dragon=family==='dragon',air=['plane','glider'].includes(family),sub=family==='submarine',space=family==='spacecraft',surface=['wheeled','motorcycle','skateboard','hover','boat'].includes(family);

@@ -8,6 +8,8 @@
     "./testing": "./src/testing.ts"
   },
   "dependencies": {
+    "fast-png": "8.0.0",
+    "jpeg-js": "0.4.4",
     "@dimforge/rapier3d-compat": "file:../../vendor/rapier-query-refresh/rapier3d-compat-0.20.0-whitebox-query.2-575cd152b6fe51d6.tgz",
     "@noble/hashes": "1.8.0",
     "@recast-navigation/core": "0.43.1",

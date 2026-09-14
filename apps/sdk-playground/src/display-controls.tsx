@@ -71,7 +71,7 @@ function HelperToggle({label,hint,checked,change,reason,children}:{label:string;
 }
 export function DisplayHelpers({settings:s,change,available:a}:ControlsProps&{available:DisplayAvailability}) {
   const update=(patch:Partial<DisplaySettings>)=>change({...s,...patch});
-  const any=s.colliders!=='off'||s.wireframe||s.anchors||s.climbSurfaces||s.water||s.helperOnly!=='none';
+  const any=s.cameras||s.colliders!=='off'||s.wireframe||s.anchors||s.climbSurfaces||s.water||s.helperOnly!=='none';
   return <>
     <div className="display-helper-only"><strong>临时只看辅助</strong><p className="display-hint">暂时隐藏视觉表面，退出后恢复原有画面与辅助组合。</p>{s.helperOnly!=='none'?<div><p>正在仅看{s.helperOnly==='collision'?'碰撞体':'网格线框'}</p><Button variant="outline" size="sm" onClick={()=>update({helperOnly:'none'})}>退出仅看辅助</Button></div>:<div className="display-batch"><Button variant="outline" size="sm" disabled={!a.physics} onClick={()=>update({helperOnly:'collision'})}>仅看碰撞体</Button><Button variant="outline" size="sm" onClick={()=>update({helperOnly:'wireframe'})}>仅看线框</Button></div>}</div>
     {s.helperOnly!=='none'&&<p className="display-hint">以下是退出后恢复的叠加设置。</p>}
@@ -83,6 +83,10 @@ export function DisplayHelpers({settings:s,change,available:a}:ControlsProps&{av
         <label className="display-check"><Checkbox aria-label="包含地面碰撞体" checked={s.ground} onCheckedChange={v=>update({ground:v===true})}/><span>包含地面碰撞体</span></label>
         {a.unmappedColliders>0&&<p className="display-hint">{a.unmappedColliders} 个碰撞体没有对象归属；仅在附近或全场景碰撞范围显示。</p>}
         {s.colliderScope==='follow'&&a.scopedColliders===0&&<p className="display-unavailable">当前检查范围没有关联碰撞体；可切换到附近或全场景碰撞体。</p>}
+      </HelperToggle>
+      <HelperToggle label="摄像机和取景范围" hint="切换世界视角查看游玩摄像机与取景框；鼠标观察，键盘继续控制角色或载具。" checked={s.cameras} change={v=>update({cameras:v})}>
+        <label className="display-number">取景范围显示距离 / 米<input aria-label="取景范围显示距离 / 米" type="number" min={1} max={100} step={1} value={s.cameraRange} onChange={e=>{const n=e.currentTarget.valueAsNumber;if(Number.isFinite(n)&&n>=1&&n<=100)update({cameraRange:n});}}/></label>
+        <p className="display-hint">鼠标环绕、平移和缩放；键盘继续游玩。同时开启碰撞体“全部类型”，显示真实探测球与扫掠路径：青色为畅通，橙色为受阻，红色为返回的接触点与法线。第一人称未执行扫掠时不显示旧数据。</p>
       </HelperToggle>
       <HelperToggle label="网格线框" hint="叠加三角网格，检查几何密度和拓扑。" checked={s.wireframe} change={v=>update({wireframe:v})} reason={['depth','normal','semantic'].includes(s.mode)?'当前画面模式不支持叠加网格线框；可使用上方“仅看线框”。':undefined}/>
       <HelperToggle label="交互锚点" hint="金色标记交互位置，检查入口与站位。" checked={s.anchors} change={v=>update({anchors:v})} reason={!a.anchors?'当前检查范围未绑定交互锚点。':undefined}/>
@@ -103,6 +107,6 @@ export function displaySummary(s:DisplaySettings):string {
   if(s.hiddenIds.length)bits.push(`隐藏 ${s.hiddenIds.length} 个对象`);
   if(s.types.length!==DISPLAY_TYPES.length)bits.push(`显示 ${s.types.length} 类`);
   if(s.helperOnly!=='none')bits.push(s.helperOnly==='collision'?'仅看碰撞体':'仅看线框');
-  else {if(s.colliders!=='off')bits.push('碰撞体');if(s.wireframe)bits.push('线框');if(s.anchors)bits.push('交互锚点');if(s.climbSurfaces)bits.push('攀爬面');if(s.water)bits.push('水体');}
+  else {if(s.cameras)bits.push('摄像机');if(s.colliders!=='off')bits.push('碰撞体');if(s.wireframe)bits.push('线框');if(s.anchors)bits.push('交互锚点');if(s.climbSurfaces)bits.push('攀爬面');if(s.water)bits.push('水体');}
   return bits.join(' · ');
 }

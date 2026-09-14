@@ -68,3 +68,8 @@ export function finishTankStep(v:VehicleState,previous:VehicleState,q:Environmen
   const distance=delta.dot(new Vector3(Math.sin(previous.yaw+yaw/2),0,Math.cos(previous.yaw+yaw/2)));
   if(v.grounded){t.leftTravel+=distance-yaw*TANK_GEOMETRY.trackHalfSpacing;t.rightTravel+=distance+yaw*TANK_GEOMETRY.trackHalfSpacing;}
 }
+
+/** 横坡支撑法线转换为此小类的 YXZ 侧倾目标。 */
+export function tankSupportRoll(normal:{x:number;y:number;z:number},forward:{x:number;z:number}):number {
+  return Math.atan2(normal.z*forward.x-normal.x*forward.z,normal.y);
+}

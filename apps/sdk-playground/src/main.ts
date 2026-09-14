@@ -4,6 +4,7 @@ import {createCameraPreview} from "./camera/preview";
 import {selectDragonCameraVariant} from "./camera/project-state";
 import type {CameraEditorBinding} from "./camera/panel";
 /// <reference types="vite/client" />
+import type {AircraftActionRequest} from '@worldkit/three';
 import {loadCameraProject} from './camera-project';
 import { toast as notify } from "sonner";
 import * as T from "three";
@@ -63,6 +64,7 @@ import {
   type CollisionDebugMode,
 } from "@worldkit/preset-content/humanoid/capsule-debug";
 import { createDisplayPreview } from './display-preview';
+import {selectDisplayCameraProbeSample} from './display-camera-probes';
 import { createDisplayOverlays, type DisplayInteractionTarget } from './display-overlays';
 import { defaultDisplaySettings, isDisplayPreviewActive, type DisplaySettings, type DisplayType } from './display-settings';
 import {buildDisplayCatalog} from './display-catalog';
@@ -124,7 +126,7 @@ const visuals:VehicleVisual[] = SPECS.map(spec=>{
 try {
   await Promise.all([
     character.load(resolvePresetResource),
-    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
+    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,loadTextures:true,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -221,6 +223,7 @@ const session = {
     }
     world.dispose();
     displayPreview.clearMaterials();
+    displayPreview.setSettings({...displaySettings,cameras:false});
     world = visual;
     currentMap = next;
     getCameraEditor().state.invalidate();
@@ -319,6 +322,10 @@ function refreshDisplayMetadata(force=false) {
   if(JSON.stringify(available)!==JSON.stringify(shell.get().displayAvailable))shell.update({displayAvailable:available});
 }
 const displayPreview = createDisplayPreview({
+  collisionDiagnostics:()=>selectDisplayCameraProbeSample(sdk.inspectCamera().collisionQueries,'presentation'),
+  onRender:callback=>sdk.onRender(callback),
+  inputSurface:sdkPresentation.inputSurface,
+  focusGameplay:()=>{if(ready&&!paused&&!panelOpen)sdkPresentation.focus();},
   scene, camera, source: renderer, mount: canvas.parentElement!,
   context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[sim.controlledActor.vehicleIndex]!.root]:[controlledCharacter().root]}),
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
@@ -346,6 +353,7 @@ function setCollisionMode(value: CollisionDebugMode) {
   setDisplaySettings({...displaySettings, colliders: value, helperOnly:'none'});
 }
 function setDisplaySettings(value: DisplaySettings) {
+  sdk.setCameraCollisionDiagnosticsEnabled(value.cameras&&value.helperOnly==='none'&&value.colliders==='all');
   displaySettings = value; collisionMode = value.helperOnly === 'collision' ? 'all' : value.colliders;
   refreshDisplayMetadata(true);
   displayPreview.setSettings(value); shell.update({display: value, collider: collisionMode, displayError: ''});
@@ -396,7 +404,8 @@ function syncTeleport() {
 }
 function selectAsset(id: string) {
   if (!ready) return;
-  if(id==='dragon'){prepareSelection(DRAGON_TRAINING.id,'dragon-air',id);shell.update({mapId:session.map.id});return;}
+  const variantId=catalog.find(asset=>asset.id===id)?.dragonVariantId;
+  if(variantId){selectDragonVariant(variantId,true);return;}
   if (id === "person") {
     if (sim.controlledActor.id !== "person") npcLab?.control("person");
     if(sim.controlledActor.vehicle?.motion.flyingCreature){prepareSelection(session.map.id,defaultRegion(session.map,'person').id,'person');return;}
@@ -407,7 +416,7 @@ function selectAsset(id: string) {
       sim.controlledActor.message = "当前已是人物 · 可前往人物动作测试点";
       toast(sim.controlledActor.message);
     }
-    library.setActive(sim.controlledActor.vehicle?.spec.id ?? "person");
+    library.setActive(libraryAssetId(sim.controlledActor.vehicle?.spec.id ?? "person"));
     return;
   }
   const v = sim.vehicles.find((v) => v.spec.id === id);
@@ -486,6 +495,7 @@ window.addEventListener("keydown", (e) => {
   )
     return;
   if (e.repeat) return;
+  if(sim.controlledActor.vehicle?.motion.aircraft&&Object.values(sdk.getKeyBindings()).some(codes=>codes.includes(e.code))){cancelAircraftAction?.();cancelAircraftAction=undefined;}
   if (
     ["forward", "backward", "left", "right", "jump"].some((action) =>
       sdk.getKeyBindings()[action as humanoid.ControlAction].includes(e.code),
@@ -517,16 +527,22 @@ document.addEventListener("visibilitychange", () => {
 canvas.addEventListener("contextmenu", (e) => e.preventDefault(), pageEventOptions);
 shell.on("recoverButton", recoverVehicle);
 shell.on("cameraButton", cycleCamera);
-shell.on('dragonSelect',id=>{
-  if(!DRAGON_VARIANTS.some(variant=>variant.id===id)||id===dragonVariant.id)return;
+function selectDragonVariant(id:string,enterTraining=false){
+  if(!DRAGON_VARIANTS.some(variant=>variant.id===id))return;
+  if(id===dragonVariant.id){
+    if(enterTraining){prepareSelection(DRAGON_TRAINING.id,'dragon-air','dragon');shell.update({mapId:session.map.id});}
+    return;
+  }
   if(!sim.controlledActor.vehicle&&session.map.id===DRAGON_TRAINING.id){
     sessionStorage.setItem('dragon-training-person',JSON.stringify({position:sim.controlledActor.player.position.toArray(),yaw:sim.controlledActor.player.yaw}));
   }
-  getCameraEditor().state.replace(selectDragonCameraVariant(getCameraEditor().state.snapshot.validDraft,id!),true);
-  const url=new URL(location.href);url.searchParams.set('dragon',id!);
+  getCameraEditor().state.replace(selectDragonCameraVariant(getCameraEditor().state.snapshot.validDraft,id),true);
+  const url=new URL(location.href);url.searchParams.set('dragon',id);
+  if(enterTraining)url.hash=`/scenes/${DRAGON_TRAINING.id}`;
   // 保持地图路由，由启动流程重新创建唯一受控实例与动画拥有者。
   location.assign(url.href);
-});
+}
+shell.on('dragonSelect',id=>{if(id)selectDragonVariant(id);});
 shell.on("resetButton", async () => {
   await sdk.reset();
   getCameraEditor().state.invalidate();
@@ -555,7 +571,11 @@ const onPanelChange = (open: boolean) => {
   clearInput();
   resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
 };
-const catalog = buildWorkspaceCatalog(SPECS);
+const catalog = buildWorkspaceCatalog(SPECS).map(asset=>asset.dragonVariantId
+  ? {...asset,thumbnail:`./dragon-thumbnails/${asset.dragonVariantId}.png`} : asset);
+function libraryAssetId(instanceId:string):string {
+  return instanceId==='dragon' ? catalog.find(asset=>asset.dragonVariantId===dragonVariant.id)?.id??instanceId : instanceId;
+}
 const library = mountAssetLibrary(el("libraryHost"), {
   assets: catalog,
   onSelect: selectAsset,
@@ -569,8 +589,9 @@ const library = mountAssetLibrary(el("libraryHost"), {
 renderQuickSlots(library.getQuickSlots());
 function renderPausedState(_dt = 0) {
   updateVisuals(0);
-  updateUI();
-  renderer.render(scene, camera);
+  updateUI(true);
+  shell.flush();
+  sdk.render();
 }
 function prepareSelection(mapId: string, regionId: string, assetId: string) {
   humanDemo = null;
@@ -1099,8 +1120,9 @@ function drawMap() {
 const spacePanel=mountSpacePanel(sdkPresentation.ui.root,command=>{runtime.command(command);sdkPresentation.focus();});
 let lastUIUpdate = -Infinity,
   lastBindings = "";
-function updateUI() {
-  if (performance.now() - lastUIUpdate < 100) return;
+function updateUI(force = false) {
+  // Paused/stepped frames have no later live tick to refresh throttled telemetry.
+  if (!force && performance.now() - lastUIUpdate < 100) return;
   lastUIUpdate = performance.now();
   refreshDisplayMetadata();
   const v = sim.controlledActor.vehicle,
@@ -1117,7 +1139,7 @@ function updateUI() {
   const bindingSignature = JSON.stringify({keys:sdk.getKeyBindings(),cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
   if (lastActive !== sim.controlledActor.vehicleIndex || lastBindings !== bindingSignature) {
     lastBindings = bindingSignature;
-    library.setActive(v?.spec.id ?? "person");
+    library.setActive(libraryAssetId(v?.spec.id ?? "person"));
     lastActive = sim.controlledActor.vehicleIndex;
     setText(
       "category",
@@ -1172,7 +1194,7 @@ function updateUI() {
             : v.spec.mode === "glider" && !v.launched
               ? "等待释放"
               : v.spec.mode === "plane"
-                ? `${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
+                ? v.motion.aircraft?.wearable?humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy):v.motion.aircraft?.subtype==='balloon'?`热气球 · 热量 ${Math.round(v.motion.aircraft.temperatureKelvin-273.15)}°C`:`${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
                 : "驾驶中"
       : p.swimming
         ? "游泳"
@@ -1199,6 +1221,8 @@ function updateUI() {
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
           ? "<kbd>Shift</kbd>从高台释放，开始滑翔"
+          : v.spec.mode === "plane" && v.spec.aircraftSubtype && v.spec.aircraftSubtype!=="fixed-wing" && v.spec.aircraftSubtype!=="pusher"
+            ? v.spec.hint
           : v.spec.mode === "plane" && v.grounded
             ? "<kbd>Shift</kbd>加油门，约 90 km/h 轻按 S 拉起 · Ctrl 收油并刹车 · T 驾驶舱"
             : v.spec.mode === "plane" ? "W / S 俯仰 · A / D 协调转弯 · 松开回平 · Ctrl 收油 · T 切视角" : `<kbd>F</kbd>${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
@@ -1305,6 +1329,8 @@ function updateCreatureVisual(n: number, dt: number) {
       dt,
     );
 }
+let movingVisualRoot:T.Group|undefined;
+let movingVisuals:{id:string;mesh:T.Object3D}[]=[];
 function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   visuals.forEach((vis, n) => {
     const state = sim.vehicles[n]!;
@@ -1317,8 +1343,10 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
       active: n === sim.controlledActor.vehicleIndex,
     });
     if (n === sim.controlledActor.vehicleIndex)
-      vis.aircraftCockpit?.update(state,sim.time);
-    if(n===sim.controlledActor.vehicleIndex)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
+      vis.aircraftCockpit?.update({...state,aircraft:state.motion.aircraft},sim.time);
+    vis.soaringShell?.update({...state,aircraft:state.motion.aircraft},n===sim.controlledActor.vehicleIndex?character.root:undefined);
+    if(state.motion.aircraft)vis.aircraftShell?.update(sample?.vehicles[n]?.aircraft??state.motion.aircraft);
+    if(n===sim.controlledActor.vehicleIndex&&!state.motion.aircraft)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
     vis.label.visible =
       n !== sim.controlledActor.vehicleIndex &&
       camera.position.distanceToSquared(state.position) < 8100;
@@ -1334,7 +1362,8 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
     sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position,
     (runtime.environment.map.water.some(w=>camera.position.x>=w.min[0]&&camera.position.x<=w.max[0]&&camera.position.z>=w.min[2]&&camera.position.z<=w.max[2]&&camera.position.y>=w.min[1]&&camera.position.y<w.surface-.15)),
   );
-  for(const box of session.map.boxes)if(box.rigidGroup){const pose=sim.environment.propBoxPose(box.id),mesh=world.root.getObjectByName(box.id);if(pose&&mesh){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}}
+  if(movingVisualRoot!==world.root){movingVisualRoot=world.root;const indexed=new Map<string,T.Object3D>();world.root.traverse(mesh=>indexed.set(mesh.name,mesh));movingVisuals=session.map.boxes.filter(b=>b.rigidGroup||b.liftId).flatMap(b=>{const mesh=indexed.get(b.id);return mesh?[{id:b.id,mesh}]:[];});}
+  for(const {id,mesh} of movingVisuals){const pose=sim.environment.propBoxPose(id);if(pose){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}}
   updateUI();
 }
 runtime.onVisualUpdate(updateVisuals);
@@ -1435,7 +1464,7 @@ function ensureThumbnails() {
  disposeThumbnails = renderAssetThumbnails(
   [
     { id: "person", object: character.root },
-    ...visuals.map((v, n) => ({ id: SPECS[n]!.id, object: v.root })),
+    ...visuals.flatMap((v, n) => SPECS[n]!.flyingCreature ? [] : [{ id: SPECS[n]!.id, object: v.root }]),
   ],
   (id, url) => library.setThumbnail(id, url),
   () => library.isOpen(),
@@ -1455,7 +1484,23 @@ shell.on("exportProfiles", () => {
   toast("将 profiles.json 放回项目目录后重新编译，交付才会使用这些参数");
 });
 // Small local command surface for repeatable player selections and state inspection.
+let cancelAircraftAction: (() => void) | undefined;
 const labAPI = {
+  inspectAircraftActions: () => ({
+    vehicleId: sim.controlledActor.vehicle?.motion.aircraft ? sim.controlledActor.vehicle.spec.id : null,
+    actions: runtime.inspectAircraftActions(),
+    execution: runtime.inspectAircraftActionExecution(),
+  }),
+  setAircraftActions: (requests: readonly AircraftActionRequest[], durationSeconds: number) => {
+    if (!ready || paused || panelOpen) throw new Error('Resume the training ground before aircraft actions');
+    cancelAircraftAction = runtime.setAircraftActions(requests, durationSeconds);
+    return labAPI.inspectAircraftActions();
+  },
+  cancelAircraftActions: () => {
+    cancelAircraftAction?.();
+    cancelAircraftAction = undefined;
+    return labAPI.inspectAircraftActions();
+  },
   getState: () => ({
     spaceFlight:sim.controlledActor.vehicle?humanoid.spaceTelemetry(sim.controlledActor.vehicle):null,
     inputState:runtime.inspectControls(),
@@ -1587,6 +1632,27 @@ if (context?.registerTool) {
       if(!runtime.summonDragon('dragon'))throw new Error(sim.controlledActor.message);
       return labAPI.getState();
     });
+  register(
+    "inspect_aircraft_actions",
+    "Read actions and current eligibility for the mounted aircraft subtype. Query before requesting actions.",
+    {type:'object',properties:{},additionalProperties:false}, true,
+    () => labAPI.inspectAircraftActions(),
+  );
+  register(
+    "execute_aircraft_actions",
+    "Execute the mounted aircraft's semantic actions for simulation seconds. New requests replace old ones; keyboard input takes over. Only actions returned by inspect_aircraft_actions are supported. Axis strength is 0–1; omit strength for hold/trigger actions.",
+    {type:'object',properties:{requests:{type:'array',items:{type:'object',properties:{action:{type:'string'},strength:{type:'number',minimum:0,maximum:1}},required:['action'],additionalProperties:false}},durationSeconds:{type:'number',exclusiveMinimum:0,maximum:60}},required:['requests','durationSeconds'],additionalProperties:false}, false,
+    (value) => {
+      const input=value as {requests:AircraftActionRequest[];durationSeconds:number};
+      if(!input || !Array.isArray(input.requests)) throw new Error('Aircraft action requests must be an array');
+      return labAPI.setAircraftActions(input.requests,input.durationSeconds);
+    },
+  );
+  register(
+    "cancel_aircraft_actions", "Cancel the current aircraft semantic request and return to normal input.",
+    {type:'object',properties:{},additionalProperties:false}, false,
+    () => labAPI.cancelAircraftActions(),
+  );
   register(
     "inspect_character",
     "Read the character action, rig, interaction target eligibility and recent traversal events.",

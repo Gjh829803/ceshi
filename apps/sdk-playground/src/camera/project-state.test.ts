@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createWorld,createHumanoidCameraDocument,resolveCameraConfiguration,parseCameraDocument} from '@worldkit/three';
 import {Group,PerspectiveCamera} from 'three';
 import {SPECS} from '@worldkit/preset-content/config';
+import cameraPresets from '@worldkit/preset-content/cameras/presets.json';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {getDefaultProfile} from '@worldkit/preset-content/platform/profiles';
 import {applyControlProfile} from '@worldkit/preset-content/platform/profile-runtime';
@@ -17,11 +18,22 @@ const baseline=JSON.parse(readFileSync(new URL('../../../../scripts/migrations/f
 it('resolves all 32 vehicle distances and explicit shoulder speed from documents',()=>{
   const {savedDocument:document}=calibrationProject('campus','D01');expect(baseline.vehicles).toHaveLength(32);
   for(const spec of baseline.vehicles){const resolved=resolveCameraConfiguration(document,{subjectId:spec.id,subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat'],headingAvailable:true});
-   expect(resolved.values.position).toMatchObject({distanceMeters:spec.camera});
+   expect(resolved.values.position).toMatchObject({distanceMeters:spec.id==='glider'?16:spec.camera});
    const shoulder=resolveCameraConfiguration(document,{viewId:'shoulder',subjectId:spec.id,subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat'],headingAvailable:true});
    expect(shoulder.values.effects.speedFov.fullEffectSpeedMetersPerSecond).toBe(Math.max(8,spec.speed));
   }
  });
+
+it.each(Object.keys(CAMERA_PROJECT_FILES))('binds every current vehicle to the same named content presets in %s',configurationId=>{
+ const context={subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat'] as const,headingAvailable:true};
+  const {savedDocument:document}=calibrationProject(configurationId,'D01');
+  for(const spec of SPECS)for(const viewId of ['third-person','first-person','shoulder']){
+   const presetId=`${spec.id}.${viewId}`;
+   expect(document.binding.subjectOverrides?.[spec.id]?.views[viewId]?.presetId).toBe(presetId);
+   expect(document.presets?.[presetId]).toEqual(cameraPresets[presetId as keyof typeof cameraPresets]);
+   expect(resolveCameraConfiguration(document,{...context,subjectId:spec.id,viewId}).viewId).toBe(viewId);
+  }
+});
 
 it('resolves source archetype pitch and creature-state anchor calibrations',()=>{const {savedDocument:document}=calibrationProject('campus','D01');const context={subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat'] as const,headingAvailable:true};for(const subjectId of ['atv','jetski'])expect(resolveCameraConfiguration(document,{...context,subjectId,viewId:'first-person'}).values.orientation.initialPitchRadians).toBe(.34);for(const [subjectId,height] of [['horse',2.25],['carriage',2.05]] as const)expect(resolveCameraConfiguration(document,{...context,subjectId}).values.position.anchorOffset.offsetMetersXYZ[1]).toBeCloseTo(height);});
 

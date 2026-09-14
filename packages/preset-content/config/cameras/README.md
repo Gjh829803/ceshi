@@ -31,3 +31,18 @@ Old swimming/driver-eye fallbacks, orbit-relative lateral offsets, collision
 padding/bypass and doubled damping require visual retuning. First-person collision
 is intentionally enabled and roll inheritance disabled. No screenshot equivalence
 or performance improvement is claimed by the numerical migration.
+
+The `pr240-camera-migration-20260914` snapshots apply the later vehicle recovery
+calibration to third-person views: 0.12 seconds clear hold, 0.18 seconds half-life,
+6 m/s recovery limit and 0.015 m release deadband. Numbered flying creatures retain
+their 12 m/s recovery limit and zero deadband. Other views keep their own tuning.
+The historical exporter and migration report still describe the original conversion;
+rerunning that one-time exporter does not preserve subsequent content calibration.
+
+The seven additional aircraft subjects have explicit presets and the glider uses
+its 16 m aircraft framing. Paraglider third-person framing uses 9.5 m distance,
+2.1 m origin offset and 0.25 rad pitch; wingsuit uses 7.5 m, 1 m and 0.2 rad.
+These are the fully airborne values from the previous wearable framing, now stable
+named presets. Spreading, seating and canopy animation no longer interpolate camera
+configuration implicitly. Projects can author additional named views and select
+them explicitly; no automatic wearable state selection is declared or implemented.

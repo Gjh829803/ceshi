@@ -1,3 +1,4 @@
+import * as cameraQueries from './camera-queries';
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {describe,it,expect,vi} from 'vitest';
 import {Group,PerspectiveCamera,Vector2,Vector3,Quaternion,PCFShadowMap,type WebGLRenderer} from 'three';
@@ -8,6 +9,23 @@ const fixture=(renderer?:WebGLRenderer)=>createWorld({camera:new PerspectiveCame
 function authored(world:Awaited<ReturnType<typeof fixture>>){world.useAuthoredCamera();const c=world.camera as PerspectiveCamera;c.position.set(11,22,33);c.lookAt(0,0,0);c.fov=41;c.near=.2;c.far=700;c.updateProjectionMatrix();return c.clone();}
 function matches(world:Awaited<ReturnType<typeof fixture>>,camera:PerspectiveCamera){expect(world.cameraMode).toBe('authored');expect(world.camera.position.toArray()).toEqual(camera.position.toArray());expect(world.camera.quaternion.angleTo(camera.quaternion)).toBeLessThan(1e-7);expect((world.camera as PerspectiveCamera).fov).toBe(camera.fov);expect(world.camera.projectionMatrix.elements).toEqual(camera.projectionMatrix.elements);}
 describe('Humanoid sealed camera lifecycle',()=>{
+ it('observes real camera sweeps without changing queries, poses or fixed time',async()=>{
+  const setup=()=>createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes:[...map.boxes,{id:'wall',position:[0,3,2.5],size:[10,6,.3]}]},character:{instanceId:'person',object:new Group()},vehicles:[]}});
+  const observed=await setup(),baseline=await setup();
+  try{
+   const queries=vi.spyOn(cameraQueries,'probeHumanoidCamera');
+   expect(observed.inspectCamera().collisionQueries).toBeUndefined();observed.setCameraCollisionDiagnosticsEnabled(true);
+   observed.step({},2);const calls=queries.mock.calls.map(call=>structuredClone(call.slice(1,4)));queries.mockClear();baseline.step({},2);
+   expect(observed.snapshot()).toEqual(baseline.snapshot());expect(calls).toEqual(queries.mock.calls.map(call=>structuredClone(call.slice(1,4))));
+   const sample=observed.inspectCamera().collisionQueries!.fixed!;expect(sample.probes.length).toBeGreaterThan(0);expect(sample.source).toBe('fixed');
+   expect(sample.simulationTick).toBe(observed.simulationTick);
+   for(const probe of sample.probes)expect(calls).toContainEqual([probe.from,probe.to,probe.radius]);
+   const before=observed.snapshot(),count=queries.mock.calls.length;
+   expect(observed.inspectCamera().collisionQueries!.fixed).toEqual(sample);expect(observed.snapshot()).toEqual(before);expect(queries).toHaveBeenCalledTimes(count);
+   expect(Object.isFrozen(sample.probes)).toBe(true);
+   observed.setCameraCollisionDiagnosticsEnabled(false);expect(observed.inspectCamera().collisionQueries).toBeUndefined();queries.mockRestore();
+  }finally{observed.dispose();baseline.dispose();}
+ });
  it('reads a dirty camera pose without changing transform caches or ownership',async()=>{
   const w=await fixture();w.setCameraFollow({configuration:createHumanoidCameraDocument('person')});try{
    w.step({},0);w.useAuthoredCamera();

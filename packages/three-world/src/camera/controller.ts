@@ -1,3 +1,4 @@
+import {cameraSubjectHeading} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
 import {cameraDisplayAnchor} from './display-anchor';
 import {cameraFramesCompatible} from './state';
@@ -163,6 +164,7 @@ export class CameraController {
       !Number.isSafeInteger(subject.generation) ||
       subject.generation < 0 ||
       !Number.isFinite(subject.speedMetersPerSecond) ||
+      (subject.continuousHeadingSeedRadians !== undefined && !Number.isFinite(subject.continuousHeadingSeedRadians)) ||
       vectors.some(
         (value) => value.length !== 3 || !value.every(Number.isFinite),
       ) ||
@@ -215,12 +217,14 @@ export class CameraController {
     state: ControllerState,
     subject: CameraSubjectFacts,
     dt: number,
+    headingHistory?: CameraStrategyHistory,
   ) {
     const input = {
       subject,
       configuration: state.resolved!,
       intent: state.intent!,
       history: state.history,
+      headingHistory: state.history ?? headingHistory,
       opening: state.openings.get(state.resolved!.viewId),
       deltaSeconds: dt,
     };
@@ -255,8 +259,9 @@ export class CameraController {
     frame: CameraControllerFrame,
     dt: number,
     cut: boolean,
+    headingHistory?: CameraStrategyHistory,
   ): void {
-    const result = this.pose(candidate, candidate.subject!, dt);
+    const result = this.pose(candidate, candidate.subject!, dt, headingHistory);
     let base = result.proposal;
     let transition = candidate.transition;
     if (transition.kind === "blend") {
@@ -267,6 +272,8 @@ export class CameraController {
           candidate.subject!,
           frame.aspect,
           base,
+          frame.simulationTick,
+          "fixed",
         );
       const elapsed = Math.min(
         transition.durationSeconds,
@@ -627,7 +634,7 @@ export class CameraController {
             }
           : previous.transition,
       };
-      this.commitCandidate(candidate, frame, 0, reset);
+      this.commitCandidate(candidate, frame, 0, reset, changedSubject ? undefined : previous.history);
     });
   }
   /** Activating a pending view rebases its held desired opening once.
@@ -679,6 +686,8 @@ export class CameraController {
       );
       const cached = activated.views.get(viewId);
       let intent = initialIntent(resolved, subject, activated.openings.get(viewId));
+      if(subject.continuousHeadingSeedRadians !== undefined && resolved.values.orientation.referenceFrame === 'world-up' && !activated.openings.has(viewId))
+        intent = clampCameraIntent({...intent, yawRadians: cameraSubjectHeading(subject, old.history) ?? intent.yawRadians}, resolved);
       if (cached && cached.configuration.kind === resolved.kind) {
         const changedReference =
           cached.configuration.values.orientation.referenceFrame !==
@@ -758,6 +767,7 @@ export class CameraController {
         frame,
         0,
         duration === 0,
+        old.history,
       );
     });
   }
@@ -805,6 +815,7 @@ export class CameraController {
           secondsSinceOrbit: yaw !== 0 || pitch !== 0 ? 0 : seed.secondsSinceOrbit,
         },
         history,
+        headingHistory: old.history,
         opening: openings.get(resolved.viewId),
         deltaSeconds,
       });
@@ -818,7 +829,7 @@ export class CameraController {
         mode: active ? "follow" : old.mode,
       };
       // Predict the same base pose from prepared intent, including current blend time.
-      let base = this.pose(state, subject, deltaSeconds).proposal;
+      let base = this.pose(state, subject, deltaSeconds, old.history).proposal;
       if (old.transition.kind === "blend")
         base = blendCameraProposals(
           old.transition.source,
@@ -892,6 +903,7 @@ export class CameraController {
           frame,
           pending.deltaSeconds,
           lifecycle?.kind === "applied" && lifecycle.continuity === "cut",
+          lifecycle?.kind === "applied" ? undefined : this.state.history,
         );
         return clone(this.state.current!);
       });
@@ -1148,12 +1160,17 @@ export class CameraController {
       this.state = { ...this.state, current, previous: current };
     }
   }
-  private inspectionCache:{state:ControllerState;failure:CameraInspection["failure"];value:CameraInspection}|undefined;
+  setCollisionDiagnosticsEnabled(enabled:boolean):void {
+    this.admit();
+    this.constraints.setDiagnosticsEnabled(enabled);
+  }
+  private inspectionCache:{diagnosticsRevision:number;state:ControllerState;failure:CameraInspection["failure"];value:CameraInspection}|undefined;
   inspect(): CameraInspection {
     const s = this.state;
-    if(this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
+    if(this.inspectionCache?.diagnosticsRevision===this.constraints.diagnosticsRevision&&this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
     const value=immutable(
       clone({
+        collisionQueries: this.constraints.inspectQueries(),
         mode: s.mode,
         document: s.document,
         documentHash: s.hash,
@@ -1170,7 +1187,7 @@ export class CameraController {
         ...(this.failureState ? { failure: this.failureState } : {}),
       }),
     );
-    this.inspectionCache={state:s,failure:this.failureState,value};
+    this.inspectionCache={diagnosticsRevision:this.constraints.diagnosticsRevision,state:s,failure:this.failureState,value};
     return value;
   }
   sampleProjection(
@@ -1190,7 +1207,10 @@ export class CameraController {
     if(displaySubject&&s.previous.subjectAnchorWorldMetersXYZ&&s.current.subjectAnchorWorldMetersXYZ){
       const alpha=context.cut||!cameraFramesCompatible(s.previous,s.current)?1:context.alpha;
       const fixedAnchor=new Vector3(...s.previous.subjectAnchorWorldMetersXYZ).lerp(new Vector3(...s.current.subjectAnchorWorldMetersXYZ),alpha);
-      const correction=cameraDisplayAnchor(displaySubject,s.resolved,s.history?.headingRadians).sub(fixedAnchor);
+      // Re-express the committed continuous heading at this display pose. This
+      // pure delta evaluation neither advances nor replaces strategy history.
+      const displayHeading=cameraSubjectHeading(displaySubject,s.history) ?? s.history?.headingRadians;
+      const correction=cameraDisplayAnchor(displaySubject,s.resolved,displayHeading).sub(fixedAnchor);
       const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
       proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
     }
@@ -1202,6 +1222,7 @@ export class CameraController {
         subject,
         aspect,
         s.current,
+        context.currentTick,
       );
     } finally {
       this.busy = false;

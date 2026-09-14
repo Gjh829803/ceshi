@@ -1,3 +1,5 @@
+import {hasUnoccupiedBody,releaseUnoccupiedBody,stepUnoccupiedBody} from './motion-families/shared/unoccupied-body';
+import {familyUnoccupiedPhysics} from './motion-families/registry';
 import { HumanoidActor,type ActorInput } from './humanoid/actor';
 import { resolveConfiguredFlyingCreatureFeel } from './motion-families/flying-creature/state';
 import { copyAtvState } from './motion-families/ground-vehicle/atv';
@@ -36,6 +38,7 @@ export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,stra
 export interface VehicleState {motion:MotionFamilyState;spec:VehicleSpec & MovementSettings;position:Vector3;velocity:Vector3;rotation:Quaternion;yaw:number;pitch:number;roll:number;steering:number;throttle:number;grounded:boolean;launched:boolean;speed:number;submerged:boolean}
 
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSettings {
+ if(spec.aircraftSubtype!==undefined&&spec.mode!=='plane')throw Error('VEHICLE_AIRCRAFT_SUBTYPE_INVALID');
   spec=resolveFamilyPhysics(spec);
   const authored=Object.fromEntries(Object.keys(CONTROL_RANGES).filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key as keyof MovementSettings]]));
   const family=motionFamilyForMode(spec.mode);
@@ -109,7 +112,7 @@ export class Simulation {
   removeActor(id:string):void{const actor=this.actors.get(id);if(actor){this.actors.delete(id);actor.dispose();}}
   dispose():void{for(const id of this.actors.keys())this.removeActor(id);for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
-  syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft),...part}))));}
+  syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v))&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));}
   summonDragon(id?:string,actorId:string=this.controlledActor.id):boolean{return this.actor(actorId).summonDragon(id);}
   reset():void{
     const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
@@ -119,6 +122,8 @@ export class Simulation {
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
+    const carry=this.environment.stepLifts(dt,[...this.actors.values()].filter(actor=>!actor.vehicle).map(actor=>({id:actor.id,feet:actor.controller.position,grounded:actor.controller.grounded})));
+    for(const [id,delta] of carry)this.actor(id).controller.carryPlatform(delta);
     const incidents=new Map([...this.actors].map(([id,actor])=>[id,actor.recoveryTrigger()]));
     this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values()){if(inputs.get(actor.id)?.input.actions?.summonDragon)actor.summonDragon();actor.beginStep(dt);}this.syncActorBodies();
     const drivers=new Map<VehicleState,HumanoidActor>();for(const actor of this.actors.values())if(actor.vehicle)drivers.set(actor.vehicle,actor);
@@ -128,6 +133,11 @@ export class Simulation {
   }
   private stepVehicle(v:VehicleState,driver:HumanoidActor|undefined,i:Input,dt:number):void{
     const vehicle=driver?.vehicle;
+    const unoccupied=familyUnoccupiedPhysics(v.spec);
+    if(!driver&&unoccupied&&this.available(v)){stepUnoccupiedBody(v,unoccupied,this.environment);return;}
+    // 仅已选择空载物理的小类在登乘时交还控制权；其他载具不经过此分支。
+    releaseUnoccupiedBody(v,this.environment);
+    if(v.motion.kayak)v.motion.kayak.riderMounted=v===vehicle&&driver?.transition===0;
     if(v.motion.family==='space')v.motion.body.riderMounted=v===vehicle&&driver?.transition===0;
     const vehicleBefore=vehicle?.position.clone();
     const before=vehicle?{unicycle:copyUnicycleState(vehicle.motion.unicycle),submersible:copySubmersibleState(vehicle.motion.submersible),jetski:copyJetSkiState(vehicle.motion.jetski),atv:copyAtvState(vehicle.motion.atv),rotation:vehicle.rotation.clone(),yaw:vehicle.yaw,pitch:vehicle.pitch,roll:vehicle.roll,creature:vehicle.motion.creature?{...vehicle.motion.creature,leadPosition:vehicle.motion.creature.leadPosition?.clone()}:undefined}:undefined;

@@ -1,3 +1,4 @@
+export {wearableHint} from './motion-families/aircraft/wearable-flight';
 export {spaceTelemetry} from './motion-families/space/commands';
 export {SPACE_FLIGHT_PRESETS} from './motion-families/space/config';
 export type {SpaceFlightConfig,SpaceDriveMode,SpaceDockPort} from './motion-families/space/config';
@@ -85,3 +86,6 @@ export {dragonGroundHeading} from './motion-families/flying-creature/ground-pose
 
 export {createAircraftSpec,type AircraftSpec,type AircraftKind} from './aircraft-spec';
 export type {VehicleInspection,VehicleInspectionResult,VehicleInspectionQuery,VehicleWheelInspection} from './vehicle-inspection';
+
+// 显示层旋转模糊等特效不作为相机可碰撞实体。
+export {markCameraVisualEffect} from './camera-visual-effects';

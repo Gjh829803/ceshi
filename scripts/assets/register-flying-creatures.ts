@@ -19,7 +19,8 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
   const flame=await resource('flying-creatures/flame.png',`${sourceDirectory}/FireGenLoop01_8x8.png`);
   const notices=await resource('flying-creatures/README.md','assets/dragon-training/README.md');
   const traces=await Promise.all(['variants.json','variant-sources.json','ground-sources.json','manifest.json'].map(file=>resource(`flying-creatures/${file}`,`${sourceDirectory}/${file}`)));
-  return Promise.all(variants.map(async variant=>{
+  // Only measured Century variants belong to this extracted lineage.
+  return Promise.all(variants.filter(variant=>/^D\d{2}$/.test(variant.id)).map(async variant=>{
     const id=`creature.dragon.${variant.id.toLowerCase()}`;
     const model=await resource(`flying-creatures/${variant.id}/model.glb`,`${sourceDirectory}/${variant.file}`);
     const name=variant.id==='D09'?`长身飞龙 ${variant.id}`:`飞龙 ${variant.id}`;

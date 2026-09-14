@@ -13,7 +13,7 @@ if(spec.bodyPhysics&&!["motion","paddle","jet"].includes(spec.bodyPhysics.kind))
 if(spec.bodyPhysics&&spec.wheelPhysics)throw Error('VEHICLE_PHYSICS_OWNER_CONFLICT');
 const body=spec.bodyPhysics??(spec.wheelPhysics?undefined:defaultBody(spec));if(body){validateBodyPhysics(body);if(['paddle','jet'].includes(body.kind)&&!body.water||body.kind==='jet'&&!body.powertrain)throw Error('VEHICLE_BODY_PHYSICS_CONFIG_INVALID');}return body?{...spec,bodyPhysics:body}:spec;
 }
-export function createPhysicsState(spec:VehicleSpec):SurfaceVesselState{const state:SurfaceVesselState={family:'surface-vessel'};if(spec.bodyPhysics)state.body=createBodyPhysics(spec.bodyPhysics);if(spec.mode==='paddled_boat')state.kayak={...createKayakState(),...((spec.archetype==='canoe'||spec.archetype==='raft')?{craft:'canoe' as const,side:-1}:{})};if(spec.archetype==='raft')state.raft=createRaftState();if(spec.archetype==='jetski')state.jetski=createJetSkiState();return state;}
+export function createPhysicsState(spec:VehicleSpec):SurfaceVesselState{const state:SurfaceVesselState={family:'surface-vessel'};if(spec.bodyPhysics)state.body=createBodyPhysics(spec.bodyPhysics);if(spec.mode==='paddled_boat')state.kayak={...createKayakState(),...((spec.archetype==='canoe'||spec.archetype==='raft')?{craft:'canoe' as const,side:-1}:{})};if(spec.archetype==='raft'){state.raft=createRaftState();state.kayak!.bladeLength=1.72;}if(spec.archetype==='jetski')state.jetski=createJetSkiState();return state;}
 
 export function resetRigidState(v:import('../../simulation').VehicleState){if(v.motion.family!=='surface-vessel')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');if(v.spec.bodyPhysics)v.motion.body=createBodyPhysics(v.spec.bodyPhysics);}
 

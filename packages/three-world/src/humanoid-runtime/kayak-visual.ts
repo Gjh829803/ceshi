@@ -30,7 +30,7 @@ export function poseKayakHands(root:Object3D,k:KayakState){
   const direction=target.clone().sub(a),distance=Math.min(direction.length(),l1+l2-.0001);direction.normalize();
   // The top hand crosses ahead of the chest with its elbow down; the shaft
   // hand opens its elbow outboard instead of folding inward toward the shaft.
-  const pole=(k.craft==='canoe'?(side===(k.side??-1)?new Vector3(side*3,-.8,.6):new Vector3(side*.7,-1.2,1)):new Vector3(side*.6,-1,-.15)).applyQuaternion(rotation);pole.addScaledVector(direction,-pole.dot(direction)).normalize();
+  const pole=(k.craft==='canoe'?(new Vector3(side*(1.85+1.15*side*(k.sideBlend??k.side??-1)),-1+.2*side*(k.sideBlend??k.side??-1),.8-.2*side*(k.sideBlend??k.side??-1))):new Vector3(side*.6,-1,-.15)).applyQuaternion(rotation);pole.addScaledVector(direction,-pole.dot(direction)).normalize();
   const along=(l1*l1-l2*l2+distance*distance)/(2*Math.max(.001,distance));
   const elbow=a.clone().addScaledVector(direction,along).addScaledVector(pole,Math.sqrt(Math.max(0,l1*l1-along*along)));
   const aim=(bone:Object3D,child:Object3D,to:Vector3)=>{

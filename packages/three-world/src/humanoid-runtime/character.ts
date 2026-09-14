@@ -1,8 +1,7 @@
+import {AircraftRiderPose} from './motion-families/aircraft/rider-pose';
 import type {ModelLoadOptions} from '../model-loader';
 import {setObjectColor,validateObjectColor,type ObjectColorBinding} from '../object-color';
 import {fitUnicycleFeet} from './unicycle-rider';
-import {poseKayakHands} from './kayak-visual';
-import {fitAtvHands} from './atv-rider';
 import {raiseMountedFeet,RIDER_SHOE_CONTACT_RISE} from './rider-foot-clearance';
 import {fitDragonClimb,type DragonClimbContacts} from './motion-families/flying-creature/mount-ladder';
 import * as T from 'three';
@@ -39,54 +38,34 @@ export class MountedRiderPose {
     for (const { bone, base } of this.entries) bone.quaternion.copy(base);
     this.applied = false;
   }
-  apply(weight = 1, mode: 'unicycle' | 'ride' | 'drive' | 'sled' | 'ski' | 'paddling' = 'ride', sled?:HumanoidRenderState['sledPose'], unicycle?:HumanoidRenderState['unicyclePose']) {
+  apply(weight = 1, mode: 'unicycle' | 'ride' | 'drive' | 'sled' | 'ski' | 'paddling' = 'ride') {
     this.restore(); this.actor.updateWorldMatrix(true, true);
     this.actor.getWorldQuaternion(this.actorRotation).normalize();
     for (const { bone, child, side, joint, base } of this.entries) {
       base.copy(bone.quaternion);
-      if(joint==='spine'&&mode!=='ski'&&mode!=='unicycle')continue;
-      if(mode==='unicycle'){
-        const time=unicycle?.balanceTime??0,turn=unicycle?.balance??0,down=unicycle?.footDown??1;
-        const sway=Math.sin(time*2.7)*.10+Math.sin(time*4.3)*.035;
-        if(joint==='spine')this.targetDirection.set(-turn*.12+sway*.18,1,.035);
-        else if(joint==='upperarm')this.targetDirection.set(side,-.22-down*.22+side*(sway+turn*.20),.06+Math.sin(time*2.1+side)*.10);
-        else if(joint==='lowerarm')this.targetDirection.set(side*.9,.12+side*sway,.28+side*turn*.2);
-        else if(joint==='thigh')this.targetDirection.set(side*.2,-1,.4);
+      // Fixed seat fitting only: controls never drive the rider's limbs.
+      if(joint==='spine')continue;
+      if(joint==='upperarm')this.targetDirection.set(side*.35,-1,.1);
+      else if(joint==='lowerarm')this.targetDirection.set(0,-.25,1);
+      else if(mode==='unicycle'){
+        if(joint==='thigh')this.targetDirection.set(side*.2,-1,.4);
         else if(joint==='calf')this.targetDirection.set(0,-1,-.2);
         else this.targetDirection.set(0,-.02,1);
-      }else
-      if(mode==='ski'){
-        const turn=sled?.steer??0,push=sled?.push??0;
-        if(joint==='spine')this.targetDirection.set(-turn*.38,1,.2);
-        else if(joint==='thigh')this.targetDirection.set(side*.09,-1,.42);
+      }else if(mode==='ski'){
+        if(joint==='thigh')this.targetDirection.set(side*.09,-1,.42);
         else if(joint==='calf')this.targetDirection.set(0,-1,-.42);
-        else if(joint==='foot')this.targetDirection.set(0,-.02,1);
-        else if(joint==='upperarm')this.targetDirection.set(side*.6,-.8,.25-push*.25);
-        else this.targetDirection.set(side*.12,-.25,.9-push*.45);
-      }
-      else if(mode==='paddling'){
+        else this.targetDirection.set(0,-.02,1);
+      }else if(mode==='paddling'){
         if(joint==='thigh')this.targetDirection.set(side*.12,-.04,1);
         else if(joint==='calf')this.targetDirection.set(0,-.08,1);
-        else if(joint==='foot')this.targetDirection.set(0,.1,1);
-        else if(joint==='upperarm')this.targetDirection.set(side*.3,-.4,.7);
-        else this.targetDirection.set(-side*.1,.1,1);
-      }
-      else if (mode === 'sled') {
-        // Feet stay outside the narrow wooden seat. A low calf drop keeps the
-        // supplied human's soles above the runners instead of through the floor.
-        const drag=Math.max(sled?.brake??0,Math.max(0,-side*(sled?.steer??0))*.7);
-        const push=sled?.push??0;
-        if(joint==='thigh')this.targetDirection.set(side*1.15,-.06-drag*.28-push*.25,1);
-        else if(joint==='calf')this.targetDirection.set(side*.15,-.70-drag*.65-push*.5,.85-drag*.48-push*.48);
-        else if(joint==='foot')this.targetDirection.set(side*.06,-.02,1);
-        else if(joint==='upperarm')this.targetDirection.set(side*.25,-.65,.65);
-        else this.targetDirection.set(-side*.1,-.12,1);
-      }
-      else if (joint === 'thigh') this.targetDirection.set(side * (mode === 'ride' ? .85 : .16), mode === 'ride' ? -.62 : -.1, mode === 'ride' ? .15 : 1);
-      else if (joint === 'calf') this.targetDirection.set(side * .03, -1, -.08);
-      else if (joint === 'foot') this.targetDirection.set(side * .12, -.1, 1);
-      else if (joint === 'upperarm') this.targetDirection.set(side * .3, -.6, .7);
-      else this.targetDirection.set(-side * .1, .1, 1);
+        else this.targetDirection.set(0,.1,1);
+      }else if(mode==='sled'){
+        if(joint==='thigh')this.targetDirection.set(side*1.15,-.06,1);
+        else if(joint==='calf')this.targetDirection.set(side*.15,-.70,.85);
+        else this.targetDirection.set(side*.06,-.02,1);
+      }else if(joint==='thigh')this.targetDirection.set(side*(mode==='ride'?.85:.16),mode==='ride'?-.62:-.1,mode==='ride'?.15:1);
+      else if(joint==='calf')this.targetDirection.set(side*.03,-1,-.08);
+      else this.targetDirection.set(side*.12,-.1,1);
       this.targetDirection.normalize().applyQuaternion(this.actorRotation);
       child.getWorldPosition(this.currentDirection); bone.getWorldPosition(this.point);
       this.currentDirection.sub(this.point).normalize();
@@ -145,6 +124,7 @@ export class Character {
   private firstPersonBody?: FirstPersonBody;
   private readonly eyeOffset = new T.Vector3();
   private overlay?: MountedRiderPose;
+  private aircraftOverlay?: AircraftRiderPose;
   private frame = emptyFrame();
   private localPosition = new T.Vector3();
   private localFacing = new T.Vector3(0, 0, 1);
@@ -239,10 +219,10 @@ export class Character {
   }
   dispose():void{
     if(this.disposed)return;this.disposed=true;this.loaded=false;
-    const firstPersonBody=this.firstPersonBody,overlay=this.overlay,attachments=this.attachments,source=this.source;
-    delete this.firstPersonBody;delete this.overlay;delete this.attachments;delete this.source;
+    const firstPersonBody=this.firstPersonBody,overlay=this.overlay,aircraftOverlay=this.aircraftOverlay,attachments=this.attachments,source=this.source;
+    delete this.firstPersonBody;delete this.aircraftOverlay;delete this.overlay;delete this.attachments;delete this.source;
     this.presentationNodes.clear();this.previousPose=[];this.currentPose=[];
-    cleanupCharacter([()=>this.colorBinding?.dispose(),()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>source?.dispose(),()=>this.root.removeFromParent()]);
+    cleanupCharacter([()=>this.colorBinding?.dispose(),()=>firstPersonBody?.dispose(),()=>overlay?.restore(),()=>attachments?.dispose(),()=>aircraftOverlay?.restore(),()=>source?.dispose(),()=>this.root.removeFromParent()]);
     delete this.colorBinding;
   }
 
@@ -267,9 +247,11 @@ export class Character {
   update(dt: number, pose: HumanoidRenderState) {
     const source = this.source; if (!source) return;
     this.applyPresentationPose(1);
-    this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
+    this.aircraftOverlay?.restore();this.overlay?.restore(); this.actor.position.set(0, 0, 0); this.actor.quaternion.identity(); this.carriedAttachment = null;
     const mode = pose.mounted ?? null;
     const mounted = mode !== null;
+    // 翼装地面准备仍由正常步行动画驱动，不属于固定载具坐姿。
+    const fixedMountedPose = mounted && mode !== 'wingsuit-ready';
     const boarding=pose.dragonMount,progress=boarding?.progress??1;
     const rideWeight=boarding?T.MathUtils.clamp(boarding.entering?(progress-.65)/.35:1-progress/.25,0,1):1;
     const identity = pose.simulationIdentity;
@@ -279,9 +261,10 @@ export class Character {
     // Position and heading already belong to the host root. Keep source-local
     // placement independent while passing action state through.
     this.frame.position = this.localPosition; this.frame.facing = this.localFacing;
-    if (mounted) {
+    if (fixedMountedPose) {
       Object.assign(this.frame, emptyFrame(), { position: this.localPosition, facing: this.localFacing });
-      if (mode !== 'stand' && mode !== 'ski') this.frame.skills = { pose: { key: 'sit-idle', time: 0 }, seated: null, carrying: null, active: null, syncCarried: () => {} };
+      const standing=mode==='stand'||mode==='ski'||mode==='wingsuit';
+      this.frame.skills={pose:{key:standing?'idle':'sit-idle',time:0},seated:null,carrying:null,active:null,syncCarried:()=>{}};
       if(boarding&&rideWeight<.99)this.frame.skills={pose:{key:boarding.entering?'climb-up':'climb-down',time:progress*3},seated:null,carrying:null,active:null,syncCarried:()=>{}};
     } else if (pose.skills) {
       const carrying = pose.skills.carrying;
@@ -293,30 +276,28 @@ export class Character {
     const smoothing=source.smoothing;
     // An enclosed driver must have its calibrated full sitting pose even on the
     // entry/reset boundary. Do not blend a standing body through the cabin roof.
-    if(mode==='unicycle'||mode==='submarine'||mode==='tank'||mode==='atv')source.smoothing=false;
+    if(fixedMountedPose)source.smoothing=false;
     try{source.update(dt,this.frame);}finally{source.smoothing=smoothing;}
-    if (mounted && mode !== 'stand') {
-      this.overlay!.apply(rideWeight, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive', pose.sledPose,pose.unicyclePose);
+    if(mode==='wingsuit'||mode==='paraglider'){
+      // Equipment modes use a fixed flight posture, independent of control input.
+      (this.aircraftOverlay??=new AircraftRiderPose(source.root)).apply(1,mode);
+      this.actor.updateWorldMatrix(true,true);
+      source.bones.pelvis!.getWorldPosition(this.hipOffset);this.actor.worldToLocal(this.hipOffset);
+      this.actor.rotation.x=mode==='wingsuit'?Math.PI/2:0;
+      this.actor.position.copy(this.hipOffset).applyQuaternion(this.actor.quaternion).negate();
+    } else if (mounted && mode !== 'stand' && mode !== 'wingsuit-ready') {
+      this.overlay!.apply(rideWeight, mode === 'unicycle' ? 'unicycle' : mode === 'paddling' ? 'paddling' : mode === 'ski' ? 'ski' : mode === 'sled' ? 'sled' : (mode === 'ride'||mode==='atv') ? 'ride' : 'drive');
       // Align the true source pelvis with the host's seat/saddle attachment.
       this.actor.updateWorldMatrix(true, true);
       source.bones.pelvis!.getWorldPosition(this.hipOffset); this.actor.worldToLocal(this.hipOffset);
       this.actor.position.copy(this.hipOffset).negate();
-      if(mode==='unicycle'&&pose.unicyclePose){
-        const down=pose.unicyclePose.footDown;
-        const smooth=(t:number)=>t*t*(3-2*t);
-        // Step behind the saddle to plant a foot without carrying the opposite
-        // hip across the fork. UEFN's visible pelvis extends below its bone:
-        // lift it 74 mm onto the cushion, then clear the rear edge before lowering.
-        this.actor.position.x+=.02*down;
-        this.actor.position.y+=.074-.175*smooth(Math.max(0,(down-.6)/.4));
-        this.actor.position.z-=.30*smooth(Math.min(1,down/.6));
-        fitUnicycleFeet(source.root,this.root,pose.unicyclePose);
+      if(mode==='unicycle'){
+        this.actor.position.y+=.074;
+        fitUnicycleFeet(source.root,this.root);
       }
-      if(mode==='atv')fitAtvHands(source.root,this.root,pose.atvSteeringAngle??0);
       if(mode==='atv'||mode==='tank'||mode==='submarine'||mode==='paddling')raiseMountedFeet(source.root,this.root,RIDER_SHOE_CONTACT_RISE);
       if(mode==='sled')raiseMountedFeet(source.root,this.root,.006);
     }
     this.root.updateWorldMatrix(true, true);
-    if(mode==='paddling'&&pose.kayakPose)poseKayakHands(this.root,pose.kayakPose);
   }
 }

@@ -192,3 +192,31 @@ describe('vehicle camera geometry',()=>{
   expect(query.probe([0,0,0],[2,0,0],.2).distanceMeters).toBeLessThan(.9);
  });
 });
+
+it('holds a dragon camera arm across a brief clear gap and recovers without a pop',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
+    character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'dragon',assetId:'dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}]}});
+  try{
+    const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:0,humanoid:{mounted:true,vehicleInstanceId:'dragon'}});
+    const wall=new Mesh(new BoxGeometry(100,100,1));wall.position.set(0,40,10);world.addEntity({id:'camera-wall',object:wall,role:'obstacle',physics:{kind:'fixed',shape:'box'}});
+    world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',activation:'immediate',binding:{targetEntityId:'dragon'},views:{orbit:{kind:'third-person',overrides:{zoom:{range:{kind:'unbounded'}},position:{anchor:{kind:'origin'},distanceMeters:32,armHalfLifeSeconds:0},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{visibility:'require-line-of-sight',recovery:{clearHoldSeconds:.12,halfLifeSeconds:.18,speedLimit:{kind:'limited',maximumSpeedMetersPerSecond:12}}}}}}}});
+    const arm=()=>world.snapshot().camera.actualArmDistanceMeters!;
+    // The semantic aircraft forward is -Z; place this wall along the selected arm.
+    world.step({},1);const constrained=arm();expect(constrained).toBeLessThan(11);
+    await world.execute({type:'entity.despawn',entityId:'camera-wall'});world.step({},1);expect(arm()).toBeLessThanOrEqual(constrained+.001);
+    let previous=arm();for(let n=0;n<240;n++){world.step({},1);expect(arm()-previous).toBeLessThanOrEqual(12/60+.002);previous=arm();}
+    expect(arm()).toBeGreaterThan(31);
+  }finally{world.dispose();}
+});
+
+it('reuses rigid part shapes through root and rotor motion, but rebuilds edited geometry',()=>{
+ const root=new Group(),pivot=new Group();root.add(pivot);const rotor=new Mesh(new BoxGeometry(4,.15,.2),new MeshStandardMaterial());pivot.add(rotor);block(root,[1,1,2],[0,-2,0]);
+ const build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
+ try{const query=trackQuery([{instanceId:'rotor',object:root}]);query.sync();const count=build.mock.calls.length;
+ for(let n=0;n<60;n++){root.position.set(n*.2,1,n*.3);root.rotation.y=n*.02;pivot.rotation.y=n*.1;query.sync();}
+ expect(build.mock.calls.length).toBe(count);
+ root.position.set(0,0,0);root.rotation.set(0,0,0);pivot.rotation.y=Math.PI/2;query.sync();expect(query.probe([3,0,0],[-3,0,0],.1).distanceMeters).toBeCloseTo(2.8,3);
+ rotor.geometry.scale(2,1,1);query.sync();expect(build.mock.calls.length).toBeGreaterThan(count);
+ root.remove(pivot);query.sync();expect(query.probe([3,0,0],[-3,0,0],.1).colliderEntityId).toBeUndefined();
+ }finally{build.mockRestore();}
+});

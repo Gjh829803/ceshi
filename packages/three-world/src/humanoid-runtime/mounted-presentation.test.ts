@@ -1,3 +1,4 @@
+import type {HumanoidRenderState,SourceCharacterFrame} from './humanoid/animation';
 import { describe, expect, it, vi } from 'vitest';
 import { Group, Vector3 } from 'three';
 import { Character } from './character';
@@ -10,7 +11,7 @@ import { PresentationState } from './presentation';
 // Distinguish the adopted SDK source subtree from later author-owned children.
 function instrumentedCharacter() {
   const root=new Group(),bone=new Group();root.add(bone);
-  const update=vi.fn((dt:number)=>{bone.position.x+=dt;bone.rotation.y+=dt;});
+  const update=vi.fn((dt:number,_frame:SourceCharacterFrame)=>{bone.position.x+=dt;bone.rotation.y+=dt;});
   const source={root,bones:{pelvis:bone},actions:{},weights:{},motionSources:[],createFactory:()=>undefined,update,dispose:vi.fn()} as unknown as SourceCharacter;
   return {animation:new Character(source),bone,update,source};
 }
@@ -237,4 +238,65 @@ it('starts fresh owned pose history when a source is asynchronously adopted',asy
   expect(authorChild.position.x).toBe(7);
   animation.applyPresentationPose(1);expect(authorChild.position.x).toBe(7);
  }finally{load.mockRestore();animation.dispose();}
+});
+
+it('passes wearable run-up speed to locomotion and suppresses it after leaving the ground',()=>{
+ const {animation,update,source}=instrumentedCharacter();
+ source.smoothing=true;
+ const smoothingDuringUpdate:boolean[]=[];update.mockImplementation(()=>{smoothingDuringUpdate.push(source.smoothing);});
+ const pose:HumanoidRenderState={position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:6,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'breaststroke',animationEvent:null,surface:null,skills:null,mounted:'wingsuit-ready'};
+ for(const speed of [0,2,6]){
+  animation.update(1/60,{...pose,speed});
+  expect(update.mock.calls.at(-1)![1]!.speed).toBe(speed);
+  expect(update.mock.calls.at(-1)![1]!.skills).toBeNull();
+  expect(smoothingDuringUpdate.at(-1)).toBe(true);
+ }
+ animation.update(1/60,{...pose,speed:0});expect(update.mock.calls.at(-1)![1]!.speed).toBe(0);
+ animation.update(1/60,{...pose,mounted:'wingsuit'});expect(update.mock.calls.at(-1)![1]!.speed).toBe(0);
+ animation.update(1/60,{...pose,mounted:'drive'});expect(update.mock.calls.at(-1)![1]!.speed).toBe(0);
+ expect(smoothingDuringUpdate.at(-1)).toBe(false);
+ animation.update(1/60,pose);expect(update.mock.calls.at(-1)![1]!.speed).toBe(6);
+ expect(update.mock.calls.at(-1)![1]!.skills).toBeNull();
+ expect(smoothingDuringUpdate.at(-1)).toBe(true);
+ expect(source.smoothing).toBe(true);
+});
+
+
+it('places wearable ground shoes at the support in fixed and interpolated presentation',async()=>{
+ const {readFile}=await import('node:fs/promises'),{fileURLToPath}=await import('node:url');
+ const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+ const {parseFixtureGlb}=await import('./textured-glb-fixture');
+ const {SkinnedMesh,PerspectiveCamera}=await import('three');
+ const {createWorld}=await import('../world');
+ const {SPECS}=await import('@worldkit/preset-content/config');
+ const {getMap}=await import('@worldkit/preset-content/environment/maps');
+ const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>parseFixtureGlb(await readFile(fileURLToPath(url))));
+ const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
+ const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
+ try{
+  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  const map=getMap('campus'),spec=structuredClone(SPECS.find(s=>s.id==='wingsuit')!);
+  world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:spec.id,assetId:spec.id,spec,object:new Group()}]}});
+  const runtime=world.humanoid!,actor=runtime.simulation.controlledActor,v=runtime.simulation.vehicles[0]!;
+  actor.commitMountedStart(0);world.step({},60);
+  const engine=engineOf(world),point=new Vector3();
+  const soleHeight=()=>{let low=Infinity;rider.root.updateWorldMatrix(true,true);rider.root.traverse(n=>{if(n instanceof SkinnedMesh){n.skeleton.update();for(let i=0;i<n.geometry.getAttribute('position').count;i++){n.getVertexPosition(i,point).applyMatrix4(n.matrixWorld);low=Math.min(low,point.y);}}});return low;};
+  expect(v.grounded).toBe(true);
+  const floor=runtime.environment.support(v.position,2,.1)!.height;
+  expect(soleHeight()-floor).toBeGreaterThan(-.04);expect(soleHeight()-floor).toBeLessThan(.08);
+  for(const frames of [30,10,10]){
+   world.step({humanoid:{...emptyInput(),forward:1,boost:true}},frames);
+   expect(v.grounded).toBe(true);
+   for(const alpha of [0,.5,1])engine.withPresentation(()=>{
+    expect(rider.root.position.distanceTo(runtime.options.vehicles[0]!.object.position)).toBeLessThan(1e-6);
+    // 跑步允许真实腾空相位，但不能叠加一米座位高度。
+    expect(soleHeight()-floor).toBeGreaterThan(-.08);expect(soleHeight()-floor).toBeLessThan(.4);
+   },alpha);
+  }
+  expect(rider.sourceCharacter!.weights.run).toBeGreaterThan(.5);
+  // 离地后恢复原飞行挂点；不改装备飞行物理或骨架比例。
+  v.grounded=false;v.position.y+=10;
+  const expected=v.position.clone().add(new Vector3(...spec.seat).applyQuaternion(v.rotation));
+  expect(runtime.logicalPose(actor.id)!.position.distanceTo(expected)).toBeLessThan(1e-6);
+ }finally{world?.dispose();if(!world)rider.dispose();loader.mockRestore();transport.mockRestore();}
 });

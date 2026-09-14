@@ -1,3 +1,4 @@
+import {mountedRiderOffset} from './motion-families/aircraft/wearable-flight';
 import * as THREE from 'three';
 import type { CameraDocument } from '../config/camera/index';
 import type { CameraInspection } from '../camera/state';
@@ -28,20 +29,20 @@ export function sampleHumanoidCameraSubject(simulation:Simulation,binding:Camera
  const mounted=actor&&!actor.dragonTransition?actor.vehicle:undefined;
  const poseVehicle=vehicle??mounted;
  const rotation=poseVehicle?poseVehicle.rotation.clone().normalize():new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),actor!.player.yaw);
- const position=vehicle?vehicle.position.clone():mounted?mounted.position.clone().add(new THREE.Vector3(...mounted.spec.seat).applyQuaternion(rotation)):actor!.player.position.clone();
+ const position=vehicle?vehicle.position.clone():mounted?mounted.position.clone().add(new THREE.Vector3(...mountedRiderOffset(mounted)).applyQuaternion(rotation)):actor!.player.position.clone();
  if(display&&object){position.copy(object.getWorldPosition(new THREE.Vector3()));rotation.copy(object.getWorldQuaternion(new THREE.Quaternion()).normalize());}
  const body=vehicle?{minimumHeightMeters:vehicle.spec.envelope.offset[1]-vehicle.spec.envelope.halfExtents[1],maximumHeightMeters:vehicle.spec.envelope.offset[1]+vehicle.spec.envelope.halfExtents[1]}:{minimumHeightMeters:0,maximumHeightMeters:actor!.controller.capsuleHeight};
  const seatVehicle=vehicle??actor?.vehicle;
  const seatObject=display&&seatVehicle?objects.get(seatVehicle.spec.id):undefined;
  const seatRotation=seatObject?seatObject.getWorldQuaternion(new THREE.Quaternion()).normalize():seatVehicle?.rotation;
  const seatPosition=seatObject?seatObject.getWorldPosition(new THREE.Vector3()):seatVehicle?.position;
- const seat=seatVehicle?new THREE.Vector3(...seatVehicle.spec.seat).applyQuaternion(seatRotation!).add(seatPosition!):undefined;
+ const seat=seatVehicle?new THREE.Vector3(...mountedRiderOffset(seatVehicle)).applyQuaternion(seatRotation!).add(seatPosition!):undefined;
  const eyePoint=new THREE.Vector3();
  if(!actor||!eye(actor.id,eyePoint)){
   if(poseVehicle)eyePoint.copy(seat!).add(new THREE.Vector3(0,poseVehicle.spec.characterPose==='stand'?1.55:.72,.08).applyQuaternion(seatRotation!));
   else eyePoint.copy(position).add(new THREE.Vector3(0,actor!.controller.swimming?1.35:Math.max(.25,actor!.controller.capsuleHeight-.12),0));
  }
- return {id,generation:gen,kind:vehicle?'vehicle':'humanoid',positionWorldMetersXYZ:position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI)).toArray(),speedMetersPerSecond:(poseVehicle?.velocity??actor!.player.velocity).length(),body,eyeWorldMetersXYZ:eyePoint.toArray(),...(seat?{seatWorldMetersXYZ:seat.toArray()}:{})};
+ return {...(poseVehicle?.motion.aircraft&&!poseVehicle.motion.aircraft.wearable&&poseVehicle.motion.aircraft.subtype!=='balloon'?{continuousHeadingSeedRadians:poseVehicle.yaw+Math.PI}:{}),id,generation:gen,kind:vehicle?'vehicle':'humanoid',positionWorldMetersXYZ:position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI)).toArray(),speedMetersPerSecond:(poseVehicle?.velocity??actor!.player.velocity).length(),body,eyeWorldMetersXYZ:eyePoint.toArray(),...(seat?{seatWorldMetersXYZ:seat.toArray()}:{})};
 }
 /** Native query policy and refined vehicle surfaces; returned distances contain no padding. */
 export class HumanoidCameraGeometry {

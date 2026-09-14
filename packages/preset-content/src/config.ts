@@ -7,6 +7,7 @@ import { JETSKI_SPEC } from './vehicles/jetski/spec';
 import { KAYAK_SPEC } from './vehicles/kayak/spec';
 import { RAFT_SPEC } from './vehicles/raft/spec';
 import { roadSeatAnchor } from './vehicles/road/seating';
+import { roverBodyParts } from './vehicles/road/collision';
 import { SKI_SPEC } from './vehicles/ski/spec';
 import { SLED_SPEC } from './vehicles/sled/spec';
 import { SUBMERSIBLE_SPEC } from './vehicles/submersible/spec';
@@ -17,8 +18,9 @@ export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
 export type VehicleSpec = humanoid.VehicleSpec;
 /** Specialized controller families share movement modes but have distinct tuning. */
-export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype' | 'flyingCreature'> | undefined): string {
+export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype' | 'flyingCreature' | 'aircraftSubtype'> | undefined): string {
   if(spec?.flyingCreature)return 'flying-creature';
+  if(spec?.aircraftSubtype==='glider')return 'glider';
   const archetype = spec?.archetype;
   return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
     ? archetype : spec?.mode ?? 'character';
@@ -43,6 +45,24 @@ export const SPECS: VehicleSpec[] = [
   {id:'supercar',name:'超跑',en:'VELOCITY',mode:'wheeled',kernel:'K03',color:'#e66048',spawn:[-52,0,64],yaw:0,speed:65,accel:17,grip:18,steer:.88,radius:1.7,seat:roadSeatAnchor('supercar'),hint:'W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速',archetype:'racer',envelope:{kind:'box',halfExtents:[1.3,.9,2.5],offset:[0,.9,0]}},
   {id:'kart',name:'卡丁车',en:'KART',mode:'wheeled',kernel:'K03',color:'#e9bf4f',spawn:[-66,0,64],yaw:0,speed:24,accel:10,grip:19,steer:1.65,radius:1.15,seat:roadSeatAnchor('kart'),hint:'W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速',archetype:'racer',envelope:{kind:'box',halfExtents:[1,.85,1.45],offset:[0,.85,0]}},
 ];
+const planeBaseline=SPECS.find(s=>s.id==='plane')!;
+for(const [n,variant] of ([
+ {id:'pusher-plane',name:'机尾推进式飞机',en:'PUSHER',aircraftSubtype:'pusher',color:'#639ac2'},
+ {id:'helicopter',name:'单主旋翼直升机',en:'HELI',aircraftSubtype:'helicopter',color:'#e4b251'},
+ {id:'multirotor',name:'四旋翼载人飞行器',en:'QUAD',aircraftSubtype:'multirotor',color:'#6dbca9'},
+ {id:'tiltrotor',name:'倾转旋翼飞机',en:'TILT',aircraftSubtype:'tiltrotor',color:'#9993ca'},
+] as const).entries())SPECS.push({...structuredClone(planeBaseline),...variant,spawn:[-250+n*16,0,-205],
+ hint:variant.aircraftSubtype==='pusher'?planeBaseline.hint:'Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾'+(variant.aircraftSubtype==='tiltrotor'?' · 前飞加速自动倾转，减速恢复悬停':''),
+ envelope:{kind:'box',halfExtents:[4.5,1.4,variant.aircraftSubtype==='helicopter'?4.1:3.6],offset:[0,1.4,0]}});
+// 无动力小类共用注册入口；原旧滑翔机预设迁入新的飞机动力学。
+Object.assign(SPECS.find(s=>s.id==='glider')!,{...structuredClone(planeBaseline),id:'glider',name:'无动力滑翔机',en:'SOAR',aircraftSubtype:'glider',color:'#e2e8eb',hint:'Shift 牵引起飞（最多 8 秒） · S 拉起 / W 低头 · A/D 转弯 · Ctrl 扰流板 · Space 地面刹车'});
+for(const [n,variant] of ([
+ {id:'paraglider',name:'滑翔伞',en:'CANOPY',aircraftSubtype:'paraglider',characterPose:'paraglider',color:'#e3b958'},
+ {id:'wingsuit',name:'翼装飞行',en:'WINGSUIT',aircraftSubtype:'wingsuit',characterPose:'wingsuit',color:'#dfb550'},
+ {id:'balloon',name:'热气球',en:'BALLOON',aircraftSubtype:'balloon',characterPose:'stand',color:'#db9369'},
+] as const).entries())SPECS.push({...structuredClone(planeBaseline),...variant,spawn:variant.id==='balloon'?[-120,0,-205]:[-138+n*16,120,variant.id==='wingsuit'?-170:-138],seat:variant.id==='balloon'?[0,.18,0]:[0,1,0],radius:variant.id==='balloon'?1.2:.6,
+ hint:variant.id==='balloon'?'Shift 按住加热 · 松开自然冷却 · Ctrl 放热气下降 · 水平随风漂移':variant.id==='wingsuit'?'Shift 助跑离开高台 · W/S 调整俯仰 · A/D 转向 · Space 开伞减速着陆':'Shift 助跑离开高台 · W/S 调整滑翔角 · A/D 转向 · Space 刹车缓降着陆',
+ envelope:{kind:'box',halfExtents:variant.id==='balloon'?[.85,1.4,.85]:[.5,1,.5],offset:[0,1,0]}});
 for(const spec of SPECS){if(spec.mode==='wheeled'){
   const sporty=spec.archetype==='racer',utility=spec.id==='trail-rover';
   spec.reverseSpeed=spec.speed*.3;
@@ -55,6 +75,8 @@ for(const spec of SPECS){if(spec.mode==='wheeled'){
   spec.wheelPhysics={...defaults.wheelPhysics,powertrain,
     ...(sporty?{centerOfMassHeight:.5,tireFriction:1.55,mass:1250,radius:.39,hubHeight:.39,maxRaise:.02,wheelWidth:.32}:
       utility?{centerOfMassHeight:.75,mass:1900,maxRaise:.04,maxDrop:.045}:{})};
+  if(spec.id==='racer')spec.wheelPhysics.cabin={kind:'box',halfExtents:[.99,.47,.90],offset:[0,1.49,.10]};
+  if(spec.id==='rover'||utility)spec.wheelPhysics.bodyParts=roverBodyParts(utility);
   if(spec.id==='supercar'){
     spec.wheelPhysics={...spec.wheelPhysics,centerOfMassHeight:.45,radius:.37,hubHeight:.37,halfTrack:1.02,halfWheelbase:1.5,wheelWidth:.32};
     // The authored dimensions previously drove the implicit four-wheel layout.
@@ -65,6 +87,17 @@ for(const spec of SPECS){if(spec.mode==='wheeled'){
   if(spec.id==='kart'){
     spec.wheelPhysics=humanoid.createRoadPhysicsProfile('car',{centerOfMassHeight:.3,tireFriction:1.4,mass:180,radius:.24,hubHeight:.24,halfTrack:.78,halfWheelbase:.87,wheelWidth:.24,maxRaise:.02,maxDrop:.025,wheels:[-.78,.78].flatMap(x=>[-.89,.85].map(z=>({x,z,steering:z>0,driven:z<0}))),powertrain:{...powertrain,torqueCurve:powertrain.torqueCurve.map(([rpm,torque])=>[rpm,torque*.08]),engineBrakeTorque:5,dragArea:.45,boostTorqueMultiplier:1.6}});
     spec.speed=24;spec.maxSpeed=24*1.15;
+  }
+  // 训练场汽车逐车型调校；其他载具以及模型无关的 SDK 默认值不启用松油门辅助。
+  if(['rover','racer','trail-rover','supercar','kart'].includes(spec.id)){
+    spec.wheelPhysics.coastBrakeDeceleration=spec.id==='trail-rover'?1:1.2;
+    if(spec.id==='racer'||spec.id==='supercar'){
+      const torqueScale=spec.id==='supercar'?1.65:1.22;
+      spec.wheelPhysics.powertrain={...powertrain,
+        torqueCurve:powertrain.torqueCurve.map(([rpm,torque])=>[rpm,torque*torqueScale]),
+        // 普通油门增强，加速键保持原来的峰值扭矩预算。
+        boostTorqueMultiplier:(powertrain.boostTorqueMultiplier??1.8)/torqueScale};
+    }
   }
   // 底盘底面在轮轴之上；车轮接地由逐轮查询负责，保留车身/驾驶员顶部范围。
   spec.envelope={...spec.envelope,halfExtents:[spec.envelope.halfExtents[0],spec.envelope.halfExtents[1]-.16,spec.envelope.halfExtents[2]],offset:[0,spec.envelope.offset[1]+.16,0]};

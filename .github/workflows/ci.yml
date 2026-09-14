@@ -13,51 +13,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.14.0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.3.0
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install media and Python test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          python -m pip install --disable-pip-version-check pillow requests
-
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-validation
 
       - name: Lint
         run: pnpm lint
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Verify workspace boundaries and test census
+        run: pnpm verify:workspace-boundaries && pnpm test:census
 
       - name: Test independent Node and Python lanes
         run: pnpm test:independent
 
-      - name: Run full Vitest suite
-        run: pnpm test
+      - name: Run contract tests
+        run: pnpm test:contract
 
       - name: Build Three runtime
         run: pnpm build
 
       - name: Assert checks left the tracked tree clean
         run: git diff --exit-code
+
+  resource-heavy:
+    name: Resource-heavy tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-validation
+
+      # Each runner retains the existing single-fork isolation and test limits.
+      - name: Run resource-heavy test shard
+        run: pnpm test:resource-heavy --shard=${{ matrix.shard }}/3
+
+      - name: Assert tests left the tracked tree clean
+        run: git diff --exit-code
+
+  # Preserve the required check name and reject failed, cancelled or skipped lanes.
+  validate:
+    if: ${{ always() }}
+    needs: [checks, resource-heavy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation lane to succeed
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          RESOURCE_TESTS_RESULT: ${{ needs.resource-heavy.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$RESOURCE_TESTS_RESULT" = success

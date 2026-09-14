@@ -1,3 +1,4 @@
+import {skateboardSupport,skateboardRoll} from './skateboard';
 import { Euler,Vector3 } from 'three';
 import { VEHICLE_ATTITUDE } from '../../../config/vehicle';
 import { vehicleImpactMass } from '../../config';
@@ -114,7 +115,7 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, _time: numbe
         else {
             const actualFloor = surfaceHeight(v.position.x, v.position.z);
             v.velocity.y -= 18 * dt;
-            if (v.position.y <= actualFloor + .12) {
+            if (mode==='skateboard'?skateboardSupport(v.position.y,actualFloor,v.grounded):v.position.y <= actualFloor + .12) {
                 v.position.y = actualFloor;
                 v.velocity.y = 0;
                 v.grounded = true;
@@ -125,7 +126,8 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, _time: numbe
             const targetPitch = v.grounded && Math.abs(ahead - behind) < 3 ? Math.atan2(ahead - behind, 2.4) : 0;
             const attitude = mode === 'motorcycle' ? VEHICLE_ATTITUDE.motorcycle : VEHICLE_ATTITUDE.ground;
             v.pitch = damp(v.pitch, targetPitch, 12, dt);
-            v.roll = damp(v.roll, clamp(v.steering * speed * attitude.rollRadiansPerSteeringSpeed, -attitude.maximumRollRadians, attitude.maximumRollRadians), attitude.rollResponsePerSecond, dt);
+            if(mode==='skateboard'&&v.grounded){const normal=q.support(v.position,1,.2)?.normal;if(normal)v.roll=damp(v.roll,skateboardRoll(normal,newF),12,dt);}
+            else v.roll = damp(v.roll, clamp(v.steering * speed * attitude.rollRadiansPerSteeringSpeed, -attitude.maximumRollRadians, attitude.maximumRollRadians), attitude.rollResponsePerSecond, dt);
         }
         v.rotation.setFromEuler(euler.set(-v.pitch, v.yaw, v.roll, 'YXZ'));
         v.submerged = driveDisabled;
@@ -152,7 +154,7 @@ export function stepFamilyIntent(v: VehicleState, i: Input, dt: number, time: nu
     const delta = v.position.clone().sub(old), motionOrigin = old.clone();
     // Runners and ATV tyres must follow the slope. Inflating a pitched hull into a level box
     // suspends the sled above snow by half its length times the grade.
-    const snowHull = mode === 'sled' || mode === 'ski' || v.spec.archetype === 'atv';
+    const snowHull = mode === 'skateboard' || mode === 'sled' || mode === 'ski' || v.spec.archetype === 'atv';
     const levelHull = supported && !snowHull;
     let pose = levelHull ? groundVehiclePose(body, v.rotation, v.yaw) : { body, rotation: v.rotation };
     const previousPose = levelHull ? groundVehiclePose(body, oldRotation, oldYaw) : { body, rotation: oldRotation };

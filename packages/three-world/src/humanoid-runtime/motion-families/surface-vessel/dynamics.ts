@@ -1,7 +1,8 @@
+import {stepPaddleDrive} from './paddle-drive';
 import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleBody,type EnvironmentQueries } from '../../environment/queries';
 import { finishJetSkiStep } from './jetski';
-import { CANOE_WATER,KAYAK_WATER,kayakPaddlePose,kayakStroke,paddleBlade } from './paddling';
+import { paddleRiderBody } from './paddling';
 import { stepPowertrain } from '../../powertrain';
 import type { Input,VehicleState } from '../../simulation';
 import { TANK_GEOMETRY } from '../ground-vehicle/tank';
@@ -17,7 +18,9 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
         body: ReturnType<typeof vehicleBody>;
         rotation?: Quaternion;
     }[] = [{ body: vehicleBody(v.spec) }];
+    if(c.kind==='paddle')parts.push({body:paddleRiderBody(v.spec.seat)});
     const rig = q.vehicleRig(v.spec.id, state, v.position, v.rotation, state.mass, e.halfExtents[0], e.halfExtents[2], e.offset[1] + e.halfExtents[1], c.centerOfMassHeight, parts, c.friction ?? .02, c.restitution ?? .08), body = rig.body;
+    if(c.kind==='paddle')rig.colliders[1]!.setEnabled(v.motion.kayak!.riderMounted===true);
     // Synchronise explicit reset/teleport once; substeps below only read the solver.
     const prior = body.translation();
     let relocated = new Vector3(prior.x, prior.y, prior.z).distanceToSquared(v.position) > .01;
@@ -79,31 +82,9 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
         const resist = (deceleration: number) => -Math.sign(speed) * Math.min(Math.abs(speed) / h, Math.max(0, deceleration)) * mass;
         let lateral = c.water ? immersion > 0 ? s.grip : v.grounded ? 7 : 0 : dryGround ? s.grip : 0;
         if (c.kind === 'paddle') {
-            const k = v.motion.kayak!, canoe = k.craft === 'canoe', period = canoe ? CANOE_WATER.strokePeriod : KAYAK_WATER.strokePeriod;
-            k.surface = water?.surface ?? null;
-            k.immersion = immersion;
-            k.buoyancy = buoyancy;
-            k.turn = v.steering;
-            k.brake = input.brake ? 1 : 0;
-            k.effort = blend(k.effort, afloat && !input.brake ? Math.max(Math.abs(input.forward), Math.abs(input.steer)) : 0, 7, h);
-            if (Math.abs(input.forward) > .01)
-                k.reverse = Math.sign(input.forward);
-            if (canoe && Math.abs(input.steer) > .1 && (k.phase % 1 < .2 || k.effort < .05))
-                k.side = -Math.sign(input.steer);
-            if (k.effort > .005)
-                k.phase += h / (v.motion.raft && input.boost ? .85 : period);
-            const stroke = kayakStroke(k), paddle = kayakPaddlePose(k), blade = paddleBlade(k, k.brake ? 1 : stroke.side).applyQuaternion(paddle.rotation).add(paddle.position).applyQuaternion(v.rotation).add(v.position), w = q.waterAt(blade);
-            k.bladeImmersion = w ? clamp((w.surface - blade.y) / .1, 0, 1) : 0;
-            const pulse = afloat ? stroke.power * k.bladeImmersion : 0, direction = Math.sign(input.forward);
-            driveForce = mass * direction * s.accel * pulse * (v.motion.raft && input.boost ? 1.2 : 1);
-            const resistance = immersion > 0 ? s.coastDeceleration + Math.abs(speed) * s.dragQuadratic : v.grounded ? (v.motion.raft ? .32 : 5) : 0;
-            driveForce += resist(Math.abs(speed) * (resistance + (input.brake && afloat ? s.brakeDamping * k.bladeImmersion : 0)));
-            yawAcceleration = afloat ? -v.steering * s.steer * pulse + stroke.side * direction * pulse * (v.motion.raft ? .035 : canoe ? .20 : .10) - state.angularVelocity.y * (canoe ? .85 : 1.15) : v.grounded ? -state.angularVelocity.y * 8 : 0;
-            pitch = direction * pulse * .025;
-            roll = -stroke.side * pulse * .035 - state.angularVelocity.y * speed * .018;
-            state.effort = pulse;
-            state.cadence = k.effort > .005 ? 60 / (v.motion.raft && input.boost ? .85 : period) : 0;
-            v.throttle = direction * pulse;
+            const result=stepPaddleDrive(v,input,h,q,{afloat,immersion,buoyancy,mass,speed,yawInertia:inertia(mass).y});
+            driveForce=result.driveForce; yawAcceleration=result.yawAcceleration;
+            pitch=result.pitch;roll=result.roll;
         }
         else if (c.kind === 'jet') {
             const brake = input.brake || state.powertrain!.directionBraking;

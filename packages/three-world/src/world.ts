@@ -195,11 +195,14 @@ export class ThreeWorld implements API.World {
       if(epoch!==this.epoch||(target&&this.entries.get(target)?.generation!==generation))throw failure('CAMERA_EDIT_STALE');
     });
   }
+ setCameraCollisionDiagnosticsEnabled(enabled:boolean):void{this.alive();this.engine.setCameraCollisionDiagnosticsEnabled(enabled);}
  inspectCamera(){return this.engine.inspectCamera();}
  setCameraView(viewId:string):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraView(viewId);}
  useAuthoredCamera():THREE.Camera{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.engine.useAuthoredCamera();}
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
+ /** Observes a completed render after presentation materials are restored; observers must not advance simulation. */
+ onRender(callback:()=>void):()=>void{this.alive();return this.engine.onRender(callback);}
  onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.updating.add(callback);return()=>{this.updating.delete(callback);};}
  onReset(callback:()=>void):()=>void{this.resets.add(callback);return()=>{this.resets.delete(callback);};}
  onDispose(callback:()=>void):()=>void{this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}

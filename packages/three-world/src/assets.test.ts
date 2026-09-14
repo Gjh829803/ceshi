@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, LoopOnce, LoopRepeat, Vector3, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
+import { Box3, LoopOnce, LoopRepeat, Vector3, type DataTexture, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
@@ -29,7 +29,7 @@ const pose = (asset: AssetInstance) => {
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('Three asset loader against original project GLBs', () => {
-  it('skips embedded model images by default and keeps failed texture opt-in separate from live whitebox assets', async () => {
+  it('skips images by default and isolates decoded Node textures from live whitebox assets', async () => {
     const fetchBytes = vi.fn(readBytes(humanoid));
     const objectURL = vi.spyOn(URL, 'createObjectURL');
     const first = await loadAsset(humanoid, { fetchBytes }); instances.push(first);
@@ -37,7 +37,10 @@ describe('Three asset loader against original project GLBs', () => {
     expect(material.map).toBeNull(); expect(material.normalMap).toBeNull();
     expect(material.color.getHex()).toBe(0xffffff);
     expect(objectURL).not.toHaveBeenCalled();
-    await expect(loadAsset(humanoid, { fetchBytes, loadTextures: true })).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+    const textured=await loadAsset(humanoid,{fetchBytes,loadTextures:true});instances.push(textured);
+    const texturedMaterial=meshes(textured)[0]!.material as MeshStandardMaterial;
+    expect((texturedMaterial.map as DataTexture).image.width).toBeGreaterThan(0);expect((texturedMaterial.normalMap as DataTexture).image.width).toBeGreaterThan(0);
+    expect(material.map).toBeNull();expect(objectURL).not.toHaveBeenCalled();
     const second = await loadAsset(humanoid, { fetchBytes, loadTextures: false }); instances.push(second);
     expect(meshes(second)[0]!.geometry).toBe(meshes(first)[0]!.geometry);
     expect(fetchBytes).toHaveBeenCalledTimes(2);
@@ -68,6 +71,7 @@ describe('Three asset loader against original project GLBs', () => {
 
   it('binds source humanoid clips to its metric skeleton without root drift', async () => {
     const instance=await load();
+    // The UEFN LOD1 replacement is one textured skin on the preserved skeleton.
     expect(meshes(instance)).toHaveLength(1);
     expect(instance.clips.map(clip=>clip.name).sort()).toEqual(Object.keys(humanoid.actions).sort());
     const mesh=meshes(instance)[0] as SkinnedMesh;

@@ -1,3 +1,4 @@
+export {AIRCRAFT_SUBTYPES,type AircraftSubtype} from './config/aircraft.js';
 export * from './contracts.js';
 export {setObjectColor,type ObjectColorBinding} from './object-color.js';
 export {INTERACTION_SLOT_SCHEMA} from './interaction-contracts.js';
@@ -17,6 +18,8 @@ export { CHARACTER_CAPABILITIES, type CharacterCapability, type CharacterCapabil
 export { HorseVisual } from './humanoid-runtime/horse.js';
 export type { HorseAnimationFrame, SeatAnchor, ResourceResolver } from './humanoid-runtime/horse.js';
 
+export type {AircraftActionId,AircraftActionRequest} from './humanoid-runtime/motion-families/aircraft/actions';
+
 export {compileBoundaryBoxes,type BoundaryDefinition,type BoundaryBox} from './boundaries';
 
 export * from './config/camera/index';
@@ -24,3 +27,5 @@ export * from './config/camera/index';
 export type {CameraInspection} from './camera/state';
 
 export type {CameraEditSession} from './camera/editing';
+
+export type {CameraCollisionProbeSample,CameraCollisionQuerySamples} from './camera/constraints';

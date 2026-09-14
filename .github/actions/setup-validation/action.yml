@@ -1,0 +1,32 @@
+name: Set up validation workspace
+description: Install the shared Node, Python, media and browser test dependencies.
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10.14.0
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24.3.0
+        cache: pnpm
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install media and Python test dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        python -m pip install --disable-pip-version-check pillow requests
+
+    - name: Install workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Install Playwright Chromium
+      shell: bash
+      run: pnpm exec playwright install --with-deps chromium

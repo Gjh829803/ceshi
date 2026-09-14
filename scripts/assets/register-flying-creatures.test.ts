@@ -8,6 +8,8 @@ import {readCatalogResource} from '@worldkit/creator-host/asset-resources';
 it('registers all eleven measured flying creatures with packaged visual resources and explicit controller ownership',async()=>{
   const root=path.resolve('.'),sources=await readCatalogSources(root),generated=await flyingCreatureCatalogEntries(root);
   const policy=JSON.parse(await readFile(path.join(root,'packages/creator-host/config/asset-policy.json'),'utf8'));
+  const trainingVariants=JSON.parse(await readFile(path.join(root,'assets/dragon-training/__creature-assets/variants.json'),'utf8'));
+  expect(trainingVariants.map((v:{id:string})=>v.id)).toEqual(Array.from({length:11},(_,n)=>`D${String(n+1).padStart(2,'0')}`));
   expect(generated.map(asset=>asset.id)).toEqual(Array.from({length:11},(_,n)=>`creature.dragon.d${String(n+1).padStart(2,'0')}`));
   for(const asset of generated){
     expect(sources.find(source=>source.id===asset.id)).toEqual(asset);

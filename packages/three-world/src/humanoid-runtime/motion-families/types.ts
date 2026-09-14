@@ -2,6 +2,7 @@ import type { Mode,VehicleSpec } from '../config';
 import type { EnvironmentQueries } from '../environment/queries';
 import type { Input,VehicleState } from '../simulation';
 import type { MotionFamilyState } from './state';
+import type {UnoccupiedPhysics} from './shared/unoccupied-body';
 export type MotionFamilyId='human'|'ground-vehicle'|'surface-vessel'|'aircraft'|'flying-creature'|'underwater'|'space';
 export type MotionMode=Mode|'character';
 export interface MotionSubtype {id:string;name:string;mode:MotionMode|null;controlFamily:string;status:'implemented'|'reserved';description:string}
@@ -13,6 +14,7 @@ export interface MotionFamilyModule {
   resetRigidState?:(v:VehicleState)=>void;
   impactMass?:(spec:VehicleSpec)=>number;
   resetAuxiliaryState?:(v:VehicleState)=>void;
+  unoccupiedPhysics?:(spec:VehicleSpec)=>UnoccupiedPhysics|undefined;
   step:VehicleStep|null;
 }
 export const subtype=(family:MotionFamilyId,mode:MotionMode,name:string,description:string,controlFamily:string=mode):MotionSubtype=>({id:`${family}.${controlFamily}`,mode,name,description,controlFamily,status:'implemented'});

@@ -1,3 +1,7 @@
+import { humanoid } from '@worldkit/three';
+import { SPECS } from '@worldkit/preset-content/config';
+import { buildWorkspaceCatalog, filterAssets, sanitizeAssetIds } from '@worldkit/preset-content/platform/catalog';
+import { DRAGON_VARIANTS } from '@worldkit/preset-content/dragon-variants';
 import { build } from "esbuild";
 import type { Browser, Page } from "playwright";
 import {
@@ -263,5 +267,21 @@ describe("React asset library browser contracts", () => {
     expect(await page.locator(".asset-library").getAttribute("role")).not.toBe(
       "dialog",
     );
+  });
+});
+
+
+describe('numbered dragon library entries', () => {
+  it('lists all available dragon models under creatures with distinct selectable identities', () => {
+    const specs=SPECS.map(spec=>spec.id==='dragon'?humanoid.createFlyingCreatureSpec('dragon'):spec);
+    const catalog=buildWorkspaceCatalog(specs);
+    const dragons=filterAssets(catalog,'','creatures').filter(asset=>asset.dragonVariantId);
+    expect(dragons.map(asset=>asset.dragonVariantId)).toEqual(DRAGON_VARIANTS.map(variant=>variant.id));
+    expect(dragons).toHaveLength(11);
+    expect(new Set(catalog.map(asset=>asset.id)).size).toBe(catalog.length);
+    expect(dragons.find(asset=>asset.dragonVariantId==='D01')?.id).toBe('dragon');
+    expect(sanitizeAssetIds(catalog,['dragon','creature.dragon.d11','LP01','B01'])).toEqual(['dragon','creature.dragon.d11']);
+    expect(filterAssets(catalog,'D11','creatures').map(asset=>asset.dragonVariantId)).toEqual(['D11']);
+    expect(filterAssets(catalog,'D02','air').map(asset=>asset.dragonVariantId)).toEqual(['D02']);
   });
 });

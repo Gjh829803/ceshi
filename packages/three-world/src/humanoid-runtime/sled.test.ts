@@ -9,6 +9,7 @@ import { EnvironmentQueries, initEnvironmentQueries, vehicleBody } from './envir
 import { createVehicle, emptyInput, stepVehicle as prepareVehicle, type Input } from './simulation';
 import type { EnvironmentDefinition } from './environment/types';
 import { SLED_SPEC } from '@worldkit/preset-content/sled';
+import {readControls} from './input';
 
 import { SKI_SPEC } from '@worldkit/preset-content/ski';
 
@@ -28,16 +29,37 @@ function fixture(degrees=0, wall=false) {
   const run=(seconds:number,controls:Partial<Input>={})=>{for(let t=0;t<Math.round(seconds*60);t++)stepVehicle(v,{...emptyInput(),...controls},1/60,t/60,q);};
   return {q,v,run};
 }
-it('rests without thrust, cannot pivot at rest, pushes only to walking speed, and coasts after release',()=>{
+it('rests without thrust, pushes only to walking speed, and coasts after release',()=>{
   const {q,v,run}=fixture(),neutral=fixture();try{
-    neutral.run(2);run(2,{steer:1,boost:true});expect(v.speed).toBeLessThan(.01);
+    neutral.run(2);run(2,{boost:true});expect(v.speed).toBeLessThan(.01);
     // Isolate input-driven pivot from the same native body's contact settling.
     expect(v.yaw-neutral.v.yaw).toBeCloseTo(0,3);
     expect(v.position.distanceTo(neutral.v.position)).toBeLessThan(.01);
     run(10,{forward:1});expect(v.speed).toBeGreaterThan(1);expect(v.speed).toBeLessThanOrEqual(3.01);
     const speed=v.speed,z=v.position.z;run(1);expect(v.position.z-z).toBeGreaterThan(.5);expect(v.speed).toBeLessThan(speed);
-    run(3,{forward:-1});expect(v.speed).toBeLessThan(.01);const stop=v.position.clone();run(2,{forward:-1});expect(v.position.distanceTo(stop)).toBeLessThan(.02);
+    run(3,{brake:true});expect(v.speed).toBeLessThan(.01);const stop=v.position.clone();run(2,{brake:true});expect(v.position.distanceTo(stop)).toBeLessThan(.02);
   }finally{q.dispose();neutral.q.dispose();}
+});
+it.each(['KeyA','KeyD'])('respects subtype stationary steering from %s',key=>{
+ const {q,v,run}=fixture();
+ try{run(2);const start=v.position.clone(),yaw=v.yaw;
+  run(2,readControls(new Set([key]),true,false,{},undefined,spec.mode));
+  if(spec.mode==='sled')expect((v.yaw-yaw)*(key==='KeyA'?1:-1)).toBeGreaterThan(.35);
+  else expect(Math.abs(v.yaw-yaw)).toBeLessThan(.01);
+  expect(v.position.distanceTo(start)).toBeLessThan(.06);
+  run(2);const released=v.yaw;run(1);expect(Math.abs(v.yaw-released)).toBeLessThan(.01);
+ }finally{q.dispose();}
+});
+it('reads S from rest and switches between forward, braking, and reverse without releasing the key',()=>{
+ const {q,v,run}=fixture(),s=readControls(new Set(['KeyS']),true,false,{},undefined,spec.mode);
+ try{run(2);const start=v.position.z;run(4,s);
+  if(spec.mode==='sled'){
+   expect(v.position.z-start).toBeLessThan(-1);expect(v.velocity.z).toBeLessThan(-.2);expect(v.speed).toBeLessThan(1.6);
+   run(6,{forward:1});expect(v.velocity.z).toBeGreaterThan(1);
+   const before=v.velocity.z;run(.2,s);expect(v.velocity.z).toBeLessThan(before);run(4,s);expect(v.velocity.z).toBeLessThan(-.2);
+   run(2,{...s,brake:true});expect(v.speed).toBeLessThan(.01);const stop=v.position.clone();run(2,{...s,brake:true});expect(v.position.distanceTo(stop)).toBeLessThan(.02);
+  }else{expect(Math.abs(v.position.z-start)).toBeLessThan(.02);expect(v.speed).toBeLessThan(.01);}
+ }finally{q.dispose();}
 });
 it('accelerates downhill without W, brakes against gravity, then slides again when released',()=>{
   const {q,v,run}=fixture(12);try{

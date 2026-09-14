@@ -197,13 +197,13 @@ it('loads model textures off by default using the real Node GLTF parser',async()
   }});
 });
 
-it('rejects enabled model textures in Node without reusing or poisoning the default cache',async()=>{
+it('decodes enabled Node textures without reusing or poisoning the default cache',async()=>{
   const {resolve}=resources(),actor=await SourceCharacter.load(resolve);sources.push(actor);
-  await expect(SourceCharacter.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+  const textured=await SourceCharacter.load(resolve,{loadTextures:true});sources.push(textured);
+  expect(((mesh(textured).material as THREE.MeshStandardMaterial).map as THREE.DataTexture).image.width).toBeGreaterThan(0);
   const again=await SourceCharacter.load(resolve);sources.push(again);expect(mesh(again).geometry).toBe(mesh(actor).geometry);
   const publicActor=new Character();characters.push(publicActor);
-  await expect(publicActor.load(resolve,{loadTextures:true})).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
-  expect(publicActor.loaded).toBe(false);await publicActor.load(resolve);expect(publicActor.loaded).toBe(true);
+  await publicActor.load(resolve,{loadTextures:true});expect(publicActor.loaded).toBe(true);
 });
 
 it('captures model textures options before async loading and retains them in the immutable source factory',async()=>{

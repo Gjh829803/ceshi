@@ -33,11 +33,11 @@ export function validateEnvironment(map:EnvironmentDefinition):void{
       suggestedAction:`Set ${path} to exactly three finite coordinates [x,y,z], each between -100000 and 100000. Region size remains the two-dimensional [width,depth] field.`,
     });
   };
-  const vector=(v:unknown):v is readonly number[]=>Array.isArray(v)&&v.length===3&&v.every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<=100000);
+  const vector=(v:unknown):v is readonly number[]=>Array.isArray(v)&&v.length===3&&[0,1,2].every(i=>typeof v[i]==='number'&&Number.isFinite(v[i])&&Math.abs(v[i])<=100000);
   const text=(v:unknown)=>typeof v==='string'&&v.trim().length>0;
   if(!map||!text(map.id)||!map.bounds||!vector(map.bounds.min)||!vector(map.bounds.max)||map.bounds.min.some((n,i)=>n>=map.bounds.max[i]!)||!vector(map.playerSpawn))fail();
   for(const list of [map.boxes,map.water,map.regions,map.spawns])if(!Array.isArray(list))fail();
-  for(const list of [map.interactions,map.climbSurfaces,map.looseCrates,map.characterTrials,map.boundaries])if(list!==undefined&&!Array.isArray(list))fail();
+  for(const list of [map.interactions,map.climbSurfaces,map.looseCrates,map.characterTrials,map.boundaries,map.lifts])if(list!==undefined&&!Array.isArray(list))fail();
   const boundaryIds=new Set(compileBoundaryBoxes(map.boundaries??[]).map(box=>box.id));
   if(map.boxes.some(box=>boundaryIds.has(box?.id)))fail();
   if(map.recovery!==undefined){
@@ -46,8 +46,21 @@ export function validateEnvironment(map:EnvironmentDefinition):void{
     if(checkpoint!==undefined&&(!checkpoint||!vector(checkpoint.position)||!Number.isFinite(checkpoint.yaw)||
       checkpoint.position[1]<=recovery.fallBelowY||[0,2].some(axis=>checkpoint.position[axis]!<map.bounds.min[axis]!||checkpoint.position[axis]!>map.bounds.max[axis]!)))fail();
   }
+  const liftIds=new Set<string>();
+  for(const lift of map.lifts??[]){
+    // Height is signed vertical travel relative to the starting origin. Zero speed or height leaves a
+    // legitimate static lift; empty lifts need not own collision geometry.
+    if(!lift||Array.isArray(lift)||!text(lift.id)||liftIds.has(lift.id)||!vector(lift.position)||
+      !Number.isFinite(lift.height)||Math.abs(lift.height)>100000||!Number.isFinite(lift.speed)||lift.speed<0)fail();
+    liftIds.add(lift.id);
+  }
+  for(const box of map.boxes){
+    if(!box||!text(box.id)||!vector(box.position)||!vector(box.size)||box.size.some(n=>n<=0)||(box.rotation!==undefined&&!vector(box.rotation)))fail();
+    // A box has one physical owner. Unknown references otherwise disappear
+    // from the static pass without joining a lift; dual owners duplicate it.
+    if(box.liftId!==undefined&&(!text(box.liftId)||!liftIds.has(box.liftId)||box.rigidGroup!==undefined))fail();
+  }
   const groupMasses=new Map<string,number>();for(const box of map.boxes)if(box.rigidGroup){const g=box.rigidGroup;if(!text(g.id)||!Number.isFinite(g.massKg)||g.massKg<=0||box.collision===false||(groupMasses.has(g.id)&&groupMasses.get(g.id)!==g.massKg))fail();groupMasses.set(g.id,g.massKg);}
-  for(const box of map.boxes)if(!box||!text(box.id)||!vector(box.position)||!vector(box.size)||box.size.some(n=>n<=0)||(box.rotation!==undefined&&!vector(box.rotation)))fail();
   for(const water of map.water)if(!water||!text(water.id)||!vector(water.min)||!vector(water.max)||water.min.some((n,i)=>n>=water.max[i]!)||!Number.isFinite(water.surface))fail();
   for(let i=0;i<map.regions.length;i++){
     const region=map.regions[i];if(!region)return fail();

@@ -1,6 +1,7 @@
+import {buildSoaringShell} from '@worldkit/preset-content/soaring-shell';
 import {readFile} from 'node:fs/promises';
 import {expect,it,vi} from 'vitest';
-import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
+import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3,Group,Mesh,MeshStandardMaterial,Quaternion} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld,humanoid} from '@worldkit/three';
 import {SourceCharacter} from '@worldkit/three/testing';
@@ -10,7 +11,7 @@ import {getMap} from '@worldkit/preset-content/environment/maps';
 import {prepareCourse} from '@worldkit/preset-content/platform/scenarios';
 vi.mock('../../../preset-content/src/assets/resources',()=>({resolvePresetResource:()=>{throw new Error('Unexpected creature resource load in road seating test');},definitions:{}}));
 
-it('fits both aircraft to actual Source101 skin, controls, pedals and ground clearance',async()=>{
+it('fits fixed aircraft riders to actual Source101 skin, pedals and ground clearance',async()=>{
  const assetRoot=new URL('../../../../assets/three-creator/presets/humanoid/source/',import.meta.url);
  const entries=await Promise.all(['idle-loop','walk-loop','run-loop','climb-2m5'].map(async id=>{
   const bytes=await readFile(new URL(`gasp-research/${id}.experimental.glb`,assetRoot));
@@ -24,7 +25,7 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
  // vertices, physics, mounted placement and the camera all use real code.
  const noop=()=>{};
  vi.stubGlobal('document',{createElement:()=>({getContext:()=>({fillRect:noop,beginPath:noop,roundRect:noop,fill:noop,fillText:noop})})});
- const specs=SPECS.filter(s=>s.mode==='plane'),visuals=specs.map(buildVehicle);
+ const specs=SPECS.filter(s=>s.mode==='plane'&&!['wingsuit','paraglider','balloon'].includes(s.aircraftSubtype??'')),visuals=specs.map(buildVehicle);
  vi.unstubAllGlobals();
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:character.root,animation:character},vehicles:specs.map((spec,i)=>({instanceId:spec.id,assetId:spec.id,spec,object:visuals[i]!.root}))}});
  try{
@@ -44,19 +45,17 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
     if(o.name!==name)return;const bounds=new Box3().setFromObject(o).expandByScalar(-.002);
     expect(points.filter(p=>bounds.containsPoint(root.localToWorld(p.clone()))).length,name+' penetration').toBe(0);
    });
-   for(const [n,name] of ['hand_l','hand_r'].entries()){
-    const grip=root.children.filter(o=>o.name==='aircraft-grip')[n]!;
-    const bounds=new Box3().setFromObject(grip);const skin=parts.get(name)!;
-    const distance=Math.min(...skin.map(p=>bounds.distanceToPoint(root.localToWorld(p.clone()))));
-    expect(distance,name+' contact gap').toBeLessThan(.015);
-   }
+   // 人物不再握持操控件；验证同一固定姿势在载具运动中保持稳定。
+   const fixedBones=new Map<string,number[]>();character.actor.traverse(n=>{if(n.type==='Bone'){n.updateMatrix();fixedBones.set(n.name,n.matrix.toArray());}});
    for(const name of ['foot_l','foot_r']){
     const foot=new Box3().setFromPoints(parts.get(name)!);
     expect(foot.min.y-.74,name+' sole gap').toBeGreaterThanOrEqual(0);
     expect(foot.min.y-.74,name+' sole gap').toBeLessThan(.01);
    }
-   const prop=visuals[i]!.rotors[0]!;
-   for(let angle=0;angle<Math.PI*2;angle+=Math.PI/24){prop.rotation.z=angle;root.updateMatrixWorld(true);const bounds=new Box3().setFromObject(prop);expect(bounds.min.y-runtime.simulation.controlledActor.vehicle!.position.y).toBeGreaterThan(.29);}
+   const visual=visuals[i]!;
+   expect(visual.rotors.length).toBe(spec.aircraftSubtype==='glider'?0:spec.aircraftSubtype==='multirotor'?4:['helicopter','tiltrotor'].includes(spec.aircraftSubtype??'')?2:1);
+   // 精确顶点边界避免新增圆形桨盘的局部方形包围盒旋转后虚增半径。
+   for(let angle=0;angle<Math.PI*2;angle+=Math.PI/24){visual.aircraftShell!.update({rotorPhases:visual.rotors.map(()=>angle),tilt:0});root.updateMatrixWorld(true);for(const prop of visual.rotors){const bounds=new Box3().setFromObject(prop,true);expect(bounds.min.y-runtime.simulation.controlledActor.vehicle!.position.y,`${spec.id} propeller clearance`).toBeGreaterThan(.29);}}
    for(const rig of visuals[i]!.wheelRigs){expect(rig.steering.position.y-rig.radius).toBeCloseTo(0,5); const wheelBounds=new Box3().setFromObject(rig.steering);root.traverse(o=>{if(['aircraft-floor','aircraft-side','aircraft-nose','aircraft-tail'].includes(o.name))expect(wheelBounds.intersectsBox(new Box3().setFromObject(o)),o.name+' wheel penetration').toBe(false);});}
    const cushion=visuals[i]!.root.getObjectByName('seat-cushion');
    expect(cushion,`${spec.id} cushion`).toBeDefined();
@@ -86,17 +85,48 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
    for(const input of [{boost:true},{forward:-1},{steer:1},{steer:-1},{forward:1}]){
     world.step({humanoid:{...humanoid.emptyInput(),...input}},input.boost?300:90);
     character.root.updateMatrixWorld(true);
-    const hands=root.children.filter(o=>o.name==='aircraft-grip');
-    for(const [j,name] of ['hand_l','hand_r'].entries()){
-     const bone=character.actor.getObjectByName(name)!;
-     const local=root.worldToLocal(bone.getWorldPosition(new Vector3()));
-     const baseline=name==='hand_l'?new Vector3(.214,1.585,.51864):new Vector3(-.19459,1.59379,.49525);
-     expect(local.distanceTo(baseline),name+' dynamic attachment').toBeLessThan(.005);
-     expect(hands[j]!.position.distanceTo(local)).toBeLessThan(.09);
-    }
+    character.actor.traverse(n=>{if(n.type==='Bone'){n.updateMatrix();n.matrix.toArray().forEach((v,k)=>expect(v,`${spec.id}/${n.name} fixed pose`).toBeCloseTo(fixedBones.get(n.name)![k]!,5));}});
    }
    prepareCourse(runtime.simulation,getMap('aircraft-training'),'airfield',spec.id);expect(runtime.enter(spec.id)).toBe(true);world.step({},60);
    expect(runtime.exit()).toBe(true);world.step({},30);
   }
  }finally{world.dispose();vi.unstubAllGlobals();}
 },30000);
+
+it('keeps canopy handles and ropes on the displayed rider after a bank or turn',()=>{
+ const root=new Group(),avatar=new Group(),material=new MeshStandardMaterial();
+ const pelvis=new Group(),left=new Group(),right=new Group();pelvis.name='pelvis';left.name='hand_l';right.name='hand_r';
+ left.position.set(.7,1,.2);right.position.set(-.7,1,.2);avatar.add(pelvis,left,right);
+ const shell=buildSoaringShell(root,'paraglider',material);
+ root.position.set(20,120,-70);shell.update({grounded:false,aircraft:{canopy:1},throttle:0},avatar);
+ const lookup=vi.spyOn(avatar,'getObjectByName');
+ for(const yaw of [-1,.7,2]){
+  shell.update({grounded:false,aircraft:{canopy:1},throttle:0},avatar);
+  root.rotation.set(.2,yaw,.45);avatar.rotation.copy(root.rotation);avatar.position.copy(root.position).add(new Vector3(.3,1,-.2));
+  root.updateWorldMatrix(true,true);avatar.updateWorldMatrix(true,true);
+  root.traverse(node=>{if(node instanceof Mesh||node.type==='Line')Reflect.apply(node.onBeforeRender,node,[]);});
+  const handles:Mesh[]=[];root.traverse(node=>{if(node.name==='soaring-brake-handle')handles.push(node as Mesh);});
+  for(let n=0;n<2;n++){
+   const hand=(n===0?right:left).getWorldPosition(new Vector3());
+   expect(new Vector3().setFromMatrixPosition(handles[n]!.matrixWorld).distanceTo(hand)).toBeLessThan(.04);
+   const rope=root.getObjectByName('soaring-brake-line-'+n)!;
+   expect(new Vector3().applyMatrix4(rope.matrixWorld).distanceTo(new Vector3().setFromMatrixPosition(handles[n]!.matrixWorld))).toBeLessThan(1e-6);
+  }
+  const expected=pelvis.getWorldPosition(new Vector3()).add(new Vector3(0,-.175,0).applyQuaternion(root.getWorldQuaternion(new Quaternion())));
+  expect(new Vector3().setFromMatrixPosition(root.getObjectByName('soaring-harness')!.matrixWorld).distanceTo(expected)).toBeLessThan(1e-6);
+ }
+ expect(lookup).not.toHaveBeenCalled();lookup.mockRestore();
+ root.traverse(node=>{if(node instanceof Mesh||node.type==='Line')(node as Mesh).geometry.dispose();});material.dispose();
+});
+
+it('binds a late wingsuit rig and reuses membrane buffers across frames',()=>{
+ const root=new Group(),avatar=new Group(),material=new MeshStandardMaterial(),shell=buildSoaringShell(root,'wingsuit',material);
+ const state={grounded:false,aircraft:{canopy:0},throttle:0};shell.update(state,avatar);
+ for(const [name,x,y,z] of [['pelvis',0,1,0],['hand_l',1,1.4,.3],['hand_r',-1,1.4,.3],['foot_l',.2,0,0],['foot_r',-.2,0,0]] as const){const b=new Group();b.name=name;b.position.set(x,y,z);avatar.add(b);}
+ shell.update(state,avatar);const lookup=vi.spyOn(avatar,'getObjectByName');
+ const cloth=root.getObjectByName('wingsuit-membrane') as Mesh,positions=cloth.geometry.getAttribute('position'),normals=cloth.geometry.getAttribute('normal');
+ for(let n=0;n<60;n++){avatar.rotation.y=n*.02;avatar.updateWorldMatrix(true,true);root.updateWorldMatrix(true,true);shell.update(state,avatar);Reflect.apply(cloth.onBeforeRender,cloth,[]);}
+ expect(lookup).not.toHaveBeenCalled();expect(cloth.geometry.getAttribute('position')).toBe(positions);expect(cloth.geometry.getAttribute('normal')).toBe(normals);
+ expect(Array.from(positions.array).every(Number.isFinite)).toBe(true);expect(Array.from(normals.array).some(x=>Math.abs(x)>.5)).toBe(true);
+ lookup.mockRestore();root.traverse(n=>{if(n instanceof Mesh||n.type==='Line')(n as Mesh).geometry.dispose();});material.dispose();
+});

@@ -54,7 +54,7 @@ it('requires ground beside the wheel for foot support and follows real ramps',()
     expect(height).toBeGreaterThan(1.5);expect(pitch).toBeGreaterThan(.07);
   }finally{ramp.dispose();g.q.dispose();}
 });
-it('retains the original skeleton and fits alternating pedals, ground support and the lift arc',async()=>{
+it('retains the original skeleton and holds a fixed seated pose while pedals and support state change',async()=>{
   const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();
@@ -69,7 +69,7 @@ it('retains the original skeleton and fits alternating pedals, ground support an
       const s={...createUnicycleState(),wheelAngle:angle,footDown:down,balanceTime:angle,supportLocal:[.30,.055,-.06] as [number,number,number]};
       rider.root.position.set(...UNICYCLE_SPEC.seat);rider.update(1/60,{...frame,unicyclePose:s});rider.root.updateMatrixWorld(true);
       for(const [suffix,side] of [['l',1],['r',-1]] as const){
-        const target=unicyclePedal(angle,side);target.y+=.055;if(side===1){target.lerp(new Vector3(...s.supportLocal),down);target.y+=Math.sin(Math.PI*down)*.09;}target.y+=.055; // UEFN level-shoe sole calibration.
+        const target=unicyclePedal(0,side);target.y+=.11; // Static rest contacts, independent of pedal phase.
         const actual=rider.root.getObjectByName(`ball_${suffix}`)!.getWorldPosition(new Vector3());expect(actual.distanceTo(target),JSON.stringify({angle,down,side,actual,target})).toBeLessThan(.015);
       }
       const bounds=new Box3(),point=new Vector3();let legVertices=0,minClearance=Infinity,pelvisBottom=Infinity,saddleIntersections=0;
@@ -99,7 +99,7 @@ it('retains the original skeleton and fits alternating pedals, ground support an
       expect(bounds.min.y).toBeGreaterThan(-.025);expect(rider.root.scale.toArray()).toEqual([1,1,1]);
       hands.push(rider.root.getObjectByName('hand_l')!.getWorldPosition(new Vector3()));
     }
-    expect(hands[0]!.distanceTo(hands[6]!)).toBeGreaterThan(.03);
+    for(const hand of hands)expect(hand.distanceTo(hands[0]!)).toBeLessThan(1e-6);
     rider.update(1/60,{...frame,mounted:null});expect(rider.actor.position.toArray()).toEqual([0,0,0]);
   }finally{rider.dispose();transport.mockRestore();fetchTransport.mockRestore();}
 },15000);

@@ -1,8 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, cloneAsset, playLocomotion } from './assets';
 import { createWorld } from './engine';
@@ -17,10 +15,6 @@ async function preset() {
   });
   instances.push(asset); return asset;
 }
-beforeEach(()=>{
-  const parse=GLTFLoader.prototype.parse;
-  vi.spyOn(GLTFLoader.prototype,'parse').mockImplementation(function(this:GLTFLoader,data,path,onLoad,onError){return parse.call(fixtureTextureLoader(this),data,path,onLoad,onError);});
-});
 afterEach(() => { for (const asset of instances.splice(0)) asset.dispose(); vi.restoreAllMocks(); });
 
 it('loads the preset skeleton, a grounded human body and independent clone animation', async () => {

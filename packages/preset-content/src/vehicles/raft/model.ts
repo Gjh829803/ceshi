@@ -14,7 +14,10 @@ export function buildRaftModel(){
  for(const z of [-1.25,-.45,.85])box('raft.bench',[1.12,.065,.26],[0,.285,z]);
  // Keep the original paddle rig, including pure water-contact ripples.
  for(const node of [...donor.children])if(node.name==='kayak.paddle'||node.name.startsWith('kayak.ripple')||node.name.startsWith('kayak.wake'))root.add(node);
- const paddle=root.getObjectByName('kayak.paddle')!;paddle.traverse(node=>{if(node instanceof T.Mesh)node.material=dark;});
+ const paddle=root.getObjectByName('kayak.paddle')!;
+ const blade=paddle.getObjectByName('canoe.single-blade');if(blade)blade.position.y=-1.72;
+ for(const node of paddle.children)if(node instanceof T.Mesh&&node.geometry instanceof T.CylinderGeometry&&node.geometry.parameters.height===1.32){node.scale.y=1.49/1.32;node.position.y=-1.49/2;}
+paddle.traverse(node=>{if(node instanceof T.Mesh)node.material=dark;});
  for(const [name,side] of [['control.hand.left',1],['control.hand.right',-1]] as const){const socket=new T.Group();socket.name=name;socket.position.copy(humanoid.paddleGrip({...humanoid.createKayakState(),craft:'canoe',side:-1},side));paddle.add(socket);}
  for(const [name,pos] of Object.entries(RAFT_SOCKETS)){const node=new T.Group();node.name=name;node.position.set(...pos);root.add(node);}
  return root;

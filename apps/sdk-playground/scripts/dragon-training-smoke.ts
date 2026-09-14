@@ -47,6 +47,7 @@ try{
   }else{
   await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
   const initial=await state();assert.equal(initial.activeVehicle,null);assert.equal(initial.controlledEntityId,'person');assert.equal(page.frames().length,1);
+  assert(await page.evaluate(()=>{let textured=false;window.__WORLDKIT_EVAL__!.scene.traverse((node:any)=>{if(node.isSkinnedMesh){const materials=Array.isArray(node.material)?node.material:[node.material];if(materials.some((m:any)=>m.map&&m.normalMap)&&node.skeleton?.bones.some((b:any)=>b.name==='Seat'))textured=true;}});return textured;}),'training dragon retains its color and normal textures');
   await summonAndBoard();
   const flightStart=await state();
   await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('d');

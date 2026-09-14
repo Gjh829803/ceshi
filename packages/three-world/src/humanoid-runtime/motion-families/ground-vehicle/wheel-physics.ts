@@ -1,3 +1,4 @@
+import {fitRoadCabin,fitRoadBodyParts} from './road-cabin';
 import type {SolverSample} from '../../solver-sample';
 import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleBody,type EnvironmentQueries } from '../../environment/queries';
@@ -7,11 +8,12 @@ import type { Input,VehicleState } from '../../simulation';
 /** 自有简化轮胎模型：米、秒、千克。只在训练固定步中积分，不另建物理世界。 */
 export interface WheelLayout {x:number;z:number;steering:boolean;driven:boolean}
 /** centerOfMassHeight：相对模型原点的米数；tireFriction：地面摩擦倍率；steeringGripRatio：汽车转向轴抓地比例（默认 0.85）。 */
-export interface WheelPhysicsConfig {chassis?:import('../../config').CollisionEnvelope;steeringGripRatio?:number;centerOfMassHeight?:number;tireFriction?:number;wheels?:WheelLayout[];balanceAssist?:boolean;mass:number;radius:number;halfTrack:number;halfWheelbase:number;hubHeight:number;maxRaise?:number;maxDrop?:number;wheelWidth?:number;powertrain?:PowertrainConfig}
+/** coastBrakeDeceleration：松油门时附加轮端制动，单位 m/s²，范围 0～5；省略或 0 关闭，不影响主动制动和腾空运动。 */
+export interface WheelPhysicsConfig {coastBrakeDeceleration?:number;bodyParts?:import('../../config').CollisionEnvelope[];cabin?:import('../../config').CollisionEnvelope;chassis?:import('../../config').CollisionEnvelope;steeringGripRatio?:number;centerOfMassHeight?:number;tireFriction?:number;wheels?:WheelLayout[];balanceAssist?:boolean;mass:number;radius:number;halfTrack:number;halfWheelbase:number;hubHeight:number;maxRaise?:number;maxDrop?:number;wheelWidth?:number;powertrain?:PowertrainConfig}
 export interface SimulatedWheel {hubHeight?:number;contact:boolean;length:number;load:number;steer:number;angle:number;omega:number;slip:number;force:number}
 export interface WheelPhysicsState {sample?:SolverSample;angularVelocity:Vector3;wheels:SimulatedWheel[];powertrain:PowertrainState}
 export function createWheelPhysics(c?:WheelPhysicsConfig):WheelPhysicsState{return {angularVelocity:new Vector3(),powertrain:createPowertrain(c?.powertrain),wheels:Array.from({length:c?wheelLayout(c).length:4},()=>({hubHeight:c?.hubHeight??.52,contact:false,length:.25,load:0,steer:0,angle:0,omega:0,slip:0,force:0}))};}
-export function validateWheelPhysics(c:WheelPhysicsConfig):void{if(c.chassis&&(c.chassis.kind!=='box'||c.chassis.halfExtents.some(n=>!Number.isFinite(n)||n<=0)||c.chassis.offset.some(n=>!Number.isFinite(n))))throw new Error('VEHICLE_CHASSIS_CONFIG_INVALID');for(const k of ['mass','radius','halfTrack','halfWheelbase','hubHeight'] as const){const v=c[k];if(!Number.isFinite(v)||v<=0)throw new Error(`VEHICLE_WHEEL_CONFIG_INVALID:${k}`);}for(const [name,value,max] of [['steeringGripRatio',c.steeringGripRatio,1],['centerOfMassHeight',c.centerOfMassHeight,3],['tireFriction',c.tireFriction,3],['maxRaise',c.maxRaise,.24],['maxDrop',c.maxDrop,.4],['wheelWidth',c.wheelWidth,1]] as const)if(value!==undefined&&(!Number.isFinite(value)||value<=0||value>max))throw new Error('VEHICLE_WHEEL_CONFIG_INVALID:'+name);if(c.mass<100||c.radius<.1||c.radius>2||c.halfTrack<.2||c.halfWheelbase<.4)throw new Error('VEHICLE_WHEEL_CONFIG_INVALID');if(c.wheels){if(c.wheels.length<2||c.wheels.length>12||c.wheels.some(w=>!Number.isFinite(w.x)||!Number.isFinite(w.z)||typeof w.steering!=="boolean"||typeof w.driven!=="boolean")||!c.wheels.some(w=>w.driven)||new Set(c.wheels.map(w=>`${w.x}:${w.z}`)).size!==c.wheels.length)throw new Error("VEHICLE_WHEEL_LAYOUT_INVALID");}if(c.balanceAssist!==undefined&&typeof c.balanceAssist!=="boolean")throw new Error("VEHICLE_WHEEL_BALANCE_INVALID");if(c.powertrain)validatePowertrain(c.powertrain);}
+export function validateWheelPhysics(c:WheelPhysicsConfig):void{if(c.coastBrakeDeceleration!==undefined&&(!Number.isFinite(c.coastBrakeDeceleration)||c.coastBrakeDeceleration<0||c.coastBrakeDeceleration>5))throw new Error("VEHICLE_WHEEL_CONFIG_INVALID:coastBrakeDeceleration");if(c.bodyParts&&(c.chassis||c.cabin||c.bodyParts.length===0||c.bodyParts.length>32||c.bodyParts.some(b=>b.kind!=='box'||b.halfExtents.some(n=>!Number.isFinite(n)||n<=0)||b.offset.some(n=>!Number.isFinite(n)))))throw new Error('VEHICLE_BODY_PARTS_CONFIG_INVALID');if(c.cabin&&(c.chassis||c.cabin.kind!=='box'||c.cabin.halfExtents.some(n=>!Number.isFinite(n)||n<=0)||c.cabin.offset.some(n=>!Number.isFinite(n))||c.cabin.offset[1]-c.cabin.halfExtents[1]<1.0))throw new Error('VEHICLE_CABIN_CONFIG_INVALID');if(c.chassis&&(c.chassis.kind!=='box'||c.chassis.halfExtents.some(n=>!Number.isFinite(n)||n<=0)||c.chassis.offset.some(n=>!Number.isFinite(n))))throw new Error('VEHICLE_CHASSIS_CONFIG_INVALID');for(const k of ['mass','radius','halfTrack','halfWheelbase','hubHeight'] as const){const v=c[k];if(!Number.isFinite(v)||v<=0)throw new Error(`VEHICLE_WHEEL_CONFIG_INVALID:${k}`);}for(const [name,value,max] of [['steeringGripRatio',c.steeringGripRatio,1],['centerOfMassHeight',c.centerOfMassHeight,3],['tireFriction',c.tireFriction,3],['maxRaise',c.maxRaise,.24],['maxDrop',c.maxDrop,.4],['wheelWidth',c.wheelWidth,1]] as const)if(value!==undefined&&(!Number.isFinite(value)||value<=0||value>max))throw new Error('VEHICLE_WHEEL_CONFIG_INVALID:'+name);if(c.mass<100||c.radius<.1||c.radius>2||c.halfTrack<.2||c.halfWheelbase<.4)throw new Error('VEHICLE_WHEEL_CONFIG_INVALID');if(c.wheels){if(c.wheels.length<2||c.wheels.length>12||c.wheels.some(w=>!Number.isFinite(w.x)||!Number.isFinite(w.z)||typeof w.steering!=="boolean"||typeof w.driven!=="boolean")||!c.wheels.some(w=>w.driven)||new Set(c.wheels.map(w=>`${w.x}:${w.z}`)).size!==c.wheels.length)throw new Error("VEHICLE_WHEEL_LAYOUT_INVALID");}if(c.balanceAssist!==undefined&&typeof c.balanceAssist!=="boolean")throw new Error("VEHICLE_WHEEL_BALANCE_INVALID");if(c.powertrain)validatePowertrain(c.powertrain);}
 export function wheelLayout(c:WheelPhysicsConfig):WheelLayout[]{return c.wheels??[-c.halfTrack,c.halfTrack].flatMap(x=>[-c.halfWheelbase,c.halfWheelbase].map(z=>({x,z,steering:z>0,driven:true})));}
 const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 const Y=new Vector3(0,1,0),restLength=.25;
@@ -23,7 +25,9 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
   const raise=c.maxRaise??.1,drop=c.maxDrop??.1,minLength=restLength-raise,maxLength=restLength+drop;
   const envelope=vehicleBody(v.spec),width=envelope.kind==='box'?envelope.halfExtents[0]:c.halfTrack+.25,length=envelope.kind==='box'?envelope.halfExtents[2]:c.halfWheelbase+.5,height=envelope.kind==='box'?envelope.offset[1]+envelope.halfExtents[1]:2.2;
   const comHeight=c.centerOfMassHeight??(c.balanceAssist?.85:.65);
-  const rig=q.vehicleRig(v.spec.id,state,v.position,v.rotation,c.mass,width,length,height,comHeight,c.chassis?[{body:c.chassis}]:undefined),body=rig.body;
+  const rig=q.vehicleRig(v.spec.id,state,v.position,v.rotation,c.mass,width,length,height,comHeight,c.bodyParts?c.bodyParts.map(body=>({body})):c.chassis?[{body:c.chassis}]:undefined),body=rig.body;
+  if(c.bodyParts)fitRoadBodyParts(rig,c.bodyParts);
+  if(c.cabin)fitRoadCabin(rig,c.cabin);
   body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(state.angularVelocity,true);
   rig.beforeStep=(h:number)=>{
     state.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
@@ -39,6 +43,9 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
       wheelOmega:state.wheels.reduce((sum,w,i)=>sum+(layout[i]!.driven?w.omega:0),0)/drivenCount,roadWheelOmega:velocityForward/c.radius,grounded:state.wheels.some(w=>w.contact),
       slipping:state.wheels.some(w=>w.contact&&Math.abs(w.slip)>Math.max(2,Math.abs(velocityForward)*.3)),
       speedLimit:input.forward<0||state.powertrain.targetGear<0?v.spec.reverseSpeed:input.boost?v.spec.maxSpeed:v.spec.speed},h);
+    // 仅显式启用的车型在松油门时增加轮端阻力；随油门回落渐入，仍由轮胎接触和摩擦上限解算。
+    const coastBrake=Math.abs(input.forward)<.001&&!input.brake&&!state.powertrain.directionBraking
+      ?(c.coastBrakeDeceleration??0)*(1-state.powertrain.throttle):0;
     const force=new Vector3(),torque=new Vector3();
     // 汽车方向输入使用完整机械舵角，不按车速缩小；实际转弯由逐轮摩擦和车身受力决定。
     // 两轮骑乘继续使用原有转向与平衡模型。
@@ -81,7 +88,7 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
       const tangent=new Vector3(Math.sin(w.steer),0,Math.cos(w.steer)).applyQuaternion(v.rotation);tangent.addScaledVector(normal,-tangent.dot(normal)).normalize();
       const right=normal.clone().cross(tangent).normalize();
       const longitudinal=pointVelocity.dot(tangent),lateral=pointVelocity.dot(right);
-      const brakeCapacity=(input.brake||state.powertrain.directionBraking?c.mass*v.spec.brakeDeceleration/wheelCount*c.radius:0)+w.load*engine.rollingResistance*c.radius;
+      const brakeCapacity=(input.brake||state.powertrain.directionBraking?c.mass*v.spec.brakeDeceleration/wheelCount*c.radius:0)+w.load*(engine.rollingResistance+coastBrake/9.81)*c.radius;
       // 汽车转向轴保留较低的摩擦上限，让后轴仍有稳定余量，避免连续反打时四轮同时饱和。
       const grip=w.load*(hit?.friction??.85)*(c.tireFriction??1)*(input.brake&&z<0?.45:1)*(steering&&!c.balanceAssist?(c.steeringGripRatio??.85):1);
       // 简化牵引力控制：接地轮的驱动扭矩不超过当前摩擦可传递的扭矩，避免加速键只制造空转。

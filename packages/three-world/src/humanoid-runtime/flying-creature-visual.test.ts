@@ -18,8 +18,7 @@ import {CreatureFlame} from './motion-families/flying-creature/flame';
 import type {MotionPose} from './presentation';
 import {DRAGON_VARIANTS} from '@worldkit/preset-content/dragon-variants';
 import {getDefaultProfile,parseAssetProfile} from '@worldkit/preset-content/platform/profiles';
-// 真实骨架/Rapier 回归连续占用主线程；每例释放一次事件循环以发送测试进度。
-afterEach(async()=>{vi.restoreAllMocks();await new Promise<void>(resolve=>setImmediate(resolve));});
+afterEach(()=>{vi.restoreAllMocks();});
 async function fixture(id='D01'){
   vi.stubGlobal('ProgressEvent',class{constructor(public type:string){}});
   const variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
@@ -139,36 +138,21 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
     const human=runtime.simulation.controlledActor.controller,body=human.standingQueryBody;
     const blockedRight=id==='D09'&&body.kind==='capsule'?human.world.createCollider(RAPIER.ColliderDesc.cuboid(.45,1,.45).setTranslation(Math.max(...variant.ground!.probes.map(p=>p.center[0]+p.radius))+body.radius+.18,1,variant.ground!.seat[2])):undefined;
     if(blockedRight)world.step({},1);
-    const seatedHip=rider.hip!.getWorldPosition(new T.Vector3());
     expect(runtime.exit(),runtime.simulation.controlledActor.message).toBe(true);
-    if(blockedRight){expect(runtime.simulation.controlledActor.dragonTransition!.side).toBe(-1);human.world.removeCollider(blockedRight,true);}
-    expect(seatedHip.distanceTo(rider.hip!.getWorldPosition(new T.Vector3())),id+':start dismount').toBeLessThan(.6);
-    const duration=runtime.simulation.controlledActor.transition;
-    let hip=rider.hip!.getWorldPosition(new T.Vector3());
-    for(let n=0;n<Math.ceil(duration*60)+5;n++){
-      world.step({},1);const current=rider.hip!.getWorldPosition(new T.Vector3());
-      expect(current.distanceTo(hip),id+':dismount frame '+n).toBeLessThan(.6);hip=current;
-      expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);
-      const contacts=visual.sampleMount(runtime.simulation.controlledActor.dragonTransition,rider.root);
-      if(contacts&&contacts.weight>.99){
-        for(const [i,side] of ['l','r'].entries()){
-          expect(rider.root.getObjectByName('hand_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.hands[i]!),id+':ladder hand '+side+JSON.stringify({n,hip:current.toArray(),shoulder:rider.root.getObjectByName('upperarm_'+side)!.getWorldPosition(new T.Vector3()).toArray(),target:contacts.hands[i]!.toArray(),yaw:runtime.simulation.controlledActor.player.yaw})).toBeLessThan(.18);
-          expect(rider.root.getObjectByName('foot_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.feet[i]!),id+':ladder foot '+side).toBeLessThan(.2);
-        }
-      }
-    }
-    expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);expect(runtime.simulation.controlledActor.controller.capsule.isEnabled()).toBe(true);
-    world.step({},20);expect(runtime.simulation.controlledActor.player.position.y).toBeLessThan(.1);
-    expect(runtime.enter('dragon'),runtime.simulation.controlledActor.message).toBe(true);
-    const enterSeconds=runtime.simulation.controlledActor.transition;
-    for(let n=0;n<Math.ceil(enterSeconds*60)+5;n++){
-      world.step({humanoid:{...emptyInput(),boost:true}},1);
-      const contacts=visual.sampleMount(runtime.simulation.controlledActor.dragonTransition,rider.root);
-      if(contacts&&contacts.weight>.99)for(const [i,side] of ['l','r'].entries()){
-        expect(rider.root.getObjectByName('hand_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.hands[i]!),id+':ascending hand '+side).toBeLessThan(.18);
-        expect(rider.root.getObjectByName('foot_'+side)!.getWorldPosition(new T.Vector3()).distanceTo(contacts.feet[i]!),id+':ascending foot '+side).toBeLessThan(.2);
-      }
-    }
+    const actor=runtime.simulation.controlledActor;
+    expect(actor.vehicleIndex).toBe(-1);expect(human.capsule.isEnabled()).toBe(true);
+    expect(actor.transition).toBe(0);expect(actor.dragonTransition).toBeUndefined();
+    if(blockedRight){expect(actor.player.position.x).toBeLessThan(0);human.world.removeCollider(blockedRight,true);}
+    world.step({},1);
+    expect(visual.sampleMount(actor.dragonTransition,rider.root)).toBeUndefined();
+    expect(visual.root.getObjectByName('dragon-saddle-ladder')!.visible).toBe(false);
+    expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);
+    world.step({},20);expect(actor.player.position.y).toBeLessThan(.1);
+    expect(runtime.enter('dragon'),actor.message).toBe(true);
+    expect(actor.transition).toBe(0);expect(actor.dragonTransition).toBeUndefined();
+    world.step({},1);
+    expect(visual.sampleMount(actor.dragonTransition,rider.root)).toBeUndefined();
+    expect(visual.root.getObjectByName('dragon-saddle-ladder')!.visible).toBe(false);
     expect(runtime.simulation.controlledActor.vehicle!.grounded).toBe(true);expect(runtime.simulation.controlledActor.controller.capsule.isEnabled()).toBe(false);
     expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()))).toBeLessThan(.001);
     world.step({humanoid:{...emptyInput(),brake:true}},1);world.step({},180);
@@ -223,9 +207,10 @@ it.each(DRAGON_VARIANTS.slice(1).map(v=>v.id))('%s uses its own clips and stable
 });
 
 it('publishes eleven selectable complete rigs with embedded textures and source-timed clips',()=>{
-  expect(DRAGON_VARIANTS.map(v=>v.id)).toEqual(Array.from({length:11},(_,i)=>'D'+String(i+1).padStart(2,'0')));
+  const imported=DRAGON_VARIANTS.filter(v=>/^D\d+$/.test(v.id));
+  expect(imported.map(v=>v.id)).toEqual(Array.from({length:11},(_,i)=>'D'+String(i+1).padStart(2,'0')));
   const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
-  for(const variant of DRAGON_VARIANTS.slice(1)){
+  for(const variant of imported.slice(1)){
     const profile=getDefaultProfile('dragon')!;
     expect(()=>parseAssetProfile({...profile,envelope:variant.envelope})).not.toThrow();
     const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));

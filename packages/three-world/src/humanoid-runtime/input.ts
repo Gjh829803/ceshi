@@ -54,6 +54,8 @@ export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boole
     boost:!!key('sprint'),brake:false,slow:!!key('slow'),jump:false};
   if(mounted){i.primary=!!key('interact');i.secondary=!!key('roll');i.slow=!!key('crouch');i.roll=key('interact')-key('roll');i.lift=key('jump')-key('crouch');i.pitch=key('cameraDown')-key('cameraUp');i.strafe=key('cameraRight')-key('cameraLeft');i.brake=!!key('jump');}
   else {i.jump=jump;i.actions={...commands};}
+  // 起飞使用按下沿，避免空格在两个固定步之间松开时丢失指令。
+  if(mounted&&mode==='dragon')i.jump=jump;
   if(mode){const axes=vehicleKeyboardAxes(mode);if(!axes.pitch)i.pitch=0;if(!axes.strafe)i.strafe=0;}
   return i;
 }

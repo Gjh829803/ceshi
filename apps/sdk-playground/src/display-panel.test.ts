@@ -75,6 +75,12 @@ describe('Display picture and inspector controls',()=>{
   await page.getByText('快捷检查',{exact:false}).click();await page.getByRole('button',{name:'对照碰撞范围',exact:true}).click();expect(await state()).toMatchObject({mode:'material',scope:'subject',colliders:'all',colliderScope:'nearby'});
   expect(await page.getByRole('status',{name:'当前显示摘要'}).innerText()).toContain('碰撞体');
  });
+ it('toggles camera geometry and its range without observer controls',async()=>{
+  await page.getByRole('button',{name:'显示检查',exact:true}).click();await page.getByRole('tab',{name:'辅助 Helpers'}).click();
+  await page.getByRole('checkbox',{name:'摄像机和取景范围',exact:true}).check();expect((await state()).cameras).toBe(true);
+  await page.getByRole('spinbutton',{name:'取景范围显示距离 / 米'}).fill('15');expect(await state()).toMatchObject({cameras:true,cameraRange:15});
+  await page.getByRole('button',{name:'重置辅助',exact:true}).click();expect(await state()).toMatchObject({cameras:false,cameraRange:10});
+ });
  it('pins into the dedicated host and keeps picture independent',async()=>{
   await page.getByRole('button',{name:'显示检查',exact:true}).click();await page.getByRole('button',{name:'固定到右侧',exact:true}).click();
   expect(await page.locator('#displayInspectorHost .display-panel').count()).toBe(1);

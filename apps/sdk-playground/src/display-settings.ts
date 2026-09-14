@@ -20,27 +20,28 @@ export type DisplaySettings = {
   mode:DisplayMode; scope:'all'|'subject'|'selected'; selectedIds:string[]; hiddenIds:string[]; types:DisplayType[];
   isolation:{scope:'all'|'subject'|'selected';hiddenIds:string[];types:DisplayType[]}|null;
   helperOnly:'none'|'collision'|'wireframe'; colliders:'off'|'person'|'all'; colliderScope:'follow'|'nearby'|'all'; nearbyMeters:number;
+  cameras:boolean; cameraRange:number;
   ground:boolean; anchors:boolean; climbSurfaces:boolean; water:boolean; wireframe:boolean; xray:boolean; opacity:number; depthNear:number;depthFar:number;
 };
 export type DisplayRenderSettings = Omit<DisplaySettings,'mode'> & {mode:DisplayMode|'collision'|'wireframe'};
 export function defaultDisplaySettings():DisplaySettings {
   return {mode:'material',scope:'all',selectedIds:[],hiddenIds:[],types:DISPLAY_TYPES.map(t=>t.id),isolation:null,
-    helperOnly:'none',colliders:'off',colliderScope:'follow',nearbyMeters:6,ground:true,anchors:false,climbSurfaces:false,water:false,
+    helperOnly:'none',colliders:'off',colliderScope:'follow',nearbyMeters:6,cameras:false,cameraRange:10,ground:true,anchors:false,climbSurfaces:false,water:false,
     wireframe:false,xray:false,opacity:.75,depthNear:0,depthFar:60};
 }
 export function resolveDisplaySettings(s:DisplaySettings):DisplayRenderSettings {
   if(s.helperOnly==='none')return {...s};
-  return {...s,mode:s.helperOnly,colliders:s.helperOnly==='collision'?'all':'off',anchors:false,climbSurfaces:false,water:false,wireframe:false};
+  return {...s,mode:s.helperOnly,cameras:false,colliders:s.helperOnly==='collision'?'all':'off',anchors:false,climbSurfaces:false,water:false,wireframe:false};
 }
 export function isDisplayPreviewActive(s:DisplaySettings):boolean {
   return s.mode!=='material'||s.scope!=='all'||!!s.hiddenIds.length||s.types.length!==DISPLAY_TYPES.length||s.helperOnly!=='none'
-    ||s.colliders!=='off'||s.anchors||s.climbSurfaces||s.water||s.wireframe;
+    ||s.cameras||s.colliders!=='off'||s.anchors||s.climbSurfaces||s.water||s.wireframe;
 }
 export function resetDisplaySection(s:DisplaySettings,section:DisplaySection):DisplaySettings {
   const d=defaultDisplaySettings();
   if(section==='picture')return {...s,mode:d.mode,depthNear:d.depthNear,depthFar:d.depthFar};
   if(section==='objects')return {...s,scope:'all',selectedIds:[],hiddenIds:[],types:d.types,isolation:null};
-  return {...s,helperOnly:'none',colliders:'off',colliderScope:'follow',nearbyMeters:d.nearbyMeters,ground:true,
+  return {...s,helperOnly:'none',colliders:'off',colliderScope:'follow',nearbyMeters:d.nearbyMeters,cameras:false,cameraRange:d.cameraRange,ground:true,
     anchors:false,climbSurfaces:false,water:false,wireframe:false,xray:false,opacity:d.opacity};
 }
 export function isolateDisplaySelection(s:DisplaySettings):DisplaySettings {

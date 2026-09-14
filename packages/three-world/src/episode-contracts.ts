@@ -21,7 +21,7 @@ export interface EpisodeStartProbe {
 export interface EpisodeCapabilities {
  readonly humanoid?:{
   readonly mapId:string;readonly characterInstanceId:string;
-  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./humanoid-runtime/config').Mode;readonly available:boolean}[];
+  readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./humanoid-runtime/config').Mode;readonly aircraftSubtype?:import('./config/aircraft').AircraftSubtype|undefined;readonly available:boolean}[];
   readonly inputAxes:readonly string[];
  };
  readonly schemaVersion: 2;

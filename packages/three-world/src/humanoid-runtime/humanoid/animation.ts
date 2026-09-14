@@ -42,9 +42,10 @@ export interface SourceCharacterFrame {
  */
 export type HumanoidRenderState = Omit<SourceCharacterFrame, 'skills'> & {
   simulationIdentity?: object;
+  wearablePose?: {spread:number;seated:number;landing:number}|undefined;
   dragonMount?:{progress:number;entering:boolean;side:number};
   unicyclePose?: import('../motion-families/ground-vehicle/unicycle').UnicycleState | undefined;
-  mounted?: 'unicycle' | 'stand' | 'drive' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'atv' | 'paddling' | null;
+  mounted?: 'unicycle' | 'stand' | 'drive' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'atv' | 'paddling' | null | 'wingsuit' | 'wingsuit-ready' | 'paraglider';
   atvSteeringAngle?:number;
   sledPose?: {push:number;brake:number;steer:number}; kayakPose?:KayakState;
   skills: (Omit<SourceCharacterSkills, 'syncCarried'> & { syncCarried?: SourceCharacterSkills['syncCarried'] }) | null;

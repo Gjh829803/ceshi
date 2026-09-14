@@ -4,12 +4,15 @@ import type {BoundaryDefinition} from '../../boundaries';
 export type Vec3 = readonly [number, number, number];
 export interface EnvironmentBox {
   id: string;
+  /** World-space center, including boxes assigned to a lift. */
   position: Vec3;
   size: Vec3;
   rotation?: Vec3;
   color?: string;
   surface?: 'concrete' | 'asphalt' | 'grip' | 'ice' | 'metal';
   collision?: boolean;
+  /** Lift ownership; boxes move together with their named platform. */
+  liftId?: string;
   /** 同组碰撞盒组成一个刚体；massKg 是整组总质量。 */
   rigidGroup?: {id:string;massKg:number};
 }
@@ -71,6 +74,20 @@ export interface CharacterTrial {
 }
 export interface LooseCrate { id: string; position: Vec3; size: number }
 export interface EnvironmentDefinition {
+  /** Outer broadphase tile edge in metres (default 64, range 16–128).
+   * Exact internal contact cells and the authored surface volume are unchanged. */
+  collisionTileEdgeMeters?:number;
+  lifts?: readonly {
+    id:string;
+    /** World-space origin of the starting stop, in metres. */
+    position:Vec3;
+    /** Signed vertical travel from the starting stop, in metres. */
+    height:number;
+    /** Travel speed in metres per second; zero keeps the lift static. */
+    speed:number;
+  }[];
+  /** Optional airflow consumed by aircraft aerodynamics. */
+  airflow?:{wind:Vec3;shearPerMeter?:Vec3;thermals?:readonly {center:Vec3;radius:number;updraft:number}[]};
   id: string;
   name: string;
   description: string;

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3, type SkinnedMesh } from 'three';
+import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3, type DataTexture, type SkinnedMesh } from 'three';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { WorldAssets } from './assets-library.js';
 import type { AssetInstance } from './contracts.js';
@@ -29,9 +29,11 @@ function meshOf(instance: AssetInstance): SkinnedMesh {
 afterEach(() => { for (const library of libraries.splice(0)) library.dispose(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('WorldAssets', () => {
-  it('forwards explicit texture opt-in and can load a whitebox instance after unsupported Node decoding', async () => {
+  it('forwards Node texture opt-in and keeps the default whitebox instance independent', async () => {
     const { library } = fixture();
-    await expect(library.load('humanoid.uefn-mannequin', { loadTextures: true })).rejects.toThrow('MODEL_TEXTURE_DECODER_UNAVAILABLE');
+    const textured=await library.load('humanoid.uefn-mannequin',{loadTextures:true});
+    expect(((meshOf(textured).material as MeshStandardMaterial).map as DataTexture).image.width).toBeGreaterThan(0);
+    expect(library.owns(textured)).toBe(true);
     const instance = await library.load('humanoid.uefn-mannequin');
     expect((meshOf(instance).material as MeshStandardMaterial).map).toBeNull();
     expect(library.owns(instance)).toBe(true);

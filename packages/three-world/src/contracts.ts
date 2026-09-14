@@ -415,6 +415,8 @@ export interface World {
  setCameraFollow(options:CameraFollowOptions):void;
  setCameraView(viewId:string):void;
  inspectCamera():import('./camera/state').CameraInspection;
+ /** Collect bounded samples from actual camera collision queries; disabled by default. */
+ setCameraCollisionDiagnosticsEnabled(enabled:boolean):void;
  /** Releases SDK following without disposing/replacing the camera. */
  useAuthoredCamera():THREE.Camera;
  setCaptureTargets(targets:readonly CaptureTargetSelection[]):void;
@@ -431,6 +433,8 @@ export interface World {
  onInteract(entityId:string,plan:()=>WorldCommand|readonly WorldCommand[]):()=>void;
  /** Direct Three writes are for visual descendants; managed root channels use execute(). */
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
+ /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */
+ onRender(callback:()=>void):()=>void;
  onReset(callback:()=>void):()=>void;
  onDispose(callback:()=>void):()=>void;
  execute(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;

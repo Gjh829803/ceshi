@@ -1,10 +1,11 @@
+import {cameraSubjectHeading} from "./heading";
 import { Euler, MathUtils, Quaternion, Vector3 } from "three";
 import type {
   CameraAngleLimits,
   CameraKind,
   ResolvedCameraConfiguration,
 } from "../../config/camera/index";
-import { cameraPositionAnchor, subjectHeading } from "../subject";
+import { cameraPositionAnchor } from "../subject";
 import type {
   CameraIntent,
   CameraProposal,
@@ -77,7 +78,7 @@ export function prepareCameraIntent<K extends CameraKind>(
     configuration.values.framing.kind === "preserve-opening";
   if (preserving && !opening)
     throw new Error("CAMERA_OPENING_REFERENCE_REQUIRED");
-  const measuredHeading = subjectHeading(subject);
+  const measuredHeading = cameraSubjectHeading(subject, input.headingHistory ?? history);
   const heading = measuredHeading ?? history?.headingRadians ?? 0;
   const initialDistance = preserving
     ? opening!.distanceMeters
@@ -176,7 +177,7 @@ export function evaluateStrategy<K extends CameraKind>(
     configuration.values.framing.kind === "preserve-opening";
   if (preserving && (!opening || opening.viewId !== configuration.viewId))
     throw new Error("CAMERA_OPENING_REFERENCE_REQUIRED");
-  const measuredHeading = subjectHeading(subject);
+  const measuredHeading = cameraSubjectHeading(subject, input.headingHistory ?? history);
   const heading = measuredHeading ?? history?.headingRadians ?? 0;
   const reference =
     values.orientation.referenceFrame === "subject-up"
@@ -330,6 +331,7 @@ export function evaluateStrategy<K extends CameraKind>(
       speedDistanceMeters: speedDistance,
       speedFovDegrees: fov,
       headingRadians: heading,
+      headingQuaternionWorldXYZW: subject.semanticQuaternionWorldXYZW,
       horizonQuaternionWorldXYZW: orientation.toArray(),
     },
   };

@@ -123,12 +123,13 @@ async function loadSpaceDriver(){
 }
 
 // 实际可见人物、骨架与驾驶动作；只替代 Node 中的纹理解码。
-it.each(['spacecraft','survey-spacecraft'])('fits the current Source101 driver in %s through thrust and bank, with an eye camera',async id=>{
+it.each(['spacecraft','survey-spacecraft'])('keeps the fixed Source101 driver supported in %s through thrust and bank, with an eye camera',async id=>{
  const character=await loadSpaceDriver();
  const config={...SPECS.find(s=>s.id===id)!,spawn:[0,20,0] as [number,number,number]},model=buildSpaceModel(config);
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:character.root,animation:character},vehicles:[{instanceId:'craft',assetId:id,spec:config,object:model.root}]}});
  try{
   world.setCameraFollow({configuration:{...createHumanoidCameraDocument('person'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'craft',mounted:true,}});
+  const fixedBones=new Map<string,number[]>();
   for(const input of [{},{forward:1,steer:-1},{forward:-1,steer:1,roll:1}]){
    world.step({humanoid:{...emptyInput(),...input}},30);model.root.updateMatrixWorld(true);character.root.updateMatrixWorld(true);
    const inverse=model.root.matrixWorld.clone().invert(),points:Vector3[]=[],pelvis=new Box3();
@@ -140,7 +141,7 @@ it.each(['spacecraft','survey-spacecraft'])('fits the current Source101 driver i
    expect(pelvis.min.y-top).toBeGreaterThanOrEqual(0);expect(pelvis.min.y-top).toBeLessThan(.04);
    expect(floor).toBeGreaterThanOrEqual(.69);
    for(const x of [-.16,.16]){const sole=Math.min(...points.filter(p=>Math.abs(p.x-x)<.09&&Math.abs(p.z-.5)<.15).map(p=>p.y));expect(sole-.7025).toBeGreaterThanOrEqual(0);expect(sole-.7025).toBeLessThan(.01);}
-   for(const [name,target] of [['hand_l',new Vector3(.214,1.508,.52)],['hand_r',new Vector3(-.195,1.524,.495)]] as const){const hand=character.root.getObjectByName(name)!.getWorldPosition(new Vector3()).applyMatrix4(inverse);expect(hand.distanceTo(target)).toBeLessThan(.12);}
+   character.actor.traverse(n=>{if(n.type==='Bone'){n.updateMatrix();const values=n.matrix.toArray();if(!fixedBones.has(n.name))fixedBones.set(n.name,values);else values.forEach((v,k)=>expect(v,`${id}/${n.name} fixed pose`).toBeCloseTo(fixedBones.get(n.name)![k]!,5));}});
    world.setCameraView('first-person');const cameraDocument=world.inspectCamera().document!;world.setCameraFollow({configuration:{...cameraDocument,views:{...cameraDocument.views,'first-person':{kind:'first-person',overrides:{position:{subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0}}}}}});world.step({},1);const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);expect(world.camera.position.distanceTo(eye)).toBeLessThan(.003);world.setCameraView('third-person');
   }
  }finally{world.dispose();}

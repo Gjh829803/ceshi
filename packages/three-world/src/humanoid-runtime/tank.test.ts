@@ -56,14 +56,14 @@ it('sweeps the barrel before the hull reaches a wall, and rejects obstructed tur
   }finally{obstacle.dispose();}
  }finally{side.q.dispose();}
 });
-it('keeps the full original rider inside the cabin with fixed hand/foot contact, including zero-time entry',async()=>{
+it('keeps the full original rider inside the cabin with a fixed resting pose and foot support, including zero-time entry',async()=>{
  const transport=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character(),model=buildTankModel();
  try{
   await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
   const identities=new Map<SkinnedMesh,unknown>();rider.root.traverse(n=>{if(n instanceof SkinnedMesh)identities.set(n,n.geometry);});
-  const samples=[];
+  const samples=[];const restHands:Vector3[]=[];
   for(const dt of [0,1/60,1/120,1/30,0]){
    rider.root.position.set(...TANK_SPEC.seat);
    rider.update(dt,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'tank'});
@@ -81,9 +81,10 @@ it('keeps the full original rider inside the cabin with fixed hand/foot contact,
    }
    expect([...intersections]).toEqual([]);
    expect(bounds.min.y).toBeGreaterThan(.88);expect(bounds.max.y).toBeLessThan(2.5);expect(bounds.min.z).toBeGreaterThan(1.9);expect(bounds.max.z).toBeLessThan(3);
-   for(const [bone,socket] of [['hand_l','control.hand.left'],['hand_r','control.hand.right'],['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
+   for(const [bone,socket] of [['ball_l','control.foot.left'],['ball_r','control.foot.right']] as const){
     const point=rider.root.getObjectByName(bone)!.getWorldPosition(new Vector3());expect(point.distanceTo(new Vector3(...TANK_SOCKETS[socket]).add(new Vector3(0,socket.startsWith('control.foot')?.035:0,0)))).toBeLessThan(.002);
    }
+   for(const [index,side] of ['l','r'].entries()){const hand=rider.root.getObjectByName(`hand_${side}`)!.getWorldPosition(new Vector3());restHands[index]??=hand.clone();expect(hand.distanceTo(restHands[index]!)).toBeLessThan(1e-6);}
    expect(rider.root.scale.toArray()).toEqual([1,1,1]);samples.push({dt,min:bounds.min.toArray(),max:bounds.max.toArray()});
   }
   console.log('TANK_CABIN_CLEARANCE',JSON.stringify(samples));

@@ -36,7 +36,6 @@ const fixtures: ReadonlyArray<{ name: string; create: (occluded?: boolean) => Pr
   { name: 'Humanoid', async create(occluded) {
     const world = await createWorld({ camera: new THREE.PerspectiveCamera(), navigation: false, assetDefinitions: {},
       humanoid: { map: { ...map, boxes: [...map.boxes, ...(occluded ? [obstruction] : [])] }, character: { instanceId: 'subject', object: new THREE.Group() }, vehicles: [] } });
-    world.humanoid!.advance({},1/60);
     return { world, subjectId: 'subject' };
   } },
   { name: 'mounted horse', async create(occluded) {
@@ -96,6 +95,7 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
   it('forwards follow settings, retains free orbit, and resets the authored baseline', async () => {
     const fixture = await create(), { world } = fixture;
     try {
+      const initialSubject = subjectPosition(fixture);
       const opening = authoredOpening(world);
       world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
       world.step({}, 30);
@@ -117,7 +117,10 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
       await world.reset();
       expect(world.simulationTick).toBe(0);
       expect(world.cameraMode).toBe('follow-pending');
-      expectPose(world, opening,subjectPosition(fixture).sub(start));
+      // Reset restores the sealed spawn and opening; the post-settle movement
+      // reference can differ because the mounted body settles onto its support.
+      expect(subjectPosition(fixture).distanceTo(initialSubject)).toBeLessThan(2e-5);
+      expectPose(world, opening);
       expect(world.snapshot().errors).toEqual([]);
     } finally { world.dispose(); }
   });

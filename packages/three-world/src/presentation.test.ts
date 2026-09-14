@@ -97,7 +97,9 @@ describe('independent UI and clean model input',()=>{
    const running=f.world.isRunning&&f.world.simulationTick>f.streamStartTick;v.pause();v.srcObject=null;
    const state={status:f.presentation.status(),hidden:f.hud.hidden,anchorHidden:f.anchor.hidden,liveHidden:f.live.hidden};
    f.presentation.dispose();return {pixel,running,state,inputTrack:f.sourceStream.stream.getTracks()[0].readyState,externalTrack:f.external.getTracks()[0].readyState};`);
-  expect(data.pixel.slice(0,3)).toEqual([108,154,172]);expect(data.pixel.slice(0,3)).not.toEqual([21,55,92]);expect(data.running).toBe(true);
+  // MediaStream RGB/YUV conversion rounds 8-bit channels differently across platforms.
+  for(const [i,expected] of [108,154,172].entries())expect(Math.abs(data.pixel[i]-expected)).toBeLessThanOrEqual(1);
+  expect(data.pixel.slice(0,3)).not.toEqual([21,55,92]);expect(data.running).toBe(true);
   expect(data.state).toMatchObject({status:{mode:'video',synchronization:'unmapped'},hidden:true,anchorHidden:true,liveHidden:false});
   expect(data.inputTrack).toBe('ended');expect(data.externalTrack).toBe('live');await evaluate('f.external.getTracks().forEach(t=>t.stop());');
  });

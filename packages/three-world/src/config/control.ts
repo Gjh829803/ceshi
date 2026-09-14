@@ -35,7 +35,7 @@ export function defaultMovementSettings(mode:Mode|'character',base:CoreControl):
  if(mode==='bus')return {...defaultMovementSettings('wheeled',base),maxSpeed:base.speed,reverseSpeed:2.5,
   coastDeceleration:.55,brakeDeceleration:3.8,brakeDamping:0,steeringResponse:2.5,steeringReturn:3.2,
   throttleResponse:1.6,pitchResponse:3,rollResponse:2.5};
- if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('skateboard',base),maxSpeed:base.speed,reverseSpeed:0,groundSpeed:3,
+ if(mode==='sled'||mode==='ski')return {...defaultMovementSettings('skateboard',base),maxSpeed:base.speed,reverseSpeed:mode==='sled'?1.5:0,groundSpeed:3,
   coastDeceleration:.22,brakeDeceleration:6,brakeDamping:0,steeringResponse:4,steeringReturn:6,
   dragQuadratic:.006,pitchResponse:12,rollResponse:10};
  const road=mode==='wheeled'||mode==='motorcycle'||mode==='unicycle',creature=mode==='mount'||mode==='carriage',person=mode==='character';

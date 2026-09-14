@@ -10,6 +10,22 @@ beforeAll(initEnvironmentQueries);
 afterEach(()=>{for(const sim of sims.splice(0))sim.dispose();for(const q of queries.splice(0))q.dispose();});
 function setup(){const q=new EnvironmentQueries(map);queries.push(q);const sim=new Simulation(q,[],{id:'player'});sims.push(sim);return {q,sim};}
 
+it('carries two actors on one lift without advancing the platform twice',()=>{
+  const liftMap:EnvironmentDefinition={...map,playerSpawn:[-.7,.1,0],lifts:[{id:'lift',position:[0,0,0],height:4,speed:1}],boxes:[
+    ...map.boxes,{id:'lift-floor',position:[0,-.05,0],size:[6,.3,6],liftId:'lift'},
+  ]};
+  const q=new EnvironmentQueries(liftMap);queries.push(q);const sim=new Simulation(q,[],{id:'player'});sims.push(sim);
+  const other=sim.addActor('other',new Vector3(.7,.1,0));
+  for(let n=0;n<60;n++)sim.step(1/60);
+  const before=q.propBoxPose('lift-floor')!.position.y;
+  for(let n=0;n<120;n++)sim.step(1/60);
+  const height=q.propBoxPose('lift-floor')!.position.y;
+  expect(height-before).toBeGreaterThan(1);expect(height-before).toBeLessThan(1.7);
+  expect(sim.controlledActor.player.position.y).toBeCloseTo(height+.15,1);
+  expect(other.player.position.y).toBeCloseTo(height+.15,1);
+  expect(other.controller.grounded).toBe(true);expect(sim.controlledActor.controller.grounded).toBe(true);
+});
+
 it('steps three independent controllers on one world tick and removes only one actor rig',()=>{
   const {q,sim}=setup();
   const a=sim.addActor('a',new Vector3(0,.04,0)),b=sim.addActor('b',new Vector3(4,.04,0));

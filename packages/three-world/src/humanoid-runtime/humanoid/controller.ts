@@ -141,6 +141,7 @@ export class HumanoidController {
   /** External host heading uses +Z. The original reset() above retains its source -Z convention. */
   resetAt(position:Vector3,yaw=0){this.mounted=false;this.capsule.setEnabled(true);this.reset(position.x,position.z,position.y,yaw-Math.PI);}
   /** Teleports do not recreate, move, or reset any world interaction target. */
+  carryPlatform(deltaY:number){if(!deltaY)return;this.position.y+=deltaY;const p=this.body.translation();this.body.setTranslation({x:p.x,y:p.y+deltaY,z:p.z},true);this.body.setNextKinematicTranslation({x:p.x,y:p.y+deltaY,z:p.z});}
   teleportTo(position:Vector3,yaw=0){
     if(!this.canBoard){this.lastResult=this.boardingReason;return false;}
     this.surface.reset();this.resetMovement(position.x,position.z,position.y,yaw-Math.PI);return true;

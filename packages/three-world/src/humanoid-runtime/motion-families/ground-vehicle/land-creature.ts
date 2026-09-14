@@ -1,4 +1,4 @@
-import { Quaternion,Vector3 } from 'three';
+import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleImpactMass } from '../../config';
 import { creatureBodies } from '../../creatures/controller';
 import { vehicleBody,type EnvironmentQueries,type MoveResult,type QueryBody } from '../../environment/queries';
@@ -62,8 +62,8 @@ function turnIsClear(position: Vector3, body: QueryBody, fromYaw: number, toYaw:
 function moveBody(position: Vector3, delta: Vector3, body: QueryBody, yaw: number, walking: boolean, q: EnvironmentQueries, push: {
     massKg: number;
     dt: number;
-}): MoveResult {
-    const rotation = rotationAt(yaw);
+}, attitude?:Quaternion): MoveResult {
+    const rotation = attitude??rotationAt(yaw);
     if (!walking)
         return q.move(position, delta, body, rotation, 0, push);
     // Separate floor support from horizontal control: combined diagonal sweeps can
@@ -99,7 +99,7 @@ function moveBody(position: Vector3, delta: Vector3, body: QueryBody, yaw: numbe
         }
     }
     const result = { ...down, grounded: across.grounded || down.grounded, normals: [...across.normals, ...down.normals] };
-    const clearance = q.safeSpawn(result.position, body, rotation);
+    const clearance = attitude ? null : q.safeSpawn(result.position, body, rotation);
     if (clearance && clearance.y > result.position.y + 1e-5 && clearance.y - result.position.y < .08) {
         const lifted = q.move(result.position, clearance.clone().sub(result.position), body, rotation);
         if (lifted.position.distanceToSquared(clearance) < 1e-8 && !q.overlaps(clearance, body, rotation))
@@ -127,22 +127,50 @@ function stepMount(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries)
     const body = vehicleBody(v.spec), old = v.position.clone(), speed = desiredSpeed(v, i, dt);
     const turn = v.spec.steer * (.25 + .75 * Math.min(Math.abs(speed) / 3, 1));
     const yaw = v.yaw - v.steering * turn * dt * (speed < -.1 ? -1 : 1);
-    if (turnIsClear(old, body, v.yaw, yaw, q))
-        v.yaw = yaw;
-    const direction = heading(v.yaw), vertical = v.grounded ? -1 : v.velocity.y - 18 * dt;
-    v.velocity.copy(direction).multiplyScalar(speed);
-    v.velocity.y = vertical;
-    const moved = moveBody(old, v.velocity.clone().multiplyScalar(dt), body, v.yaw, true, q, { massKg: vehicleImpactMass(v.spec), dt });
-    if (clearBody(moved.position, body, rotationAt(v.yaw), q))
-        v.position.copy(moved.position);
-    v.velocity.copy(v.position).sub(old).divideScalar(dt);
-    // Keep the full solved translation for observations and physical dismount.
-    // Grounded motion chooses its resting downward probe above, independently of
-    // this output velocity, so an uphill component cannot become a new jump.
-    v.grounded = moved.grounded;
-    v.pitch = 0;
-    v.roll = 0;
-    v.rotation.copy(rotationAt(v.yaw));
+    const normal=q.support(old,3,.15)?.normal,direction=heading(yaw);
+    const pitch=normal?Math.atan2(-normal.dot(direction),normal.y):0;
+    const roll=normal?Math.atan2(normal.z*direction.x-normal.x*direction.z,normal.y):0;
+    const attitude=v.rotation.clone().slerp(new Quaternion().setFromEuler(new Euler(-pitch,yaw,roll,'YXZ')),1-Math.exp(-10*dt));
+    // 坐骑在转向与贴坡时检查真实倾斜体积，马车仍使用自己的牵引求解。
+    const start=old.clone();
+    if(q.overlaps(start,body,attitude)){
+      // 只抬到倾斜体积刚好脱离坡面，避免用世界轴包围盒把马过度抬高。
+      const ceiling=q.move(old,new Vector3(0,.45,0),body,v.rotation).position;
+      if(q.overlaps(ceiling,body,attitude))return;
+      let low=0,high=ceiling.y-old.y;
+      for(let n=0;n<12;n++){
+        const middle=(low+high)/2;start.y=old.y+middle;
+        if(q.overlaps(start,body,attitude))low=middle;else high=middle;
+      }
+      start.y=old.y+Math.min(ceiling.y-old.y,high+.003);
+    }
+    const raised=q.move(old,start.clone().sub(old),body,v.rotation);
+    if(raised.position.distanceToSquared(start)>1e-6)return;
+    for(let n=1;n<=4;n++)if(q.overlaps(start,body,v.rotation.clone().slerp(attitude,n/4)))return;
+    const wasGrounded=v.grounded;
+    const fallSpeed=wasGrounded?0:(v.motion.creature!.mountFallSpeed??Math.min(0,v.velocity.y))-18*dt;
+    const vertical=wasGrounded?-1:fallSpeed;
+    v.velocity.copy(direction).multiplyScalar(speed);v.velocity.y=vertical;
+    let moved=moveBody(start,v.velocity.clone().multiplyScalar(dt),body,yaw,true,q,{massKg:vehicleImpactMass(v.spec),dt},attitude);
+    // 在原有接地状态附近重新扫掠脚下；不能靠远处地面的射线维持悬空接地。
+    if(wasGrounded&&!moved.grounded&&!moved.normals.some(n=>n.y>.5)){
+      const supported=q.move(moved.position,new Vector3(0,-.12,0),body,attitude);
+      if((supported.grounded||supported.normals.some(n=>n.y>.5))&&clearBody(supported.position,body,attitude,q)){
+        // 近地探测只确认支撑，不能把 12 cm 探测长度在单步内全部应用。
+        // 转入坡面时姿态会暂时抬离支撑；限速落回，避免第三人称继承突然下跳。
+        const descentPerSecond=Math.max(2,Math.abs(speed*Math.tan(pitch))+.5);
+        const supportY=Math.max(supported.position.y,old.y-descentPerSecond*dt);
+        const settled=q.move(moved.position,new Vector3(0,Math.min(0,supportY-moved.position.y),0),body,attitude);
+        moved={...settled,grounded:true};
+      }
+    }
+    if(clearBody(moved.position,body,attitude,q)){
+      v.position.copy(moved.position);v.rotation.copy(attitude);
+      const angles=new Euler().setFromQuaternion(attitude,'YXZ');v.pitch=-angles.x;v.roll=angles.z;v.yaw=angles.y;
+    }
+    v.velocity.copy(v.position).sub(old).divideScalar(dt);v.grounded=moved.grounded||moved.normals.some(n=>n.y>.5);
+    // 对外速度仍报告实际位移，下一步重力只使用独立的腾空速度。
+    v.motion.creature!.mountFallSpeed=v.grounded?0:fallSpeed;
 }
 function stepCarriage(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
     const state = v.motion.creature!, oldCart = v.position.clone(), oldLead = state.leadPosition!.clone(), oldCartYaw = v.yaw, oldLeadYaw = state.leadYaw!;

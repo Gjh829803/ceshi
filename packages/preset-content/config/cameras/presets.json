@@ -182,7 +182,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -201,7 +207,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.rover",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "rover.first-person": {
@@ -346,7 +352,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -365,7 +377,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.racer",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "racer.first-person": {
@@ -510,7 +522,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -529,7 +547,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.motorcycle",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "motorcycle.first-person": {
@@ -674,7 +692,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -693,7 +717,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.skateboard",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "skateboard.first-person": {
@@ -838,7 +862,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -857,7 +887,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.hovercraft",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "hovercraft.first-person": {
@@ -1002,7 +1032,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1021,7 +1057,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.boat",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "boat.first-person": {
@@ -1167,7 +1203,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1186,7 +1228,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.submarine",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "submarine.first-person": {
@@ -1291,7 +1333,7 @@
         "farMeters": 2100
       },
       "position": {
-        "distanceMeters": 11,
+        "distanceMeters": 16,
         "anchor": {
           "kind": "origin"
         },
@@ -1312,7 +1354,7 @@
           "minimumRadians": -1.4835298641951802,
           "maximumRadians": 1.25
         },
-        "initialPitchRadians": 0.3,
+        "initialPitchRadians": 0.2,
         "recenter": {
           "yawHalfLifeSeconds": 0.5331901388922656,
           "pitch": {
@@ -1323,8 +1365,9 @@
       },
       "zoom": {
         "range": {
-          "minimumDistanceMeters": 4.95,
-          "maximumDistanceMeters": 27.5
+          "kind": "bounded",
+          "minimumDistanceMeters": 7.2,
+          "maximumDistanceMeters": 40.0
         }
       },
       "constraints": {
@@ -1334,7 +1377,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1353,7 +1402,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.glider",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "glider.first-person": {
@@ -1501,7 +1550,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1520,7 +1575,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.plane",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "plane.first-person": {
@@ -1669,7 +1724,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1688,7 +1749,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.spacecraft",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "spacecraft.first-person": {
@@ -1834,7 +1895,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -1853,7 +1920,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.trail-rover",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "trail-rover.first-person": {
@@ -1998,7 +2065,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2017,7 +2090,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.touring-motorcycle",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "touring-motorcycle.first-person": {
@@ -2161,7 +2234,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2180,7 +2259,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.rescue-hovercraft",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "rescue-hovercraft.first-person": {
@@ -2325,7 +2404,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2344,7 +2429,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.patrol-boat",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "patrol-boat.first-person": {
@@ -2490,7 +2575,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2509,7 +2600,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.trainer-plane",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "trainer-plane.first-person": {
@@ -2658,7 +2749,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2677,7 +2774,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.survey-spacecraft",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "survey-spacecraft.first-person": {
@@ -2824,7 +2921,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -2843,7 +2946,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.supercar",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "supercar.first-person": {
@@ -2988,7 +3091,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3007,7 +3116,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.kart",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "kart.first-person": {
@@ -3152,7 +3261,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3171,7 +3286,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.horse",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "horse.first-person": {
@@ -3316,7 +3431,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3335,7 +3456,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.carriage",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "carriage.first-person": {
@@ -3481,7 +3602,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3500,7 +3627,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.dragon",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "dragon.first-person": {
@@ -3647,7 +3774,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3666,7 +3799,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.unicycle",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "unicycle.first-person": {
@@ -3812,7 +3945,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3831,7 +3970,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.observation-submarine",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "observation-submarine.first-person": {
@@ -3978,7 +4117,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -3997,7 +4142,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.canoe",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "canoe.first-person": {
@@ -4142,7 +4287,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4161,7 +4312,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.kayak",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "kayak.first-person": {
@@ -4306,7 +4457,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4325,7 +4482,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.raft",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "raft.first-person": {
@@ -4470,7 +4627,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4489,7 +4652,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.jetski",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "jetski.first-person": {
@@ -4635,7 +4798,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4654,7 +4823,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.atv",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "atv.first-person": {
@@ -4800,7 +4969,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4819,7 +4994,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.ski",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "ski.first-person": {
@@ -4964,7 +5139,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -4983,7 +5164,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.sled",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "sled.first-person": {
@@ -5128,7 +5309,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -5147,7 +5334,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.tank",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "tank.first-person": {
@@ -5295,7 +5482,13 @@
           "pivotClearanceMeters": 0
         },
         "recovery": {
-          "halfLifeSeconds": 0
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
         }
       },
       "effects": {
@@ -5314,7 +5507,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.bus",
-      "version": "285246867"
+      "version": "pr240-camera-migration-20260914"
     }
   },
   "bus.first-person": {
@@ -5406,6 +5599,1220 @@
     "sourceIdentity": {
       "id": "calibration.bus",
       "version": "285246867"
+    }
+  },
+  "pusher-plane.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 13,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.3,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "minimumDistanceMeters": 5.8500000000000005,
+          "maximumDistanceMeters": 32.5
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.pusher-plane",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "pusher-plane.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.pusher-plane",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "pusher-plane.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.pusher-plane",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "helicopter.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 13,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.3,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "minimumDistanceMeters": 5.8500000000000005,
+          "maximumDistanceMeters": 32.5
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.helicopter",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "helicopter.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.helicopter",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "helicopter.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.helicopter",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "multirotor.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 13,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.3,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "minimumDistanceMeters": 5.8500000000000005,
+          "maximumDistanceMeters": 32.5
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.multirotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "multirotor.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.multirotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "multirotor.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.multirotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "tiltrotor.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 13,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.3,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "minimumDistanceMeters": 5.8500000000000005,
+          "maximumDistanceMeters": 32.5
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.tiltrotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "tiltrotor.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.tiltrotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "tiltrotor.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.tiltrotor",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "paraglider.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 9.5,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            2.1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.25,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.25,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "kind": "bounded",
+          "minimumDistanceMeters": 4.275,
+          "maximumDistanceMeters": 23.75
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.paraglider",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "paraglider.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.paraglider",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "paraglider.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.paraglider",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "wingsuit.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 7.5,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.2,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "kind": "bounded",
+          "minimumDistanceMeters": 3.375,
+          "maximumDistanceMeters": 18.75
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.wingsuit",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "wingsuit.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.wingsuit",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "wingsuit.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.wingsuit",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "balloon.third-person": {
+    "kind": "third-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.12,
+        "farMeters": 2100
+      },
+      "position": {
+        "distanceMeters": 25,
+        "anchor": {
+          "kind": "origin"
+        },
+        "anchorOffset": {
+          "space": "world",
+          "offsetMetersXYZ": [
+            0,
+            1,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0.08664339756999316
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.25
+        },
+        "initialPitchRadians": 0.2,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "zoom": {
+        "range": {
+          "kind": "bounded",
+          "minimumDistanceMeters": 11.25,
+          "maximumDistanceMeters": 62.5
+        }
+      },
+      "constraints": {
+        "collision": {
+          "radiusMeters": 0.25,
+          "armClearanceMeters": 0,
+          "pivotClearanceMeters": 0
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.18,
+          "speedLimit": {
+            "kind": "limited",
+            "maximumSpeedMetersPerSecond": 6
+          },
+          "clearHoldSeconds": 0.12,
+          "releaseDeadbandMeters": 0.015
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+          "extendHalfLifeSeconds": 0.23104906018664842,
+          "retractHalfLifeSeconds": 0.5776226504666211
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+          "halfLifeSeconds": 0.23104906018664842
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.balloon",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "balloon.first-person": {
+    "kind": "first-person",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.035,
+        "farMeters": 2100
+      },
+      "position": {
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "referenceFrame": "subject-up",
+        "rollInheritanceRatio": 0,
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.balloon",
+      "version": "pr240-camera-migration-20260914"
+    }
+  },
+  "balloon.shoulder": {
+    "kind": "shoulder",
+    "values": {
+      "lens": {
+        "verticalFovDegrees": 55,
+        "nearMeters": 0.05,
+        "farMeters": 2100
+      },
+      "position": {
+        "anchorOffset": {
+          "space": "subject",
+          "offsetMetersXYZ": [
+            0.48,
+            0.22,
+            0
+          ]
+        },
+        "subjectTranslationHalfLifeSeconds": 0,
+        "anchorHalfLifeSeconds": 0.08664339756999316,
+        "armHalfLifeSeconds": 0
+      },
+      "orientation": {
+        "pitchLimitsRadians": {
+          "minimumRadians": -1.4835298641951802,
+          "maximumRadians": 1.05
+        },
+        "initialPitchRadians": 0.12,
+        "referenceFrame": "subject-up",
+        "recenter": {
+          "yawHalfLifeSeconds": 0.5331901388922656,
+          "pitch": {
+            "targetRadians": 0.2,
+            "halfLifeSeconds": 0.5776226504666211
+          }
+        }
+      },
+      "constraints": {
+        "collision": {
+          "armClearanceMeters": 0.025
+        },
+        "recovery": {
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      },
+      "effects": {
+        "speedDistance": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetMeters": 0.3
+        },
+        "speedFov": {
+          "enabled": true,
+          "fullEffectSpeedMetersPerSecond": 58,
+          "maximumOffsetDegrees": 4,
+          "halfLifeSeconds": 0.13862943611198905
+        }
+      }
+    },
+    "sourceIdentity": {
+      "id": "calibration.balloon",
+      "version": "pr240-camera-migration-20260914"
     }
   }
 }

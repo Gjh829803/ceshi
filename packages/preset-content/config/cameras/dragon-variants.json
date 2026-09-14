@@ -53,11 +53,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -76,7 +77,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D01",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -227,11 +228,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -250,7 +252,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D02",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -401,11 +403,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -424,7 +427,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D03",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -575,11 +578,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -598,7 +602,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D04",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -749,11 +753,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -772,7 +777,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D05",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -923,11 +928,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -946,7 +952,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D06",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -1097,11 +1103,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -1120,7 +1127,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D07",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -1271,11 +1278,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -1294,7 +1302,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D08",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -1445,11 +1453,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -1468,7 +1477,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D09",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -1619,11 +1628,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -1642,7 +1652,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D10",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {
@@ -1793,11 +1803,12 @@
           },
           "recovery": {
             "halfLifeSeconds": 0.18,
-            "clearHoldSeconds": 0.12,
             "speedLimit": {
               "kind": "limited",
               "maximumSpeedMetersPerSecond": 12
-            }
+            },
+            "clearHoldSeconds": 0.12,
+            "releaseDeadbandMeters": 0
           }
         },
         "effects": {
@@ -1816,7 +1827,7 @@
       },
       "sourceIdentity": {
         "id": "dragon.D11",
-        "version": "285246867"
+        "version": "pr240-camera-migration-20260914"
       }
     },
     "first-person": {

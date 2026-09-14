@@ -27,6 +27,7 @@ export function stepMotionFamily(...args:Parameters<VehicleStep>){const family=b
 
 export function resolveFamilyPhysics(spec:VehicleSpec){const family=byMode.get(spec.mode);if(!family?.resolvePhysicsSpec)throw Error('MOTION_PHYSICS_FAMILY_UNAVAILABLE');return family.resolvePhysicsSpec(spec);}
 export function createFamilyPhysics(spec:VehicleSpec){const family=byMode.get(spec.mode);if(!family?.createPhysicsState)throw Error('MOTION_PHYSICS_FAMILY_UNAVAILABLE');return family.createPhysicsState(spec);}
+export function familyUnoccupiedPhysics(spec:VehicleSpec){return byMode.get(spec.mode)?.unoccupiedPhysics?.(spec);}
 
 export function resetFamilyRigidState(v:import('../simulation').VehicleState){const family=byMode.get(v.spec.mode);if(!family?.resetRigidState)throw Error('MOTION_PHYSICS_FAMILY_UNAVAILABLE');family.resetRigidState(v);}
 

@@ -969,3 +969,56 @@ it('does not validate an unselected pending opening when switching to first-pers
  c.install(configuration,frame());f.setSubject({...initial,positionWorldMetersXYZ:[0,-1,0]});step(c,1);
  expect(()=>c.setView('eye',frame(1))).not.toThrow();expect(c.inspect().resolved?.kind).toBe('first-person');
 });
+
+it('keeps aircraft heading through pitch poles, speculative input and checkpoint restore', () => {
+  const f=fixture(), c=f.controller;
+  const aircraft={...initial,continuousHeadingSeedRadians:0};
+  f.setSubject(aircraft);
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},orientation:{recenter:{enabled:true,minimumSpeedMetersPerSecond:0,delaySeconds:0,yawHalfLifeSeconds:0}}}},eye:{kind:'first-person',overrides:{orientation:{referenceFrame:'subject-up'}}}}}),{lifecycleGeneration:0,simulationTick:0,aspect:1});
+  for(let tick=1;tick<=120;tick++){
+    const rotation=new Quaternion().setFromAxisAngle(new Vector3(1,0,0),tick*Math.PI/120);
+    const subject={...aircraft,semanticQuaternionWorldXYZW:rotation.toArray()};
+    f.setSubject(subject);
+    const frame={lifecycleGeneration:0,simulationTick:tick,aspect:1};
+    // Two speculative evaluations must have the same result and leave the committed heading untouched.
+    const first=c.prepareInput({},1/60,frame);c.abortPreparedInput();
+    expect(c.prepareInput({},1/60,frame)).toEqual(first);c.evaluateAndCommit(frame);
+    expect(c.inspect().intent!.yawRadians).toBeCloseTo(0,9);
+    if(tick===60){const checkpoint=c.captureCheckpoint();c.restoreCheckpoint(checkpoint,c.inspect().cameraCommitRevision);}
+    const before=c.inspect();
+    c.sampleProjection({epoch:0,previousTick:before.previous!.simulationTick,currentTick:tick,alpha:.5,cut:false},1,subject);
+    c.sampleProjection({epoch:0,previousTick:before.previous!.simulationTick,currentTick:tick,alpha:.5,cut:false},1,subject);
+    expect(c.inspect()).toEqual(before);
+  }
+  // A real world-up turn after inversion changes heading once, without an Euler half-turn.
+  const rotated=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),.2).multiply(new Quaternion().setFromAxisAngle(new Vector3(1,0,0),Math.PI));
+  f.setSubject({...aircraft,semanticQuaternionWorldXYZW:rotated.toArray()});
+  const frame={lifecycleGeneration:0,simulationTick:121,aspect:1};c.prepareInput({},1/60,frame);c.evaluateAndCommit(frame);
+  expect(c.inspect().intent!.yawRadians).toBeCloseTo(.2,9);
+  c.setView('eye',frame);c.setView('orbit',frame);
+  expect(c.inspect().current!.upWorldXYZ[1]).toBeGreaterThan(.9);
+  c.prepareInput({},1/60,{...frame,simulationTick:122});c.evaluateAndCommit({...frame,simulationTick:122});
+  expect(c.inspect().intent!.yawRadians).toBeCloseTo(.2,9);
+});
+
+it('uses the displayed aircraft heading for heading-space anchors at both endpoints and between them',()=>{
+  const f=fixture(),c=f.controller;
+  const previous:CameraSubjectFacts={...initial,continuousHeadingSeedRadians:0};
+  f.setSubject(previous);
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'},anchorOffset:{space:'heading',offsetMetersXYZ:[2,0,0]},distanceMeters:4,subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0},orientation:{initialPitchRadians:0,recenter:{enabled:false}}}}}}),{lifecycleGeneration:0,simulationTick:0,aspect:1});
+  const currentRotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),.2);
+  const current:CameraSubjectFacts={...previous,continuousHeadingSeedRadians:.2,semanticQuaternionWorldXYZW:currentRotation.toArray()};
+  f.setSubject(current);
+  const frame={lifecycleGeneration:0,simulationTick:1,aspect:1};c.prepareInput({},1/60,frame);c.evaluateAndCommit(frame);
+  const before=c.inspect();
+  for(const alpha of [0,.25,.5,.75,1,.5,0]){
+    const rotation=new Quaternion().slerp(currentRotation,alpha);
+    const display={...previous,semanticQuaternionWorldXYZW:rotation.toArray()};
+    const projected=c.sampleProjection({epoch:0,previousTick:0,currentTick:1,alpha,cut:false},1,display)!;
+    const expected=new Vector3(2,0,0).applyQuaternion(rotation).add(new Vector3(0,0,4));
+    expect(new Vector3(...projected.positionWorldMetersXYZ).distanceTo(expected)).toBeLessThan(1e-9);
+    if(alpha===0)expect(projected.positionWorldMetersXYZ).toEqual(before.previous!.positionWorldMetersXYZ);
+    if(alpha===1)expect(projected.positionWorldMetersXYZ).toEqual(before.current!.positionWorldMetersXYZ);
+    expect(c.inspect()).toEqual(before);
+  }
+});
