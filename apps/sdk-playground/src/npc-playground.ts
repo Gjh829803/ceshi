@@ -33,7 +33,8 @@ export function createNpcPlayground(world: ThreeWorld, options: {focus(): void; 
   function control(id: string) {
     options.beforeControl();
     world.setControlledEntity(id);
-    world.setCameraFollow({targetEntityId: id});
+    const document=world.inspectCamera().document;
+    if(document)world.setCameraFollow({configuration:{...document,binding:{...document.binding,targetEntityId:id}}});
     options.changed(); update(); options.focus();
   }
   function beforeMapChange() {

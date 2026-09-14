@@ -4,7 +4,7 @@ import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
 import {createCapsuleDebug,createCollisionDebug} from '@worldkit/preset-content/humanoid/capsule-debug';
 import {createWorld,humanoid} from '@worldkit/three';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile} from '@worldkit/preset-content/platform/profiles';
-import {applyCameraProfile,applyControlProfile,readEditableProfile} from '@worldkit/preset-content/platform/profile-runtime';
+import {applyControlProfile,readEditableProfile} from '@worldkit/preset-content/platform/profile-runtime';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {GRAND_PRIX} from '@worldkit/preset-content/environment/grand-prix';
 import {SPECS} from '@worldkit/preset-content/config';
@@ -184,22 +184,15 @@ describe('player workspace configuration',()=>{
   expect(()=>saveAssetProfile(storage,{...profile,control:{speed:10,accel:3,grip:4,steer:1}})).toThrow();
   expect(()=>saveAssetProfile(storage,{...profile,defaultsRevision:2})).toThrow();
  });
- it('reads live SDK movement tuning before a camera-only edit',async()=>{
+ it('reads live SDK movement tuning without asset camera authority',async()=>{
   const rover=SPECS.find(spec=>spec.id==='rover')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:rover,object:new Group()}]}});
   try{const runtime=world.humanoid!,cached=getDefaultProfile('rover')!;runtime.applyProfile({vehicles:{rover:{coastDeceleration:2}}});
    const effective=readEditableProfile(runtime,cached);expect(effective.control.coastDeceleration).toBe(2);
-   effective.camera.distance=10;applyCameraProfile(runtime,effective);expect(runtime.exportProfile().vehicles?.rover?.coastDeceleration).toBe(2);
-   world.useAuthoredCamera();const editable=readEditableProfile(runtime,effective);expect(editable.camera).toEqual(effective.camera);expect(runtime.inspectConfiguration().effective.camera.settings).toBeNull();
+   applyControlProfile(runtime,effective);expect(runtime.exportProfile().vehicles?.rover?.coastDeceleration).toBe(2);
+   world.useAuthoredCamera();const editable=readEditableProfile(runtime,effective);expect(editable).not.toHaveProperty("camera");expect(runtime.inspectConfiguration().effective).not.toHaveProperty('camera');
   }finally{world.dispose();}
  });
- it('uses the authored indoor camera default while keeping explicit distance edits across maps',async()=>{
-  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:new Group()},vehicles:[]}});
-  try{const r=world.humanoid!,profile=getDefaultProfile('person')!;applyCameraProfile(r,profile);world.step({},1);expect(r.followCamera.distance).toBe(8.8);
-   r.switchMap(getMap('indoor-lab'));world.step({},1);expect(r.followCamera.distance).toBe(5.6);
-   profile.camera.distance=10;applyCameraProfile(r,profile);await world.reset();world.step({},1);expect(r.followCamera.distance).toBe(10);
-   r.switchMap(getMap('campus'));world.step({},1);expect(r.followCamera.distance).toBe(10);
-  }finally{world.dispose();}
- });
+
  it('authors every configured campus spawn and approaches the actual patrol boat in water without moving it',async()=>{
   const map=getMap('campus');
   expect(map.spawns.filter(s=>s.vehicleId)).toHaveLength(SPECS.length);
@@ -221,7 +214,9 @@ describe('player workspace configuration',()=>{
   try{world.step({},1);world.humanoid!.advance({},1/60,{yawDeltaRadians:.7});
    prepareCourse(world.humanoid!.simulation,map,defaultRegion(map,'person').id,'person');world.step({},1);
    const p=world.humanoid!.simulation.controlledActor.player;expect(p.position.x).toBeCloseTo(-32);expect(p.position.z).toBeCloseTo(23);expect(Math.cos(p.yaw)).toBeCloseTo(-1);
-   expect(Math.cos(world.humanoid!.followCamera.yaw)).toBeCloseTo(-1);
+   const pose=world.inspectCamera().current!;
+   const backward=(pose.positionWorldMetersXYZ[0]-p.position.x)*Math.sin(p.yaw)+(pose.positionWorldMetersXYZ[2]-p.position.z)*Math.cos(p.yaw);
+   expect(backward).toBeLessThan(-7); // Compare physical arm against actor forward, not incompatible yaw conventions.
   }finally{world.dispose();}
  });
  it('does not replace delivered configuration with nonexistent or corrupt local overrides',()=>{
@@ -234,21 +229,12 @@ describe('player workspace configuration',()=>{
   for(const key of values.keys())values.set(key,'corrupt');
   expect((loadAssetProfile(storage,'person')??project).control.speed).toBe(10);
  });
- it('keeps camera distance outside camera tuning across profile edits and reset',async()=>{
-  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{
-   map:{id:'test',name:'Test',description:'',bounds:{min:[-50,-5,-50],max:[50,50,50]},boxes:[{id:'floor',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
-   character:{instanceId:'person',object:new Group()},vehicles:[]}});
-  try{const profile=getDefaultProfile('person')!;profile.camera.distance=12;
-   applyCameraProfile(world.humanoid!,profile);applyControlProfile(world.humanoid!,profile);
-   expect(world.humanoid!.exportProfile().camera).not.toHaveProperty('distance');
-   await world.reset();expect(world.humanoid!.followCamera.baseDistance).toBe(12);
-  }finally{world.dispose();}
- });
+
 });
 
 
 it('uses complete current camera values and never backfills old camera shapes',()=>{
- expect(()=>humanoid.parseCameraTuning({recenterDelaySeconds:1,followResponsePerSecond:8,baseFovDegrees:55})).toThrow();
+ expect(humanoid).not.toHaveProperty('parseCameraTuning');
  const profile=getDefaultProfile('person')!;
  expect(profile.control).toEqual(humanoid.defaultMovementSettings('character',{speed:3.1,accel:14,grip:5,steer:8}));
 });

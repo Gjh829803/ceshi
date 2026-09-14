@@ -1,0 +1,58 @@
+.camera-document-editor {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.camera-document-context {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 0;
+  background: #0b252d;
+  border-bottom: 1px solid #ffffff18;
+}
+.camera-document-editor h3,
+.camera-document-editor h4 {
+  margin: 4px 0;
+  color: #eff3e9;
+}
+.camera-document-editor output,
+.camera-document-editor small {
+  color: #a8c2c3;
+}
+.camera-document-editor summary {
+  cursor: pointer;
+  padding: 6px 0;
+  color: #d7e3de;
+}
+.camera-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.camera-document-editor button[data-slot="button"] {
+  border: 1px solid #ffffff24;
+  background: #173940;
+  color: #d7e3de;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font: inherit;
+  cursor: pointer;
+}
+.camera-document-editor button[data-slot="button"]:hover {
+  background: #244a50;
+}
+.camera-document-editor button[data-slot="button"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.camera-document-editor textarea {
+  box-sizing: border-box;
+  border: 1px solid #ffffff24;
+  background: #082129;
+  color: #d7e3de;
+  border-radius: 5px;
+  padding: 8px;
+}
+.camera-document-editor [role="alert"] {
+  color: #f1c7a0;
+}

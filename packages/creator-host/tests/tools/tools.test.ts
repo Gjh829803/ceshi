@@ -310,14 +310,14 @@ describe('Three tool operations and truthful submission', () => {
     const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });
-  it('discovers persistent camera defaults and admits the same view configuration for recorded commands',async()=>{
+  it('discovers named camera documents and rejects retired profile view commands',async()=>{
     const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
     try{
       const schema=await service.schema('humanoid');
-      expect(schema.sdkGuide).toContain('defaultPerspective');expect(schema.sdkGuide).toContain('keyboardToggleEnabled');
-      expect(schema.sdkGuide).toContain('cameraToggle');expect(schema.humanoidSourceContracts?.['humanoid-runtime/runtime.ts']).toContain('HumanoidViewSettings');
+      expect(schema.sdkGuide).toContain('defaultViewId');expect(schema.sdkGuide).toContain('cycleViewIds');
+      expect(schema.sdkGuide).toContain('setCameraView');expect(schema.humanoidSourceContracts?.['humanoid-runtime/runtime.ts']).not.toContain('HumanoidViewSettings');
       const check=new Ajv({strict:false}).compile(WORLD_COMMAND_SCHEMA);
-      expect(check({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(true);
+      expect(check({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}})).toBe(false);
       expect(check({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'invented'}}})).toBe(false);
     }finally{await service.close();}
   });
@@ -364,21 +364,16 @@ describe('v2 command and discovery boundary', () => {
     try{
       const initial=await discoveryCall(service,'creator_get_authoring_schema');
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(initial.cameraAuthoring);
-      expect(initial.cameraAuthoring).toMatchObject({scope:'humanoid-only',runtimeAuthority:'host-sdk-baseline',parameters:{targetHeightOffset:{default:0},horizontalOffset:{default:0}}});
-      expect(initial.cameraAuthoring.startWithDefaults).toMatch(/whitebox/i);
-      expect(initial.cameraAuthoring.opening).toMatchObject({tool:'creator_get_authoring_schema',arguments:{topic:'programming'}});
-      const startup=await discoveryCall(service,initial.cameraAuthoring.opening.tool,initial.cameraAuthoring.opening.arguments);
-      expect(startup.sdkGuide).toContain('initialMountId');expect(startup.sdkGuide).toContain("headingFollow:'vehicle'");
-      const openingExample=await discoveryCall(service,initial.cameraAuthoring.openingExample.tool,initial.cameraAuthoring.openingExample.arguments);
-      expect(openingExample.files['main.ts']).toContain("world.setCameraFollow({opening, activateOnInput:true, headingFollow:'vehicle'})");
+      expect(initial.cameraAuthoring).toMatchObject({scope:'named-camera-views',runtimeAuthority:'host-sdk-baseline'});
+      const startup=await discoveryCall(service,initial.cameraAuthoring.authoring.tool,initial.cameraAuthoring.authoring.arguments);
+      expect(startup.sdkGuide).toContain('initialMountId');expect(startup.sdkGuide).toContain('parseCameraDocument');
+      const configuration=await discoveryCall(service,initial.cameraAuthoring.configuration.tool,initial.cameraAuthoring.configuration.arguments);
+      expect(configuration.cameraConfiguration.status).toBe('available');
       expect(initial.cameraAuthoring.verify.currentView).toEqual({tool:'world_preview',arguments:{view:'current'}});
-      expect(initial.cameraAuthoring.verify.viewChanges).toContain('only when');
-      expect(initial.cameraAuthoring.followTarget).toContain('shared framing/follow parameters');
-      expect(initial.cameraAuthoring.followTarget).toContain('Input selection is independent');
       expect(initial.cameraAuthoring.verify.opening).toMatch(/reset/i);
-      for(const field of ['cameraObservation','cameraOverrides','cameraSettings','framing'])expect(initial.cameraAuthoring.verify.read).toContain(field);
-      expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['description']},path:'observation.description.humanoid.configuration.effective.camera.framing'});
-      for(const request of [initial.cameraAuthoring.openingExample,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
+      expect(initial.cameraAuthoring.verify.read).toContain('cameraObservation.camera');
+      expect(initial.cameraAuthoring.inspect).toMatchObject({tool:'world_inspect',arguments:{sections:['camera']},path:'observation.camera'});
+      for(const request of [initial.cameraAuthoring.configuration,initial.cameraAuthoring.verify.currentView,initial.cameraAuthoring.inspect]){
         const tool=THREE_CREATOR_TOOLS.find(tool=>tool.name===request.tool);
         expect(tool,request.tool).toBeDefined();
         expect(new Ajv({strict:false}).compile(tool!.inputSchema)(request.arguments),request.tool).toBe(true);
@@ -397,24 +392,24 @@ describe('v2 command and discovery boundary', () => {
       }
       const commands=await discoveryCall(service,'creator_get_authoring_schema',{topic:'control',sections:['commands']});
       const profile=commands.worldCommandSchema.oneOf.find((entry:any)=>entry.properties.type.const==='humanoid.apply-profile').properties.profile;
-      expect(profile.properties.camera.properties.targetHeightOffset).toMatchObject({default:0,minimum:-2,maximum:5,description:expect.stringMatching(/increment.*meters/i)});
+      expect(profile.properties).not.toHaveProperty('camera');expect(profile.properties).not.toHaveProperty('cameraDistanceMeters');
       const check=new Ajv({strict:false}).compile(commands.worldCommandSchema);
-      for(const camera of [{targetHeightOffset:1.1,horizontalOffset:0},{targetHeightOffset:-2,horizontalOffset:-3},{targetHeightOffset:5,horizontalOffset:3}])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:11,camera}})).toBe(true);
+      for(const camera of [{targetHeightOffset:1.1,horizontalOffset:0},{targetHeightOffset:-2,horizontalOffset:-3},{targetHeightOffset:5,horizontalOffset:3}])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:11,camera}})).toBe(false);
     }finally{await service.close();}
   });
   it('uses current workspace source for camera guidance instead of presenting Host numeric defaults as active',async()=>{
     const service=new ThreeCreatorTools(await fixture(),'three-sdk');
     try{
       await service.materializeRuntime();
-      const file=path.join(service.workspace,'sdk/three-world/src/config/camera.ts');
-      await writeFile(file,(await readFile(file,'utf8')).replace('targetHeightOffset:numeric(0,','targetHeightOffset:numeric(.4,'));
+      const file=path.join(service.workspace,'sdk/three-world/src/config/camera/defaults.ts');
+      await writeFile(file,(await readFile(file,'utf8')).replace('activation: "on-input"','activation: "immediate"'));
       const selected=await discoveryCall(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['guide','humanoid']});
       expect(selected.cameraAuthoring).toMatchObject({runtimeAuthority:'workspace-sdk-source'});
       expect(selected.cameraAuthoring).not.toHaveProperty('parameters');
       expect((await discoveryCall(service,'creator_describe_environment')).cameraAuthoring).toEqual(selected.cameraAuthoring);
-      expect(selected.cameraAuthoring.source).toContain('sdk/three-world/src/config/camera.ts');
-      expect(selected.runtimeDefinitions['config/camera.ts']).toContain('targetHeightOffset:numeric(.4,');
-      expect(selected.runtimeDefinitions['camera-subject.ts']).toBe(await readFile(path.join(service.workspace,'sdk/three-world/src/camera-subject.ts'),'utf8'));
+      expect(selected.cameraAuthoring.source).toContain('sdk/three-world/src/config/camera/index.ts');
+      expect(selected.runtimeDefinitions['config/camera/defaults.ts']).toContain('activation: "immediate"');
+      expect(selected.runtimeDefinitions['camera/subject.ts']).toBe(await readFile(path.join(service.workspace,'sdk/three-world/src/camera/subject.ts'),'utf8'));
       const example=await discoveryCall(service,'creator_get_examples');
       expect(example.cameraAuthoring).toEqual(selected.cameraAuthoring);
       expect(example.exampleAuthority).toBe('host-baseline');
@@ -440,16 +435,16 @@ describe('v2 command and discovery boundary', () => {
       for(const name of ['creator_describe_environment','creator_get_authoring_schema','creator_get_examples'])expect(await discoveryCall(raw,name)).not.toHaveProperty('cameraAuthoring');
       for(const name of ['creator_get_authoring_schema','creator_get_examples']){
         const result=await discoveryCall(sdk,name,{topic:'nonhuman-subject'});
-        expect(result.cameraAuthoring).toMatchObject({scope:'ordinary-sdk-follow'});
+        expect(result.cameraAuthoring).toMatchObject({scope:'named-camera-views',subject:'nonhuman'});
         expect(result.cameraAuthoring).not.toHaveProperty('parameters');
         expect(JSON.stringify(result.cameraAuthoring)).toContain('setCameraFollow');
         expect(JSON.stringify(result.cameraAuthoring)).not.toMatch(/player\.camera|targetHeightOffset|configuration\.effective\.camera\.framing/);
       }
     }finally{await raw.close();await sdk.close();}
   });
-  it('accepts the SDK camera distance interval through Host command transport', () => {
+  it('rejects retired camera distance fields through Host movement-profile transport', () => {
     const check=new Ajv({strict:false,strictNumbers:true}).compile(WORLD_COMMAND_SCHEMA);
-    for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(true);
+    for(const value of [.1,.5,1,40,75,100,null])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(false);
     for(const value of [0,-.1,100.1,Infinity])expect(check({type:'humanoid.apply-profile',profile:{cameraDistanceMeters:value}}),String(value)).toBe(false);
   });
   it('accepts expanded handling controls in Creator commands and rejects out-of-range or unknown controls',()=>{

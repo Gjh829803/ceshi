@@ -1,10 +1,10 @@
 import { caseRuntimeConfig } from './case-config.js';
 import { PLAYER_CAPTURE_VERSION } from '../capture/playback-policy.mjs';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename, lstat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEpisodeSource } from '../source/source.js';
+import { loadEpisodeSource,inspectEpisodeSourceCamera } from '../source/source.js';
 import { canonicalHash, PRE_SEEDANCE_PROFILE, assertPreSeedanceProfile, validateEpisodePlan, type EpisodePlan, type EpisodeSourceManifest } from '../contracts.js';
 import { runCaptureSegments, normalizeCaptureForVisuals, type CaptureSummary } from '../capture/capture.js';
 import { createCloudClient, type CloudClient } from '../cloud/cloud.mjs';
@@ -28,6 +28,7 @@ export interface EpisodeWorkflowOptions {
   sourceManifestPath: string; outputRoot: string; episodeId?: string;
   until?: 'plan' | 'capture' | 'pre-seedance'; stopBeforeSeedance: true;
   runtimeConfig?: Record<string, any>; cloud?: Cloud;
+  openBrowser?:typeof import('../capture/browser.js').openEpisodeBrowser;
   capture?: (options: { sourceManifestPath: string; planPath: string; outputRoot: string; worldBuildHash: string; segmentIds?: string[]; caseId?: string; cohortId?: string; continuation?: any }) => Promise<CaptureSummary>;
   batchQueue?: ReturnType<typeof createBatchQueue>;
   onProgress?: (state: any) => void | Promise<void>; publishS3Prefix?: string;
@@ -62,9 +63,30 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
   async function planWorld(repair?: {previousPlan:EpisodePlan;failedSegmentIds:string[];failures:any[]}) {
     const routeCandidate = !repair ? conf?.routePlanCandidate : null;
     if(routeCandidate && (routeCandidate.sourceHash!==source.sourceHash || digest(await readFile(routeCandidate.path))!==routeCandidate.sha256))throw new Error('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');
-    const input = {...plannerBase,promptHash:digest(plannerPrompt),repair:repair??null,...(routeCandidate?{routeCandidate:{sha256:routeCandidate.sha256,sourceHash:routeCandidate.sourceHash}}:{})}, inputHash=canonicalHash(input);
-    const taskRoot=path.join(output,'planner',inputHash), planPath=path.join(taskRoot,'plan.json'), evidencePath=path.join(taskRoot,'planner-tool-evidence.json');
-    await mkdir(taskRoot,{recursive:true}); await save(path.join(taskRoot,'context.json'),input);
+    const cameraProtocol=await inspectEpisodeSourceCamera(source,options.openBrowser);
+    const request=JSON.parse(JSON.stringify({...plannerBase,promptHash:digest(plannerPrompt),repair:repair??null,...(routeCandidate?{routeCandidate:{sha256:routeCandidate.sha256,sourceHash:routeCandidate.sourceHash}}:{})}));
+    const requestKey=canonicalHash(request),taskRoot=path.join(output,'planner',requestKey),planPath=path.join(taskRoot,'plan.json'),evidencePath=path.join(taskRoot,'planner-tool-evidence.json');
+    const contextPath=path.join(taskRoot,'context.json'),contextReceiptPath=path.join(taskRoot,'context-receipt.json');
+    await mkdir(taskRoot,{recursive:true});
+    let contextBytes:Buffer|undefined;
+    try{contextBytes=await readFile(contextPath);}catch(error:any){if(error.code!=='ENOENT')throw error;}
+    let inputHash:string;
+    if(contextBytes){
+      // Admission is fresh, but the attached request remains the first exact sample.
+      // Missing/partial seals fail closed: they never authorize another submission.
+      try{
+        const receipt=await json(contextReceiptPath),input=JSON.parse(contextBytes.toString()),{cameraProtocol:frozenCamera,...frozenRequest}=input;
+        const declaration=(camera:any)=>({baselineMode:camera.baselineMode,documentHash:camera.documentHash,views:camera.views,defaultViewId:camera.defaultViewId});
+        if(receipt?.requestKey!==requestKey||receipt.contextSha256!==digest(contextBytes)||receipt.inputHash!==canonicalHash(input)||canonicalHash(frozenRequest)!==requestKey||frozenCamera.worldBuildHash!==source.worldBuildHash||frozenCamera.sourceHash!==source.sourceHash||frozenCamera.runtimeHash!==source.runtimeHash||canonicalHash(declaration(frozenCamera.capabilities.camera))!==canonicalHash(declaration(cameraProtocol.capabilities.camera)))throw Error('mismatched planner context');
+        inputHash=receipt.inputHash;
+      }catch{throw Error('EPISODE_PLANNER_CONTEXT_CHANGED');}
+    }else{
+      if((await readdir(taskRoot)).length)throw Error('EPISODE_PLANNER_CONTEXT_CHANGED');
+      const input=JSON.parse(JSON.stringify({...request,cameraProtocol}));inputHash=canonicalHash(input);
+      contextBytes=Buffer.from(JSON.stringify(input,null,2)+'\n');
+      await writeFile(contextPath,contextBytes,{flag:'wx'});
+      await writeFile(contextReceiptPath,JSON.stringify({requestKey,inputHash,contextSha256:digest(contextBytes)},null,2)+'\n',{flag:'wx'});
+    }
     const previous=await json(path.join(taskRoot,'result.json'));
     if(previous?.inputHash===inputHash){ const bytes=await readFile(planPath);const ev=await readFile(evidencePath); if(digest(bytes)===previous.planSha256&&digest(ev)===previous.evidenceSha256)return {plan:validateEpisodePlan(JSON.parse(bytes.toString()),{worldBuildHash:source.worldBuildHash}),planPath}; }
     const planningManifest=conf?.planningSourceManifest ?? path.resolve(options.sourceManifestPath);

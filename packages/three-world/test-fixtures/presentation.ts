@@ -25,7 +25,7 @@ export async function bootPresentationFixture() {
  const ground=new THREE.Mesh(new THREE.BoxGeometry(60,.5,60),new THREE.MeshBasicMaterial({color:'#87a584'}));ground.position.y=-.25;world.addEntity({id:'ground',role:'terrain',object:ground});
  const wall=new THREE.Mesh(new THREE.BoxGeometry(9,3,.5),new THREE.MeshBasicMaterial({color:'#d9c89d'}));wall.position.set(0,1.5,-6);world.addEntity({id:'wall',role:'obstacle',object:wall});
  const hero=new THREE.Group();const body=new THREE.Mesh(new THREE.CapsuleGeometry(.3,1.1),new THREE.MeshBasicMaterial({color:'#ffb342'}));body.position.y=.85;hero.add(body);
- world.addCharacter({id:'hero',object:hero,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('hero');world.setCameraFollow();
+ world.addCharacter({id:'hero',object:hero,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('hero');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'hero'},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}}}});
  const health=world.state.define('health',100);
  let presentation=world.createPresentation({historyFrames:3});
  const hud=document.createElement('div');hud.id='hud';

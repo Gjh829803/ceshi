@@ -19,7 +19,7 @@ const scene=new THREE.Scene();scene.background=new THREE.Color('#193148');const 
 const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('#world')});renderer.setSize(320,180);
 const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{}});
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80,20,20),new THREE.MeshBasicMaterial({color:'#73664e'}));floor.rotation.x=-Math.PI/2;world.addEntity({id:'floor',object:floor,role:'terrain'});
-const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5,1.8,.5),new THREE.MeshBasicMaterial({color:'#00ccff'}));mesh.position.y=.9;actor.add(mesh);world.addCharacter({id:'traveler',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('traveler');world.setCameraFollow({framingMode:'preserve-opening',followHalfLifeSeconds:.045});await world.start();`);
+const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5,1.8,.5),new THREE.MeshBasicMaterial({color:'#00ccff'}));mesh.position.y=.9;actor.add(mesh);world.addCharacter({id:'traveler',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('traveler');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'traveler'},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:.045},lens:{nearMeters:.1,farMeters:300},constraints:{visibility:'require-line-of-sight'}}}}}});await world.start();`);
   const compiler=new ThreeCompiler(author,'three-sdk'),candidate=await compiler.prepare();
   await mkdir(path.join(candidate.root,'captures'));
   const image=await sharp({create:{width:2,height:2,channels:3,background:'#193148'}}).png().toBuffer();
@@ -34,7 +34,7 @@ const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5
   const derivation=JSON.parse(await readFile(path.join(root,'derived/derivation.json'),'utf8'));
   expect(source.runtimeHash).toBe(candidate.runtimeHash);expect(derivation.authorCompiledEntriesUnchanged).toBe(true);
   expect(source.targets).toHaveLength(1);expect(source.targets[0]).toMatchObject({id:'traveler',role:'primary-subject'});expect(source.referenceImage?.sha256).toBe(sha(image));
-  const sdk=await readFile(path.join(source.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(sdk).toContain('followHalfLifeSeconds');expect(sdk).toContain('prepareSegment');expect(sdk).toBe(await readFile(path.join(candidate.playableRoot,'runtime/worldkit-three.js'),'utf8'));
+  const sdk=await readFile(path.join(source.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(sdk).toContain('subjectTranslationHalfLifeSeconds');expect(sdk).toContain('prepareSegment');expect(sdk).toBe(await readFile(path.join(candidate.playableRoot,'runtime/worldkit-three.js'),'utf8'));
   const session=await openEpisodeBrowser({playableRoot:source.playableRoot,widthPixels:320,heightPixels:180});
   try{
    await session.page.waitForSelector('canvas[data-worldkit-episode-surface]',{state:'visible'});

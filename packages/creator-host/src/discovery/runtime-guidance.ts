@@ -5,8 +5,8 @@ import type {CreatorProfile} from '../contracts.js';
 import {REPOSITORY_ROOT,type ThreeCompiler} from '../compiler/compiler.js';
 import {readWorkspaceRuntime,type WorkspaceRuntime} from '../compiler/workspace-runtime.js';
 
-const OPTIONAL_GUIDANCE_FILES=new Set(['object-color.ts','camera-subject.ts','humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts']);
-const DEFINITION_FILES = ['humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','config/aircraft.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera.ts','humanoid-runtime/humanoid/action-schema.ts','humanoid-runtime/input.ts','humanoid-runtime/input-guidance.ts','humanoid-runtime/character-capabilities.ts','humanoid-runtime/runtime.ts'] as const;
+const OPTIONAL_GUIDANCE_FILES=new Set(['object-color.ts','camera/subject.ts','humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts']);
+const DEFINITION_FILES = ['humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','config/aircraft.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','config/input.ts','config/actions.ts','config/control.ts','config/control-fields.ts','config/camera/humanoid.ts','config/camera/types.ts','config/camera/fields.ts','config/camera/defaults.ts','config/camera/behavior-fields.ts','config/camera/field-primitives.ts','humanoid-runtime/humanoid/action-schema.ts','humanoid-runtime/input.ts','humanoid-runtime/input-guidance.ts','humanoid-runtime/character-capabilities.ts','humanoid-runtime/runtime.ts'] as const;
 
 /** One validated source snapshot per discovery call; never import author modules. */
 export class RuntimeGuidance {
@@ -32,10 +32,10 @@ export class RuntimeGuidance {
     return readFile(path.join(REPOSITORY_ROOT,'packages/three-world/src',relative),'utf8');
   }
   async definitions(includeHumanoid=true){
-    return Object.fromEntries(await Promise.all(['world.ts','config/presentation.ts','camera-subject.ts',...(includeHumanoid?DEFINITION_FILES:[])].filter(name=>this.shouldDescribeSource(name)).map(async name=>{
+    return Object.fromEntries(await Promise.all(['world.ts','config/presentation.ts','camera/subject.ts',...(includeHumanoid?DEFINITION_FILES:[])].filter(name=>this.shouldDescribeSource(name)).map(async name=>{
       const source=await this.source(name);
       // Small config modules are returned whole so helper/type dependencies stay readable.
-      if(name==='camera-subject.ts'||name.startsWith('config/')||['humanoid-runtime/road-vehicle.ts','humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts'].includes(name))return [name,source];
+      if(name==='camera/subject.ts'||name.startsWith('config/')||['humanoid-runtime/road-vehicle.ts','humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts'].includes(name))return [name,source];
       const file=ts.createSourceFile(name,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
       // Keep imports so references are traceable. Initializers are displayed as
       // source, not interpreted: arbitrary workspace code never runs on the Host.

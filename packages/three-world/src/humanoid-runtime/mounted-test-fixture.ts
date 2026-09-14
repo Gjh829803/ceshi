@@ -18,6 +18,8 @@ const source = catalog.assets.find(
 export async function createMountedFixture(
   options: {
     boxes?: EnvironmentDefinition["boxes"];
+    initialMountId?:string;
+    spawnYawRadians?:number;
     animation?:import("./character").Character;
     playerSpawn?:[number,number,number];
     secondHorsePosition?: [number, number, number];
@@ -53,7 +55,7 @@ export async function createMountedFixture(
       name: "Horse",
       vehicleId: `horse-${n + 1}`,
       position,
-      yaw: 0,
+      yaw: options.spawnYawRadians??0,
       regionId: "mount",
     })),
     playerSpawn: options.playerSpawn??[1.45, 0.025, 0],
@@ -64,7 +66,7 @@ export async function createMountedFixture(
     assetDefinitions: {},
     humanoid: {
       map,
-      character: { instanceId: "person", object: options.animation?.root??new Group(),...(options.animation?{animation:options.animation}:{}) },
+      character: { ...(options.initialMountId?{initialMountId:options.initialMountId}:{}),instanceId: "person", object: options.animation?.root??new Group(),...(options.animation?{animation:options.animation}:{}) },
       vehicles: positions.map((spawn, n) => ({
         instanceId: `horse-${n + 1}`,
         assetId: "creature.horse",
@@ -73,6 +75,6 @@ export async function createMountedFixture(
       })),
     },
   });
-  world.humanoid!.prepareCharacter(options.playerSpawn??[1.45, 0.025, 0]);
+  if(!options.initialMountId)world.humanoid!.prepareCharacter(options.playerSpawn??[1.45, 0.025, 0]);
   return world;
 }

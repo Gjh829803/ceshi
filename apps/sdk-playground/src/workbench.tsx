@@ -1,3 +1,4 @@
+import {CameraPanel,type CameraEditorBinding} from "./camera/panel";
 import { ModalHeader, ModalFooter } from "./components/modal-layout";
 import {
   Dialog,
@@ -23,6 +24,7 @@ import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
 
 type Tab = "scenes" | "camera";
 interface WorkbenchOptions {
+  cameraEditor?():CameraEditorBinding;
   specs?: readonly VehicleSpec[];
   onOpenChange(open: boolean): void;
   onPrepare(mapId: string, regionId: string, assetId: string): void;
@@ -225,6 +227,8 @@ function Workbench({
             ) : (
               <>
                 {selectAsset("编辑 3C 资产")}
+                {o.cameraEditor && <CameraPanel binding={o.cameraEditor()} subjectId={assetId}/> }
+                <details open={!o.cameraEditor}><summary>操控与包络参数（按资产保存）</summary>
                 <CameraEditor
                   key={`${assetId}:${revision}`}
                   assetId={assetId}
@@ -233,6 +237,7 @@ function Workbench({
                   inform={inform}
                   reset={() => setRevision((n) => n + 1)}
                 />
+                </details>
                 <h3>当前运行主体 · 实时状态</h3>
                 <output
                   className="wb-telemetry"
@@ -268,29 +273,11 @@ function CameraEditor({
   const current = o.getProfile(assetId),
     mode = vehicleControlFamily((o.specs ?? SPECS).find((s) => s.id === assetId));
   const fields: {
-    group: "camera" | "control";
+    group: "control";
     key: string;
     label: string;
     step: number;
   }[] = [
-    {
-      group: "camera" as const,
-      key: "distance",
-      label: "跟随距离 / 米",
-      step: 0.25,
-    },
-    ...(
-      [
-        "baseFovDegrees",
-        "recenterDelaySeconds",
-        "followResponsePerSecond",
-      ] as const
-    ).map((key) => ({
-      group: "camera" as const,
-      key,
-      label: `${humanoid.CAMERA_PARAMETERS[key].label} / ${humanoid.CAMERA_PARAMETERS[key].unit}`,
-      step: humanoid.CAMERA_PARAMETERS[key].step,
-    })),
     ...humanoid
       .controlFields(mode ?? "character",!!(o.specs ?? SPECS).find(s=>s.id===assetId)?.wheelPhysics)
       .filter((f) => !f.disabled)
@@ -300,7 +287,7 @@ function CameraEditor({
         label: `${f.label} / ${f.unit}`,
         step: f.step,
       })),
-  ].filter((f) => assetId !== "person" || f.key !== "recenterDelaySeconds");
+  ];
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       fields.map((f) => [
@@ -322,7 +309,7 @@ function CameraEditor({
   return (
     <>
       <p className="wb-note">
-        操控与相机参数按资产独立应用。进入相应载具后使用它的配置；保存到本地后，下次打开继续使用。
+        操控参数按资产保存；相机由当前项目 CameraDocument 管理。
       </p>
       {assetId === "person" && (
         <p className="wb-note">
@@ -350,13 +337,7 @@ function CameraEditor({
         {fields.map((f) => {
           const id = `${f.group}.${f.key}`,
             bounds =
-              f.group === "camera"
-                ? f.key === "distance"
-                  ? humanoid.CAMERA_DISTANCE_EDITOR_RANGE
-                  : humanoid.CAMERA_TUNING_RANGES[
-                      f.key as humanoid.NumericCameraKey
-                    ]
-                : humanoid.CONTROL_RANGES[f.key as humanoid.ControlKey];
+              humanoid.CONTROL_RANGES[f.key as humanoid.ControlKey];
           return (
             <label key={id} className="wb-field">
               {f.label}

@@ -11,10 +11,7 @@ const humanoidInputShape=objectSchema({forward:axis,steer:axis,roll:axis,lift:ax
  actions:objectSchema(Object.fromEntries(humanoid.HUMANOID_ACTION_INPUT_FIELDS.map(key=>[key,boolean])),[])},['forward','steer','roll','lift','pitch','strafe','boost','brake','slow','jump']);
 const humanoidInput={...humanoidInputShape,description:'Use emptyHumanoidInput(), change channels described by world.describe().humanoid.inputGuide for the active family, and release overrides after use. boost is not universally acceleration.'};
 const humanoidProfile=objectSchema({character:objectSchema(humanoid.CONTROL_SCHEMA_PROPERTIES,[]),
- view:objectSchema(humanoid.HUMANOID_VIEW_SCHEMA_PROPERTIES,[]),
- cameraDistanceMeters:{anyOf:[humanoid.CAMERA_DISTANCE_METERS_SCHEMA,{type:'null'}]},
- camera:objectSchema(humanoid.CAMERA_SCHEMA_PROPERTIES,[]),
- vehicles:{type:'object',additionalProperties:objectSchema({...humanoid.CONTROL_SCHEMA_PROPERTIES,camera:humanoid.VEHICLE_CAMERA_DISTANCE_SCHEMA},[])}},[]);
+ vehicles:{type:'object',additionalProperties:objectSchema(humanoid.CONTROL_SCHEMA_PROPERTIES,[])}},[]);
 const command=(type:WorldCommand['type'], fields:Record<string,unknown>, optional:string[]=[])=>objectSchema({type:{const:type},...fields},['type',...Object.keys(fields).filter(name=>!optional.includes(name))]);
 /** Closed transport shape; current capability/range/ownership checks remain in World.execute. */
 export const WORLD_COMMAND_SCHEMA={oneOf:[
@@ -22,7 +19,7 @@ export const WORLD_COMMAND_SCHEMA={oneOf:[
  command('space.dock',{actorId:string,portId:{anyOf:[string,{type:'null'}]}},['actorId']),
  command('vehicle.prepare',{actorId:string,instanceId:string,spawn:objectSchema({id:string,name:string,position:vec3,yaw:number,vehicleId:string,regionId:string},['id','name','position','yaw','regionId'])},['actorId']),
  {...command('vehicle.approach',{instanceId:string,actorId:string},['actorId']),description:humanoid.VEHICLE_APPROACH_DESCRIPTION},command('vehicle.enter',{instanceId:string,actorId:string},['actorId']),command('vehicle.exit',{actorId:string},['actorId']),command('vehicle.recover',{actorId:string},['actorId']),
- command('humanoid.set-camera-mode',{mode:{enum:[0,1,2]}}),command('humanoid.set-input',{actorId:string,input:{anyOf:[humanoidInput,{type:'null'}]}},['actorId']),
+ command('humanoid.set-input',{actorId:string,input:{anyOf:[humanoidInput,{type:'null'}]}},['actorId']),
  command('humanoid.apply-profile',{profile:humanoidProfile}),
  command('humanoid.perform-action',{actorId:string,request:objectSchema({requestId:string,action:{enum:humanoid.SKILL_DEFINITIONS.map(skill=>skill.id)},targetId:string,slotId:string},['requestId','action'])},['actorId']),
  command('entity.set-visible',{entityId:string,isVisible:boolean}),

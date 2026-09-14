@@ -113,7 +113,7 @@ it('runtime validates and owns the horse, sampling before callbacks and restorin
     runtime.onVisualUpdate(()=>expect(sample).toHaveBeenCalled());
     const body=horse.content.getObjectByName('Body')!;
     const before=body.matrixWorld.elements.slice();
-    const restore=humanoidHost(runtime).present(.5,0);
+    const restore=humanoidHost(runtime).present({epoch:0,previousTick:0,currentTick:0,alpha:.5,cut:false});
     restore();
     expect(body.matrixWorld.elements).toEqual(before);
   } finally {world.dispose();}
@@ -199,7 +199,7 @@ it('uses the real horse sample and Source101 pelvis in a mounted display transac
       const logical=runtime.simulation.controlledActor.player.position.clone();
       horse.root.updateMatrixWorld(true);const canonicalBody=horse.content.getObjectByName('Body')!.matrixWorld.elements.slice();
       for(let n=0;n<2;n++) {
-        const restore=humanoidHost(runtime).present(.5,3);
+        const restore=humanoidHost(runtime).present({epoch:0,previousTick:2,currentTick:3,alpha:.5,cut:false});
         const anchor=horse.root.matrixWorld.clone().multiply(horse.readSeatAnchor([0,1.65,0],seatAnchor));
         expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(anchor))).toBeLessThan(1e-9);
         expect(runtime.simulation.controlledActor.player.position).toEqual(logical);

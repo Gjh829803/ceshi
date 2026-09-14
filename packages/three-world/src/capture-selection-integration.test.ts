@@ -26,7 +26,7 @@ function rejects(callback:()=>unknown,code:string) {let failure:unknown;try{call
 describe('capture selection on the real World lifecycle',()=>{
  it('publishes default subject-only selection, then live author priority independently from registration',async()=>{
   const {world,start,hero,tree}=await fixture(),observer=await start();
-  expect(observer.episode?.schemaVersion).toBe(1);expect(observer.episode?.capabilities().controlledEntityId).toBe('hero');
+  expect(observer.episode?.schemaVersion).toBe(2);expect(observer.episode?.capabilities().controlledEntityId).toBe('hero');
   expect(observer.captureTargetIds).toEqual(['hero']);expect(observer.targets).toEqual({hero});
   world.setCaptureTargets(['tower',{entityId:'trees',representative:{kind:'object',object:tree}}]);
   expect(observer.captureTargetIds).toEqual(['hero','tower','trees']);expect(observer.targetRepresentativesById!.trees!.object).toBe(tree);

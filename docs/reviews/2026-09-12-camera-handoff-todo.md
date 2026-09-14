@@ -80,8 +80,8 @@
 
 ## 现有定位入口
 
-- [共享相机状态与交接](../../packages/three-world/src/camera.ts)
-- [Humanoid 采样与呈现适配](../../packages/three-world/src/humanoid-runtime/camera.ts)
+- [共享相机状态与交接](https://github.com/seedleap/agent-whitebox-world-sdk/blob/2852468670864e7b829c7f84c0f56f280494f88f/packages/three-world/src/camera.ts)
+- [Humanoid 采样与呈现适配](https://github.com/seedleap/agent-whitebox-world-sdk/blob/2852468670864e7b829c7f84c0f56f280494f88f/packages/three-world/src/humanoid-runtime/camera.ts)
 - [Humanoid 起点与上下车消费](../../packages/three-world/src/humanoid-runtime/runtime.ts)
 - [World / Episode 运行时入口](../../packages/three-world/src/world.ts)
 - [公共相机契约测试](../../packages/three-world/src/camera-public-conformance.test.ts)

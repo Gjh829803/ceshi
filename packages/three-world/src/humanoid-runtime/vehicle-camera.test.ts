@@ -14,7 +14,7 @@ const queries=new Set<VehicleCameraQueries>();
 function trackQuery(vehicles:ConstructorParameters<typeof VehicleCameraQueries>[0]){const query=new VehicleCameraQueries(vehicles);queries.add(query);return query;}
 afterEach(()=>{for(const query of queries)query.dispose();queries.clear();});
 
-const spec:VehicleSpec={id:'rover',name:'Rover',en:'ROVER',mode:'wheeled',kernel:'K03',color:'#fff',spawn:[0,0,0],yaw:0,speed:12,accel:5,grip:11,steer:1.1,radius:1.65,seat:[0,.91,.1],camera:11,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
+const spec:VehicleSpec={id:'rover',name:'Rover',en:'ROVER',mode:'wheeled',kernel:'K03',color:'#fff',spawn:[0,0,0],yaw:0,speed:12,accel:5,grip:11,steer:1.1,radius:1.65,seat:[0,.91,.1],hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
 const map:EnvironmentDefinition={id:'camera-rover',name:'Camera rover',description:'',bounds:{min:[-50,-5,-50],max:[50,30,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'rover-start',name:'Rover',vehicleId:'rover',position:[0,0,0],yaw:0,regionId:'road'}],playerSpawn:[2.7,.04,0]};
 function block(root:Group,size:[number,number,number],position:[number,number,number]):Mesh<BoxGeometry,MeshStandardMaterial|MeshStandardMaterial[]>{
  const mesh=new Mesh(new BoxGeometry(...size),new MeshStandardMaterial());mesh.position.set(...position);root.add(mesh);return mesh;
@@ -28,13 +28,14 @@ function openCabin(){
 async function fixture(object=openCabin()){
  const parkedSpec={...spec};
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'rover',assetId:'rover',spec:parkedSpec,object}]}});
- world.humanoid!.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1,collisionRadiusMeters:.25}});
+
  return world;
 }
 function approachAndOrbit(world:Awaited<ReturnType<typeof fixture>>){
  world.step({},5);world.step({moveXRatio:1},100);
  const contact=world.getEntityState('player'),vehicleX=world.humanoid!.simulation.vehicles[0]!.position.x;world.step({},30);
- world.step({cameraPitchRatio:-1},25);world.step({cameraYawRatio:1},78);
+ world.useAuthoredCamera();world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',input:{orbitRateRadiansPerSecond:1.2},activation:'immediate',binding:{targetEntityId:'player'},views:{'third-person':{kind:'third-person',overrides:{position:{distanceMeters:11,anchor:{kind:'subject-local',positionMetersXYZ:[0,1.7,0]},armHalfLifeSeconds:0},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{visibility:'require-line-of-sight',collision:{radiusMeters:.25}}}}}}});
+ world.step({cameraYawRatio:(Math.PI*1.5-world.inspectCamera().intent!.yawRadians)/(1.2*3)},180);world.step({},180);
  return {...contact,vehicleX};
 }
 describe('vehicle camera geometry',()=>{
@@ -57,17 +58,7 @@ describe('vehicle camera geometry',()=>{
    expect(camera.positionWorldMetersXYZ[0]-world.humanoid!.simulation.vehicles[0]!.position.x).toBeGreaterThan(.34);
   }finally{world.dispose();}
  });
- it('discovers a vehicle model attached after runtime initialization and keeps display projection deterministic',async()=>{
-  const root=new Group(),world=await fixture(root);try{
-   root.add(openCabin());approachAndOrbit(world);
-   const r=world.humanoid!,c=r.followCamera,state=c.collisionState;
-   const pose={position:r.simulation.controlledActor.player.position.clone(),rotation:new Quaternion(),velocity:new Vector3(),yaw:r.simulation.controlledActor.player.yaw,speed:0,steering:0,cameraHeight:1.68*.655};
-   c.present(pose,.75);const eye=world.camera.position.clone();c.present(pose,.25);c.present(pose,.75);
-   expect(world.camera.position.distanceTo(eye)).toBeLessThan(1e-8);expect(c.collisionState).toEqual(state);
-   expect(world.camera.position.distanceTo(c.presentationTarget)).toBeGreaterThan(10.9);
-   await world.reset();approachAndOrbit(world);expect(world.snapshot().camera.actualArmDistanceMeters).toBeGreaterThan(10.9);
-  }finally{world.dispose();}
- });
+
  it.each([false,true])('reports a lens that starts inside a closed vehicle part (material array: %s)',array=>{
   const root=new Group(),mesh=block(root,[2,2,2],[0,1,0]);if(array)mesh.material=Array.from({length:6},()=>new MeshStandardMaterial());const query=trackQuery([{instanceId:'body',object:root}]);query.sync();
   const hit=query.probe([0,1,0],[0,1,0],.2);
@@ -78,9 +69,11 @@ describe('vehicle camera geometry',()=>{
   glass.material=Array.from({length:6},()=>new MeshStandardMaterial({transparent:true,opacity:.25}));
   const query=trackQuery([{instanceId:'glass',object:root}]);query.sync();
   expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(true);
+  expect(query.probe([2,1,0],[-2,1,0],0).distanceMeters).toBe(4);
   expect(query.probe([2,1,0],[-2,1,0],.2).distanceMeters).toBeCloseTo(1.75,4);
   glass.material[0]!.transparent=false;glass.material[0]!.opacity=1;query.sync();
   expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(false);
+  expect(query.probe([2,1,0],[-2,1,0],0).distanceMeters).toBeCloseTo(1.95,5);
   glass.material[0]!.visible=false;query.sync();expect(query.visibleBetween([2,1,0],[-2,1,0])).toBe(true);
  });
  it('returns world-space distances and normals under rotated, scaled parents',()=>{
@@ -198,24 +191,4 @@ describe('vehicle camera geometry',()=>{
   expect(query.probe([0,0,0],[0,3,0],.2).colliderEntityId).toBeUndefined();
   expect(query.probe([0,0,0],[2,0,0],.2).distanceMeters).toBeLessThan(.9);
  });
-});
-
-it('holds a dragon camera arm across a brief clear gap and recovers without a pop',async()=>{
-  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
-    character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'dragon',assetId:'dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}]}});
-  let blocked=true;
-  const probe=vi.spyOn(world.humanoid!.environment,'cameraProbe').mockImplementation((from,to)=>{
-    const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);return blocked&&length>10?{distanceMeters:10,colliderEntityId:'wall'}:{distanceMeters:length};
-  });
-  try{
-    const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:0,humanoid:{mounted:true,vehicleInstanceId:'dragon'}});
-    const camera=r.followCamera,arm=()=>world.camera.position.distanceTo(camera.target);
-    world.step({},1);const constrained=arm();expect(constrained).toBeLessThan(11);
-    blocked=false;world.step({},1);expect(arm()).toBeLessThanOrEqual(constrained+.001);
-    blocked=true;world.step({},1);expect(arm()).toBeLessThan(11);
-    blocked=false;let previous=arm();for(let n=0;n<600;n++){
-      world.step({},1);expect(arm()-previous).toBeLessThanOrEqual(12/60+.001);previous=arm();
-    }
-    expect(arm()).toBeGreaterThan(31);
-  }finally{probe.mockRestore();world.dispose();}
 });

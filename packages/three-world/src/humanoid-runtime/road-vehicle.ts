@@ -23,7 +23,7 @@ export function createRoadVehicleSpec(kind:RoadVehicleKind):RoadVehicleSpec {
     color:'#eeeeee',spawn:[0,0,0],yaw:0,
     speed:(motorcycle?150:160)/3.6,maxSpeed:(motorcycle?180:200)/3.6,reverseSpeed:motorcycle?2:8.4,
     accel:motorcycle?12:10,grip:motorcycle?13:11,steer:motorcycle?1.12:1,
-    radius:motorcycle?.85:1.65,seat:motorcycle?[0,1.135,-.2]:[0,1.1,0],camera:motorcycle?6.8:8.2,
+    radius:motorcycle?.85:1.65,seat:motorcycle?[0,1.135,-.2]:[0,1.1,0],
     ...(motorcycle?{characterPose:'ride' as const}:{}),
     hint:'W/S 油门与制动 · A/D 转向 · Shift 加速 · Space 制动 · F 上下车',
     envelope:motorcycle?{kind:'box',halfExtents:[.65,1.2,1.65],offset:[0,1.2,0]}:

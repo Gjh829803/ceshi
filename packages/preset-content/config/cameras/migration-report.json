@@ -1,0 +1,4058 @@
+{
+  "sources": [
+    {
+      "sourcePath": "scripts/migrations/fixtures/legacy-camera-baseline.json",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc"
+    },
+    {
+      "sourcePath": "scripts/migrations/fixtures/legacy-dragon-variants.json",
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e"
+    },
+    {
+      "sourcePath": "scripts/migrations/fixtures/legacy-camera-subject-facts.json",
+      "sourceHash": "d6d5e29e237dcbdbce4e66a479ea5bae8523de24bbc72335a24d387c1bfeeecc"
+    }
+  ],
+  "sourceIdentity": "285246867",
+  "subjectFactsSourceRevision": "2852468670864e7b829c7f84c0f56f280494f88f",
+  "subjects": [
+    {
+      "subjectId": "person",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.anchorHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "rover",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "rover",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "racer",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "racer",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "motorcycle",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "motorcycle",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "skateboard",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "skateboard",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "hovercraft",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "hover",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "boat",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "boat",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "submarine",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "submarine",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "glider",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "glider",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "plane",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "plane",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "spacecraft",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "spacecraft",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "trail-rover",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "rover",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "touring-motorcycle",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "motorcycle",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "rescue-hovercraft",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "hover",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "patrol-boat",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "boat",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "trainer-plane",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "plane",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "survey-spacecraft",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "spacecraft",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "supercar",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "racer",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "kart",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "racer",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/config.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "horse",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "horse",
+        "creature": true,
+        "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "carriage",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "carriage",
+        "creature": true,
+        "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "dragon",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "dragon",
+        "creature": true,
+        "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "unicycle",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "unicycle",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/unicycle/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "observation-submarine",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "submarine",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/submersible/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "canoe",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "canoe",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/canoe/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "kayak",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "kayak",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/kayak/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "raft",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "raft",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/raft/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "jetski",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "jetski",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/jetski/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "atv",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "atv",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/atv/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "ski",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "ski",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/ski/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "sled",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "sled",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/sled/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "tank",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "tank",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/tank/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    },
+    {
+      "subjectId": "bus",
+      "sourceHash": "0484e194d47eb4720e70d4b88242b2a185960999e560791434f67793c33637fc",
+      "subjectFacts": {
+        "archetype": "bus",
+        "creature": false,
+        "specSourcePath": "packages/preset-content/src/vehicles/bus/spec.ts"
+      },
+      "report": [
+        {
+          "field": "cameraDistanceMeters",
+          "status": "inactive",
+          "note": "Omitted world override: use the specified subject/context baseline."
+        },
+        {
+          "field": "recenterDelaySeconds",
+          "status": "equivalent",
+          "destination": "orientation.recenter.delaySeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "recenterResponsePerSecond",
+          "status": "converted",
+          "destination": "orientation.recenter",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "followResponsePerSecond",
+          "status": "converted",
+          "destination": "position.armHalfLifeSeconds",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "baseFovDegrees",
+          "status": "equivalent",
+          "destination": "lens.verticalFovDegrees",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "targetHeightOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "horizontalOffset",
+          "status": "converted",
+          "destination": "position.anchorOffset",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionEnabled",
+          "status": "converted",
+          "destination": "constraints.collision.enabled",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "collisionRadiusMeters",
+          "status": "converted",
+          "destination": "constraints.collision.radiusMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "distance",
+          "status": "equivalent",
+          "destination": "position.distanceMeters",
+          "note": "Mapped from the specified source context."
+        },
+        {
+          "field": "hiddenOpeningPitch",
+          "status": "converted",
+          "note": "Explicit .35 humanoid / .3 vehicle / .12 shoulder; public .25."
+        },
+        {
+          "field": "hiddenBodyAnchor",
+          "status": "retune",
+          "note": "Humanoid body ratio .655 restores old reset pivot; swimming eye/posture behavior requires visual retune."
+        },
+        {
+          "field": "hiddenNear",
+          "status": "converted",
+          "note": "Construction .12 and view .035/.05 are explicit per-view lens values."
+        },
+        {
+          "field": "hiddenRecenter",
+          "status": "converted",
+          "note": "Airborne yaw multiplier and ground/air pitch targets exported as values."
+        },
+        {
+          "field": "shoulderPace",
+          "status": "converted",
+          "note": "Full-effect speed exported from the specified source speed; never read dynamics at runtime."
+        },
+        {
+          "field": "shoulderRadius",
+          "status": "converted",
+          "note": "Effective min(.2, configured radius) exported; new edits have no hidden clamp."
+        },
+        {
+          "field": "roll",
+          "status": "retune",
+          "note": "First-person roll inheritance deliberately disabled; validate cockpit framing."
+        },
+        {
+          "field": "collision",
+          "status": "retune",
+          "note": "First-person collision enabled intentionally; old bypass, padding and doubled damping are not retained."
+        },
+        {
+          "field": "anchorSpace",
+          "status": "retune",
+          "note": "Old orbit-relative lateral offsets become explicit heading/subject or world offsets; nonzero offsets require visual retuning."
+        },
+        {
+          "field": "seatEye",
+          "status": "retune",
+          "note": "SDK eye semantic anchor uses current actor geometry; native fallback seat .72/1.55 and .08 eye shift are not claimed equivalent."
+        }
+      ]
+    }
+  ],
+  "dragonVariants": [
+    {
+      "id": "D01",
+      "distanceMeters": 32,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D02",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D03",
+      "distanceMeters": 37,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D04",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D05",
+      "distanceMeters": 38,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D06",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D07",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D08",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D09",
+      "distanceMeters": 34,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D10",
+      "distanceMeters": 37,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    },
+    {
+      "id": "D11",
+      "distanceMeters": 40,
+      "sourceHash": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
+      "status": "retune",
+      "note": "Explicit variant distance inventory; selected variant document must bind this calibration."
+    }
+  ],
+  "unexportedBrowserProfiles": {
+    "status": "unknown",
+    "note": "No browser storage inspected; raw v1 keys remain untouched."
+  }
+}

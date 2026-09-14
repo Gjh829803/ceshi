@@ -12,9 +12,10 @@ it('rejects direct mutations and callback registration after disposal', async ()
     () => runtime.approach('horse-1'), () => runtime.switchMap(runtime.options.map),
     () => runtime.applyProfile({}), () => runtime.advance({}, 1 / 60),
     () => runtime.reset(), () => runtime.useAuthoredCamera(),
-    () => runtime.setCameraMode(0), () => runtime.onVisualUpdate(() => {}),
+    () => runtime.onVisualUpdate(() => {}),
   ];
   for (const mutate of mutations) expect(mutate).toThrow('HUMANOID_DISPOSED');
+  expect(()=>world.setCameraView('third-person')).toThrow('WORLD_DISPOSED');
 });
 
 it('allows world cleanup after a directly disposed runtime',async()=>{

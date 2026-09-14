@@ -1,3 +1,4 @@
+import {openEpisodeBrowser} from '../../src/capture/browser.js';
 import {writeFixtureAssetPolicy} from '../fixtures/asset-policy';
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,10 +15,11 @@ import { createRenderedFrameEncoder, inspectRenderedVideo } from '@worldkit/brow
 
 const tempRoots: string[] = [];
 afterEach(async () => { await Promise.all(tempRoots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-const capabilities: EpisodeCapabilities = { schemaVersion: 1, controlledEntityId: 'actor', fixedTimeStepSeconds: 1 / 60,
+const cameraIdentity={viewId:'explore',viewKind:'third-person',documentHash:'fixture-camera',configurationRevision:1,cameraCommitRevision:1,lifecycleGeneration:1,logicalTargetId:'actor',resolvedSubjectId:'actor',subjectGeneration:1,transition:{kind:'none',configuredDurationSeconds:0,effectiveDurationSeconds:0}} as const;
+const capabilities: EpisodeCapabilities = { schemaVersion: 2, controlledEntityId: 'actor', fixedTimeStepSeconds: 1 / 60,
   worldBounds: { minimumWorldMetersXYZ: [-30, 0, -600], maximumWorldMetersXYZ: [100, 20, 100] },
   movement: { kind: 'ground', movementId: 'ground', walkSpeedMetersPerSecond: 4, runSpeedMetersPerSecond: 7, jumpSpeedMetersPerSecond: 0, heightMeters: 1.8, radiusMeters: 0.3, maximumStepHeightMeters: 0.4, maximumSlopeRadians: 0.8 },
-  camera: { mode: 'follow', segmentInitialization: 'relative-authored-pose' }, maximumStartAlignmentMeters: 0.75 };
+  camera: { baselineMode:'follow',documentHash:'fixture-camera',views:[{viewId:'explore',kind:'third-person'},{viewId:'aim',kind:'third-person'}],defaultViewId:'explore',current:{...cameraIdentity,mode:'follow',positionWorldMetersXYZ:[0,3,5],orientationWorldQuaternionXYZW:[0,0,0,1],desiredPositionWorldMetersXYZ:null,desiredYawRadians:0,desiredPitchRadians:0},mode: 'follow', segmentInitialization: 'relative-authored-pose' }, maximumStartAlignmentMeters: 0.75 };
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 function fakeSession(options: { shouldFail?: boolean } = {}) {
   let yaw = 0, pitch = 0;
@@ -25,7 +27,7 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
   let tick = 1, position: Vec3 = [0, 0, 0], preparations = 0;
   const advances: number[] = [];
   const snapshot = (): WorldSnapshot => ({ schemaVersion: 2, worldRevision: 0, simulationTick: tick, simulationSeconds: tick / 60, controlledEntityId: 'actor', isRunning: false,
-    camera: { mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: yaw, desiredPitchRadians: pitch },
+    camera: { ...cameraIdentity,mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: yaw, desiredPitchRadians: pitch },
     entities: [{ id: 'actor', generation: 0, geometryVersion: 0, name: 'actor', tags: [], role: 'actor', appearancePrompt: '', positionWorldMetersXYZ: position, rotationLocalRadiansXYZ: [0, 0, 0], scaleLocalXYZ: [1, 1, 1], isVisibleLocal: true, isVisibleEffective: true, controlOwners: [], motion: { phase: 'grounded', isGrounded: true, velocityWorldMetersPerSecondXYZ: velocity, collisionEntityIds: [] } }],
     errors: options.shouldFail && tick > 30 ? [{ code: 'FIXTURE_RUNTIME_ERROR', message: 'fixture failure', phase: 'step', category: 'runtime', entityIds: ['actor'] }] : [] });
   const session: EpisodeCaptureSession = {
@@ -227,3 +229,28 @@ it('rejects a prior-route candidate from another source before dispatching the c
  options.runtimeConfig.routePlanCandidate.sourceHash='c'.repeat(64);await writeFile(candidatePath,'tampered route');
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');expect(runCodex).not.toHaveBeenCalled();expect(capture).not.toHaveBeenCalled();
 });
+
+it('rejects v1 capabilities before probing or preparing the frozen runtime',async()=>{
+ const setup=await fixture();
+ setup.fake.session.capabilities=async()=>({...capabilities,schemaVersion:1}) as unknown as EpisodeCapabilities;
+ await expect(runCaptureSegments({...setup.options,segmentIds:['segment-00']})).rejects.toThrow('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
+ expect(setup.fake.preparations).toBe(0);
+});
+it('rejects a prepared named view mismatch before recording',async()=>{
+ const setup=await fixture();setup.plan.segments[0]!.start={...setup.plan.segments[0]!.start,cameraViewId:'aim'};
+ const result=await runCaptureSegments({...setup.options,segmentIds:['segment-00']});
+ expect(result.status).not.toBe('completed');expect(setup.encoded).toBe(0);
+});
+
+it('admits port v2 over real browser transport and rejects a mismatched prepared response',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'episode-protocol-browser-'));tempRoots.push(root);
+ const html=(version:number|undefined,capabilityVersion:number|undefined=2)=>`<script>window.__WORLDKIT_EVAL__={ready:true,stopLive:async()=>{},episode:{schemaVersion:${String(version)},capabilities:()=>(${JSON.stringify({...capabilities,schemaVersion:capabilityVersion})}),prepareSegment:async()=>({camera:${JSON.stringify(capabilities.camera.current)}}),execute:async()=>{},operation:()=>{},release:()=>{window.released=true}}};</script>`;
+ for(const [version,capabilityVersion] of [[1,2],[undefined,2],[2,1]] as const){
+  await writeFile(path.join(root,'index.html'),html(version,capabilityVersion));
+  await expect(openEpisodeBrowser({playableRoot:root})).rejects.toThrow('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
+ }
+ await writeFile(path.join(root,'index.html'),html(2));const session=await openEpisodeBrowser({playableRoot:root});try{
+  await expect(session.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'aim'},{widthPixels:640,heightPixels:360})).rejects.toThrow('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
+  expect(await session.page.evaluate(()=> (window as any).released)).toBe(true);
+ }finally{await session.close();}
+},30000);

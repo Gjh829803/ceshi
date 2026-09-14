@@ -29,32 +29,40 @@ The vehicle's map spawn and seat define placement. The SDK checks grounded suppo
 availability, occupancy and body clearance before publishing the mounted state.
 It performs no approach or boarding animation. An invalid start fails explicitly.
 
-Configure `world.setCameraFollow` with `opening` (world position, look-at point,
-optional up vector and FOV) and `activateOnInput:true`. Use
-`headingFollow:'vehicle'` for automatic recentering while riding; on foot it keeps
-camera-relative movement and free orbit. `headingFollow:'fixed'` retains viewing
-direction. Recenter timing comes from the current vehicle camera tuning; manual
-orbit temporarily holds that direction. Initial input preserves the opening;
-recentering changes heading gradually without replacing
-the opening's distance, pitch or FOV. Do not combine `opening` with target framing
-or orbit distance/pitch overrides.
+Import project `config/camera.json` relatively, pass it to `parseCameraDocument`,
+then call `world.setCameraFollow({configuration:document})`. A document defines named views,
+`defaultViewId`, subject binding and optional embedded preset snapshots. Select
+another configured view with `world.setCameraView(viewId)`. Request `contracts`
+for the selected SDK's `cameraConfiguration` schema/field metadata and
+`cameraSourceContracts`; source-edited projects may report stale generated metadata
+as unavailable while retaining their current declarations.
 
-Mount changes reuse the active rig: preserved framing follows the new subject with
-the current orbit, zoom and relative composition, using follow damping. A retracted
-vehicle camera is not saved as the person's new opening. Target framing uses its
-configured follow and transition timing. Neither reapplies startup view settings. An explicit reset
-restores the sealed opening. Mouse drag remains available while riding; keyboard
-axis ownership follows the SDK's [controls](../../../three-world/README.md#bind-scene-controls-and-parameters).
+For an authored opening, configure a third-person view with `opening` and
+`framing.kind:'preserve-opening'`. `activation:'on-input'` preserves it until
+input activates following. Configure recentering, damping, zoom and transitions
+in that view's overrides. The document resolver supplies defaults and reports field
+provenance. Embed any referenced preset snapshots in `document.presets`; author
+imports do not allow preset-content. The nonhuman binding example includes the
+relative JSON import and minimal document; adapt its target to your actor.
+
+Ordinary `addCharacter` supports optional `eyePositionLocalMetersXYZ`; first-person
+and shoulder views require actual subject eye support. Subject binding selects the
+camera target independently of the controlled entity. Mount changes follow the
+document's binding policy through the existing camera owner.
 
 The first start/step/reset seals the initial relationship and camera together.
 Reset restores both. Do not simulate F for initialization, manually attach the
-rider, or install another camera writer. Advanced authored camera poses can still
-use `useAuthoredCamera` followed by follow configuration without `opening`.
-On-foot initial facing defaults to back toward the opening camera and can use
-`characterFacingYawRadians`; a mounted rider follows the vehicle's heading.
-Request `humanoid`/`nonhuman-subject` contracts for current parameter definitions.
-In existing real-input checks compare `mountedInstanceId`, the controlled entity,
-`snapshot().camera.subjectEntityId`, `headingFollow` and actual displayed frames.
+rider, or install another camera writer. On-foot initial facing defaults to back
+toward the opening camera and can use `characterFacingYawRadians`; a mounted rider
+follows the vehicle's heading.
+
+Read `world_inspect({sections:['camera']})` for `observation.camera`: the committed
+configuration hash/revisions, effective view and subject, resolved fields and
+provenance. Current-view feedback uses that same inspection. Missing or failed
+inspection is explicitly unavailable and does not prevent screenshots. Playtest
+samples retain compact `snapshot.camera` identities; source inventory, runtime
+identity and actual adopted document hash together establish which build consumed
+which configuration. Reads do not advance simulation.
 
 Keep HUD outside the pure world image:
 ```ts

@@ -51,6 +51,7 @@ export function summarizePlaytestTrace(value: unknown, query: PlaytestTraceQuery
   const compact = ({sample, wallSeconds, traceSampleIndex}: typeof timed[number]) => {
     const velocityMetersPerSecondXYZ = vector(sample.velocityMetersPerSecondXYZ);
     const humanoid = object(sample.humanoid), mounted = humanoid.mountedInstanceId;
+    const camera=object(sample.camera),transition=object(camera.transition);
     const mountObserved = mounted === null || typeof mounted === 'string';
     return {
       traceSampleIndex, wallSeconds, simulationTick: finite(sample.simulationTick),
@@ -58,6 +59,12 @@ export function summarizePlaytestTrace(value: unknown, query: PlaytestTraceQuery
       positionMetersXYZ: vector(sample.positionMetersXYZ), velocityMetersPerSecondXYZ,
       speedMetersPerSecond: velocityMetersPerSecondXYZ ? finite(Math.hypot(...velocityMetersPerSecondXYZ)) : null,
       isGrounded: typeof sample.isGrounded === 'boolean' ? sample.isGrounded : null,
+      camera: Object.keys(camera).length ? {
+        documentHash:text(camera.documentHash),configurationRevision:finite(camera.configurationRevision),cameraCommitRevision:finite(camera.cameraCommitRevision),
+        viewId:text(camera.viewId),viewKind:text(camera.viewKind),lifecycleGeneration:finite(camera.lifecycleGeneration),
+        logicalTargetId:text(camera.logicalTargetId),resolvedSubjectId:text(camera.resolvedSubjectId),subjectGeneration:finite(camera.subjectGeneration),subjectEntityId:text(camera.subjectEntityId),
+        transition:transition.kind==='none'?{kind:'none',reason:text(transition.reason)}:transition.kind==='blend'?{kind:'blend',targetViewId:text(transition.targetViewId),configuredDurationSeconds:finite(transition.configuredDurationSeconds),effectiveDurationSeconds:finite(transition.effectiveDurationSeconds),elapsedSeconds:finite(transition.elapsedSeconds),durationSeconds:finite(transition.durationSeconds)}:null,
+      }:null,
       actionId: text(sample.actionId), cameraMode: text(object(sample.camera).mode),
       mount: {status: mountObserved ? 'observed' : 'unavailable', instanceId: text(mounted)},
       observationError: text(sample.observationError, 300),

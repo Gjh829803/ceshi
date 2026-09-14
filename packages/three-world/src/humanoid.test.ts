@@ -24,7 +24,7 @@ it.each(['car','motorcycle','horse'] as const)('starts %s mounted before tick ze
   character:{instanceId:'person',object:new THREE.Group(),initialMountId:'ride'},
   vehicles:[{instanceId:'ride',assetId:'custom.vehicle',object:new THREE.Group(),spec}]}});worlds.push(world);
  expect(world.snapshot()).toMatchObject({simulationTick:0,humanoid:{mountedInstanceId:'ride',transition:{remainingSeconds:0}}});
- world.setCameraFollow({opening:{positionWorldMetersXYZ:[7,5,9],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:49},headingFollow:'vehicle'});
+ world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'person'},activation:'on-input',views:{'third-person':{kind:'third-person',opening:{positionWorldMetersXYZ:[7,5,9],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:49},overrides:{framing:{kind:'preserve-opening'},orientation:{recenter:{enabled:true}}}}}}});
  const camera=world.camera.clone(),person=world.humanoid!.simulation.controlledActor;
  world.step({},0);expect(person.player.yaw).toBeCloseTo(1.2);expect(world.camera.quaternion.angleTo(camera.quaternion)).toBeLessThan(1e-7);
  world.step({humanoid:{...emptyInput(),forward:1}},90);expect(person.vehicle!.position.distanceTo(new THREE.Vector3(0,.025,0))).toBeGreaterThan(.5);

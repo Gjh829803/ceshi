@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertPreSeedanceProfile, canonicalHash, PRE_SEEDANCE_PROFILE, segmentRecipeHash, validateEpisodePlan, type EpisodePlan } from '../../src/contracts.js';
+import { importEpisodePlan, assertPreSeedanceProfile, canonicalHash, PRE_SEEDANCE_PROFILE, segmentRecipeHash, validateEpisodePlan, type EpisodePlan } from '../../src/contracts.js';
 
 const hash = 'a'.repeat(64);
 const plan = (): EpisodePlan => ({ kind: 'worldkit-three-episode-plan', schemaVersion: 2, worldBuildHash: hash,
@@ -54,7 +54,7 @@ it('accepts mount and view settled goals and requires a boarding instance target
   const input = plan(), segment = input.segments[0]!;
   segment.actionGoals = [
     { id: 'board', trigger: { waypointIndex: 0, radiusMeters: .6 }, targetId: 'car', intent: { kind: 'mount', action: 'enter' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
-    { id: 'view', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'view', perspective: 'first-person' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
+    { id: 'view', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'view', viewId:'first-person' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
     { id: 'exit', trigger: { waypointIndex: 0, radiusMeters: .6 }, intent: { kind: 'mount', action: 'exit' }, completion: { kind: 'settled', holdSeconds: .2 }, timeoutSeconds: 4 },
   ];
   expect(validateEpisodePlan(input, { worldBuildHash: hash }).segments[0]!.actionGoals).toEqual(segment.actionGoals);
@@ -75,4 +75,13 @@ it('accepts explicit interaction slots and rejects slots unrelated to an interac
   expect(segmentRecipeHash({ worldBuildHash: hash, runtimeHash: hash }, segment)).not.toBe(recipe);
   segment.actionGoals = [{ ...goal, intent: { kind: 'mount', action: 'enter' } }];
   expect(() => validateEpisodePlan(input, { worldBuildHash: hash })).toThrow('SLOT_INVALID');
+});
+
+it('imports legacy camera selections only through declared views without changing its source plan',()=>{
+ const legacy=plan() as any;legacy.segments[0].start.humanoid={cameraMode:2};legacy.segments[1].start.cameraPerspective='third-person';
+ const declaration={views:[{viewId:'explore',kind:'third-person'},{viewId:'aim',kind:'third-person'},{viewId:'over-shoulder',kind:'shoulder'}],defaultViewId:'explore'} as const;
+ const before=canonicalHash(legacy),converted=importEpisodePlan(legacy,declaration,{worldBuildHash:hash});
+ expect(converted.segments[0]!.start.cameraViewId).toBe('over-shoulder');expect(converted.segments[1]!.start.cameraViewId).toBe('explore');expect(canonicalHash(legacy)).toBe(before);
+ expect(()=>importEpisodePlan(legacy,{...declaration,defaultViewId:'over-shoulder'},{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_VIEW_AMBIGUOUS');
+ legacy.segments[0].start.cameraViewId='aim';expect(()=>importEpisodePlan(legacy,declaration,{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_FIELDS_CONFLICT');
 });

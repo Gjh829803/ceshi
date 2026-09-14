@@ -1,3 +1,5 @@
+import {parseCameraDocument} from '@worldkit/three';
+import cameraData from './config/camera.json';
 import * as THREE from 'three';
 import {createHumanoidWorld,type EnvironmentDefinition} from '@worldkit/three';
 import {addInteractionDemo} from './interactions';
@@ -26,7 +28,7 @@ hud.style.cssText='position:absolute;top:16px;left:16px;padding:12px;background:
 const label=document.createElement('p');label.textContent='WASD 控制人物 · NPC 自动往返 · 接近后争用物件、搬运及坐下';hud.append(label,interactionPanel);
 for(const id of ['person','npc-left','npc-right']){
   const button=document.createElement('button');button.textContent=`跟随 ${id}`;
-  button.onclick=()=>{world.setCameraFollow({targetEntityId:id});presentation.focus();};hud.append(button);
+  button.onclick=()=>{world.setCameraFollow({configuration:parseCameraDocument({...cameraData,binding:{...cameraData.binding,targetEntityId:id}})});presentation.focus();};hud.append(button);
 }
 const reset=document.createElement('button');reset.textContent='重置';reset.onclick=async()=>{await world.reset();await world.start();presentation.focus();};hud.append(reset);
 presentation.ui.mount(hud);

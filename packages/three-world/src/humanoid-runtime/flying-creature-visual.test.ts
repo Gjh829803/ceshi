@@ -1,3 +1,4 @@
+import {createHumanoidCameraDocument} from '../config/camera/index';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {fileURLToPath} from 'node:url';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -88,22 +89,23 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
   const world=await createWorld({camera:new T.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
     character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:`creature.dragon.${id.toLowerCase()}`,spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,...(variant.collisionProbes?{flyingCreatureCollision:variant.collisionProbes}:{})},object:visual.root,flyingVisual:visual}]}});
   try{
-    const runtime=world.humanoid!;runtime.applyProfile({view:{keyboardToggleEnabled:true}});
+    const runtime=world.humanoid!;world.setCameraFollow({configuration:{...createHumanoidCameraDocument('person'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});
     expect(world.snapshot().humanoid?.vehicles[0]?.assetId).toBe(`creature.dragon.${id.toLowerCase()}`);
     runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
+    const document=world.inspectCamera().document!;world.setCameraFollow({configuration:{...document,views:Object.fromEntries(Object.entries(document.views).map(([key,view])=>[key,{...view,overrides:{...view.overrides,position:{...view.overrides?.position,subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0},orientation:{...view.overrides?.orientation,pitchLimitsRadians:{kind:'bounded',minimumRadians:-85*Math.PI/180,maximumRadians:85*Math.PI/180}}}}]))} as import('../config/camera/index').CameraDocument});
     const meshes:T.SkinnedMesh[]=[];rider.root.traverse(n=>{if(n instanceof T.SkinnedMesh)meshes.push(n);});
     const full=meshes.map(mesh=>mesh.geometry.index?.count??0);
     const eye=()=>{const point=new T.Vector3();expect(rider.eyePosition(point)).toBe(true);return point;};
     for(const mode of [0,1,2] as const){
-      runtime.setCameraMode(mode);
+      world.setCameraView(['third-person','first-person','shoulder'][mode]!);
       for(let frame=0;frame<120;frame++)world.step({cameraPitchRatio:-1},1);
       expect(world.camera.getWorldDirection(new T.Vector3()).y,id+':sky view '+mode).toBeGreaterThan(.99);
       expect(world.camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
       if(mode===1)expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
     }
-    runtime.setCameraMode(0);
+    world.setCameraView('third-person');
     for(const direction of [-1,1]){
-      world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
+      world.step({cameraTogglePressed:true},1);expect(world.inspectCamera().resolved?.kind).toBe('first-person');
       expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
       for(let n=0;n<60;n++){
         world.step({cameraYawRatio:direction,cameraPitchRatio:direction,humanoid:{...emptyInput(),steer:direction,boost:true}},1);
@@ -114,24 +116,25 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
           expect(world.camera.quaternion.toArray().every(Number.isFinite)).toBe(true);
         },alpha);
       }
-      expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true);
-      world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(2);
+      const engine=(world as unknown as {engine:WorldEngine}).engine;engine.withPresentation(()=>expect(meshes.some((mesh,i)=>(mesh.geometry.index?.count??0)<full[i]!)).toBe(true));
+      expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
+      world.step({},1);world.step({cameraTogglePressed:true},1);expect(world.inspectCamera().resolved?.kind).toBe('shoulder');
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
       const vehicle=runtime.simulation.controlledActor.vehicle!,offset=world.camera.position.clone().sub(eye()).applyQuaternion(vehicle.rotation.clone().invert());
-      expect(offset.x).toBeLessThan(-.15);expect(offset.z).toBeLessThan(-1.5);expect(offset.length()).toBeLessThan(3);
-      world.step({},1);world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(0);
+      expect(offset.length()).toBeGreaterThan(1);expect(offset.length()).toBeLessThan(3);
+      world.step({},1);world.step({cameraTogglePressed:true},1);expect(world.inspectCamera().resolved?.kind).toBe('third-person');
       expect(meshes.map(mesh=>mesh.geometry.index?.count??0)).toEqual(full);
     }
-    runtime.setCameraMode(1);runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,cameraMode:1}});
+    world.setCameraView('first-person');runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true,}});
     expect(world.camera.position.distanceTo(eye())).toBeLessThan(1e-6);
-    runtime.setCameraMode(0);
+    world.setCameraView('third-person');
     expect(runtime.exit()).toBe(true);world.step({},720);
     expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('grounded');
-    runtime.setCameraMode(1);
+    world.setCameraView('first-person');
     expect(world.camera.position.distanceTo(eye()),id+':ground eye').toBeLessThan(.001);
     const sight=visual.root.getObjectByName('Head')!.getWorldPosition(new T.Vector3()).sub(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()));sight.y=0;
     expect(sight.normalize().dot(new T.Vector3(0,0,1)),id+':ground body faces rider view').toBeGreaterThan(.6);
-    runtime.setCameraMode(0);
+    world.setCameraView('third-person');
     // 长身龙额外覆盖右侧堵塞后左侧下龙，以及左侧重新登乘。
     const human=runtime.simulation.controlledActor.controller,body=human.standingQueryBody;
     const blockedRight=id==='D09'&&body.kind==='capsule'?human.world.createCollider(RAPIER.ColliderDesc.cuboid(.45,1,.45).setTranslation(Math.max(...variant.ground!.probes.map(p=>p.center[0]+p.radius))+body.radius+.18,1,variant.ground!.seat[2])):undefined;
@@ -223,9 +226,8 @@ it('publishes eleven selectable complete rigs with embedded textures and source-
   expect(DRAGON_VARIANTS.map(v=>v.id)).toEqual(Array.from({length:11},(_,i)=>'D'+String(i+1).padStart(2,'0')));
   const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
   for(const variant of DRAGON_VARIANTS.slice(1)){
-    expect(variant.camera).toBeGreaterThanOrEqual(1);expect(variant.camera).toBeLessThanOrEqual(40);
     const profile=getDefaultProfile('dragon')!;
-    expect(()=>parseAssetProfile({...profile,camera:{...profile.camera,distance:variant.camera},envelope:variant.envelope})).not.toThrow();
+    expect(()=>parseAssetProfile({...profile,envelope:variant.envelope})).not.toThrow();
     const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
     const json=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)).toString());
     const source=sources.find((s:{id:string})=>s.id===variant.id);

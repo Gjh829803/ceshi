@@ -16,6 +16,10 @@ export const RETAINED_PACKAGES = new Map([
   ["packages/three-world/package.json", "@worldkit/three"],
 ]);
 const SOURCE_FILE = /\.(?:c|m)?[jt]sx?$/;
+// A retired scope must appear literally or use an escape. Keep every escape
+// except \/ as a candidate: escaped slashes cannot create either scope name.
+// Candidates still go through the AST so comments and fixture strings are ignored.
+const POSSIBLE_RETIRED_SPECIFIER = /@(?:babylonjs|whitebox-world)|\\[^/]/;
 
 export interface ThreeWorkspaceViolation {
   readonly code: "THREE_WORKSPACE_PACKAGE" | "THREE_RETIRED_DEPENDENCY";
@@ -59,6 +63,7 @@ export function checkThreeWorkspaceFiles(
   }
   for (const [name, source] of Object.entries(files)) {
     if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|shared|scripts|deploy)\//.test(name)) continue;
+    if (!POSSIBLE_RETIRED_SPECIFIER.test(source)) continue;
     const syntax = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
       name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
     const add = (node: ts.Node | undefined) => {

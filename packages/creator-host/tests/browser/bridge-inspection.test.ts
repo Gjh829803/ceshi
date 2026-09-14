@@ -91,3 +91,21 @@ it('keeps vehicle diagnostics opt-in and degrades a missing or throwing sampler 
  expect(host.inspect({sections:['vehicles']}).vehicles).toBeNull();
  expect(world.snapshot()).toEqual(before);
 });
+
+it('forwards committed camera inspection only on demand and preserves recording summaries',async()=>{
+ const {world,observer,host}=await fixture(),before=world.snapshot();
+ expect(observer.inspectCamera).toBeTypeOf('function');
+ const inspect=vi.spyOn(observer,'inspectCamera');
+ host.inspect({sections:['snapshot']});host.read();expect(inspect).not.toHaveBeenCalled();
+ expect(host.inspect({sections:['camera']}).camera).toEqual(world.inspectCamera());
+ expect(host.read().camera).toEqual(before.camera);
+ expect(world.snapshot()).toEqual(before);
+});
+
+it('keeps camera failures local with an explicit reason',async()=>{
+ const {observer,host}=await fixture();
+ observer.inspectCamera=()=>{throw new Error('camera unavailable');};
+ expect(host.inspect({sections:['camera']})).toMatchObject({camera:null,cameraAvailability:{status:'unavailable',reason:'inspection-failed'}});
+ delete observer.inspectCamera;
+ expect(host.inspect({sections:['camera']})).toMatchObject({camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}});
+});

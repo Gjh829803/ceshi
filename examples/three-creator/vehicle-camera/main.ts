@@ -1,5 +1,6 @@
+import cameraData from './config/camera.json';
 import * as THREE from 'three';
-import {createHumanoidWorld, humanoid, type EnvironmentDefinition} from '@worldkit/three';
+import {createHumanoidWorld,parseCameraDocument, humanoid, type EnvironmentDefinition} from '@worldkit/three';
 import {applyWhiteboxMaterials} from './whitebox-materials';
 
 // Choose automobile handling before authoring the model. This contains no geometry.
@@ -71,11 +72,8 @@ const mechanical={wheelRigs,steering:wheelRigs.filter((_,i)=>physics.wheels[i]!.
 const world = await createHumanoidWorld({scene, camera, canvas, map, characterId: 'person',
   vehicles: [{instanceId: 'rover', assetId: 'custom.car', object: rover,
     spec}],
-  profile: {
-    view: {defaultPerspective: 'third-person', keyboardToggleEnabled: true},
-    cameraDistanceMeters: 11,
-  },
 });
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 world.onDispose(() => {
   for (const mesh of environmentMeshes) { mesh.geometry.dispose(); mesh.material.dispose(); }
 });
@@ -97,6 +95,6 @@ reset.onclick = async () => { await world.reset(); presentation.focus(); };
 hud.append(status, reset); presentation.ui.mount(hud);
 world.onUpdate(() => {
   const state = world.snapshot().humanoid!;
-  status.textContent = `Self-drawn car camera and glass\nWASD move / drive · F enter / exit · Space brake\nDrag to orbit · T third person / first person / shoulder\n${state.mountedInstanceId ? 'Driving' : 'On foot'} · ${['Third person', 'First person', 'Shoulder'][state.cameraMode]}\n${state.message}`;
+  status.textContent = `Self-drawn car camera and glass\nWASD move / drive · F enter / exit · Space brake\nDrag to orbit · T third person / first person / shoulder\n${state.mountedInstanceId ? 'Driving' : 'On foot'} · ${world.snapshot().camera.viewKind}\n${state.message}`;
 });
 await world.start(); presentation.focus();

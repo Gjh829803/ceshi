@@ -437,13 +437,16 @@ describe('camera arm physical shape probes', () => {
       instances.visible = false; expect(physics.castCameraArm([0, 1, 0], [0, 1, 8], .2)).toEqual({ distanceMeters: 8 }); expect(physics.audit().colliderCount).toBe(4);
     }
   });
-  it('casts a sphere against actual solids, excludes characters and hidden bodies, and returns zero for initial overlap', async () => {
+  it('casts against actual solids, excludes only the target and hidden bodies, and returns zero for initial overlap', async () => {
     const physics = await create(); const wall = box(0, 1.3, 3, 4, 4, .2); physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' }); physics.addCharacter('npc', actor(0, 1)); physics.step(dt, {});
-    const hit = physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2); expect(hit.colliderEntityId).toBe('wall'); expect(hit.distanceMeters).toBeCloseTo(2.7, 4);
-    expect(physics.castCameraArm([0, 1.3, 3], [0, 1.3, 6], .2)).toMatchObject({ distanceMeters: 0, colliderEntityId: 'wall', startedOverlapping: true });
-    physics.setEnabled('wall', false); expect(physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2)).toEqual({ distanceMeters: 6 });
-    physics.setEnabled('wall', true); const reverse = physics.castCameraArm([0, 1.3, 6], [0, 1.3, 0], .2); expect(reverse.colliderEntityId).toBe('wall'); expect(reverse.distanceMeters).toBeCloseTo(2.7, 4);
-    expect(() => physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], 0)).toThrow('PHYSICS_OPTION_INVALID');
+    expect(physics.castCameraArm([0,1.3,0],[0,1.3,6],.2).colliderEntityId).toBe('npc');
+    const hit = physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2, 'npc'); expect(hit.colliderEntityId).toBe('wall'); expect(hit.distanceMeters).toBeCloseTo(2.7, 4);
+    expect(physics.castCameraArm([0, 1.3, 3], [0, 1.3, 6], .2, 'npc')).toMatchObject({ distanceMeters: 0, colliderEntityId: 'wall', startedOverlapping: true });
+    physics.setEnabled('wall', false); expect(physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2, 'npc')).toEqual({ distanceMeters: 6 });
+    physics.setEnabled('wall', true); const reverse = physics.castCameraArm([0, 1.3, 6], [0, 1.3, 0], .2, 'npc'); expect(reverse.colliderEntityId).toBe('wall'); expect(reverse.distanceMeters).toBeCloseTo(2.7, 4);
+    expect(physics.castCameraArm([0,1.3,0],[0,1.3,6],0,'npc')).toMatchObject({colliderEntityId:'wall'});
+    expect(physics.castCameraArm([0,1.3,0],[0,1.3,6],0,'npc').distanceMeters).toBeCloseTo(2.9,4);
+    expect(() => physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], -.1)).toThrow('PHYSICS_OPTION_INVALID');
   });
 
   it('blocks camera volume at a triangle edge even where a center ray misses, from either face', async () => {
@@ -515,7 +518,7 @@ describe('movement extension intent adapter', () => {
     const physics = await create(); const wall = box(4, 1.5, 0, .2, 3, 4); physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' }); physics.addCharacter('player', actor()); physics.step(dt, {});
     expect(physics.probe([0, 1, 0], [1, 0, 0], 10)?.entityId).toBe('player');
     const hit = physics.probe([0, 1, 0], [2, 0, 0], 10, 'player'); expect(hit?.entityId).toBe('wall'); expect(hit?.distanceMeters).toBeCloseTo(3.9, 4); expect(hit?.normalWorldXYZ).toEqual([-1, 0, 0]);
-    wall.visible = false; expect(physics.probe([0, 1, 0], [1, 0, 0], 10, 'player')?.entityId).toBe('wall'); expect(physics.castCameraArm([0, 1, 0], [10, 1, 0], .2)).toEqual({ distanceMeters: 10 });
+    wall.visible = false; expect(physics.probe([0, 1, 0], [1, 0, 0], 10, 'player')?.entityId).toBe('wall'); expect(physics.castCameraArm([0, 1, 0], [10, 1, 0], .2, 'player')).toEqual({ distanceMeters: 10 });
     physics.setEnabled('wall', false); expect(physics.probe([0, 1, 0], [1, 0, 0], 10, 'player')).toBeNull();
     expect(() => physics.probe([0, 1, 0], [0, 0, 0], 10)).toThrow('PHYSICS_PROBE_INVALID');
   });

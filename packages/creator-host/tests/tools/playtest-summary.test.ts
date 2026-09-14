@@ -60,3 +60,10 @@ describe('recorded playtest time windows', () => {
     expect(()=>summarizePlaytestTrace({},query)).toThrow('THREE_PLAYTEST_QUERY_INVALID');
   });
 });
+
+it('retains compact camera identities without field provenance in recorded reads',()=>{
+ const camera={documentHash:'a'.repeat(64),configurationRevision:2,cameraCommitRevision:8,viewId:'shoulder',subjectEntityId:'hero',transition:{status:'idle'},resolved:{large:'provenance'}};
+ const result=summarizePlaytestTrace({samples:[{wallSeconds:0,camera}]});
+ expect(result.samples[0]!.camera).toMatchObject({documentHash:camera.documentHash,configurationRevision:2,cameraCommitRevision:8,viewId:'shoulder',subjectEntityId:'hero'});
+ expect(result.samples[0]!.camera).not.toHaveProperty('resolved');
+});

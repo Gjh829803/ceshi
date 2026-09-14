@@ -50,7 +50,8 @@
       "index.html",
       "main.ts",
       "project.json",
-      "episode.json"
+      "episode.json",
+      "config/camera.json"
     ]
   },
   "character-actions": {
@@ -60,7 +61,8 @@
       "main.ts",
       "map.ts",
       "project.json",
-      "episode.json"
+      "episode.json",
+      "config/camera.json"
     ]
   },
   "preset-assets": {
@@ -96,7 +98,8 @@
       "index.html",
       "main.ts",
       "project.json",
-      "episode.json"
+      "episode.json",
+      "config/camera.json"
     ]
   },
   "vehicle-camera": {
@@ -106,7 +109,8 @@
       "main.ts",
       "project.json",
       "episode.json",
-      "whitebox-materials.ts"
+      "whitebox-materials.ts",
+      "config/camera.json"
     ]
   },
   "shared-physics": {
@@ -115,7 +119,8 @@
       "index.html",
       "main.ts",
       "project.json",
-      "episode.json"
+      "episode.json",
+      "config/camera.json"
     ]
   },
   "multiple-actors": {
@@ -125,7 +130,8 @@
       "main.ts",
       "interactions.ts",
       "project.json",
-      "episode.json"
+      "episode.json",
+      "config/camera.json"
     ]
   }
 }

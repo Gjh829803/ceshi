@@ -30,10 +30,10 @@ try{
    const boxes=[floor,{id:'occluder',position:spec.position,size:spec.size}];
    for(const box of boxes){const m=new T.Mesh(new T.BoxGeometry(...box.size),new T.MeshStandardMaterial({color:box.id==='floor'?0xc6d0cc:0x466e80}));m.position.set(...box.position);scene.add(m);visuals.push(m);}
    world.humanoid.switchMap({...map,id:spec.name,boxes,playerSpawn:spec.walk?[-1,.03,0]:map.playerSpawn});world.step({},30);
-   const start=world.humanoid.followCamera.distance;let maxArmChange=0,previous=start;
-   for(let n=0;n<120;n++){world.step(spec.walk?{moveXRatio:-1}:{},1);const distance=world.humanoid.followCamera.distance;maxArmChange=Math.max(maxArmChange,Math.abs(distance-previous));previous=distance;}
+   const start=world.inspectCamera().current.nominalDistanceMeters;let maxArmChange=0,previous=start;
+   for(let n=0;n<120;n++){world.step(spec.walk?{moveXRatio:-1}:{},1);const distance=world.inspectCamera().current.nominalDistanceMeters;maxArmChange=Math.max(maxArmChange,Math.abs(distance-previous));previous=distance;}
    renderer.render(scene,camera);
-   return {name:spec.name,start,distance:world.humanoid.followCamera.distance,maxArmChange,eye:camera.position.toArray(),subject:world.humanoid.simulation.controlledActor.player.position.toArray()};
+   return {name:spec.name,start,distance:world.inspectCamera().current.nominalDistanceMeters,maxArmChange,eye:camera.position.toArray(),subject:world.humanoid.simulation.controlledActor.player.position.toArray()};
   };
  });
  const cases=[

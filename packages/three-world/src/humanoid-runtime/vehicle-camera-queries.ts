@@ -141,15 +141,20 @@ export class VehicleCameraQueries {
   for(const frame of this.candidates(from,to,radius,excludedActorId)){
    const start=this.local(frame,from),end=this.local(frame,to),direction=end.clone().sub(start).normalize(),ray=new Ray(start,direction);
    for(const volume of frame.volumes){
-    if(!volume.parts.every(visible)||!volume.bounds.containsPoint(start))continue;
+    if(!volume.parts.every(radius===0?opaque:visible)||!volume.bounds.containsPoint(start))continue;
     const surface=volume.shape.interior(start);if(!surface)continue;
     const outward=new Vector3(surface.x,surface.y,surface.z).sub(start),depth=outward.length();
     if(depth>1e-8)return {distanceMeters:0,colliderEntityId:frame.id,startedOverlapping:true,normalWorldXYZ:this.vector(frame,outward.multiplyScalar(1/depth)),penetrationDepthMeters:depth+radius};
    }
    for(const part of frame.parts){
-    if(!visible(part))continue;
+    if(!(radius===0?opaque(part):visible(part)))continue;
     const bounds=part.bounds.clone().expandByScalar(radius),point=new Vector3();
     if(!bounds.containsPoint(start)&&(!ray.intersectBox(bounds,point)||point.distanceTo(start)>nearest.distanceMeters))continue;
+    if(radius===0){
+      const distance=part.shape.castRay(start,direction,nearest.distanceMeters);
+      if(distance>=0&&distance<=nearest.distanceMeters)nearest={distanceMeters:distance,colliderEntityId:frame.id,startedOverlapping:distance===0};
+      continue;
+    }
     // Direct Shape.castShape normals/witnesses are local to shape 1, unlike World.castShape.
     const hit=part.shape.probeBall(start,direction,radius,nearest.distanceMeters);
     if(hit?.overlap)return {distanceMeters:0,colliderEntityId:frame.id,startedOverlapping:true,normalWorldXYZ:this.vector(frame,hit.normal),penetrationDepthMeters:hit.depth};

@@ -479,7 +479,7 @@ export function mountShell(host: HTMLElement) {
               </>,
               "advanced-button",
             )}
-            {btn("exportProfiles", "导出全部配置", "export-profiles")}
+            {btn("exportProfiles", "导出操控与包络配置", "export-profiles")}
           </aside>
           <footer
             id="shortcutFooter"

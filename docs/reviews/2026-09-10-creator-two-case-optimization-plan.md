@@ -113,7 +113,7 @@ P1 表示下一批优先处理，不表示必须增加发布或生成门禁。�
 
 **验收。** 对照真实 camera 的位置、姿态、FOV 和 owner，验证 authored → 跟随驾驶 → reset 的恢复；分别覆盖首次 start、暂停与运行中 reset、连续 reset、Humanoid/普通世界及 Creator opening/current 捕获。Episode 独占时钟的起点准备和捕获释放也需验证，不能让恢复逻辑覆盖 Episode 明确选择的镜头。`current` 观察不得推进模拟或改镜头状态。
 
-入口：[Engine 封存/reset](../../packages/three-world/src/engine.ts)、[Humanoid Runtime](../../packages/three-world/src/humanoid-runtime/runtime.ts)、[相机回归](../../packages/three-world/src/camera.test.ts)、[Creator 载具浏览器回归](../../scripts/three-creator/vehicle-camera.test.ts)、[Episode 捕获消费者](../../scripts/three-episode/capture.ts)、[Episode 适配回归](../../scripts/three-episode/adapter.test.ts)。
+入口：[Engine 封存/reset](../../packages/three-world/src/engine.ts)、[Humanoid Runtime](../../packages/three-world/src/humanoid-runtime/runtime.ts)、[相机回归](https://github.com/seedleap/agent-whitebox-world-sdk/blob/a7281cbaf18b277a790c8b62ae0fab885e7d1883/packages/three-world/src/camera.test.ts)、[Creator 载具浏览器回归](../../scripts/three-creator/vehicle-camera.test.ts)、[Episode 捕获消费者](../../scripts/three-episode/capture.ts)、[Episode 适配回归](../../scripts/three-episode/adapter.test.ts)。
 
 已有相机与载具测试不能替代本次 authored/封存时序的最小复现。本项实施需按 [Runtime 检查表](runtime-deep-review-checklist.md) 做相关回归、typecheck、test census 和最终 runtime prebuild，并保留实际源码与字节身份。
 

@@ -2,7 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {expect,it,vi} from 'vitest';
 import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {createWorld,humanoid} from '@worldkit/three';
+import {createWorld,createHumanoidCameraDocument,humanoid} from '@worldkit/three';
 import {SourceCharacter,parseFixtureGlb} from '@worldkit/three/testing';
 import {buildVehicle} from '@worldkit/preset-content/models';
 import {SPECS} from '@worldkit/preset-content/config';
@@ -29,7 +29,10 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
  vi.unstubAllGlobals();
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('grand-prix'),character:{instanceId:'person',object:character.root,animation:character},vehicles:specs.map((spec,i)=>({instanceId:spec.id,assetId:spec.id,spec,object:visuals[i]!.root}))}});
  try{
-  const runtime=world.humanoid!;
+  const runtime=world.humanoid!;world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});
+  world.setCameraView('first-person');const initialCamera=world.inspectCamera().document!;
+  world.setCameraFollow({configuration:{...initialCamera,views:{...initialCamera.views,'first-person':{kind:'first-person',overrides:{position:{subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0}}}}}});
+  world.step({},1);const onFootEye=new Vector3();expect(character.eyePosition(onFootEye)).toBe(true);expect(world.camera.position.distanceTo(onFootEye)).toBeLessThan(.002);world.setCameraView('third-person');
   for(const [i,spec] of specs.entries()){
    prepareCourse(runtime.simulation,getMap('grand-prix'),'gp-straight',spec.id);
    expect(runtime.enter(spec.id)).toBe(true);world.step({},60);
@@ -58,11 +61,11 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
    expect(gap,`${spec.id} pelvis/cushion gap`).toBeGreaterThanOrEqual(-.005);
    expect(contactHeight-top,`${spec.id} body floating over cushion`).toBeLessThan(.03);
    expect(intersectingVertices,`${spec.id} body intersects cushion`).toBe(0);
-   runtime.setCameraMode(1);world.step({},1);
+   world.setCameraView('first-person');world.step({},1);
    const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);
-   expect(runtime.followCamera.camera.position.distanceTo(eye)).toBeLessThan(.002);
+   expect(world.camera.position.distanceTo(eye)).toBeLessThan(.002);
    expect(eye.y-top).toBeGreaterThan(.7);
-   runtime.setCameraMode(0);world.step({},1);
+   world.setCameraView('third-person');world.step({},1);
    if(spec.archetype==='unicycle')world.step({humanoid:{...humanoid.emptyInput(),brake:true}},120);
    expect(runtime.exit()).toBe(true);world.step({},30);
   }

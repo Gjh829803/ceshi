@@ -14,7 +14,7 @@ import {createVehicle,emptyInput,stepVehicle,Simulation} from './simulation';
 import {PresentationState} from './presentation';
 import {updateVehicleWheels} from './vehicle-animation';
 const map:EnvironmentDefinition={id:'wheel-test',name:'Wheel test',description:'',bounds:{min:[-200,-30,-200],max:[200,80,200]},boxes:[{id:'floor',position:[0,-.5,0],size:[400,1,400]}],water:[],regions:[],spawns:[],playerSpawn:[20,0,20]};
-const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[0,0,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,.91,.1],camera:8,hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,.99,2.15],offset:[0,1.31,0]},wheelPhysics:{mass:1600,radius:.52,hubHeight:.52,halfTrack:1.1,halfWheelbase:1.27}};
+const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[0,0,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,.91,.1],hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,.99,2.15],offset:[0,1.31,0]},wheelPhysics:{mass:1600,radius:.52,hubHeight:.52,halfTrack:1.1,halfWheelbase:1.27}};
 beforeAll(initEnvironmentQueries);
 function fixture(extra:EnvironmentDefinition['boxes']=[],floorSize=400){return {q:new EnvironmentQueries({...map,boxes:[{...map.boxes[0]!,size:[floorSize,1,floorSize]},...extra]}),v:createVehicle(spec)};}
 function run(f:ReturnType<typeof fixture>,n:number,input=emptyInput()){for(let i=0;i<n;i++){stepVehicle(f.v,input,1/60,i/60,f.q);f.q.stepPhysics(1/60);}}

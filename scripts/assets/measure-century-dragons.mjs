@@ -10,7 +10,7 @@ const [source,output]=process.argv.slice(2);
 if(!source||!output)throw new Error('Usage: node measure-century-dragons.mjs <export-directory> <asset-directory>');
 globalThis.ProgressEvent=class{constructor(type){this.type=type;}};
 const selected=process.argv[4]?.split(',');
-const variants=selected?JSON.parse(await fs.readFile(path.join(output,'variants.json'),'utf8')).filter(v=>!selected.includes(v.id)):[{id:'D01',name:'D01 · 原始飞龙',file:'dragon.glb',camera:32}];
+const variants=selected?JSON.parse(await fs.readFile(path.join(output,'variants.json'),'utf8')).filter(v=>!selected.includes(v.id)):[{id:'D01',name:'D01 · 原始飞龙',file:'dragon.glb'}];
 const reports=selected?JSON.parse(await fs.readFile(path.join(output,'variant-sources.json'),'utf8')).filter(v=>!selected.includes(v.id)):[];
 for(let number=2;number<=11;number++){
   const id='D'+String(number).padStart(2,'0');if(selected&&!selected.includes(id))continue;
@@ -57,8 +57,7 @@ for(let number=2;number<=11;number++){
   const half=bounds.clone().expandByScalar(1.1).getSize(new T.Vector3()).multiplyScalar(.5);
   pose.speed=0;pose.flyingCreature=createFlyingCreatureStateV1();visual.sample(pose,0);
   const seat=gltf.scene.getObjectByName('Seat').getWorldPosition(new T.Vector3()).toArray();
-  const camera=Math.min(40,Math.max(32,Math.ceil(Math.max(half.x*2.5,half.z*1.5))));
-  const variant={id,name:id+(id==='D09'?' · 长身龙':' · 飞龙'),file:id+'.glb',camera,seat,collisionProbes:probes,envelope:core.envelope};
+  const variant={id,name:id+(id==='D09'?' · 长身龙':' · 飞龙'),file:id+'.glb',seat,collisionProbes:probes,envelope:core.envelope};
   variants.push(variant);
   reports.push({...JSON.parse(await fs.readFile(path.join(source,id+'.json'),'utf8')),collisionMeasurement:core.measurement,measurement:{poses:24,bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},seatBounds:{min:seatBounds.min.toArray(),max:seatBounds.max.toArray()},sphereCount:probes.length}});
   await fs.copyFile(path.join(source,id+'.glb'),path.join(output,id+'.glb'));

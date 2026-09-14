@@ -78,10 +78,11 @@ for (const spec of SPECS) {
   }
   const {assetId,specId}=presetImportIdentity(spec.id);
   const previous=previousAssets.get(assetId);
+  const {camera:_retiredCamera,...handlingSpec}=spec;
   const { dependencyPaths, ...details } = presetImportDetails(spec, previous as Parameters<typeof presetImportDetails>[1]);
   catalog.assets.push(await definition(assetId, previous?.displayName??`${spec.name} / ${spec.en}`, primary, dependencyPaths, {
     locomotionBindingIds: previous?.locomotionBindingIds??[`locomotion.${String(spec.mode).replaceAll('_','-')}`],
-    vehicle: { schemaVersion: 1, spec:{...spec,id:specId,name:previous?.vehicle?.spec?.name??spec.name,en:previous?.vehicle?.spec?.en??spec.en} },
+    vehicle: { schemaVersion: 1, spec:{...handlingSpec,id:specId,name:previous?.vehicle?.spec?.name??spec.name,en:previous?.vehicle?.spec?.en??spec.en} },
     ...details, collision: spec.envelope,
   }));
 }

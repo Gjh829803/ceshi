@@ -1,6 +1,7 @@
-import {mkdtemp,rm,writeFile} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile as writeFixtureFile,mkdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+const writeFile:typeof writeFixtureFile=async(file,data,options)=>{await mkdir(path.dirname(String(file)),{recursive:true});return writeFixtureFile(file,data,options);};
 import type {Page} from 'playwright';
 import {expect,it} from 'vitest';
 import sharp from 'sharp';
@@ -25,7 +26,7 @@ const spec=humanoid.createRoadVehicleSpec('car');
 const world=await createHumanoidWorld({scene,canvas,camera,map,navigation:false,characterColor:'#287eca',characterLoadOptions:{loadTextures:true},
  vehicles:[{instanceId:'car',assetId:'custom.car',object:new THREE.Group(),spec}]});
 const other=await world.humanoid.createCharacter();other.setColor('#cb583e');other.root.position.set(1,.04,0);
-world.addCharacter({id:'other',humanoid:other});world.setCaptureTargets(['player','other']);world.useAuthoredCamera();world.setCameraFollow({activateOnInput:true});
+world.addCharacter({id:'other',humanoid:other});world.setCaptureTargets(['player','other']);world.useAuthoredCamera();world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'on-input',views:{'third-person':{kind:'third-person',opening:{positionWorldMetersXYZ:[0,2,8],lookAtWorldMetersXYZ:[0,1,0],fovDegrees:40},overrides:{framing:{kind:'preserve-opening'},lens:{nearMeters:.1,farMeters:100}}},'first-person':{kind:'first-person'}}}});
 (window as any).__colorTest={world,other,THREE,setObjectColor};await world.start();world.stop();
 `);
   const opening=await service.preview('opening');
@@ -34,7 +35,7 @@ world.addCharacter({id:'other',humanoid:other});world.setCaptureTargets(['player
    const {world,other,THREE,setObjectColor}=(window as any).__colorTest;
    const colors=()=>{const result:Record<string,string[]>={};for(const [id,object] of [['player',world.humanoid.options.character.object],['other',other.root]]){
     const values=new Set<string>();object.traverse((node:any)=>{if(node.isMesh)for(const m of Array.isArray(node.material)?node.material:[node.material])values.add(m.color.getHexString());});result[id]=[...values];}return result;};
-   const before=colors();world.setControlledEntity('other');world.humanoid.setCameraMode(1);world.humanoid.setCameraMode(0);world.step({},2);
+   const before=colors();world.setControlledEntity('other');world.setCameraView('first-person');world.setCameraView('third-person');world.step({},2);
    world.step({},60);world.humanoid.approach('car');const boarding=world.humanoid.inspectBoarding('car'),entered=world.humanoid.enter('car');world.step({},45);
    const mounted=world.humanoid.snapshot().mountedInstanceId,whileMounted=colors();
    const exited=world.humanoid.exit();world.step({},45);const afterExit=colors();await world.reset();

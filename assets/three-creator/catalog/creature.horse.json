@@ -93,7 +93,6 @@
         1.65,
         0
       ],
-      "camera": 8,
       "hint": "W / S 前进与后退 · A / D 转向 · Shift 疾驰 · Ctrl 慢走 · Space 停步",
       "archetype": "horse",
       "characterPose": "ride",
@@ -138,6 +137,26 @@
       "Walk",
       "Gallop"
     ],
-    "seatSource": "vehicle.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node."
+    "seatSource": "vehicle.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node.",
+    "cameraPresetReferences": [
+      {
+        "presetId": "creature.horse.third-person",
+        "source": "presets",
+        "key": "horse.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "creature.horse.first-person",
+        "source": "presets",
+        "key": "horse.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "creature.horse.shoulder",
+        "source": "presets",
+        "key": "horse.shoulder",
+        "viewId": "shoulder"
+      }
+    ]
   }
 }

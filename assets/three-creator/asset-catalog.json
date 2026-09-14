@@ -95,7 +95,6 @@
             2.1,
             0.4
           ],
-          "camera": 17,
           "hint": "W / S 前进与制动 · A / D 转向 · Space 起飞 / 上升 · Ctrl 下降 / 落地 · Shift 加速",
           "archetype": "dragon",
           "characterPose": "ride",
@@ -130,7 +129,29 @@
       },
       "recommendedFor": [
         "Evolved dragon model with Flying_Idle and Fast_Flying clips; simple dragon vehicle control."
-      ]
+      ],
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon-evolved.third-person",
+            "source": "presets",
+            "key": "dragon.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon-evolved.first-person",
+            "source": "presets",
+            "key": "dragon.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon-evolved.shoulder",
+            "source": "presets",
+            "key": "dragon.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
+      }
     },
     {
       "id": "creature.dragon.d01",
@@ -183,9 +204,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -237,7 +258,6 @@
             2.6,
             0
           ],
-          "camera": 32,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -531,6 +551,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d01.third-person",
+            "source": "dragon-variants",
+            "key": "D01",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d01.first-person",
+            "source": "dragon-variants",
+            "key": "D01",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d01.shoulder",
+            "source": "dragon-variants",
+            "key": "D01",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -604,9 +644,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -658,7 +698,6 @@
             1.8833502717189936,
             -0.901541861105132
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -952,6 +991,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d02.third-person",
+            "source": "dragon-variants",
+            "key": "D02",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d02.first-person",
+            "source": "dragon-variants",
+            "key": "D02",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d02.shoulder",
+            "source": "dragon-variants",
+            "key": "D02",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -1025,9 +1084,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -1079,7 +1138,6 @@
             2.1988230766558,
             1.6584156129844345
           ],
-          "camera": 37,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -1373,6 +1431,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d03.third-person",
+            "source": "dragon-variants",
+            "key": "D03",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d03.first-person",
+            "source": "dragon-variants",
+            "key": "D03",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d03.shoulder",
+            "source": "dragon-variants",
+            "key": "D03",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -1446,9 +1524,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -1500,7 +1578,6 @@
             2.4083334248360706,
             0.7031703289988525
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -1794,6 +1871,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d04.third-person",
+            "source": "dragon-variants",
+            "key": "D04",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d04.first-person",
+            "source": "dragon-variants",
+            "key": "D04",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d04.shoulder",
+            "source": "dragon-variants",
+            "key": "D04",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -1867,9 +1964,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -1921,7 +2018,6 @@
             2.0080233088879798,
             0.7441157487464997
           ],
-          "camera": 38,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -2215,6 +2311,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d05.third-person",
+            "source": "dragon-variants",
+            "key": "D05",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d05.first-person",
+            "source": "dragon-variants",
+            "key": "D05",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d05.shoulder",
+            "source": "dragon-variants",
+            "key": "D05",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -2288,9 +2404,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -2342,7 +2458,6 @@
             2.5861761679004016,
             0.646139228254275
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -2636,6 +2751,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d06.third-person",
+            "source": "dragon-variants",
+            "key": "D06",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d06.first-person",
+            "source": "dragon-variants",
+            "key": "D06",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d06.shoulder",
+            "source": "dragon-variants",
+            "key": "D06",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -2709,9 +2844,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -2763,7 +2898,6 @@
             2.3671454628234407,
             1.5626520853407164
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -3057,6 +3191,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d07.third-person",
+            "source": "dragon-variants",
+            "key": "D07",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d07.first-person",
+            "source": "dragon-variants",
+            "key": "D07",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d07.shoulder",
+            "source": "dragon-variants",
+            "key": "D07",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -3130,9 +3284,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -3184,7 +3338,6 @@
             1.2545577210292143,
             0.11466930189100377
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -3478,6 +3631,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d08.third-person",
+            "source": "dragon-variants",
+            "key": "D08",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d08.first-person",
+            "source": "dragon-variants",
+            "key": "D08",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d08.shoulder",
+            "source": "dragon-variants",
+            "key": "D08",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -3551,9 +3724,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -3605,7 +3778,6 @@
             2.7633648122450754,
             -1.9658638496740712
           ],
-          "camera": 34,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -3899,6 +4071,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d09.third-person",
+            "source": "dragon-variants",
+            "key": "D09",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d09.first-person",
+            "source": "dragon-variants",
+            "key": "D09",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d09.shoulder",
+            "source": "dragon-variants",
+            "key": "D09",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -3972,9 +4164,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -4026,7 +4218,6 @@
             5.322934244325622,
             -1.1711399679197654
           ],
-          "camera": 37,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -4320,6 +4511,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d10.third-person",
+            "source": "dragon-variants",
+            "key": "D10",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d10.first-person",
+            "source": "dragon-variants",
+            "key": "D10",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d10.shoulder",
+            "source": "dragon-variants",
+            "key": "D10",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -4393,9 +4604,9 @@
         },
         {
           "path": "flying-creatures/variants.json",
-          "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-          "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-          "byteLength": 50268,
+          "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+          "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+          "byteLength": 50069,
           "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
         },
         {
@@ -4447,7 +4658,6 @@
             1.6532228348059776,
             0.17419680901314005
           ],
-          "camera": 40,
           "brakeDeceleration": 22,
           "coastDeceleration": 7,
           "pitchResponse": 3.4,
@@ -4741,6 +4951,26 @@
         "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
       ],
       "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.dragon.d11.third-person",
+            "source": "dragon-variants",
+            "key": "D11",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.dragon.d11.first-person",
+            "source": "dragon-variants",
+            "key": "D11",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.dragon.d11.shoulder",
+            "source": "dragon-variants",
+            "key": "D11",
+            "viewId": "shoulder"
+          }
+        ],
         "classification": "flying-mount",
         "exampleTopic": "mounted-interaction",
         "exampleVariant": "flying-creature",
@@ -4858,7 +5088,6 @@
             1.65,
             0
           ],
-          "camera": 8,
           "hint": "W / S 前进与后退 · A / D 转向 · Shift 疾驰 · Ctrl 慢走 · Space 停步",
           "archetype": "horse",
           "characterPose": "ride",
@@ -4903,7 +5132,27 @@
           "Walk",
           "Gallop"
         ],
-        "seatSource": "vehicle.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node."
+        "seatSource": "vehicle.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node.",
+        "cameraPresetReferences": [
+          {
+            "presetId": "creature.horse.third-person",
+            "source": "presets",
+            "key": "horse.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "creature.horse.first-person",
+            "source": "presets",
+            "key": "horse.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "creature.horse.shoulder",
+            "source": "presets",
+            "key": "horse.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -5945,7 +6194,6 @@
             -0.15
           ],
           "characterPose": "atv",
-          "camera": 6.2,
           "wheelbaseMeters": 1.6,
           "rearAxleZMeters": -0.8,
           "wheelPhysics": {
@@ -6153,6 +6401,28 @@
           0.71,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.atv.third-person",
+            "source": "presets",
+            "key": "atv.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.atv.first-person",
+            "source": "presets",
+            "key": "atv.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.atv.shoulder",
+            "source": "presets",
+            "key": "atv.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -6218,7 +6488,6 @@
             0.35,
             -0.3
           ],
-          "camera": 9,
           "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
           "archetype": "boat",
           "envelope": {
@@ -6258,6 +6527,28 @@
           0,
           0.5,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.boat.third-person",
+            "source": "presets",
+            "key": "boat.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.boat.first-person",
+            "source": "presets",
+            "key": "boat.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.boat.shoulder",
+            "source": "presets",
+            "key": "boat.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -6350,7 +6641,6 @@
             1.13,
             1.38
           ],
-          "camera": 10,
           "hint": "W 油门 · S 制动后倒车 · A / D 转向 · Space 刹车 · F 上下车 · T 切换视角",
           "wheelPhysics": {
             "chassis": {
@@ -6483,6 +6773,28 @@
           1.34,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.bus.third-person",
+            "source": "presets",
+            "key": "bus.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.bus.first-person",
+            "source": "presets",
+            "key": "bus.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.bus.shoulder",
+            "source": "presets",
+            "key": "bus.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -6572,7 +6884,6 @@
             0.45,
             -0.45
           ],
-          "camera": 6.5,
           "characterPose": "paddling",
           "hint": "W 单侧划桨 · S 倒划 · A / D 换侧扫桨转向 · Space 压桨减速 · F 上下舟 · T 切换视角",
           "bodyPhysics": {
@@ -6623,6 +6934,28 @@
           0,
           0.1,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.canoe.third-person",
+            "source": "presets",
+            "key": "canoe.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.canoe.first-person",
+            "source": "presets",
+            "key": "canoe.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.canoe.shoulder",
+            "source": "presets",
+            "key": "canoe.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -6718,7 +7051,6 @@
             1.45,
             0.55
           ],
-          "camera": 12,
           "hint": "W / S 驱马与倒车 · A / D 牵引转向 · Shift 加速 · Ctrl 慢行 · Space 停车",
           "archetype": "carriage",
           "envelope": {
@@ -6758,6 +7090,28 @@
           0,
           1.4,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.carriage.third-person",
+            "source": "presets",
+            "key": "carriage.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.carriage.first-person",
+            "source": "presets",
+            "key": "carriage.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.carriage.shoulder",
+            "source": "presets",
+            "key": "carriage.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -6824,7 +7178,6 @@
             0.46,
             0
           ],
-          "camera": 11,
           "hint": "W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚 · Shift 释放滑翔",
           "archetype": "glider",
           "envelope": {
@@ -6864,6 +7217,28 @@
           0,
           0.9,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.glider.third-person",
+            "source": "presets",
+            "key": "glider.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.glider.first-person",
+            "source": "presets",
+            "key": "glider.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.glider.shoulder",
+            "source": "presets",
+            "key": "glider.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -6930,7 +7305,6 @@
             0.48,
             -0.1
           ],
-          "camera": 8,
           "hint": "W / S 推进 · A / D 转向 · Q / E 侧移 · Space 制动",
           "archetype": "hover",
           "envelope": {
@@ -6970,6 +7344,28 @@
           0,
           0.775,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.hovercraft.third-person",
+            "source": "presets",
+            "key": "hovercraft.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.hovercraft.first-person",
+            "source": "presets",
+            "key": "hovercraft.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.hovercraft.shoulder",
+            "source": "presets",
+            "key": "hovercraft.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -7048,7 +7444,6 @@
             -0.15
           ],
           "characterPose": "atv",
-          "camera": 6.2,
           "bodyPhysics": {
             "kind": "jet",
             "mass": 330,
@@ -7220,6 +7615,28 @@
           0.54,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.jetski.third-person",
+            "source": "presets",
+            "key": "jetski.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.jetski.first-person",
+            "source": "presets",
+            "key": "jetski.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.jetski.shoulder",
+            "source": "presets",
+            "key": "jetski.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -7287,7 +7704,6 @@
             0.23,
             -0.35
           ],
-          "camera": 6,
           "characterPose": "paddling",
           "maxSpeed": 4.6,
           "reverseSpeed": 1.8,
@@ -7361,6 +7777,28 @@
           0.01,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.kayak.third-person",
+            "source": "presets",
+            "key": "kayak.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.kayak.first-person",
+            "source": "presets",
+            "key": "kayak.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.kayak.shoulder",
+            "source": "presets",
+            "key": "kayak.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -7426,7 +7864,6 @@
             0.99,
             -0.2
           ],
-          "camera": 6.8,
           "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
           "archetype": "motorcycle",
           "envelope": {
@@ -7466,6 +7903,28 @@
           0,
           1.2,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.motorcycle.third-person",
+            "source": "presets",
+            "key": "motorcycle.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.motorcycle.first-person",
+            "source": "presets",
+            "key": "motorcycle.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.motorcycle.shoulder",
+            "source": "presets",
+            "key": "motorcycle.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -7557,7 +8016,6 @@
             0.24,
             0.25
           ],
-          "camera": 6.5,
           "characterPose": "submarine",
           "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
           "bodyPhysics": {
@@ -7649,6 +8107,28 @@
           0.15,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.observation-submarine.third-person",
+            "source": "presets",
+            "key": "observation-submarine.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.observation-submarine.first-person",
+            "source": "presets",
+            "key": "observation-submarine.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.observation-submarine.shoulder",
+            "source": "presets",
+            "key": "observation-submarine.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -7714,7 +8194,6 @@
             0.35,
             -0.3
           ],
-          "camera": 9.8,
           "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
           "archetype": "boat",
           "visualVariant": "patrol",
@@ -7755,6 +8234,28 @@
           0,
           0.65,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.patrol-boat.third-person",
+            "source": "presets",
+            "key": "patrol-boat.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.patrol-boat.first-person",
+            "source": "presets",
+            "key": "patrol-boat.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.patrol-boat.shoulder",
+            "source": "presets",
+            "key": "patrol-boat.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -7821,7 +8322,6 @@
             0.6,
             0.4
           ],
-          "camera": 13,
           "hint": "Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚",
           "archetype": "plane",
           "envelope": {
@@ -7861,6 +8361,28 @@
           0,
           0.45,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.plane.third-person",
+            "source": "presets",
+            "key": "plane.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.plane.first-person",
+            "source": "presets",
+            "key": "plane.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.plane.shoulder",
+            "source": "presets",
+            "key": "plane.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -7927,7 +8449,6 @@
             0.77,
             -0.1
           ],
-          "camera": 8,
           "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹漂移",
           "archetype": "racer",
           "envelope": {
@@ -7967,6 +8488,28 @@
           0,
           1.1,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.racer.third-person",
+            "source": "presets",
+            "key": "racer.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.racer.first-person",
+            "source": "presets",
+            "key": "racer.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.racer.shoulder",
+            "source": "presets",
+            "key": "racer.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8057,7 +8600,6 @@
             0.45,
             -0.45
           ],
-          "camera": 7,
           "characterPose": "paddling",
           "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
           "bodyPhysics": {
@@ -8191,6 +8733,28 @@
           0,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.raft.third-person",
+            "source": "presets",
+            "key": "raft.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.raft.first-person",
+            "source": "presets",
+            "key": "raft.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.raft.shoulder",
+            "source": "presets",
+            "key": "raft.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -8256,7 +8820,6 @@
             0.48,
             -0.1
           ],
-          "camera": 8.8,
           "hint": "W / S 推进 · A / D 转向 · Q / E 侧移 · Space 制动",
           "archetype": "hover",
           "visualVariant": "rescue",
@@ -8297,6 +8860,28 @@
           0,
           0.775,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.rescue-hovercraft.third-person",
+            "source": "presets",
+            "key": "rescue-hovercraft.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.rescue-hovercraft.first-person",
+            "source": "presets",
+            "key": "rescue-hovercraft.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.rescue-hovercraft.shoulder",
+            "source": "presets",
+            "key": "rescue-hovercraft.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8363,7 +8948,6 @@
             0.91,
             0.1
           ],
-          "camera": 8.2,
           "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹漂移",
           "archetype": "rover",
           "envelope": {
@@ -8403,6 +8987,28 @@
           0,
           1.15,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.rover.third-person",
+            "source": "presets",
+            "key": "rover.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.rover.first-person",
+            "source": "presets",
+            "key": "rover.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.rover.shoulder",
+            "source": "presets",
+            "key": "rover.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8469,7 +9075,6 @@
             0.2,
             0
           ],
-          "camera": 6,
           "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
           "characterPose": "stand",
           "archetype": "skateboard",
@@ -8510,6 +9115,28 @@
           0,
           1,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.skateboard.third-person",
+            "source": "presets",
+            "key": "skateboard.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.skateboard.first-person",
+            "source": "presets",
+            "key": "skateboard.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.skateboard.shoulder",
+            "source": "presets",
+            "key": "skateboard.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8586,7 +9213,6 @@
             0.91,
             0
           ],
-          "camera": 6,
           "characterPose": "ski",
           "hint": "W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板",
           "bodyPhysics": {
@@ -8631,6 +9257,28 @@
           0,
           0.9,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.ski.third-person",
+            "source": "presets",
+            "key": "ski.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.ski.first-person",
+            "source": "presets",
+            "key": "ski.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.ski.shoulder",
+            "source": "presets",
+            "key": "ski.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8699,7 +9347,6 @@
             0.63,
             -0.22
           ],
-          "camera": 5.8,
           "characterPose": "sled",
           "hint": "W 蹬地起步 · A / D 单侧拖脚转向 · S / Space 双脚制动 · 松键顺坡滑行 · F 上下雪橇",
           "bodyPhysics": {
@@ -8767,6 +9414,28 @@
           0.78,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.sled.third-person",
+            "source": "presets",
+            "key": "sled.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.sled.first-person",
+            "source": "presets",
+            "key": "sled.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.sled.shoulder",
+            "source": "presets",
+            "key": "sled.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -8832,7 +9501,6 @@
             0.15,
             0.4
           ],
-          "camera": 9,
           "hint": "W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · ↑↓ 俯仰 / ←→ 侧移 · Shift 制动",
           "archetype": "spacecraft",
           "envelope": {
@@ -8872,6 +9540,28 @@
           0,
           0.35,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.spacecraft.third-person",
+            "source": "presets",
+            "key": "spacecraft.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.spacecraft.first-person",
+            "source": "presets",
+            "key": "spacecraft.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.spacecraft.shoulder",
+            "source": "presets",
+            "key": "spacecraft.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -8938,7 +9628,6 @@
             0.1,
             0.5
           ],
-          "camera": 9,
           "hint": "W / S 推进 · A / D 转向 · Space 上浮 · Ctrl 下潜 · Q / E 横滚 · Shift 制动",
           "archetype": "submarine",
           "envelope": {
@@ -8978,6 +9667,28 @@
           0,
           0.2,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.submarine.third-person",
+            "source": "presets",
+            "key": "submarine.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.submarine.first-person",
+            "source": "presets",
+            "key": "submarine.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.submarine.shoulder",
+            "source": "presets",
+            "key": "submarine.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -9044,7 +9755,6 @@
             0.15,
             0.4
           ],
-          "camera": 10,
           "hint": "W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · 方向键姿态 · Shift 制动",
           "archetype": "spacecraft",
           "visualVariant": "survey",
@@ -9085,6 +9795,28 @@
           0,
           0.35,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.survey-spacecraft.third-person",
+            "source": "presets",
+            "key": "survey-spacecraft.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.survey-spacecraft.first-person",
+            "source": "presets",
+            "key": "survey-spacecraft.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.survey-spacecraft.shoulder",
+            "source": "presets",
+            "key": "survey-spacecraft.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -9163,7 +9895,6 @@
             2.1
           ],
           "characterPose": "tank",
-          "camera": 14,
           "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
           "bodyPhysics": {
             "kind": "tracks",
@@ -9324,6 +10055,28 @@
           2.08,
           0
         ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.tank.third-person",
+            "source": "presets",
+            "key": "tank.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.tank.first-person",
+            "source": "presets",
+            "key": "tank.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.tank.shoulder",
+            "source": "presets",
+            "key": "tank.shoulder",
+            "viewId": "shoulder"
+          }
+        ]
       }
     },
     {
@@ -9389,7 +10142,6 @@
             0.99,
             -0.2
           ],
-          "camera": 7.3,
           "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
           "archetype": "motorcycle",
           "visualVariant": "touring",
@@ -9430,6 +10182,28 @@
           0,
           1.2,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.touring-motorcycle.third-person",
+            "source": "presets",
+            "key": "touring-motorcycle.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.touring-motorcycle.first-person",
+            "source": "presets",
+            "key": "touring-motorcycle.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.touring-motorcycle.shoulder",
+            "source": "presets",
+            "key": "touring-motorcycle.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -9496,7 +10270,6 @@
             0.91,
             0.1
           ],
-          "camera": 8.8,
           "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹",
           "archetype": "rover",
           "visualVariant": "utility",
@@ -9537,6 +10310,28 @@
           0,
           1.15,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.trail-rover.third-person",
+            "source": "presets",
+            "key": "trail-rover.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.trail-rover.first-person",
+            "source": "presets",
+            "key": "trail-rover.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.trail-rover.shoulder",
+            "source": "presets",
+            "key": "trail-rover.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -9603,7 +10398,6 @@
             0.6,
             0.4
           ],
-          "camera": 13.5,
           "hint": "Shift 加油门 / Ctrl 减油门 · W / S 俯仰 · A / D 转弯 · Q / E 横滚",
           "archetype": "plane",
           "visualVariant": "trainer",
@@ -9644,6 +10438,28 @@
           0,
           0.45,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.trainer-plane.third-person",
+            "source": "presets",
+            "key": "trainer-plane.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.trainer-plane.first-person",
+            "source": "presets",
+            "key": "trainer-plane.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.trainer-plane.shoulder",
+            "source": "presets",
+            "key": "trainer-plane.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     },
@@ -9722,7 +10538,6 @@
             0
           ],
           "characterPose": "unicycle",
-          "camera": 4.6,
           "bodyPhysics": {
             "kind": "unicycle",
             "mass": 90,
@@ -9793,6 +10608,28 @@
           0,
           0.49,
           0
+        ]
+      },
+      "integrationMetadata": {
+        "cameraPresetReferences": [
+          {
+            "presetId": "vehicle.unicycle.third-person",
+            "source": "presets",
+            "key": "unicycle.third-person",
+            "viewId": "third-person"
+          },
+          {
+            "presetId": "vehicle.unicycle.first-person",
+            "source": "presets",
+            "key": "unicycle.first-person",
+            "viewId": "first-person"
+          },
+          {
+            "presetId": "vehicle.unicycle.shoulder",
+            "source": "presets",
+            "key": "unicycle.shoulder",
+            "viewId": "shoulder"
+          }
         ]
       }
     }

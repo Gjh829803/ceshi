@@ -63,7 +63,6 @@
         0.23,
         -0.35
       ],
-      "camera": 6,
       "characterPose": "paddling",
       "maxSpeed": 4.6,
       "reverseSpeed": 1.8,
@@ -136,6 +135,28 @@
       0,
       0.01,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.kayak.third-person",
+        "source": "presets",
+        "key": "kayak.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.kayak.first-person",
+        "source": "presets",
+        "key": "kayak.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.kayak.shoulder",
+        "source": "presets",
+        "key": "kayak.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

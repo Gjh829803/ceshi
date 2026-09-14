@@ -1,0 +1,1916 @@
+{
+  "D01": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 32,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.7,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 14.4,
+            "maximumDistanceMeters": 80
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D01",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D01",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D01",
+        "version": "285246867"
+      }
+    }
+  },
+  "D02": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.4833502717189937,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D02",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D02",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D02",
+        "version": "285246867"
+      }
+    }
+  },
+  "D03": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 37,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.7988230766558,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 16.650000000000002,
+            "maximumDistanceMeters": 92.5
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D03",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D03",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D03",
+        "version": "285246867"
+      }
+    }
+  },
+  "D04": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              3.0083334248360707,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D04",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D04",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D04",
+        "version": "285246867"
+      }
+    }
+  },
+  "D05": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 38,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.60802330888798,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 17.1,
+            "maximumDistanceMeters": 95
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D05",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D05",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D05",
+        "version": "285246867"
+      }
+    }
+  },
+  "D06": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              3.1861761679004017,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D06",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D06",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D06",
+        "version": "285246867"
+      }
+    }
+  },
+  "D07": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.967145462823441,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D07",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D07",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D07",
+        "version": "285246867"
+      }
+    }
+  },
+  "D08": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              1.8545577210292143,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D08",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D08",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D08",
+        "version": "285246867"
+      }
+    }
+  },
+  "D09": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 34,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              3.3633648122450754,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 15.3,
+            "maximumDistanceMeters": 85
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D09",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D09",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D09",
+        "version": "285246867"
+      }
+    }
+  },
+  "D10": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 37,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              5.922934244325622,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 16.650000000000002,
+            "maximumDistanceMeters": 92.5
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D10",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D10",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D10",
+        "version": "285246867"
+      }
+    }
+  },
+  "D11": {
+    "third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 40,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.2532228348059777,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 18,
+            "maximumDistanceMeters": 100
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.18,
+            "clearHoldSeconds": 0.12,
+            "speedLimit": {
+              "kind": "limited",
+              "maximumSpeedMetersPerSecond": 12
+            }
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D11",
+        "version": "285246867"
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D11",
+        "version": "285246867"
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              0.22,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "yawHalfLifeSeconds": 0.5331901388922656,
+            "pitch": {
+              "targetRadians": 0.2,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 28,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "dragon.D11",
+        "version": "285246867"
+      }
+    }
+  }
+}

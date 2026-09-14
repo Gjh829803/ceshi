@@ -1,7 +1,8 @@
 import {describe,it,expect} from 'vitest';
-import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile as writeFixtureFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+const writeFile:typeof writeFixtureFile=async(file,data,options)=>{await mkdir(path.dirname(String(file)),{recursive:true});return writeFixtureFile(file,data,options);};
 import Ajv from 'ajv';
 import {openEpisodeBrowser} from '@worldkit/episode-pipeline/browser';
 import {readExampleFiles} from '../../src/discovery/example-files.js';
@@ -14,9 +15,9 @@ describe('example source selection',()=>{
  const root=path.resolve('examples/three-creator/vehicle-camera');
  it('lists dependencies and reads selected files without allowing arbitrary paths',async()=>{
   const result=await readExampleFiles(root,'vehicle-camera');
-  expect(result.fileManifest.some(f=>f.path==='opening-camera.ts')).toBe(true);
-  const selected=await readExampleFiles(root,'vehicle-camera',['opening-camera.ts']);
-  expect(selected.files['opening-camera.ts']).toContain('setCameraFollow');
+  expect(result.fileManifest.some(f=>f.path==='config/camera.json')).toBe(true);
+  const selected=await readExampleFiles(root,'vehicle-camera',['config/camera.json']);
+  expect(selected.files['config/camera.json']).toContain('world-camera');
   await expect(readExampleFiles(root,'vehicle-camera',['../../package.json'])).rejects.toThrow('THREE_EXAMPLE_FILE_UNKNOWN');
  });
 });
@@ -52,7 +53,7 @@ describe('vehicle-camera example discovery', () => {
     topic: string; files: Record<string, string>; fileManifest: {path: string; sha256: string; byteLength: number}[];
    };
    expect(result.topic).toBe('custom-vehicle');
-   expect(Object.keys(result.files).sort()).toEqual(['episode.json', 'index.html', 'main.ts', 'project.json', 'whitebox-materials.ts']);
+   expect(Object.keys(result.files).sort()).toEqual(['config/camera.json', 'episode.json', 'index.html', 'main.ts', 'project.json', 'whitebox-materials.ts']);
    expect(JSON.parse(result.files['project.json']!).assetIds).toEqual(['humanoid.uefn-mannequin']);
    const selected = await service.examples('custom-vehicle', ['whitebox-materials.ts', 'README.md'],'car') as {files: Record<string, string>};
    expect(selected.files['whitebox-materials.ts']).toBe(result.files['whitebox-materials.ts']);
@@ -101,7 +102,7 @@ it.each([['motorcycle','custom-bike'],['car','rover']] as const)('records the se
   const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
   try{
    const start={positionWorldMetersXYZ:[0,.03,0] as const,facingYawRadians:Math.PI,
-    humanoid:{vehicleInstanceId:instanceId,mounted:true,cameraMode:0 as const}};
+    humanoid:{vehicleInstanceId:instanceId,mounted:true,}};
    const before=await episode.prepareSegment(start,{widthPixels:640,heightPixels:360});
    const after=await episode.advance({humanoid:{forward:1,steer:.1,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);
    expect(after.humanoid!.mountedInstanceId).toBe(instanceId);
@@ -128,7 +129,7 @@ it('discovers, compiles and flies a self-drawn fixed wing using the Episode owne
   const candidate=await service.compiler.prepare();
   const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
   try{
-   await episode.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,humanoid:{vehicleInstanceId:'custom-plane',mounted:true,cameraMode:0}},{widthPixels:640,heightPixels:360});
+   await episode.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'third-person',humanoid:{vehicleInstanceId:'custom-plane',mounted:true,}},{widthPixels:640,heightPixels:360});
    await episode.advance({humanoid:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:true,brake:false,slow:false,jump:false}},600);
    const after=await episode.advance({humanoid:{forward:-.3,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);
    expect(after.entities.find(e=>e.id==='custom-plane')!.positionWorldMetersXYZ[1]).toBeGreaterThan(2);

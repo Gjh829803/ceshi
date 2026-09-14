@@ -41,6 +41,38 @@ export interface BrowserSession extends EpisodeCaptureSession {
   pick(viewId: string, pixelUv: readonly [number, number]): Promise<unknown>;
 }
 
+function cameraStateShape(camera:WorldSnapshot['camera']):boolean {
+ return !!camera&&['authored','follow-pending','follow'].includes(camera.mode)
+  &&(camera.viewId===null||typeof camera.viewId==='string'&&camera.viewId.length>0)
+  &&(camera.viewKind===null||['third-person','first-person','shoulder'].includes(camera.viewKind))
+  &&(camera.documentHash===null||typeof camera.documentHash==='string')
+  &&[camera.configurationRevision,camera.cameraCommitRevision].every(v=>Number.isSafeInteger(v)&&v>=0)
+  &&(camera.lifecycleGeneration===null||Number.isSafeInteger(camera.lifecycleGeneration))
+  &&(camera.subjectGeneration===null||Number.isSafeInteger(camera.subjectGeneration))
+  &&(camera.logicalTargetId===null||typeof camera.logicalTargetId==='string')
+  &&(camera.resolvedSubjectId===null||typeof camera.resolvedSubjectId==='string')
+  &&['none','blend'].includes(camera.transition?.kind)
+  &&Number.isFinite(camera.transition.configuredDurationSeconds)&&camera.transition.configuredDurationSeconds>=0
+  &&(camera.transition.kind==='none'?camera.transition.effectiveDurationSeconds===0:camera.transition.targetViewId===camera.viewId&&Number.isFinite(camera.transition.elapsedSeconds)&&camera.transition.elapsedSeconds>=0&&Number.isFinite(camera.transition.durationSeconds)&&camera.transition.durationSeconds>0)
+  &&(camera.mode==='authored'?camera.viewId===null&&camera.viewKind===null:camera.viewId!==null&&camera.viewKind!==null&&camera.resolvedSubjectId!==null&&camera.subjectGeneration!==null);
+}
+/** Admission is intentionally independent from source/delivery envelope versions. */
+export function assertEpisodeCameraCapabilities(value:EpisodeCapabilities):void {
+  const c=value?.camera;
+  if(value?.schemaVersion!==2||!c||!Array.isArray(c.views)||!['authored','follow-pending','follow'].includes(c.baselineMode)||!cameraStateShape(c.current)||(c.documentHash!==null&&typeof c.documentHash!=='string'))throw new Error('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
+  if(c.views.some(v=>!v||typeof v.viewId!=='string'||!v.viewId||!['third-person','first-person','shoulder'].includes(v.kind))||new Set(c.views.map(v=>v.viewId)).size!==c.views.length||!(c.defaultViewId===null?c.views.length===0:c.views.some(v=>v.viewId===c.defaultViewId)))throw new Error('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
+}
+export function assertEpisodeCameraStart(start:EpisodeStart,capabilities:EpisodeCapabilities):void {
+ assertEpisodeCameraCapabilities(capabilities);
+ if(start.cameraViewId!==undefined&&!capabilities.camera.views.some(v=>v.viewId===start.cameraViewId))throw new Error('EPISODE_CAMERA_VIEW_UNDECLARED');
+}
+export function assertEpisodeCameraPrepared(start:EpisodeStart,capabilities:EpisodeCapabilities,snapshot:WorldSnapshot):void {
+ assertEpisodeCameraStart(start,capabilities);
+ const expected=start.cameraViewId??(capabilities.camera.baselineMode==='authored'?null:capabilities.camera.defaultViewId),camera=snapshot?.camera;
+ const kind=expected===null?null:capabilities.camera.views.find(v=>v.viewId===expected)?.kind;
+ if(!cameraStateShape(camera)||camera.viewId!==expected||camera.viewKind!==kind||camera.transition?.kind!=='none'||camera.documentHash!==capabilities.camera.documentHash||!Number.isSafeInteger(camera.configurationRevision)||!Number.isSafeInteger(camera.cameraCommitRevision)||(expected===null?camera.mode!=='authored':camera.mode!=='follow'||!camera.resolvedSubjectId||!Number.isSafeInteger(camera.subjectGeneration)))throw new Error('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
+}
+
 function isWithin(root: string, filename: string) {
   const relative = path.relative(root, filename);
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -102,6 +134,7 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
     await page.waitForFunction(() => (window as any).__WORLDKIT_EVAL__?.ready, undefined, { timeout: options.timeoutMilliseconds ?? 60_000 });
     await page.evaluate(async () => {
       const observer = (window as any).__WORLDKIT_EVAL__;
+      if(observer.episode?.schemaVersion!==2||observer.episode.capabilities?.()?.schemaVersion!==2)throw new Error('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
       await observer.stopLive();
       if (!observer.episode || ['prepareSegment', 'execute', 'operation'].some(method => typeof observer.episode[method] !== 'function')) throw new Error('EPISODE_RUNTIME_PORT_MISSING: build and deliver a runtime with the Episode capture port');
       (window as any).__THREE_EPISODE_VIEWS__ = { serial: 0, views: new Map() };
@@ -111,10 +144,11 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
       if (!port || typeof port[method] !== 'function') throw new Error(`EPISODE_PORT_METHOD_MISSING: ${method}`);
       return await port[method](...args);
     }, { method, args });
+    const initialCapabilities=await call('capabilities');assertEpisodeCameraCapabilities(initialCapabilities);
     const session: BrowserSession = {
       page, errors,
-      capabilities: () => call('capabilities'), boarding:id=>call('boarding',[id]), routeInput:request=>call('routeInput',[request]), probeStart: start => call('probeStart', [start]),
-      prepareSegment: (start, viewport) => call('prepareSegment', [start, viewport]),
+      capabilities: async () => {const value=await call('capabilities');assertEpisodeCameraCapabilities(value);return value;}, boarding:id=>call('boarding',[id]), routeInput:request=>call('routeInput',[request]), probeStart: start => call('probeStart', [start]),
+      prepareSegment: async (start, viewport) => {const capabilities=await session.capabilities();assertEpisodeCameraStart(start,capabilities);const snapshot=await call('prepareSegment',[start,viewport]);try{assertEpisodeCameraPrepared(start,capabilities,snapshot);return snapshot;}catch(error){await call('release');throw error;}},
       execute: command => call('execute', [command]), operation: id => call('operation', [id]),
       advance: (input,ticks) => call('advance',[input,ticks]), frame: mimeType => call('frame', [mimeType]),
       release: () => call('release'), close,

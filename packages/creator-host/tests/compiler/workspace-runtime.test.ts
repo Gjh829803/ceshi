@@ -74,3 +74,16 @@ it('builds identical browser bytes from the same workspace SDK source in separat
  expect(two.runtimeSourceHash).toBe(one.runtimeSourceHash);expect(two.runtimeHash).toBe(one.runtimeHash);
  const browser=await readFile(path.join(one.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(browser).not.toContain(first);
 });
+
+it('includes the actual migrated camera snapshot bytes in Creator source and build identity',async()=>{
+ const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');
+ await mkdir(path.join(root,'config'));
+ const cameraBytes=await readFile(path.join(REPOSITORY_ROOT,'apps/sdk-playground/config/camera.json'),'utf8');
+ await writeFile(path.join(root,'config/camera.json'),cameraBytes);
+ await writeFile(path.join(root,'main.ts'),"import {parseCameraDocument} from '@worldkit/three'; import cameraData from './config/camera.json'; window.cameraDocument=parseCameraDocument(cameraData);");
+ const first=await compiler.prepare();
+ expect(await readFile(path.join(first.sourceRoot,'config/camera.json'),'utf8')).toBe(cameraBytes);
+ const changed=JSON.parse(cameraBytes);changed.presets['person.third-person'].values.position.distanceMeters=9;
+ await writeFile(path.join(root,'config/camera.json'),JSON.stringify(changed));
+ const next=await compiler.prepare();expect(next.sourceHash).not.toBe(first.sourceHash);expect(next.worldBuildHash).not.toBe(first.worldBuildHash);
+});

@@ -8,7 +8,6 @@ export { createHumanoidWorld, DEFAULT_HUMANOID_ASSET_ID, type HumanoidWorldOptio
 export { Character as HumanoidCharacter } from './humanoid-runtime/character.js';
 export type {CharacterAttachmentPoint,CharacterAttachmentTransform} from './humanoid-runtime/character.js';
 export type { HumanoidRuntimeOptions, VehicleInstance, HumanoidProfile, HumanoidRuntime, BoardingObservation, HumanoidInputObservation } from './humanoid-runtime/runtime.js';
-export type {HumanoidViewSettings} from './config/camera.js';
 export type { EnvironmentDefinition, MapSpawn } from './humanoid-runtime/environment/types.js';
 export type { VehicleSpec } from './humanoid-runtime/config.js';
 export { emptyInput as emptyHumanoidInput } from './humanoid-runtime/simulation.js';
@@ -18,5 +17,10 @@ export { CHARACTER_CAPABILITIES, type CharacterCapability, type CharacterCapabil
 export { HorseVisual } from './humanoid-runtime/horse.js';
 export type { HorseAnimationFrame, SeatAnchor, ResourceResolver } from './humanoid-runtime/horse.js';
 
-export type {CameraSubjectAdapter,CameraSubjectBody,CameraSubjectSample} from './camera-subject';
 export {compileBoundaryBoxes,type BoundaryDefinition,type BoundaryBox} from './boundaries';
+
+export * from './config/camera/index';
+
+export type {CameraInspection} from './camera/state';
+
+export type {CameraEditSession} from './camera/editing';

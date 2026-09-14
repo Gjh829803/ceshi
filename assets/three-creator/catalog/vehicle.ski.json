@@ -71,7 +71,6 @@
         0.91,
         0
       ],
-      "camera": 6,
       "characterPose": "ski",
       "hint": "W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板",
       "bodyPhysics": {
@@ -116,6 +115,28 @@
       0,
       0.9,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.ski.third-person",
+        "source": "presets",
+        "key": "ski.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.ski.first-person",
+        "source": "presets",
+        "key": "ski.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.ski.shoulder",
+        "source": "presets",
+        "key": "ski.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

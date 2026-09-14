@@ -121,7 +121,7 @@ export class HumanoidActor {
       const rider=new Vector3(...candidate.spec.seat).applyQuaternion(rotation).add(candidate.position);
       if(!canPlaceCreature(candidate,q)||parts.some(part=>q.bodyOverlap(part,filter))||q.bodyOverlap({position:rider,rotation,body:HUMANOID_BODY},filter))return record('blocked','BODY_CLEARANCE_BLOCKED',null);
       // Commit only after support and every occupied body are valid; keep the same instance/driver.
-      q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);v.grounded=true;v.submerged=false;
+      q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.noteVehicleRelocation(v.spec.id);v.grounded=true;v.submerged=false;
       this.player.position.copy(v.spec.mode==='mount'?rider:v.position);this.player.velocity.set(0,0,0);this.player.yaw=v.yaw;
       this.player.grounded=true;this.player.swimming=false;this.player.animation=v.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';
     }else{
@@ -158,7 +158,7 @@ export class HumanoidActor {
     if(q.withVehicleCollisions(v.spec.id,()=>!canPlaceCreature(candidate,q))){this.message='准备点被其他载具占用';return false;}
     const boarding=this.boardingPoint(candidate);
     if(!boarding){this.message='准备点旁没有安全交互位置';return false;}
-    q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.preparedVehicleSpawns.set(v.spec.id,spawn);
+    q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.noteVehicleRelocation(v.spec.id);this.world.preparedVehicleSpawns.set(v.spec.id,spawn);
     this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;
     this.player.position.copy(boarding);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!q.waterAt(boarding),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});
     this.controller.setMounted(false,boarding,v.yaw);this.world.syncActorBodies();
@@ -427,7 +427,7 @@ export class HumanoidActor {
       if(!safe){this.message='附近 6 米内没有稳定且有净空的落点，请使用返回起点';return false;}
       const relocated=Math.hypot(safe.x-v.position.x,safe.z-v.position.z)>.01;
       // 找到稳定支撑并验证净空后才替换；保留驾驶关系、配置和当前测试点。
-      q.releaseVehicleRig(v.spec.id);v.position.copy(safe);v.rotation.copy(rotation);v.yaw=yaw;v.pitch=v.roll=0;
+      q.releaseVehicleRig(v.spec.id);this.world.noteVehicleRelocation(v.spec.id);v.position.copy(safe);v.rotation.copy(rotation);v.yaw=yaw;v.pitch=v.roll=0;
       v.velocity.set(0,0,0);v.speed=v.steering=v.throttle=0;v.grounded=false;v.submerged=false;
       resetFamilyRigidState(v);
       this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;

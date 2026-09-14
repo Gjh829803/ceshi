@@ -33,7 +33,7 @@ const ground=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshStandar
 ground.rotation.x=-Math.PI/2;scene.add(ground);
 // Select humanoid.uefn-mannequin in project.json; the helper loads all supplied actions.
 // Reuse the visible supplied model. Use restrained identifying colors for the subject, key counterparts and landmarks.
-// Optional first-person opening and T switching: add profile:{view:{defaultPerspective:'first-person',keyboardToggleEnabled:true}}.
+// Configure named views through a CameraDocument; see the camera authoring guide.
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'player',characterLoadOptions:{loadTextures:false}});
 world.setCaptureTargets(['player']);
 // Keep loading UI visible until initial materials and the opening frame are ready.

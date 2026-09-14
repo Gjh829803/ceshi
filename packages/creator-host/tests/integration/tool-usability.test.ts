@@ -1,9 +1,10 @@
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile as writeFixtureFile, readFile ,mkdir} from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import os from 'node:os';
 import path from 'node:path';
+const writeFile:typeof writeFixtureFile=async(file,data,options)=>{await mkdir(path.dirname(String(file)),{recursive:true});return writeFixtureFile(file,data,options);};
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThreeCreatorTools } from '../../src/tools/tools';
 import { RuntimeGuidance } from '../../src/discovery/runtime-guidance';
@@ -786,7 +787,7 @@ it('routes all four entry documents through the same MCP schema sources and expo
   expect(result.files['main.ts']).not.toMatch(/export\s+(async\s+)?function/);
   if(topic!=='getting-started')expect(result.files['main.ts']).not.toMatch(/await create(?:Humanoid)?World\(/);
   expect(result.files['main.ts']).not.toMatch(/PlaneGeometry|BoxGeometry|bounds\s*:|playerSpawn\s*:/);
-  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(['main.ts']);
+  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(['getting-started','nonhuman-subject'].includes(topic)?['main.ts','config/camera.json']:['main.ts']);
  }
  const index:any=await schema(tools,{topic:'assets'});
  expect(index.assetIndex.map((item:any)=>item.id).sort()).toEqual([...environment.assetPolicy.allowedAssetIds].sort());
@@ -848,7 +849,7 @@ it('keeps every documented example entry callable and scene-independent through 
  for(const request of requests.values()){
   const result:any=await executeThreeCreatorTool(tools,'creator_get_examples',request);
   expect(result.exampleKind).toBe('binding-snippet');expect(result.requiresAuthoredScene).toBe(true);
-  expect(Object.keys(result.files)).toEqual(['main.ts']);
+  expect(Object.keys(result.files)).toEqual(['getting-started','nonhuman-subject'].includes(request.topic)?['main.ts','config/camera.json']:['main.ts']);
   expect(result.files['main.ts']).not.toMatch(/BoxGeometry|PlaneGeometry|playerSpawn\s*:|bounds\s*:|createElement|setCameraMode\(0\)/);
  }
  const plane:any=await executeThreeCreatorTool(tools,aircraft.tool,aircraft.arguments);

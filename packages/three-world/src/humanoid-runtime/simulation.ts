@@ -77,6 +77,10 @@ export interface PlayerState { position:Vector3; velocity:Vector3; yaw:number; g
 export class Simulation {
   readonly actors=new Map<string,HumanoidActor>();
   readonly preparedVehicleSpawns=new Map<string,MapSpawn>();
+  /** Explicit relocation occurrences, distinct from entity identity and continuous movement. */
+  private readonly vehicleRelocations=new Map<string,number>();
+  noteVehicleRelocation(id:string):void{this.vehicleRelocations.set(id,this.vehicleRelocationOccurrence(id)+1);}
+  vehicleRelocationOccurrence(id:string):number{return this.vehicleRelocations.get(id)??0;}
   readonly vehicles:VehicleState[];
   characterControl=defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE);
   time=0;

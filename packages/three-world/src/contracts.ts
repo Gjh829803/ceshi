@@ -88,49 +88,12 @@ export interface GroundMovement {
  readonly maximumSlopeRadians?:number;
 }
 export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMovement|{readonly kind:'custom';readonly movementId:string}} & (
- | {readonly asset:AssetInstance;readonly object?:never;readonly humanoid?:never;readonly body?:CharacterBody}
- | {readonly object:THREE.Object3D;readonly asset?:never;readonly humanoid?:never;readonly body:CharacterBody}
- | {readonly humanoid:import('./humanoid-runtime/character').Character;readonly movement?:Pick<GroundMovement,'kind'|'walkSpeedMetersPerSecond'|'runSpeedMetersPerSecond'|'jumpSpeedMetersPerSecond'>;readonly asset?:never;readonly object?:never;readonly body?:never}
+ | {readonly asset:AssetInstance;readonly object?:never;readonly humanoid?:never;readonly body?:CharacterBody;/** Explicit semantic eye point in model-local coordinates, transformed once by the world geometry matrix. */ readonly eyePositionLocalMetersXYZ?:Vec3}
+ | {readonly object:THREE.Object3D;readonly asset?:never;readonly humanoid?:never;readonly body:CharacterBody;readonly eyePositionLocalMetersXYZ?:Vec3}
+ | {readonly humanoid:import('./humanoid-runtime/character').Character;readonly movement?:Pick<GroundMovement,'kind'|'walkSpeedMetersPerSecond'|'runSpeedMetersPerSecond'|'jumpSpeedMetersPerSecond'>;readonly asset?:never;readonly object?:never;readonly body?:never;readonly eyePositionLocalMetersXYZ?:never}
 );
-export type CameraPerspective='first-person'|'third-person';
-export interface CameraFollowViewOptions {
- /** Target-local metres, transformed by the target's world rotation and scale. */
- readonly eyeOffsetLocalMetersXYZ:Vec3;
- /** Defaults to third-person. First-person applies immediately rather than waiting for movement. */
- readonly defaultPerspective?:CameraPerspective;
- /** Defaults to false; programmatic switching is independent of this shortcut permission. */
- readonly keyboardToggleEnabled?:boolean;
-}
-/** World-space opening, applied once when configuring follow. Up controls roll. */
-export interface CameraOpening {
- readonly positionWorldMetersXYZ:Vec3;
- readonly lookAtWorldMetersXYZ:Vec3;
- readonly upWorldXYZ?:Vec3;
- readonly fovDegrees:number;
-}
-/** Shared follow for ordinary and full humanoid targets. */
 export interface CameraFollowOptions {
- /** Optional initial composition; requires preserve-opening framing, without orbit distance/pitch overrides. */
- readonly opening?:CameraOpening;
- /** Default fixed. Vehicle recentering uses the actual mount's heading/tuning; on foot it stays fixed. */
- readonly headingFollow?:'fixed'|'vehicle';
- /** Optional first-person eye in the target object's local coordinates. */
- readonly view?:CameraFollowViewOptions;
- readonly targetEntityId?:string;
- /** Without orbit overrides, continue the authored pose and framing. */
- readonly framingMode?:'preserve-opening'|'target';
- /** Translation damping for inherited opening framing; zero follows immediately. */
- readonly followHalfLifeSeconds?:number;
- readonly distanceMeters?:number;
- readonly targetHeightMeters?:number;
- readonly pitchRadians?:number;
- readonly activateOnInput?:boolean;
- readonly transitionSeconds?:number;
- readonly rotationSpeedRadiansPerSecond?:number;
- readonly collisionRadiusMeters?:number;
- readonly recoveryHalfLifeSeconds?:number;
- readonly maximumRecoveryMetersPerSecond?:number;
- readonly targetHalfLifeSeconds?:number;
+ readonly configuration:import('./config/camera/index').CameraDocument;
 }
 export type CaptureTargetRepresentative =
  | {readonly kind:'object';readonly object:THREE.Object3D}
@@ -189,7 +152,7 @@ export interface RuntimeError {
  readonly suggestedAction?:string;
 }
 export type CommandReceipt =
- | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number;readonly result?:{readonly kind:'relocation';readonly entityId:string;readonly vehicleInstanceId:string;readonly positionWorldMetersXYZ:Vec3}}
+ | {readonly status:'applied';readonly commandId:string;readonly worldRevision:number;readonly result?:{readonly kind:'relocation';readonly entityId:string;readonly vehicleInstanceId:string;readonly positionWorldMetersXYZ:Vec3}|{readonly kind:'camera-view';readonly camera:CameraState}}
  | {readonly status:'accepted';readonly commandId:string;readonly worldRevision:number;readonly operationId:string}
  | {readonly status:'rejected';readonly commandId:string;readonly worldRevision:number;readonly error:RuntimeError};
 export interface OperationStatus {
@@ -312,11 +275,20 @@ export interface WorldDescription {
  readonly actions:readonly {readonly id:string;readonly description:string;readonly inputSchema:ObjectSchema;readonly writes:readonly WriteClaim[];readonly isAvailable:boolean;readonly unavailableReason?:RuntimeError}[];
 }
 export interface CameraState {
+ readonly viewId:string|null;
+ readonly viewKind:import('./config/camera/index').CameraViewConfiguration['kind']|null;
+ readonly documentHash:string|null;
+ readonly configurationRevision:number;
+ readonly cameraCommitRevision:number;
+ readonly lifecycleGeneration:number|null;
+ readonly logicalTargetId:string|null;
+ readonly resolvedSubjectId:string|null;
+ readonly subjectGeneration:number|null;
+ readonly transition:Extract<import('./camera/state').CameraTransition,{kind:'none'}>|Omit<Extract<import('./camera/state').CameraTransition,{kind:'blend'}>,'source'|'sourceSubject'>;
+
  readonly headingFollow?:'fixed'|'vehicle';
  readonly headingTargetYawRadians?:number|null;
  readonly subjectEntityId?:string;
- readonly perspective?:CameraPerspective;
- readonly view?:Required<CameraFollowViewOptions>;
  readonly mode:'authored'|'follow-pending'|'follow';
  readonly framingMode?:'preserve-opening'|'target';
  readonly positionWorldMetersXYZ:Vec3;
@@ -439,10 +411,10 @@ export interface World {
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
- /** Configure the common follow policy; omitted orbit settings inherit the current Agent-authored view. */
- setCameraFollow(options?:CameraFollowOptions):void;
- /** Switch an existing follow camera; does not change its configured reset default. */
- setCameraPerspective(perspective:CameraPerspective):void;
+ /** Install the complete camera document; explicit preserve-opening framing can adopt the first authored view. */
+ setCameraFollow(options:CameraFollowOptions):void;
+ setCameraView(viewId:string):void;
+ inspectCamera():import('./camera/state').CameraInspection;
  /** Releases SDK following without disposing/replacing the camera. */
  useAuthoredCamera():THREE.Camera;
  setCaptureTargets(targets:readonly CaptureTargetSelection[]):void;
@@ -491,6 +463,8 @@ export interface WorldObservation {
  readonly captureTargetIds?:readonly string[];
  readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;
+ /** Read the camera controller's last committed inspection without simulation or rendering. */
+ inspectCamera?():import('./camera/state').CameraInspection;
  inspectVehicles?(query?:import('./humanoid-runtime/vehicle-inspection').VehicleInspectionQuery):import('./humanoid-runtime/vehicle-inspection').VehicleInspectionResult;
  snapshot?():WorldSnapshot; inspect?():unknown; capabilities?(query?:{readonly query?:string;readonly entityIds?:readonly string[]}):WorldDescription;
  execute?(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;

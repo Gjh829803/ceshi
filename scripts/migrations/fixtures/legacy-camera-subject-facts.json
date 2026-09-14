@@ -1,0 +1,187 @@
+{
+  "sourceRevision": "2852468670864e7b829c7f84c0f56f280494f88f",
+  "meaning": {
+    "archetype": "Literal spec.archetype in the cited original spec source; native camera checks atv/jetski for first-person pitch .34.",
+    "creature": "Original motion.creature state: ground-vehicle physics-state resetAuxiliaryState assigns mount/carriage; flying-creature physics-state creates it for dragon. Other inventoried modes do not get this state. Native camera uses this flag for seat[1]+.6 target height."
+  },
+  "sourceFiles": {
+    "packages/preset-content/src/config.ts": "4bfa231c03e6cc53e943a0f29f0860b9e822f391b08ad52bb3ac917e2fb050da",
+    "packages/preset-content/src/creatures/specs.ts": "cb3881e934fea8df4e1aa64157b3e4378d3a5ab245bc3642fa088e3cba48b09c",
+    "packages/preset-content/src/vehicles/atv/spec.ts": "5efa79afdb74c0b2221798aa704cfc81272b98d4c0bf100aaf54661ba247e958",
+    "packages/preset-content/src/vehicles/bus/spec.ts": "cd85789b717348ac732bd872234e799a1adf8fd0e79da359b97ef78e3defd075",
+    "packages/preset-content/src/vehicles/canoe/spec.ts": "ae98db3f2e59e24fbad844c2d6126c1b4cd22c92ad9ef4e605c8f3425272f933",
+    "packages/preset-content/src/vehicles/jetski/spec.ts": "d051b3342a060526113c76f814b8a48fc57452933f22d4b27946026f139c1540",
+    "packages/preset-content/src/vehicles/kayak/spec.ts": "721d859b4ba85eb3ef5361c2de6eebe41e2442977b2ed1aa5dcd3b5d24c690cd",
+    "packages/preset-content/src/vehicles/raft/spec.ts": "7232991bdeff2cc51e5bb19ef28feb41904d4888ac3acaeb6329cf61dc41a7bf",
+    "packages/preset-content/src/vehicles/ski/spec.ts": "24303d0e37d2e92c8f2ae3a981240fa25ab704989995ea430440d3587dd252c1",
+    "packages/preset-content/src/vehicles/sled/spec.ts": "abf74ab6d0be452f091280d395bb6f1aa673a3f85a40bfcec0f0e1fdf94c42b7",
+    "packages/preset-content/src/vehicles/submersible/spec.ts": "1351006c819c62e13cda0c57280bfc2d7f1239ceff747f3707e0a310588bd80d",
+    "packages/preset-content/src/vehicles/tank/spec.ts": "e25fc653ff4392eacf2944d02450cf4b884d5d32f5893b6c5914f66b1a6c4be5",
+    "packages/preset-content/src/vehicles/unicycle/spec.ts": "0163294c81b283acf7ebcf5504c7f9728c023814e1b8a32ee6611fd000edf8ec",
+    "packages/three-world/src/humanoid-runtime/camera.ts": "ec2e435612af8cdbf0b0dda333b79378043e044f489c976ec53929b5028ffbe9",
+    "packages/three-world/src/humanoid-runtime/motion-families/flying-creature/physics-state.ts": "5f39f4b7e3c86da3fcbf225571c3a789f55f4d512dae536b47eb6c0c3a7f3eff",
+    "packages/three-world/src/humanoid-runtime/motion-families/ground-vehicle/physics-state.ts": "90d4f9adb9db57cd17a49f11766589ace13d45fe5a8a5c41ecdb9a8c40ec9af9"
+  },
+  "subjects": {
+    "atv": {
+      "archetype": "atv",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/atv/spec.ts"
+    },
+    "boat": {
+      "archetype": "boat",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "bus": {
+      "archetype": "bus",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/bus/spec.ts"
+    },
+    "canoe": {
+      "archetype": "canoe",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/canoe/spec.ts"
+    },
+    "carriage": {
+      "archetype": "carriage",
+      "creature": true,
+      "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+    },
+    "dragon": {
+      "archetype": "dragon",
+      "creature": true,
+      "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+    },
+    "glider": {
+      "archetype": "glider",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "horse": {
+      "archetype": "horse",
+      "creature": true,
+      "specSourcePath": "packages/preset-content/src/creatures/specs.ts"
+    },
+    "hovercraft": {
+      "archetype": "hover",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "jetski": {
+      "archetype": "jetski",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/jetski/spec.ts"
+    },
+    "kart": {
+      "archetype": "racer",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "kayak": {
+      "archetype": "kayak",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/kayak/spec.ts"
+    },
+    "motorcycle": {
+      "archetype": "motorcycle",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "observation-submarine": {
+      "archetype": "submarine",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/submersible/spec.ts"
+    },
+    "patrol-boat": {
+      "archetype": "boat",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "plane": {
+      "archetype": "plane",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "racer": {
+      "archetype": "racer",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "raft": {
+      "archetype": "raft",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/raft/spec.ts"
+    },
+    "rescue-hovercraft": {
+      "archetype": "hover",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "rover": {
+      "archetype": "rover",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "skateboard": {
+      "archetype": "skateboard",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "ski": {
+      "archetype": "ski",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/ski/spec.ts"
+    },
+    "sled": {
+      "archetype": "sled",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/sled/spec.ts"
+    },
+    "spacecraft": {
+      "archetype": "spacecraft",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "submarine": {
+      "archetype": "submarine",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "supercar": {
+      "archetype": "racer",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "survey-spacecraft": {
+      "archetype": "spacecraft",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "tank": {
+      "archetype": "tank",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/tank/spec.ts"
+    },
+    "touring-motorcycle": {
+      "archetype": "motorcycle",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "trail-rover": {
+      "archetype": "rover",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "trainer-plane": {
+      "archetype": "plane",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/config.ts"
+    },
+    "unicycle": {
+      "archetype": "unicycle",
+      "creature": false,
+      "specSourcePath": "packages/preset-content/src/vehicles/unicycle/spec.ts"
+    }
+  }
+}

@@ -73,7 +73,6 @@
         -0.15
       ],
       "characterPose": "atv",
-      "camera": 6.2,
       "bodyPhysics": {
         "kind": "jet",
         "mass": 330,
@@ -244,6 +243,28 @@
       0,
       0.54,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.jetski.third-person",
+        "source": "presets",
+        "key": "jetski.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.jetski.first-person",
+        "source": "presets",
+        "key": "jetski.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.jetski.shoulder",
+        "source": "presets",
+        "key": "jetski.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

@@ -1,3 +1,4 @@
+import {createHumanoidCameraDocument} from '../config/camera/index';
 import {Group,PerspectiveCamera,Vector3} from 'three';
 import {describe,expect,it,vi} from 'vitest';
 import {createWorld} from '../world';
@@ -14,7 +15,7 @@ const map:EnvironmentDefinition={id:'recovery-test',name:'Recovery',description:
   spawns:[{id:'car-spawn',name:'Car',vehicleId:'car',position:[-20,.025,0],yaw:0,regionId:'ground'}],playerSpawn:[0,.025,0],
   recovery:{fallBelowY:-3,checkpoint:{position:[-10,.025,-10],yaw:Math.PI/2}}};
 const car:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.025,0],yaw:0,
-  speed:12,accel:5,grip:10,steer:1,radius:1.2,seat:[0,1,0],camera:6,hint:'',archetype:'rover',
+  speed:12,accel:5,grip:10,steer:1,radius:1.2,seat:[0,1,0],hint:'',archetype:'rover',
   envelope:{kind:'box',halfExtents:[1,1,2],offset:[0,1,0]}};
 async function fixture(options:{map?:EnvironmentDefinition;vehicles?:VehicleSpec[]}={}){
   const selected=options.map??map;
@@ -31,7 +32,7 @@ describe('explicit Humanoid boundary recovery',()=>{
   it.each(['fall','outside-map'] as const)('recovers %s once without resetting props, task time or camera mode',async trigger=>{
     const world=await fixture({map:{...map,looseCrates:[{id:'loose',position:[5,1,5],size:1}]}});
     try{
-      const r=world.humanoid!,s=r.simulation,h=s.controlledActor.controller;r.setCameraMode(2);world.step({},30);
+      world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});const r=world.humanoid!,s=r.simulation,h=s.controlledActor.controller;world.setCameraView('shoulder');world.step({},30);
       const crate=h.crates[0]!;crate.body.setTranslation({x:8,y:.51,z:8},true);crate.body.setLinvel({x:0,y:0,z:0},true);
       const props=vi.spyOn(r.environment,'resetContents'),reset=vi.spyOn(h,'reset');const before=s.time,revision=s.controlledActor.teleportRevision;
       r.setInput({...emptyInput(),forward:1});
@@ -39,7 +40,7 @@ describe('explicit Humanoid boundary recovery',()=>{
       const snapshot=world.snapshot().humanoid!;
       expect(snapshot.recovery).toMatchObject({sequence:1,status:'recovered',trigger,reason:'SAFE_CHECKPOINT',subjectInstanceId:'person'});
       expect(h.position.distanceTo(new Vector3(-10,.025,-10))).toBeLessThan(1e-5);expect(h.velocity.length()).toBe(0);expect(h.vertical).toBe(0);
-      expect(snapshot.teleportRevision).toBe(revision+1);expect(snapshot.cameraMode).toBe(2);expect(s.time).toBeGreaterThan(before);
+      expect(snapshot.teleportRevision).toBe(revision+1);expect(world.snapshot().camera.viewKind).toBe('shoulder');expect(s.time).toBeGreaterThan(before);
       expect(props).not.toHaveBeenCalled();expect(reset).not.toHaveBeenCalled();expect(crate.body.translation().x).toBeCloseTo(8);
       expect(r.inspectControls().override).toBeNull();expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);
       world.step({},5);world.render();expect(r.snapshot().recovery?.sequence).toBe(1);expect(r.options.character.object.position.distanceTo(h.position)).toBeLessThan(.05);
@@ -49,9 +50,9 @@ describe('explicit Humanoid boundary recovery',()=>{
   it('retains the mounted vehicle instance and excludes parked actors from recovery',async()=>{
     const world=await fixture({vehicles:[car,{...car,id:'parked',spawn:[25,.025,0]}]});
     try{
-      const r=world.humanoid!,s=r.simulation;r.approach('car');expect(r.enter('car')).toBe(true);r.setCameraMode(1);world.step({},31);
+      world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});const r=world.humanoid!,s=r.simulation;r.approach('car');expect(r.enter('car')).toBe(true);world.setCameraView('first-person');world.step({},31);
       const v=s.controlledActor.vehicle!,other=s.vehicles[1]!,otherPosition=other.position.clone();v.position.set(2,-4,3);v.velocity.set(5,-5,3);v.pitch=.7;v.roll=.4;
-      world.step({});expect(s.controlledActor.vehicle).toBe(v);expect(r.snapshot()).toMatchObject({mountedInstanceId:'car',cameraMode:1,recovery:{status:'recovered',subjectInstanceId:'car'}});
+      world.step({});expect(s.controlledActor.vehicle).toBe(v);expect(r.snapshot()).toMatchObject({mountedInstanceId:'car',recovery:{status:'recovered',subjectInstanceId:'car'}});
       expect(v.position.distanceTo(new Vector3(-10,.025,-10))).toBeLessThan(1e-5);expect(v.velocity.length()).toBe(0);expect([v.speed,v.steering,v.throttle,v.pitch,v.roll]).toEqual([0,0,0,0,0]);
       expect(other.position.distanceTo(otherPosition)).toBeLessThan(.05);expect(s.controlledActor.controller.isMounted).toBe(true);
     }finally{world.dispose();}

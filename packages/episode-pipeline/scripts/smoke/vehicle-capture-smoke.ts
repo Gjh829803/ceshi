@@ -8,7 +8,7 @@ const source=await loadEpisodeSource(manifest),output=path.resolve(process.argv[
 await mkdir(output,{recursive:true});
 // Local authored acceptance route, not a claim of cloud-planner generation.
 const plan:EpisodePlan={kind:'worldkit-three-episode-plan',schemaVersion:2,worldBuildHash:source.worldBuildHash,
- segments:Array.from({length:6},(_,index)=>({id:`segment-0${index}`,start:{positionWorldMetersXYZ:[-75,.03,-75+index*6],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'rover-instance-1',mounted:true,cameraMode:0}},
+ segments:Array.from({length:6},(_,index)=>({id:`segment-0${index}`,start:{positionWorldMetersXYZ:[-75,.03,-75+index*6],facingYawRadians:Math.PI,cameraViewId:'third-person',humanoid:{vehicleInstanceId:'rover-instance-1',mounted:true}},
   waypoints:[{positionWorldMetersXYZ:[-75,.03,75],gait:'walk'},{positionWorldMetersXYZ:[75,.03,75],gait:'walk'},{positionWorldMetersXYZ:[75,.03,-75],gait:'walk'},{positionWorldMetersXYZ:[-75,.03,-75],gait:'walk'}],
   endBehavior:'loop',purpose:'Local physical rover route and pure-world recording acceptance'}))};
 validateEpisodePlan(plan,{worldBuildHash:source.worldBuildHash});

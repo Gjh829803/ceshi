@@ -50,7 +50,6 @@ try{
   const after=await tool('world_inspect',{entityIds:[instanceId]});
   const from=before.observation.targets[instanceId].positionMetersXYZ,to=after.observation.targets[instanceId].positionMetersXYZ;
   const distance=Math.hypot(...to.map((n:number,i:number)=>n-from[i]));assert(distance>.1,`${instanceId} did not physically move`);
-  for(const mode of [1,2,0])await command({type:'humanoid.set-camera-mode',mode});
   await command({type:'humanoid.set-input',input:null});await command({type:'vehicle.exit'});subjects.push({instanceId,from,to,distanceMeters:distance});
  }
  await save('subject-control.json',{action,subjects});
@@ -63,9 +62,10 @@ try{
  const consumers=[];
  try{
   for(const [instanceId,position] of [['rover-instance-1',[0,.03,0]],['patrol-instance-1',[200,-1.9,0]]] as const){
-   const start={positionWorldMetersXYZ:position,facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:instanceId,mounted:true,cameraMode:0 as const}};
+   const start={positionWorldMetersXYZ:position,facingYawRadians:Math.PI,cameraViewId:'third-person',humanoid:{vehicleInstanceId:instanceId,mounted:true}};
    const probe=await session.probeStart(start);assert(probe.isValid,JSON.stringify(probe));
    const before=await session.prepareSegment(start,{widthPixels:1280,heightPixels:720}),after=await session.advance({humanoid:{...neutral,forward:1}},120);
+   for(const viewId of ['first-person','shoulder','third-person']){const receipt=await session.execute({type:'camera.set-view',viewId});assert.equal(receipt.status,'applied');let observed=await session.advance({},1);for(let tick=0;observed.camera.transition.kind!=='none'&&tick<600;tick++)observed=await session.advance({},1);assert.equal(observed.camera.viewId,viewId);assert.equal(observed.camera.transition.kind,'none');}
    const frame=await session.frame('image/png');await writeFile(path.join(output,instanceId+'.png'),Buffer.from(frame.imageDataUrl.split(',')[1]!,'base64'));
    assert.equal(after.humanoid?.mountedInstanceId,instanceId);assert.equal(after.simulationTick-before.simulationTick,120);assert.deepEqual(after.errors,[]);
    const p=after.entities.find(entity=>entity.id===instanceId)!.positionWorldMetersXYZ;

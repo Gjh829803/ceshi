@@ -59,6 +59,5 @@ export function validateEnvironment(map:EnvironmentDefinition):void{
   for(const target of map.interactions??[])if(!target||!text(target.id)||!text(target.slotId)||!['pickup','seat'].includes(target.kind)||!vector(target.position)||!vector(target.approach)||!Number.isFinite(target.yaw)||(target.size!==undefined&&(!vector(target.size)||target.size.some(n=>n<=0)))||(target.massKg!==undefined&&(!Number.isFinite(target.massKg)||target.massKg<=0)))fail();
   for(const surface of map.climbSurfaces??[])if(!surface||!text(surface.id)||boundaryIds.has(surface.colliderId??'')||!vector(surface.center)||!vector(surface.normal)||!Number.isFinite(surface.width)||surface.width<=0||!Number.isFinite(surface.minY)||!Number.isFinite(surface.maxY)||surface.minY>=surface.maxY)fail();
   for(const crate of map.looseCrates??[])if(!crate||!text(crate.id)||!vector(crate.position)||!Number.isFinite(crate.size)||crate.size<=0)fail();
-  if(map.characterCameraDistanceMeters!==undefined&&(!Number.isFinite(map.characterCameraDistanceMeters)||map.characterCameraDistanceMeters<=0))fail();
   validateEnvironmentIdentities(map);
 }

@@ -1,3 +1,5 @@
+import cameraData from './config/camera.json';
+import {parseCameraDocument} from '@worldkit/three';
 import * as THREE from 'three';
 import {createWorld,HumanoidCharacter,type EnvironmentDefinition,type VehicleSpec} from '@worldkit/three';
 // Asset discovery supplies IDs; compiler closes primary models, clips, notices and hashes.
@@ -31,16 +33,15 @@ surface(240,240,[0,0,0]);
 structure('wall',[45,5,1],[0,2.5,90]);
 for(const side of [-1,1])for(const z of [0,25,50,75])marker(side*18,.75,z);
 const vehicleObject=new THREE.Group();
-const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
+const spec=structuredClone(selected.vehicle.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'tank-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});
 // The same catalog asset can be loaded/cloned into additional independent instance roots.
 const model=await world.assets.load(selected.id);vehicleObject.add(model.object);
 
 world.setCaptureTargets([{entityId:'person'},{entityId:'tank-instance-1'}]);
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#102c35d9;color:white;padding:12px;font:14px sans-serif';
 hud.textContent='履带坦克 · F 进出 · W / S 前进、制动后倒车 · A / D 差速转向 · Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · T 视角';presentation.ui.mount(hud);
-const button=document.createElement('button');button.textContent='走近坦克';button.onclick=async()=>{await world.execute({type:'humanoid.approach',instanceId:'tank-instance-1'});presentation.focus();};hud.append(button);
-const cycleCamera=(key:KeyboardEvent)=>{if(key.code==='KeyT'&&!key.repeat){const mode=((world.snapshot().humanoid!.cameraMode+1)%3) as 0|1|2;void world.execute({type:'humanoid.camera',mode});}};
-window.addEventListener('keydown',cycleCamera);world.onDispose(()=>window.removeEventListener('keydown',cycleCamera));
+const button=document.createElement('button');button.textContent='走近坦克';button.onclick=async()=>{await world.execute({type:'vehicle.approach',instanceId:'tank-instance-1'});presentation.focus();};hud.append(button);
 await world.start();presentation.focus();

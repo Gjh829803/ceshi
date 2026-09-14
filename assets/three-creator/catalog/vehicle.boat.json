@@ -61,7 +61,6 @@
         0.35,
         -0.3
       ],
-      "camera": 9,
       "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
       "archetype": "boat",
       "envelope": {
@@ -101,6 +100,28 @@
       0,
       0.5,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.boat.third-person",
+        "source": "presets",
+        "key": "boat.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.boat.first-person",
+        "source": "presets",
+        "key": "boat.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.boat.shoulder",
+        "source": "presets",
+        "key": "boat.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

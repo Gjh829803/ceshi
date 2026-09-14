@@ -26,7 +26,7 @@ export const map:EnvironmentDefinition={
   ],
   climbSurfaces:[{id:'climb-wall',colliderId:'wall',kind:'wall',center:[-16,0,-6.1],normal:[0,0,1],width:5,minY:0,maxY:3}],
   water:[{id:'pool',min:[5,-2,-20],max:[16,0,20],surface:0}],
-  regions:[],spawns:[],playerSpawn:[3.5,.04,0],characterCameraDistanceMeters:7,
+  regions:[],spawns:[],playerSpawn:[3.5,.04,0],
 };
 
 // Every part of one movable object shares its group ID and TOTAL mass in kg.

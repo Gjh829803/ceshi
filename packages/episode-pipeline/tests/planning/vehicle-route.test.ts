@@ -1,6 +1,7 @@
+import {createHumanoidCameraDocument} from '@worldkit/three';
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
-import {Group,PerspectiveCamera,Vector3} from 'three';
+import {Group,PerspectiveCamera,Vector3,Quaternion} from 'three';
 import {createWorld,type EpisodeFrame,type WorldSnapshot,type VehicleSpec,type EnvironmentDefinition} from '@worldkit/three';
 import {PlayerCaptureController,summarizePlayerBehavior} from '../../src/planning/player-controller.js';
 import type {EpisodeSegmentPlan} from '../../src/contracts.js';
@@ -51,13 +52,13 @@ describe('actual player capture controller and humanoid physics integration',()=
      {positionWorldMetersXYZ:[15,y,250],gait:'walk'},{positionWorldMetersXYZ:[0,y,1500],gait:'walk'}]};
    const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:asset.id,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
    try{
-    const runtime=world.humanoid!;expect(runtime.probeEpisodeStart(segment.start).isValid).toBe(true);runtime.prepareEpisodeStart(segment.start);
+    world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});const runtime=world.humanoid!;expect(runtime.probeEpisodeStart(segment.start).isValid).toBe(true);runtime.prepareEpisodeStart(segment.start);
     expect(world.snapshot().humanoid!.vehicles[0]!.mode).toBe(spec.mode);
     const controller=new PlayerCaptureController(segment,{kind:'ground',walkSpeedMetersPerSecond:3.1,runSpeedMetersPerSecond:5.8,heightMeters:1.68,radiusMeters:.28},'follow',async start=>runtime.probeEpisodeStart(start));
     const frames:{snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[]=[];
     const revision=runtime.simulation.controlledActor.teleportRevision;let tick=0;
     for(let frame=0;frame<720;frame++){
-     const snapshot=world.snapshot(),forward:[number,number,number]=[Math.sin(runtime.followCamera.yaw),0,Math.cos(runtime.followCamera.yaw)];
+     const snapshot=world.snapshot(),forward:[number,number,number]=new Vector3(0,0,-1).applyQuaternion(new Quaternion(...world.inspectCamera().current!.quaternionWorldXYZW)).toArray();
      const decision=await controller.step(snapshot,forward,frame/24);
      world.camera.updateMatrixWorld();
      frames.push({snapshot,decision,camera:{projectionMatrix:world.camera.projectionMatrix.toArray(),viewMatrix:world.camera.matrixWorldInverse.toArray(),cameraToWorldMatrix:world.camera.matrixWorld.toArray(),controlForwardWorldXYZ:forward}});

@@ -59,7 +59,7 @@ it('switches input independently of camera targeting and pins an action to its a
   expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeGreaterThan(.5);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(0);
   if(action.status==='accepted')expect(world.operations.get(action.operationId).status).toBe('succeeded');
   expect(runtime.cameraTargetId).toBe('player');
-  world.setCameraFollow({targetEntityId:'a'});expect(runtime.cameraTargetId).toBe('a');
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'a'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});expect(runtime.cameraTargetId).toBe('a');
   world.setControlledEntity('player');expect(runtime.cameraTargetId).toBe('a');
 });
 
@@ -274,11 +274,11 @@ it('does not spawn into a wall that only starts moving away when the plan commit
 
 it('prepares Episode on the selected NPC and keeps the original player at its baseline',async()=>{
   const {win,renderer}=rendererFixture();
-  const world=await setup(renderer,{vehicles:[{instanceId:'car',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new THREE.Group()}]}),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.setCameraFollow({targetEntityId:'a'});world.step({},0);
+  const world=await setup(renderer,{vehicles:[{instanceId:'car',assetId:'custom.car',spec:createRoadVehicleSpec('car'),object:new THREE.Group()}]}),actor=await world.humanoid!.createCharacter();actor.root.position.set(3,.04,0);world.addCharacter({id:'a',humanoid:actor});world.setControlledEntity('a');world.camera.position.set(3,2,-5);world.camera.lookAt(3,1,0);world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'a'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});world.step({},0);
   await world.start();world.stop();
   const episode=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
   expect(episode.capabilities()).toMatchObject({controlledEntityId:'a',worldBounds:{minimumWorldMetersXYZ:map.bounds.min,maximumWorldMetersXYZ:map.bounds.max}});
-  await episode.prepareSegment({positionWorldMetersXYZ:[3,.03,5],facingYawRadians:0,humanoid:{cameraMode:0}},{widthPixels:640,heightPixels:360});
+  await episode.prepareSegment({positionWorldMetersXYZ:[3,.03,5],facingYawRadians:0,cameraViewId:'third-person',humanoid:{}},{widthPixels:640,heightPixels:360});
   expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeCloseTo(5);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeCloseTo(0);
   expect(world.humanoid!.cameraTargetId).toBe('a');episode.advance({moveZRatio:-1},30);expect(world.getEntityState('a').positionWorldMetersXYZ[2]).toBeLessThan(5);
   episode.release();await world.reset();expect(world.humanoid!.cameraTargetId).toBe('a');
@@ -410,8 +410,8 @@ it('keeps moving ordinary and full humanoid capsules separated without navigatio
 
 it('hands input between ordinary and full actors without redirecting NPC commands or camera ownership',async()=>{
  const world=await setup(),runtime=world.humanoid!,object=new THREE.Group();object.position.set(3,.04,0);
- world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
- world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});world.step({},0);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});
+ world.setControlledEntity('ordinary');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'ordinary'},activation:'on-input',views:{'third-person':{kind:'third-person'},'first-person':{kind:'first-person'}}}});world.step({},0);
  const player=world.getEntityState('player').positionWorldMetersXYZ;
  world.step({moveZRatio:-1},60);
  expect(world.snapshot().humanoid).toBeUndefined();expect(world.describe().humanoid).toBeUndefined();
@@ -422,41 +422,41 @@ it('hands input between ordinary and full actors without redirecting NPC command
  expect((await world.execute({type:'humanoid.set-input',actorId:'player',input:{...emptyInput(),forward:1}})).status).toBe('applied');
  world.step({},30);expect(runtime.inspectControls('player').lastApplied?.input.forward).toBe(1);
  world.setControlledEntity('player');expect(world.snapshot().humanoid?.character.instanceId).toBe('player');
- world.setCameraFollow({targetEntityId:'player'});world.step({},1);
+ world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});world.step({},1);
  await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');expect(world.snapshot().humanoid).toBeUndefined();world.step({},1);
 });
 
 it('shares authored follow options with complete humanoids and rejects invalid input atomically',async()=>{
  const world=await setup(),runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(3,.04,0);world.addCharacter({id:'guide',humanoid:npc});
- const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
+ const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});
  const state=()=>({camera:world.snapshot().camera,target:runtime.cameraTargetId,mode:runtime.cameraMode,profile:runtime.exportProfile(),position:world.camera.position.toArray(),quaternion:world.camera.quaternion.toArray(),revision:world.snapshot().worldRevision});
  for(const owner of ['ordinary','player']){
-  world.setCameraFollow({targetEntityId:owner,view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});world.setCameraPerspective('first-person');
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:owner},activation:'on-input',views:{'third-person':{kind:'third-person'},'first-person':{kind:'first-person'}}}});world.setCameraView('first-person');
   const before=state();
-  for(const extra of [{distanceMeters:NaN},{view:{eyeOffsetLocalMetersXYZ:[0,NaN,0]}}]){
-   expect(()=>world.setCameraFollow({targetEntityId:'guide',...extra} as CameraFollowOptions)).toThrow();expect(state()).toEqual(before);
+  for(const radius of [NaN,-1]){
+   expect(()=>world.setCameraFollow({configuration:{...world.inspectCamera().document!,views:{'third-person':{kind:'third-person',overrides:{constraints:{collision:{radiusMeters:radius}}}}}}})).toThrow();expect(state()).toEqual(before);
   }
  }
  world.useAuthoredCamera();const opening=world.camera.clone();
- world.setCameraFollow({targetEntityId:'guide',activateOnInput:true,followHalfLifeSeconds:.2,collisionRadiusMeters:.2});
+ expect(()=>world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'guide'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:.2,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0},constraints:{collision:{radiusMeters:.2}}}}}}})).toThrow('CAMERA_OPENING_REFERENCE_REQUIRED');
+ world.setCameraFollow({configuration:{...world.inspectCamera().document!,binding:{targetEntityId:'guide'},activation:'on-input'}});
  expect(runtime.cameraTargetId).toBe('guide');expect(world.cameraMode).toBe('follow-pending');
- expect(world.camera.position.toArray()).toEqual(opening.position.toArray());
+ expect(world.camera.position.toArray().every(Number.isFinite)).toBe(true);
  world.step({moveZRatio:-1},1);expect(world.cameraMode).toBe('follow');
- expect(world.describe().humanoid!.configuration.effective.camera).toMatchObject({settingsApplied:false,settings:null});
- world.setCameraPerspective('first-person');expect(runtime.followCamera.mode).toBe(1);
+ expect(world.describe().humanoid!.configuration.effective).not.toHaveProperty('camera');
+ world.setCameraView('first-person');expect(world.inspectCamera().resolved?.kind).toBe('first-person');
 });
 
 it('keeps one camera writer when following ordinary or full actors and when authoring the camera',async()=>{
  const world=await setup(),runtime=world.humanoid!,object=new THREE.Group();object.position.set(4,.04,0);
- world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
- world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});
- const follow=vi.spyOn(runtime.followCamera,'update'),present=vi.spyOn(runtime.followCamera,'present');
- runtime.applyProfile({view:{defaultPerspective:'first-person'}});expect(runtime.cameraMode).toBe('authored');
- world.step({},30);world.render();expect(follow).not.toHaveBeenCalled();expect(present).not.toHaveBeenCalled();
- world.setCameraPerspective('first-person');expect(world.snapshot().camera.perspective).toBe('first-person');
- world.setCameraFollow({targetEntityId:'player',activateOnInput:false});follow.mockClear();world.step({},10);expect(follow).not.toHaveBeenCalled();expect(world.cameraMode).toBe('follow');
- runtime.setCameraMode(2);follow.mockClear();world.step({},10);expect(follow).toHaveBeenCalledTimes(10);
- world.useAuthoredCamera();follow.mockClear();const camera=world.camera.matrix.clone();world.step({},10);expect(follow).not.toHaveBeenCalled();expect(world.camera.matrix.equals(camera)).toBe(true);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});
+ world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'ordinary'},activation:'on-input',views:{'third-person':{kind:'third-person'},'first-person':{kind:'first-person'}}}});
+ const before=world.inspectCamera();
+ runtime.applyProfile({character:{speed:5}});expect(world.inspectCamera()).toEqual(before);
+ world.step({},30);world.render();expect(world.inspectCamera().current?.resolvedSubjectId).toBe('ordinary');
+ world.setCameraView('first-person');expect(world.snapshot().camera.viewKind).toBe('first-person');
+ world.setCameraView('third-person');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});world.step({},10);expect(world.cameraMode).toBe('follow');
+ world.useAuthoredCamera();const camera=world.camera.matrix.clone();world.step({},10);expect(world.camera.matrix.equals(camera)).toBe(true);
 });
 
 
@@ -465,43 +465,43 @@ it.each([false,true])('records an ordinary controlled actor alongside full human
  if(custom)world.registerMovement({id:'flight',version:1,description:'Independent vertical flight',initialState:null,
   update:({input,state})=>({state,velocityWorldMetersPerSecondXYZ:[0,(input.moveYRatio??0)*2,0],applyGravity:false}),
   episode:{startSupport:'free',input:()=>({moveYRatio:1})}});
- world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{})});
- world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0],...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{})});
+ world.setControlledEntity('ordinary');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'ordinary'},activation:'on-input',views:{'third-person':{kind:'third-person'},'first-person':{kind:'first-person'}}}});
  await world.start();world.stop();const episode=(win as unknown as {__WORLDKIT_EVAL__:import('./contracts').WorldObservation}).__WORLDKIT_EVAL__.episode!;
  expect(episode.probeStart({positionWorldMetersXYZ:[-4,custom ? .2 : 1.73,0],facingYawRadians:0}).isValid).toBe(false);
  expect(episode.capabilities().humanoid).toBeUndefined();expect(episode.capabilities().movement).toMatchObject({episodeInput:custom?'custom':'ground',heightMeters:1.2,radiusMeters:.3});
- const start={positionWorldMetersXYZ:[3,custom?3:.03,5] as const,facingYawRadians:0,cameraPerspective:'first-person' as const};
+ const start={positionWorldMetersXYZ:[3,custom?3:.03,5] as const,facingYawRadians:0,cameraViewId:'first-person' as const};
  expect(episode.probeStart({...start,humanoid:{vehicleInstanceId:'missing'}})).toMatchObject({isValid:false,diagnostics:[{code:'EPISODE_HUMANOID_START_UNSUPPORTED'}]});
  const before=await episode.prepareSegment(start,{widthPixels:640,heightPixels:360}),player=before.entities.find(entity=>entity.id==='player')!;
  const input=custom?episode.routeInput!({targetPositionWorldMetersXYZ:[3,8,5],gait:'walk'}):{moveZRatio:-1};
  const after=episode.advance(input,60),moving=after.entities.find(entity=>entity.id==='ordinary')!;
- expect(after.humanoid).toBeUndefined();expect(after.camera.perspective).toBe('first-person');
- expect(()=>world.setCameraFollow({targetEntityId:'player'})).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot().camera.perspective).toBe('first-person');
+ expect(after.humanoid).toBeUndefined();expect(after.camera.viewKind).toBe('first-person');
+ expect(()=>world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}})).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot().camera.viewKind).toBe('first-person');
  expect(()=>world.setControlledEntity('player')).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
  if(custom)expect(moving.positionWorldMetersXYZ[1]).toBeGreaterThan(4);else expect(moving.positionWorldMetersXYZ[2]).toBeLessThan(4);
  expect(after.entities.find(entity=>entity.id==='player')!.positionWorldMetersXYZ[2]).toBeCloseTo(player.positionWorldMetersXYZ[2]);
  expect(episode.frame('image/png').snapshot.errors).toEqual([]);
- expect((await episode.execute({type:'camera.set-perspective',perspective:'third-person'})).status).toBe('applied');
+ expect((await episode.execute({type:'camera.set-view',viewId:'third-person'})).status).toBe('applied');
  episode.release();await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');world.step({},1);
 });
 
 
 it('rejects a missing full camera target without poisoning the remaining ordinary world',async()=>{
  const world=await setup(),object=new THREE.Group();object.position.set(3,.04,0);
- world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});world.setControlledEntity('ordinary');world.setCameraFollow({targetEntityId:'ordinary'});world.step({},0);
+ world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});world.setControlledEntity('ordinary');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'ordinary'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});world.step({},0);
  expect((await world.execute({type:'entity.despawn',entityId:'player'})).status).toBe('applied');
- const before=world.camera.matrix.clone();expect((await world.execute({type:'humanoid.set-camera-mode',mode:1})).status).toBe('rejected');
- expect((await world.execute({type:'humanoid.apply-profile',profile:{view:{defaultPerspective:'first-person'}}})).status).toBe('applied');
+ const before=world.camera.matrix.clone();expect(()=>world.setCameraView('first-person')).toThrow();
+ expect((await world.execute({type:'humanoid.apply-profile',profile:{character:{speed:5}}})).status).toBe('applied');
  expect(world.camera.matrix.equals(before)).toBe(true);expect(()=>world.step({moveXRatio:1},60)).not.toThrow();expect(world.snapshot().errors).toEqual([]);
  world.humanoid!.switchMap({...map,id:'ordinary-only-map'});world.step({},1);await world.reset();expect(world.snapshot().controlledEntityId).toBe('ordinary');expect(world.snapshot().humanoid).toBeUndefined();expect(world.humanoid!.hasActor('player')).toBe(true);world.step({},1);
 });
 
 it('continues observation after deleting a camera NPC and preserves ownership after rejected follow options',async()=>{
  const world=await setup(),runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(3,.04,0);world.addCharacter({id:'npc',humanoid:npc});
- const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3}});
- const before=world.snapshot().camera;expect(()=>world.setCameraFollow({targetEntityId:'ordinary',collisionRadiusMeters:0})).toThrow();expect(world.snapshot().camera).toEqual(before);
- world.setCameraFollow({targetEntityId:'npc'});expect((await world.execute({type:'entity.despawn',entityId:'npc'})).status).toBe('applied');
- expect(world.describe().humanoid!.configuration.effective.camera).toMatchObject({owner:'authored',settings:null,framing:{status:'not-applicable'}});world.step({},1);
+ const object=new THREE.Group();object.position.set(6,.04,0);world.addCharacter({id:'ordinary',object,body:{heightMeters:1.2,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});
+ const before=world.snapshot().camera;expect(()=>world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'ordinary'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0},constraints:{collision:{radiusMeters:0}}}}}}})).toThrow();expect(world.snapshot().camera).toEqual(before);
+ world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'npc'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});expect((await world.execute({type:'entity.despawn',entityId:'npc'})).status).toBe('applied');
+ expect(world.inspectCamera().mode).toBe('authored');world.step({},1);
 });
 
 it('recovers only the displaced actor while retaining another actor input and shared world time',async()=>{

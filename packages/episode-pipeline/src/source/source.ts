@@ -1,3 +1,4 @@
+import {openEpisodeBrowser,assertEpisodeCameraCapabilities} from '../capture/browser.js';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -230,4 +231,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const source = await prepareEpisodeSource({ payloadRoot: value('--payload'), outputRoot: value('--output'), worldId: value('--world-id'), ...(process.argv.includes('--reference-image') ? { referenceImage: { path: path.resolve(value('--reference-image')), sha256: value('--reference-image-sha256') } } : {}), ...(process.argv.includes('--source-url') ? { sourceUrl: value('--source-url') } : {}) });
   process.stdout.write(`${JSON.stringify({ sourceManifest: path.join(path.resolve(value('--output')), 'source.json'), worldBuildHash: source.worldBuildHash, sourceWorldBuildHash: source.sourceWorldBuildHash })}\n`);
   }
+}
+
+/** Read the actual frozen port before planning; no rebuild or replacement runtime. */
+export async function inspectEpisodeSourceCamera(source:EpisodeSourceManifest,openBrowser:typeof openEpisodeBrowser=openEpisodeBrowser){
+ const session=await openBrowser({playableRoot:source.playableRoot});
+ try{const capabilities=await session.capabilities();assertEpisodeCameraCapabilities(capabilities);return {worldBuildHash:source.worldBuildHash,sourceHash:source.sourceHash,runtimeHash:source.runtimeHash,capabilities};}
+ finally{await session.close();}
 }

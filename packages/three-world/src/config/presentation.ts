@@ -1,10 +1,5 @@
 import type {ShadowSettings} from '../contracts';
 
-/** Shared presentation defaults. Edit here and rebuild the SDK. */
-export const CAMERA_EFFECTS = Object.freeze({
-  vehicleTurnLean:Object.freeze({enabled:true,strength:1}),
-});
-
 export const DEFAULT_SHADOW_SETTINGS:Readonly<ShadowSettings> = Object.freeze({
   enabled:true,
   type:'pcf',

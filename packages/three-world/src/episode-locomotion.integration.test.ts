@@ -39,8 +39,9 @@ async function fixture(hz = 60, parentedCamera = false, followCamera = false) {
   const asset = animatedActor(world, 'player', [0, .04, 0], .4);
   asset.object.rotation.y = .3;
   if (parentedCamera) asset.object.attach(camera);
+  world.cameraSubjects.generation=id=>id==='player'?1:undefined;
   world.setControlledEntity('player');
-  if (followCamera) world.setCameraFollow({ targetEntityId: 'player' });
+  if (followCamera) world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
   world.step({}, hz / 2);
   expect(world.physics.state('player')!.isGrounded).toBe(true);
   return { world, asset, camera };
@@ -151,7 +152,11 @@ describe('Episode relocation and locomotion history with real Rapier', () => {
         const count = updates.length;
         const animationTime = asset.timeSeconds;
 
-        world.prepareEpisodeStart(start, yaw);
+        // Follow cases verify current-frame lifecycle relocation. Authored
+        // relocation needs the camera transaction used by the public port;
+        // named Episode views intentionally restore baseline framing instead.
+        if (followCamera) world.prepareEpisodeStart(start, yaw);
+        else world.prepareEpisodeCamera(undefined, () => world.prepareEpisodeStart(start, yaw));
         expect(world.simulationTick).toBe(before.simulationTick);
         expect(world.snapshot().simulationSeconds).toBe(before.simulationSeconds);
         expect(updates).toHaveLength(count);

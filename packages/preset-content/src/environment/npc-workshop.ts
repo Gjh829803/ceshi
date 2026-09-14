@@ -8,7 +8,6 @@ export function createNpcWorkshop(): EnvironmentDefinition {
     id: NPC_WORKSHOP_ID, name: 'NPC 交互试验场',
     description: '双 NPC 自动巡逻 · 切换操控 · 共享物品与双人座位',
     bounds: {min: [-20, -5, -20], max: [20, 20, 20]},
-    characterCameraDistanceMeters: 7,
     boxes: [
       {id: 'npc-ground', position: [0, -.5, 0], size: [40, 1, 40]},
       {id: 'pickup-table', position: [0, .4245, 6.65], size: [1.8, .849, .68], rigidGroup: {id: 'pickup-table', massKg: 24}},

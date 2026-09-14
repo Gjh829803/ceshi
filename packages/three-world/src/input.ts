@@ -1,5 +1,9 @@
 import type { WorldInput } from './engine-contracts.js';
-import type { CameraRigInput } from './camera.js';
+export type CameraPointerInput = Readonly<{
+  cameraYawRatio?: number; cameraPitchRatio?: number; yawDeltaRadians?: number;
+  pitchDeltaRadians?: number; distanceDeltaMeters?: number; activate?: boolean;
+}>;
+
 import type { Mode } from './humanoid-runtime/config.js';
 import { vehicleKeyboardAxes } from './humanoid-runtime/input.js';
 import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './humanoid-runtime/input.js';
@@ -113,7 +117,7 @@ export class WorldInputRouter {
     isRunning: () => boolean;
     canZoom: () => boolean;
     wantsPointerLock?: () => boolean;
-    onPointer: (input: CameraRigInput) => void;
+    onPointer: (input: CameraPointerInput) => void;
     onRelease: () => void;
   }) {
     this.keyboard.setEventAdmission(event => {

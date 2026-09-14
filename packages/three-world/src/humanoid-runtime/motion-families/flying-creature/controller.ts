@@ -151,7 +151,7 @@ export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:
 /** 创建配置，不创建场景、相机、时钟或资源。模型尺寸按 D01 米制资产标定。 */
 export function createFlyingCreatureSpec(id='century-dragon'):VehicleSpec {
   return {id,name:'飞龙',en:'DRAGON',mode:'dragon',kernel:'creature-flight',archetype:'dragon',color:'#527a59',
-    spawn:[0,40,0],yaw:0,speed:18,maxSpeed:31,accel:7,grip:4,steer:1.4,radius:CREATURE_COLLISION_ENVELOPE.halfExtents[0],seat:[0,2.6,0],camera:32,
+    spawn:[0,40,0],yaw:0,speed:18,maxSpeed:31,accel:7,grip:4,steer:1.4,radius:CREATURE_COLLISION_ENVELOPE.halfExtents[0],seat:[0,2.6,0],
     brakeDeceleration:22,coastDeceleration:7,pitchResponse:3.4,rollResponse:5,characterPose:'ride',flyingCreature:{},
     hint:'W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避',
     envelope:{kind:'box',halfExtents:[...CREATURE_COLLISION_ENVELOPE.halfExtents],offset:[...CREATURE_COLLISION_ENVELOPE.offset]}};

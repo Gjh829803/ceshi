@@ -54,25 +54,26 @@ describe('Episode local Rapier start probes', () => {
  });
 });
 
-async function fixture(parentedCamera = false,custom=false,npcNavigation=false) {
+async function fixture(parentedCamera = false,custom=false,npcNavigation=false,authored=false,native=false,tilted=false) {
  const windowTarget = new EventTarget();const documentTarget=Object.assign(new EventTarget(),{defaultView:windowTarget,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(windowTarget,{document:documentTarget});vi.stubGlobal('window',windowTarget);
  const frames:FrameRequestCallback[]=[];vi.stubGlobal('requestAnimationFrame',(fn:FrameRequestCallback)=>{frames.push(fn);return frames.length;});vi.stubGlobal('cancelAnimationFrame',vi.fn());
  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:documentTarget,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:vi.fn(()=> 'data:image/png;base64,dGVzdA==')});
  let ratio=2;const size=new THREE.Vector2(400,300);
  const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
  const camera=new THREE.PerspectiveCamera(50,4/3,.1,500),scene=new THREE.Scene();camera.position.set(3,3,6);camera.lookAt(0,1,0);
- const world=await createWorld({scene,camera,renderer,navigation:npcNavigation,assetDefinitions:{}});
- world.addEntity({id:'floor',object:plane(),role:'terrain'});
- const actor=root();actor.rotation.y=.3;
+ const nativeActor=root();
+ const world=await createWorld({scene,camera,renderer,navigation:npcNavigation,assetDefinitions:{},...(native?{humanoid:{map:{id:'authored-episode',name:'Authored episode',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},character:{instanceId:'player',object:nativeActor},vehicles:[]}}:{})});
+ if(!native)world.addEntity({id:'floor',object:plane(),role:'terrain'});
+ const actor=native?nativeActor:root();if(!native)actor.rotation.set(tilted?.2:0,.3,tilted?.1:0);
  if(parentedCamera){actor.add(camera);camera.position.set(3,3,6);camera.lookAt(0,1,0);}
  if(custom)world.registerMovement({id:'flight',version:1,description:'Direct flight',initialState:null,update:({input,state})=>({state,velocityWorldMetersPerSecondXYZ:[0,(input.moveYRatio??0)*3,0],applyGravity:false}),episode:{startSupport:'free',input:({body,targetPositionWorldMetersXYZ})=>({moveYRatio:Math.max(-1,Math.min(1,targetPositionWorldMetersXYZ[1]-body.positionWorldMetersXYZ[1]))})}});
- world.addCharacter({id:'player',object:actor,...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{}),body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
+ if(!native)world.addCharacter({id:'player',object:actor,...(custom?{movement:{kind:'custom' as const,movementId:'flight'}}:{}),body:{heightMeters:1.8,radiusMeters:.35},frontYawRadians:.4});
  if(npcNavigation){const npc=root();npc.position.set(3,0,0);world.addCharacter({id:'npc',object:npc,body:{heightMeters:1.8,radiusMeters:.35}});}
- world.setControlledEntity('player');world.setCameraFollow({targetEntityId:'player'});await world.start();
+ world.setControlledEntity('player');if(!authored)world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'player'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});if(authored)world.useAuthoredCamera();await world.start();
  const observer=(windowTarget as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__;
  expect(observer.controlledObject).toBe(actor);
  expect(observer).not.toHaveProperty('player');
- expect(world.humanoid).toBeUndefined();
+ if(!native)expect(world.humanoid).toBeUndefined();
  return {world,actor,camera,renderer,canvas,frames,observer,port:observer.episode!};
 }
 describe('Episode observer ownership and relative opening',()=>{
@@ -96,7 +97,7 @@ describe('Episode observer ownership and relative opening',()=>{
    const before=world.snapshot(),request={targetPositionWorldMetersXYZ:[0,6,0] as const,gait:'walk' as const};
    const input=port.routeInput!(request);expect(input).toEqual({moveYRatio:1});expect(world.snapshot()).toEqual(before);
    port.advance(input,30);expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeGreaterThan(4);
-   await expect(port.execute({type:'camera.set-perspective',perspective:'third-person'})).resolves.toMatchObject({status:'applied'});
+   await expect(port.execute({type:'camera.set-view',viewId:'third-person'})).resolves.toMatchObject({status:'applied'});
    port.release();expect(()=>port.routeInput!(request)).toThrow('EPISODE_SEGMENT_NOT_PREPARED');
   }finally{world.dispose();}
  });
@@ -107,7 +108,7 @@ describe('Episode observer ownership and relative opening',()=>{
    const sun=new THREE.DirectionalLight();world.configureShadowLight(sun);world.scene.add(sun);
    const shadowState=()=>({enabled:world.renderer!.shadowMap.enabled,type:world.renderer!.shadowMap.type,settings:world.shadowSettings,cast:sun.castShadow,map:sun.shadow.mapSize.toArray()});
    const initialShadows=shadowState();
-   expect(port.schemaVersion).toBe(1);expect(port.capabilities().movement.kind).toBe('ground');
+   expect(port.schemaVersion).toBe(2);expect(port.capabilities().movement.kind).toBe('ground');
    const sky=new THREE.Mesh(new THREE.SphereGeometry(1000),new THREE.MeshBasicMaterial());world.scene.add(sky);
    expect(port.capabilities().worldBounds.minimumWorldMetersXYZ[0]).toBeCloseTo(-20);expect(port.capabilities().worldBounds.maximumWorldMetersXYZ[0]).toBeCloseTo(20);
    const oldCamera=camera.getWorldPosition(new THREE.Vector3()),oldRotation=camera.getWorldQuaternion(new THREE.Quaternion());
@@ -161,4 +162,115 @@ describe('Episode observer ownership and relative opening',()=>{
    recording.world.dispose();expect(()=>recording.port.frame('image/png')).toThrow();expect(()=>recording.port.capabilities()).toThrow();recording.port.release();
   }finally{user.world.dispose();recording.world.dispose();}
  });
+});
+
+it('uses sealed named views for preparation and reports actual blend completion', async()=>{
+ const {world,port}=await fixture();try{
+  world.stop();world.useAuthoredCamera();
+  const session=world.beginCameraEdit();
+  const configuration={kind:'world-camera',schemaVersion:1,defaultViewId:'explore',binding:{targetEntityId:'player'},activation:'immediate',transition:{durationSeconds:3},input:{cycleViewIds:['explore','aim','shoulder']},views:{explore:{kind:'third-person'},aim:{kind:'third-person'},shoulder:{kind:'shoulder'}}} as const;
+  const applied=session.applyDraft(configuration,world.inspectCamera().configurationRevision);session.commitBaseline(applied.configurationRevision);session.dispose();
+  expect(port.capabilities()).toMatchObject({schemaVersion:2,camera:{views:[{viewId:'explore',kind:'third-person'},{viewId:'aim',kind:'third-person'},{viewId:'shoulder',kind:'shoulder'}],defaultViewId:'explore'}});
+  const prepared=await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'aim'},{widthPixels:640,heightPixels:360});
+  expect(prepared.camera).toMatchObject({viewId:'aim',viewKind:'third-person',transition:{kind:'none'}});
+  expect(prepared.simulationTick).toBe(1);
+  expect(prepared.camera.documentHash).toBe(world.inspectCamera().documentHash);
+  expect(()=>world.setCameraView('explore')).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+  await port.execute({type:'camera.set-view',viewId:'explore'});
+  const receipt=await port.execute({type:'camera.set-view',viewId:'aim'});expect(receipt).toMatchObject({status:'applied',result:{kind:'camera-view',camera:{viewId:'aim',transition:{kind:'blend'}}}});
+  expect(world.snapshot().camera).toMatchObject({viewId:'aim',transition:{kind:'blend'}});
+  expect(port.advance({},181).camera).toMatchObject({viewId:'aim',transition:{kind:'none'}});
+ }finally{world.dispose();}
+});
+
+it('preserves an authored baseline without declarations and rejects an explicit managed view',async()=>{
+ const {world,port,camera}=await fixture(false,false,false,true);try{
+  expect(port.capabilities().camera).toMatchObject({views:[],defaultViewId:null,current:{viewId:null,viewKind:null}});
+  const before=camera.position.clone();const prepared=await port.prepareSegment({positionWorldMetersXYZ:[4,0,0],facingYawRadians:.7},{widthPixels:640,heightPixels:360});
+  expect(prepared.camera).toMatchObject({mode:'authored',viewId:null,viewKind:null,documentHash:null});expect(camera.position.x-before.x).toBeCloseTo(4,3);
+  await expect(port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'made-up'},{widthPixels:640,heightPixels:360})).rejects.toThrow('EPISODE_CAMERA_VIEW_UNDECLARED');
+ }finally{world.dispose();}
+});
+it('activates a known authored baseline with explicit start yaw without changing its document hash',async()=>{
+ const {world,port}=await fixture();try{
+  world.stop();world.useAuthoredCamera();const edit=world.beginCameraEdit();edit.commitBaseline(world.inspectCamera().configurationRevision);edit.dispose();
+  const hash=world.inspectCamera().documentHash;
+  const omitted=await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});expect(omitted.camera.viewId).toBe(null);
+  const a=await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'third-person'},{widthPixels:640,heightPixels:360});
+  const b=await port.prepareSegment({positionWorldMetersXYZ:[4,0,0],facingYawRadians:Math.PI/2,cameraViewId:'third-person'},{widthPixels:640,heightPixels:360});
+  const rotate=new THREE.Vector3(...a.camera.positionWorldMetersXYZ).applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2).add(new THREE.Vector3(4,0,0));
+  expect(new THREE.Vector3(...b.camera.positionWorldMetersXYZ).distanceTo(rotate)).toBeLessThan(.01);expect(b.camera.documentHash).toBe(hash);
+  port.release();await world.reset();expect(world.cameraMode).toBe('authored');
+ }finally{world.dispose();}
+});
+it('declares the sealed baseline rather than an uncommitted camera draft',async()=>{
+ const {world,port}=await fixture();try{world.stop();const edit=world.beginCameraEdit(),doc=world.inspectCamera().document!;
+  edit.applyDraft({...doc,views:{...doc.views,aim:{kind:'third-person'}}},world.inspectCamera().configurationRevision);
+  expect(world.inspectCamera().document!.views.aim).toBeDefined();expect(port.capabilities().camera.views.some(v=>v.viewId==='aim')).toBe(false);
+  await expect(port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewId:'aim'},{widthPixels:640,heightPixels:360})).rejects.toThrow('EPISODE_CAMERA_VIEW_UNDECLARED');
+  expect(world.inspectCamera().document!.views.aim).toBeUndefined();
+ }finally{world.dispose();}
+});
+
+it('rebases dormant preserve-opening views at the start before their first action',async()=>{
+ const {world,port}=await fixture();try{
+  world.stop();const edit=world.beginCameraEdit(),doc=world.inspectCamera().document!,third=doc.views['third-person']!;
+  const applied=edit.applyDraft({...doc,views:{...doc.views,alternate:third}},world.inspectCamera().configurationRevision);edit.commitBaseline(applied.configurationRevision);edit.dispose();
+  await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+  expect((await port.execute({type:'camera.set-view',viewId:'alternate'})).status).toBe('applied');const a=world.snapshot().camera;
+  await port.prepareSegment({positionWorldMetersXYZ:[4,0,0],facingYawRadians:Math.PI/2},{widthPixels:640,heightPixels:360});
+  expect((await port.execute({type:'camera.set-view',viewId:'alternate'})).status).toBe('applied');const b=world.snapshot().camera;
+  const expected=new THREE.Vector3(...a.positionWorldMetersXYZ).applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2).add(new THREE.Vector3(4,0,0));
+  expect(new THREE.Vector3(...b.positionWorldMetersXYZ).distanceTo(expected)).toBeLessThan(.01);expect(b.documentHash).toBe(a.documentHash);
+ }finally{world.dispose();}
+});
+
+
+it.each([false,true])('rebases native authored Episode starts with retained document %s and preserves release/reset semantics',async(retained)=>{
+ const {world,port,actor,camera,canvas}=await fixture(false,false,false,true,true);
+ try{
+  world.stop();
+  if(retained){
+   world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'explore',binding:{targetEntityId:'player'},activation:'immediate',views:{explore:{kind:'third-person'}}}});
+   world.useAuthoredCamera();
+  }
+  camera.position.set(3,4,8);camera.lookAt(0,1,0);
+  const edit=world.beginCameraEdit();edit.commitBaseline(world.inspectCamera().configurationRevision);edit.dispose();
+  const initialEye=camera.getWorldPosition(new THREE.Vector3()),initialRotation=camera.getWorldQuaternion(new THREE.Quaternion());
+  const initialActor=actor.getWorldPosition(new THREE.Vector3()),initialFacing=actor.getWorldQuaternion(new THREE.Quaternion());
+  const hash=world.inspectCamera().documentHash;
+  expect(port.capabilities().camera.views).toHaveLength(retained?1:0);
+  for(const start of [{positionWorldMetersXYZ:[8,.03,6] as const,facingYawRadians:Math.PI/2},{positionWorldMetersXYZ:[-8,.03,-6] as const,facingYawRadians:-Math.PI/2}]){
+   let firstEye:THREE.Vector3|undefined;
+   for(let repeat=0;repeat<2;repeat++){
+    const probe=port.probeStart(start);
+    const prepared=await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+    const delta=actor.getWorldQuaternion(new THREE.Quaternion()).multiply(initialFacing.clone().invert());
+    const expected=initialEye.clone().sub(initialActor).applyQuaternion(delta).add(new THREE.Vector3(...probe.resolvedPositionWorldMetersXYZ));
+    // Authored placement is relative to the admitted start; the required tick may settle the body afterward.
+    expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(expected)).toBeLessThan(1e-7);
+    expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(initialRotation.clone().premultiply(delta))).toBeLessThan(1e-7);
+    expect(prepared.camera).toMatchObject({mode:'authored',viewId:null});expect(prepared.errors).toEqual([]);expect(prepared.simulationTick).toBe(1);
+    expect(world.inspectCamera().documentHash).toBe(hash);
+    const eye=camera.getWorldPosition(new THREE.Vector3());if(firstEye)expect(eye.distanceTo(firstEye)).toBeLessThan(1e-7);firstEye=eye;
+    port.release();expect(world.isRunning).toBe(false);expect(canvas.width).toBe(800);expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(eye)).toBe(0);
+   }
+  }
+  await world.reset();expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(initialEye)).toBeLessThan(1e-7);expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(initialRotation)).toBeLessThan(1e-7);
+  expect(actor.getWorldPosition(new THREE.Vector3()).distanceTo(initialActor)).toBeLessThan(1e-7);expect(world.inspectCamera().documentHash).toBe(hash);
+ }finally{world.dispose();}
+});
+
+
+it('preserves the complete authored relative pose when ordinary start placement removes initial body tilt',async()=>{
+ const {world,port,actor,camera}=await fixture(false,false,false,true,false,true);
+ try{
+  const eye=camera.getWorldPosition(new THREE.Vector3()),rotation=camera.getWorldQuaternion(new THREE.Quaternion());
+  const initialPosition=actor.getWorldPosition(new THREE.Vector3()),initialRotation=actor.getWorldQuaternion(new THREE.Quaternion());
+  const start={positionWorldMetersXYZ:[8,0,4] as const,facingYawRadians:Math.PI/2},probe=port.probeStart(start);
+  await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+  const delta=actor.getWorldQuaternion(new THREE.Quaternion()).multiply(initialRotation.invert());
+  expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(eye.sub(initialPosition).applyQuaternion(delta).add(new THREE.Vector3(...probe.resolvedPositionWorldMetersXYZ)))).toBeLessThan(1e-7);
+  expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(rotation.premultiply(delta))).toBeLessThan(1e-7);
+ }finally{world.dispose();}
 });

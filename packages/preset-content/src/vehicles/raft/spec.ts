@@ -1,6 +1,6 @@
 import type {VehicleSpec} from '../../config';
 export const RAFT_SPEC:VehicleSpec={id:'raft',name:'橡皮艇',en:'INFLATABLE BOAT',mode:'paddled_boat',archetype:'raft',kernel:'K17',color:'#343b40',
- spawn:[201,-1.88,-176],yaw:Math.PI/2,speed:25/3.6,maxSpeed:25/3.6,reverseSpeed:2,accel:7.5,grip:1.4,steer:1.8,radius:1.15,seat:[0,.45,-.45],camera:7,characterPose:'paddling',
+ spawn:[201,-1.88,-176],yaw:Math.PI/2,speed:25/3.6,maxSpeed:25/3.6,reverseSpeed:2,accel:7.5,grip:1.4,steer:1.8,radius:1.15,seat:[0,.45,-.45],characterPose:'paddling',
  coastDeceleration:.08,dragQuadratic:.045,brakeDamping:7,brakeDeceleration:5,steeringResponse:3.5,steeringReturn:4,pitchResponse:6,rollResponse:6,
  hint:'W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角',
  bodyPhysics:{kind:'paddle',mass:160,centerOfMassHeight:0.22,restitution:.36,water:{displacement:.55,depth:.50,bottom:.32,damping:6}},

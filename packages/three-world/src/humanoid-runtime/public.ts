@@ -9,13 +9,11 @@ export {listMotionFamilies,motionFamilyForMode,motionSubtypeControlFields,resolv
 export type {MotionFamilyId,MotionSubtype,MotionMode} from './motion-families/types';
 export * from './motion-families/surface-vessel/public';
 export { Character as HumanoidCharacter } from './character';
-export { FollowCamera } from './camera';
 export { type Simulation, emptyInput, createVehicle, type Input, type HumanoidActionInput, type VehicleState, type PlayerState } from './simulation';
 export type { VehicleSpec } from './config';
 export * from '../config/control';
 export type * from './environment/types';
 export { vehicleBody } from './environment/queries';
-export * from '../config/camera';
 export * from './input';
 export { HumanoidController } from './humanoid/controller';
 export { SWIM_ROOT_DEPTH } from './humanoid/water-physics';

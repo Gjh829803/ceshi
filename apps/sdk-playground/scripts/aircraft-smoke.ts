@@ -25,8 +25,8 @@ try{
  await page.screenshot({path:path.join(output,'cockpit-flight.png')});
  await page.keyboard.down('a');await page.waitForTimeout(1600);await page.keyboard.up('a');
  const banked=await state();assert(Math.abs(banked.vehicleRotation[2])>.03);
- await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===2);await page.keyboard.press('t');
- await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===0);
+ await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='shoulder');await page.keyboard.press('t');
+ await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='third-person');
  await page.screenshot({path:path.join(output,'aircraft-flight.png')});
  await page.waitForTimeout(1800);const recovered=await state();assert(Math.abs(recovered.vehicleRotation[2])<.06);
  await page.keyboard.down('Control');await page.waitForFunction(()=>(window as any).playground.getState().flight.throttle<.05,{},{timeout:10000});await page.keyboard.up('Control');

@@ -163,28 +163,32 @@ it('keeps exit running after control handoff until the real transition finishes'
 });
 
 it('changes a non-Player view and completes only after the actual camera matches', async () => {
-  const f = fixture(goal({ kind: 'view', perspective: 'first-person' }));
+  const f = fixture(goal({ kind: 'view', viewId: 'aim' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
   const snapshot = (tick: number, perspective: string) => {
     const { humanoid: _humanoid, ...base } = f.snapshot();
-    return { ...base, simulationTick: tick + 10, camera: { perspective } } as WorldSnapshot;
+    return { ...base, simulationTick: tick + 10, camera: {viewId:perspective,viewKind:'third-person',transition:{kind:'none'}} } as WorldSnapshot;
   };
-  await f.controller.step(snapshot(0, 'third-person'), [0, 0, -1], route);
-  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'camera.set-perspective', perspective: 'first-person' });
-  await f.controller.observe(snapshot(1, 'third-person')); expect(f.controller.timeline[0]!.result).toBe('running');
-  await f.controller.observe(snapshot(2, 'first-person')); expect(f.controller.timeline[0]!.result).toBe('succeeded');
+  await f.controller.step(snapshot(0, 'explore'), [0, 0, -1], route);
+  expect(f.execute).toHaveBeenCalledExactlyOnceWith({ type: 'camera.set-view', viewId: 'aim' });
+  await f.controller.observe(snapshot(1, 'explore')); expect(f.controller.timeline[0]!.result).toBe('running');
+  await f.controller.observe(snapshot(2, 'aim')); expect(f.controller.timeline[0]!.result).toBe('succeeded');
   expect(f.boarding).not.toHaveBeenCalled();
 });
 
-it('prefers actual camera perspective over Player mode and falls back only when absent', async () => {
-  const f = fixture(goal({ kind: 'view', perspective: 'first-person' }));
+it('requires actual named view and settled transition without a numeric fallback', async () => {
+  const f = fixture(goal({ kind: 'view', viewId: 'aim' }));
   f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
   const snapshot = f.snapshot(); Object.assign(snapshot.humanoid!, { cameraMode: 1 });
-  Object.assign(snapshot, { camera: { perspective: 'third-person' } });
+  Object.assign(snapshot, { camera: { viewId: 'explore' } });
   await f.controller.step(snapshot, [0, 0, -1], route);
   await f.controller.observe(snapshot); expect(f.controller.timeline[0]!.result).toBe('running');
   Object.assign(snapshot, { camera: {} });
-  await f.controller.observe(snapshot); expect(f.controller.timeline[0]!.result).toBe('succeeded');
+  await f.controller.observe(snapshot); expect(f.controller.timeline[0]!.result).toBe('running');
+  Object.assign(snapshot,{camera:{viewId:'aim',viewKind:'third-person',transition:{kind:'blend'}}});
+  await f.controller.observe(snapshot);expect(f.controller.timeline[0]!.result).toBe('running');
+  Object.assign(snapshot,{camera:{viewId:'aim',viewKind:'third-person',transition:{kind:'none'}}});
+  await f.controller.observe(snapshot);expect(f.controller.timeline[0]!.result).toBe('succeeded');
 });
 
 it('reports missing boarding observation only when an enter goal triggers', async () => {
@@ -213,7 +217,7 @@ it('brakes before exit and waits for measured rest and any existing transition',
 
 it('uses each mounted family stop input while waiting and changing view', async () => {
   for (const kind of ['mount', 'view'] as const) for (const mode of ['spacecraft', 'submarine', 'dragon'] as const) {
-    const f = fixture(goal(kind === 'mount' ? { kind, action: 'exit' } : { kind, perspective: 'first-person' }));
+    const f = fixture(goal(kind === 'mount' ? { kind, action: 'exit' } : { kind, viewId: 'aim' }));
     f.execute.mockImplementation(async () => ({ status: 'applied', commandId: 'view', worldRevision: 0 }));
     const snapshot = { ...f.snapshot(), humanoid: { ...f.snapshot().humanoid!, cameraMode: 0, mountedInstanceId: 'craft',
       vehicles: [vehicleState('craft',mode,10)], transition: { kind: '', remainingSeconds: 0 } } } as WorldSnapshot;
@@ -234,8 +238,8 @@ it('times out honestly when an aircraft cannot stop for exit', async () => {
 });
 
 it('uses the custom stop adapter throughout nonhuman view holds',async()=>{
- const segment:EpisodeSegmentPlan={id:'segment-00',start:{positionWorldMetersXYZ:[0,3,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[0,3,0],gait:'walk'}],endBehavior:'stop',purpose:'Hover during a view change',actionGoals:[{...goal({kind:'view',perspective:'first-person'}),completion:{kind:'settled',holdSeconds:1}}]};
+ const segment:EpisodeSegmentPlan={id:'segment-00',start:{positionWorldMetersXYZ:[0,3,0],facingYawRadians:0},waypoints:[{positionWorldMetersXYZ:[0,3,0],gait:'walk'}],endBehavior:'stop',purpose:'Hover during a view change',actionGoals:[{...goal({kind:'view',viewId:'aim'}),completion:{kind:'settled',holdSeconds:1}}]};
  const calls:any[]=[];const controller=new EpisodeActionController(segment,{execute:async()=>({status:'applied',commandId:'view',worldRevision:0}),operation:async()=>{throw Error('unexpected operation');}},0,1/60,async request=>{calls.push(request);return {moveYRatio:.25};});
- const state={schemaVersion:2,simulationTick:0,controlledEntityId:'bird',entities:[{id:'bird',positionWorldMetersXYZ:[0,3,0]}],camera:{perspective:'third-person'}} as unknown as WorldSnapshot;
+ const state={schemaVersion:2,simulationTick:0,controlledEntityId:'bird',entities:[{id:'bird',positionWorldMetersXYZ:[0,3,0]}],camera:{viewId:'explore'}} as unknown as WorldSnapshot;
  expect((await controller.step(state,[0,0,-1],route)).input).toEqual({moveYRatio:.25});expect(calls[0]).toMatchObject({mode:'stop',targetPositionWorldMetersXYZ:[0,3,0]});
 });

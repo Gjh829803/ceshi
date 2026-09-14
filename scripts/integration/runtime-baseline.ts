@@ -28,13 +28,12 @@ const workspace = path.join(output, 'workspace');
 await cp(path.resolve('examples/three-creator', example), workspace, {recursive: true,
   filter: source => !source.includes('.three-creator')});
 let mainSource=await readFile(path.join(workspace,'main.ts'),'utf8');
-let importedProfile:{character:AssetProfile['control'];camera:Omit<AssetProfile['camera'],'distance'>;cameraDistanceMeters:number}|undefined;
+let importedProfile:{character:AssetProfile['control']}|undefined;
 if(playgroundProfilesPath){
   const exported=JSON.parse(await readFile(playgroundProfilesPath,'utf8'));
-  assert.equal(exported.schemaVersion,1);assert(Array.isArray(exported.profiles));
+  assert.equal(exported.schemaVersion,2);assert(Array.isArray(exported.profiles));
   const profile=parseAssetProfile(exported.profiles.find((entry:{assetId:string})=>entry.assetId==='person'),'person');
-  const {distance,...camera}=profile.camera;
-  importedProfile={character:profile.control,camera,cameraDistanceMeters:distance};
+  importedProfile={character:profile.control};
   assert(mainSource.includes('await world.start();'));
   mainSource=mainSource.replace('await world.start();',`world.humanoid!.applyProfile(${JSON.stringify(importedProfile)});\nawait world.start();`);
 }
@@ -76,8 +75,7 @@ try {
       boost: false, brake: false, slow: false, jump: false}};
     if(importedProfile){
       const actual=await session.page.evaluate(()=>(window as any).__BASELINE_WORLD__.humanoid.exportProfile());
-      assert.deepEqual(actual.character,importedProfile.character);assert.deepEqual(actual.camera,importedProfile.camera);
-      assert.equal(actual.cameraDistanceMeters,importedProfile.cameraDistanceMeters);
+      assert.deepEqual(actual.character,importedProfile.character);
       report.consumedPlaygroundProfile=actual;
     }
     const records: unknown[] = []; report.episode = records;
@@ -153,9 +151,9 @@ try {
         assert(!landed.humanoid!.character.swimming);
         assert.equal(landed.humanoid!.character.state, 'idle');
         assert(Math.abs(landed.entities.find(e => e.id === 'person')!.positionWorldMetersXYZ[1] - from[1]) < .05);
-        assert.equal((await session.execute({type: 'camera.set-perspective', perspective: 'first-person'})).status, 'applied');
+        assert.equal((await session.execute({type: 'camera.set-view', viewId: 'first-person'})).status, 'applied');
         await capture('first-person');
-        assert.equal((await session.execute({type: 'camera.set-perspective', perspective: 'third-person'})).status, 'applied');
+        assert.equal((await session.execute({type: 'camera.set-view', viewId: 'third-person'})).status, 'applied');
         await capture('third-person');
       });
       await check('pickup-persistent-hold-put-down', async () => {

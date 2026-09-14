@@ -92,7 +92,6 @@
         2.1,
         0.4
       ],
-      "camera": 17,
       "hint": "W / S 前进与制动 · A / D 转向 · Space 起飞 / 上升 · Ctrl 下降 / 落地 · Shift 加速",
       "archetype": "dragon",
       "characterPose": "ride",
@@ -127,5 +126,27 @@
   },
   "recommendedFor": [
     "Evolved dragon model with Flying_Idle and Fast_Flying clips; simple dragon vehicle control."
-  ]
+  ],
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "creature.dragon-evolved.third-person",
+        "source": "presets",
+        "key": "dragon.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "creature.dragon-evolved.first-person",
+        "source": "presets",
+        "key": "dragon.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "creature.dragon-evolved.shoulder",
+        "source": "presets",
+        "key": "dragon.shoulder",
+        "viewId": "shoulder"
+      }
+    ]
+  }
 }

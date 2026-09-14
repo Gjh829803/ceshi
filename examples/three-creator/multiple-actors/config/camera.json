@@ -1,0 +1,36 @@
+{
+  "kind": "world-camera",
+  "schemaVersion": 1,
+  "defaultViewId": "third-person",
+  "binding": {
+    "targetEntityId": "person"
+  },
+  "activation": "on-input",
+  "views": {
+    "third-person": {
+      "kind": "third-person",
+      "opening": {
+        "positionWorldMetersXYZ": [
+          9,
+          7,
+          -12
+        ],
+        "lookAtWorldMetersXYZ": [
+          0,
+          1,
+          2
+        ],
+        "fovDegrees": 55
+      },
+      "overrides": {
+        "framing": {
+          "kind": "preserve-opening"
+        },
+        "lens": {
+          "nearMeters": 0.05,
+          "farMeters": 150
+        }
+      }
+    }
+  }
+}

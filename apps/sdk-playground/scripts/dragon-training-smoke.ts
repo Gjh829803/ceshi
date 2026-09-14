@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {launchChromiumWithSystemFallback} from '@worldkit/browser-capture/browser';
+const selectionOnly=process.argv.includes('--selection-only');
 const base=process.argv[2]??'http://127.0.0.1:5178',output=path.resolve(process.argv[3]??'.codex-tmp/dragon-native-smoke');
 await mkdir(output,{recursive:true});const browser=await launchChromiumWithSystemFallback();
 const page=await browser.newPage({viewport:{width:1440,height:960}}),errors:string[]=[],requests=new Set<string>();
@@ -31,7 +32,20 @@ async function summonAndBoard(){
   await page.keyboard.press('Space');await page.waitForFunction(()=>(window as any).playground.getState().flyingCreature.groundPhase==='airborne',{},{timeout:20000});
 }
 try{
-  await page.goto(base);await waitMap('campus');await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
+  await page.goto(base);await waitMap('campus');
+  await page.waitForFunction(()=>(window as any).playground.getState().ready);
+  if(selectionOnly){
+    const selected=await page.evaluate(()=>(window as any).playground.selectVehicle('dragon'));
+    assert.equal(selected.mapId,'flying-creature-training');assert.equal(selected.activeVehicle,null);assert.equal(selected.camera.viewKind,'third-person');
+    for(let i=0;i<2;i++){
+      const reset=await page.evaluate(()=>(window as any).playground.reset());
+      assert.equal(reset.mapId,'flying-creature-training');assert.equal(reset.activeVehicle,null);assert.equal(reset.camera.viewId,selected.camera.viewId);assert.equal(reset.camera.viewKind,'third-person');
+      assert(reset.camera.position.every(Number.isFinite));
+    }
+    assert.deepEqual(errors,[]);await page.screenshot({path:path.join(output,'selection-reset.png')});
+    await writeFile(path.join(output,'selection-reset.json'),JSON.stringify({selected,reset:await state(),errors},null,2));
+  }else{
+  await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
   const initial=await state();assert.equal(initial.activeVehicle,null);assert.equal(initial.controlledEntityId,'person');assert.equal(page.frames().length,1);
   await summonAndBoard();
   const flightStart=await state();
@@ -47,10 +61,10 @@ try{
   const flame=await state();assert.equal(flame.speed,0);assert(flame.dragonVisual.flameParticles>0);
   assert(Math.hypot(...flame.riderHip.map((v:number,i:number)=>v-flame.dragonSeat[12+i]))<.001);
   await page.screenshot({path:path.join(output,'native-flame.png')});await page.keyboard.up('e');
-  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===1);await page.screenshot({path:path.join(output,'native-first-person.png')});
-  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.mode===2);
+  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='first-person');await page.screenshot({path:path.join(output,'native-first-person.png')});
+  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='shoulder');
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
-  const reset=await state();assert.equal(reset.activeVehicle,null);assert.equal(reset.dragon.state.flamePhase,'off');assert.equal(reset.dragonVisual.flameParticles,0);assert.equal(reset.camera.mode,0);
+  const reset=await state();assert.equal(reset.activeVehicle,null);assert.equal(reset.dragon.state.flamePhase,'off');assert.equal(reset.dragonVisual.flameParticles,0);assert.equal(reset.camera.viewKind,'third-person');
   assert.equal(new URL(page.url()).hash,'#/scenes/flying-creature-training');
   await page.reload();await waitMap('flying-creature-training');assert.equal((await state()).activeVehicle,null);
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');
@@ -63,6 +77,7 @@ try{
   assert(requests.size>0&&[...requests].some(url=>url.includes('/flying-creature/__creature-assets/D02.glb')));
   assert.equal(page.frames().length,1);assert(![...requests].some(url=>/Havok|babylon|:5186|:5191/.test(url)));
   assert.deepEqual(errors,[]);await writeFile(path.join(output,'result.json'),JSON.stringify({initial,flame,reset,approachSamples,errors,requests:[...requests]},null,2));
+  }
 }catch(error){
   await page.screenshot({path:path.join(output,'failure.png')});
   await writeFile(path.join(output,'failure.json'),JSON.stringify({error:String(error),state:await state().catch(()=>null),approachSamples,errors},null,2));throw error;

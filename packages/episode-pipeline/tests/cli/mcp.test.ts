@@ -35,7 +35,7 @@ const world=await createWorld({scene,camera,renderer,navigation:false,assetDefin
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(80,80,20,20),new THREE.MeshBasicMaterial({color:0x8a704f}));ground.rotation.x=-Math.PI/2;
 world.addEntity({id:'ground',object:ground,role:'terrain'});
 const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(.3,1.2),new THREE.MeshBasicMaterial({color:0x26b6ea}));mesh.position.y=.9;actor.add(mesh);
-world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:.35}});world.setControlledEntity('actor');world.setCameraFollow({targetEntityId:'actor'});await world.start();`);
+world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:.35}});world.setControlledEntity('actor');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'actor'},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}}}});await world.start();`);
  candidate=await new ThreeCompiler(workspace,'three-sdk').prepare();
  const imagePath=path.join(candidate.root,'fixture-opening.png'),imageBytes=await sharp({create:{width:1,height:1,channels:3,background:'#193148'}}).png().toBuffer();await writeFile(imagePath,imageBytes);
  source={kind:'three-episode-source',schemaVersion:1,worldId:'mcp-fixture',sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,assetPolicySha256:candidate.assetPolicySha256,
@@ -52,7 +52,7 @@ describe('Three Episode planner MCP boundary',()=>{
  it('accepts the same full vehicle start for probing and plan submission',()=>{
   const schema=EPISODE_TOOLS.find(tool=>tool.name==='episode_probe')!.inputSchema;
   const check=new Ajv({strict:false}).compile(schema);
-  const start={positionWorldMetersXYZ:[0,15,0],facingYawRadians:.4,cameraPerspective:'first-person',humanoid:{vehicleInstanceId:'plane',mounted:true,cameraMode:1,velocityWorldMetersPerSecondXYZ:[0,0,20],pitchRadians:.2,rollRadians:.1,throttle:.7,launched:true}};
+  const start={positionWorldMetersXYZ:[0,15,0],facingYawRadians:.4,cameraViewId:'first-person',humanoid:{vehicleInstanceId:'plane',mounted:true,velocityWorldMetersPerSecondXYZ:[0,0,20],pitchRadians:.2,rollRadians:.1,throttle:.7,launched:true}};
   expect(check({kind:'start',start})).toBe(true);
   expect((schema as any).oneOf[0].properties.start).toBe(SEGMENT_SCHEMA.properties.start);
   expect(check({kind:'start',start:{...start,humanoid:{...start.humanoid,throttle:2}}})).toBe(false);
@@ -131,7 +131,7 @@ it('probes an authored view using actual camera facing without advancing the wor
  const workspace=path.join(root,'authored-camera');await mkdir(workspace);
  for(const filename of ['main.ts','index.html']) {
   const text=await readFile(path.join(root,'author',filename),'utf8');
-  await writeFile(path.join(workspace,filename),text.replace("world.setCameraFollow({targetEntityId:'actor'});",''));
+  await writeFile(path.join(workspace,filename),text.replace("world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'actor'},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}}}});",''));
  }
  const compiled=await new ThreeCompiler(workspace,'three-sdk').prepare();
  // Run the actual TSX consumer: Vitest rewrites dynamic imports inside page.evaluate.

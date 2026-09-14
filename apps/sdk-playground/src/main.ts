@@ -1,4 +1,10 @@
+import {CameraEditorState} from "./camera/editor-state";
+import {createCameraFileClient} from "./camera/file-client";
+import {createCameraPreview} from "./camera/preview";
+import {selectDragonCameraVariant} from "./camera/project-state";
+import type {CameraEditorBinding} from "./camera/panel";
 /// <reference types="vite/client" />
+import {loadCameraProject} from './camera-project';
 import { toast as notify } from "sonner";
 import * as T from "three";
 import {updateSpaceExhaust} from '@worldkit/preset-content/space-model';
@@ -23,7 +29,6 @@ import {
 import { GRAND_PRIX } from "@worldkit/preset-content/environment/grand-prix";
 import {
   applyControlProfile,
-  applyCameraProfile,
   readEditableProfile,
 } from "@worldkit/preset-content/platform/profile-runtime";
 import {
@@ -101,13 +106,13 @@ const camera = new T.PerspectiveCamera(
 );
 const dragonVariant=readDragonVariant(location.search);
 shell.update({dragonId:dragonVariant.id});
-const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,camera:dragonVariant.camera,...(dragonVariant.ground?{flyingCreatureGround:dragonVariant.ground}:{}),
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,...(dragonVariant.ground?{flyingCreatureGround:dragonVariant.ground}:{}),
   ...(dragonVariant.seat?{seat:dragonVariant.seat}:{}),...(dragonVariant.envelope?{envelope:dragonVariant.envelope}:{}),
   ...(dragonVariant.collisionProbes?{flyingCreatureCollision:dragonVariant.collisionProbes}:{}),spawn:[80,40,35] as [number,number,number]}:spec);
 function getDefaultProfile(id:string):AssetProfile|undefined{
   const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
-  return {...profile,control:humanoid.readMovementSettings(humanoid.createVehicle(spec).spec),camera:{...profile.camera,distance:spec.camera},envelope:structuredClone(spec.envelope)};
+  return {...profile,control:humanoid.readMovementSettings(humanoid.createVehicle(spec).spec),envelope:structuredClone(spec.envelope)};
 }
 const nativeDragon=new humanoid.FlyingCreatureVisual();
 const visuals:VehicleVisual[] = SPECS.map(spec=>{
@@ -153,10 +158,37 @@ const sdk = await createWorld({
     },
   },
 });
-const runtime = sdk.humanoid!,follow = runtime.followCamera;
+let cameraProject = loadCameraProject(initialMap.id, dragonVariant.id);
+sdk.setCameraFollow({configuration:cameraProject.document});
+const cameraEditors=new Map<string,CameraEditorBinding>();
+let cameraFileClient:Awaited<ReturnType<typeof createCameraFileClient>>=null;
+function getCameraEditor():CameraEditorBinding {
+ let binding=cameraEditors.get(cameraProject.configurationId);
+ if(!binding){
+  const state=new CameraEditorState(cameraProject),key=`worldkit.camera-draft.v1.${cameraProject.configurationId}`;
+  try{const recovery=localStorage.getItem(key);if(recovery)state.recover(recovery);}catch{/* Recovery is optional. */}
+  binding={state,client:cameraFileClient,rebind:()=>state.bind(sdk),preview:host=>createCameraPreview(host,scene,camera)};
+  cameraEditors.set(cameraProject.configurationId,binding);
+  state.subscribe(()=>{try{localStorage.setItem(key,state.recovery());}catch{/* A full browser store cannot block editing. */}});
+ }
+ return binding;
+}
+void createCameraFileClient().then(client=>{cameraFileClient=client;for(const binding of cameraEditors.values())binding.client=client;}).catch(error=>toast(String(error)));
+// Imported bytes may change independently of a live SDK draft or baseline.
+if(import.meta.hot)import.meta.hot.accept('./camera-project',module=>{
+ if(!module)return;
+ const imported=module.loadCameraProject(session.map.id,dragonVariant.id);
+ const binding=getCameraEditor();binding.state.imported(imported.savedDocument,imported.importedFileSha256);
+ cameraProject={...cameraProject,savedDocument:imported.savedDocument,importedFileSha256:imported.importedFileSha256};
+});
+const runtime = sdk.humanoid!;
+const cameraCollisionLimited=()=>{const diagnostics=sdk.inspectCamera().diagnostics;return diagnostics?.status==='measured'&&diagnostics.limited;};
+const cameraViews=()=>Object.entries(sdk.inspectCamera().document?.views??{}).map(([id,view])=>({id,kind:view.kind,label:`${({'third-person':'第三人称','first-person':'第一人称',shoulder:'沉浸越肩'})[view.kind]}${id===view.kind?'':` · ${id}`}`}));
+const cameraViewLabel=()=>cameraViews().find(view=>view.id===sdk.inspectCamera().current?.viewId)?.label??'作者机位';
+const cameraTargetPosition=()=>new T.Vector3(...(sdk.inspectCamera().current?.pivotWorldMetersXYZ??[0,0,0]));
 let sim = runtime.simulation;
 runtime.onSimulationReplaced(()=>{sim=runtime.simulation;});
-runtime.applyProfile({ view: { keyboardToggleEnabled: true } });
+
 const accessories = createAccessoryPreview(character);
 let currentMap = initialMap,
   world = buildWorld(scene, currentMap);
@@ -191,6 +223,10 @@ const session = {
     displayPreview.clearMaterials();
     world = visual;
     currentMap = next;
+    getCameraEditor().state.invalidate();
+    cameraProject = loadCameraProject(next.id, dragonVariant.id);
+    sdk.setCameraFollow({configuration:cameraProject.document});
+    getCameraEditor().state.invalidate();
     // Scene-local selections retire with the map; keep stable actors and picture settings.
     const stableIds=new Set(['person',...SPECS.map(spec=>spec.id)]);
     const selectedIds=displaySettings.selectedIds.filter(id=>stableIds.has(id));
@@ -229,15 +265,6 @@ for (const id of ["person", ...SPECS.map((s) => s.id)]) {
   profiles.set(id, profile);
   applyControlProfile(runtime, profile);
 }
-let cameraProfileId = "";
-function syncCameraProfile(force = false) {
-  const id = sim.controlledActor.vehicle?.spec.id ?? "person";
-  if (force || id !== cameraProfileId) {
-    cameraProfileId = id;
-    applyCameraProfile(runtime, profiles.get(id)!);
-  }
-}
-syncCameraProfile();
 const pageLifetime = new AbortController();
 const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();
@@ -417,10 +444,10 @@ function pause(value = !paused, showOverlay = true) {
   shell.text("pauseButton", value ? "继续" : "暂停");
   if (!value && !panelOpen) sdkPresentation.focus();
 }
-function setCameraMode(mode: number) {
+function setCameraView(viewId: string) {
   clearInput();
   if (document.pointerLockElement) document.exitPointerLock();
-  runtime.setCameraMode(mode as 0 | 1 | 2);
+  sdk.setCameraView(viewId);
   if (paused) renderPausedState();
   shell.update({
     configurationDirty: [...profiles].some(
@@ -429,17 +456,13 @@ function setCameraMode(mode: number) {
   });
   setText(
     "cameraButton",
-    `相机 · ${["第三人称", "第一人称", "沉浸越肩"][follow.mode]}`,
+    `相机 · ${cameraViewLabel()}`,
   );
-  toast(
-    mode === 1
-      ? "第一人称：点击画面锁定鼠标，Esc 释放；WASD 操控，T 切换视角。"
-      : `相机：${mode === 0 ? "第三人称跟随" : "近距离沉浸越肩 · 滚轮调距离，点击画面自由观察"}`,
-  );
+  toast(`相机：${cameraViewLabel()}`);
   sdkPresentation.focus();
 }
 function cycleCamera() {
-  setCameraMode((follow.mode + 1) % 3);
+  const views=cameraViews();if(!views.length)return;const index=views.findIndex(view=>view.id===sdk.inspectCamera().current?.viewId);setCameraView(views[(index+1)%views.length]!.id);
 }
 function recoverVehicle(){if(!ready)return;if(runtime.recoverVehicle())syncTeleport();toast(sim.controlledActor.message);}
 function interact() {
@@ -499,12 +522,14 @@ shell.on('dragonSelect',id=>{
   if(!sim.controlledActor.vehicle&&session.map.id===DRAGON_TRAINING.id){
     sessionStorage.setItem('dragon-training-person',JSON.stringify({position:sim.controlledActor.player.position.toArray(),yaw:sim.controlledActor.player.yaw}));
   }
+  getCameraEditor().state.replace(selectDragonCameraVariant(getCameraEditor().state.snapshot.validDraft,id!),true);
   const url=new URL(location.href);url.searchParams.set('dragon',id!);
   // 保持地图路由，由启动流程重新创建唯一受控实例与动画拥有者。
   location.assign(url.href);
 });
 shell.on("resetButton", async () => {
   await sdk.reset();
+  getCameraEditor().state.invalidate();
   await npcLab?.whenReady();
   if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
   else syncTeleport();
@@ -564,13 +589,13 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
   if (sim.controlledActor.id !== "person") npcLab?.control("person");
   session.switchMap(mapId);
   world = session.world;
-  follow.environment = session.queries;
   if(assetId==='dragon'){
     const saved=sessionStorage.getItem('dragon-training-person');sessionStorage.removeItem('dragon-training-person');
     let position=map.playerSpawn,yaw=0;
     if(saved){try{const p=JSON.parse(saved);if(Array.isArray(p.position)&&p.position.length===3&&p.position.every(Number.isFinite)&&Number.isFinite(p.yaw)){position=p.position;yaw=p.yaw;}}catch{/* 无效的旧临时状态回到地图准备区。 */}}
-    const start={positionWorldMetersXYZ:position,facingYawRadians:yaw-Math.PI,humanoid:{cameraMode:0 as const}};
+    const start={positionWorldMetersXYZ:position,facingYawRadians:yaw-Math.PI};
     runtime.prepareEpisodeStart(runtime.probeEpisodeStart(start).isValid?start:{...start,positionWorldMetersXYZ:map.playerSpawn});
+    sdk.setCameraView(sdk.inspectCamera().document!.defaultViewId);
     sim.controlledActor.message='按 H 召唤飞龙 · 等待落稳后到鞍侧按 F 上龙';
   }else prepareCourse(sim, map, regionId, assetId);
   pause(false, false);
@@ -613,7 +638,6 @@ function prepareHumanTrial(mapId: string, trial: CharacterTrial, demo = false) {
   if (sim.controlledActor.id !== "person") npcLab?.control("person");
   session.switchMap(mapId);
   world = session.world;
-  follow.environment = session.queries;
   if (!runtime.prepareCharacter(trial.position, trial.yaw))
     throw new Error(sim.controlledActor.message);
   sim.controlledActor.message = `${trial.name} · ${trial.description}`;
@@ -659,6 +683,7 @@ const equipmentPanel = mountEquipmentPanel(
   onPanelChange,
 );
 const workbench = mountWorkbench(document.body, {
+  cameraEditor:getCameraEditor,
   specs: SPECS,
   onOpenChange: onPanelChange,
   onPrepare: prepareSelection,
@@ -669,7 +694,7 @@ const workbench = mountWorkbench(document.body, {
     const profile = parseAssetProfile(value);
     applyControlProfile(runtime, profile);
     profiles.set(profile.assetId, profile);
-    syncCameraProfile(true);
+
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
@@ -680,7 +705,7 @@ const workbench = mountWorkbench(document.body, {
     const profile = getDefaultProfile(id)!;
     profiles.set(id, profile);
     applyControlProfile(runtime, profile);
-    syncCameraProfile(true);
+
     if (paused) renderPausedState();
   },
   getState: () => ({
@@ -696,8 +721,8 @@ const workbench = mountWorkbench(document.body, {
     ).toFixed(2),
     模拟秒: +sim.time.toFixed(3),
     已暂停: paused,
-    相机臂长: +follow.distance.toFixed(2),
-    相机避障: follow.collisionLimited,
+    相机臂长: +(sdk.inspectCamera().current?.nominalDistanceMeters??0).toFixed(2),
+    相机避障: cameraCollisionLimited(),
     视野度: +camera.fov.toFixed(1),
     动画: sim.controlledActor.player.animation,
     生物模型: visuals[sim.controlledActor.vehicleIndex]?.creature?.sourceStatus,
@@ -729,6 +754,7 @@ function movementState() {
   };
 }
 const inspector = mountInspector(el("inspectorHost"), {
+  cameraEditor:getCameraEditor,
   getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
   getSubject: () => ({
     name: sim.controlledActor.vehicle?.spec.name ?? "主体人物",
@@ -742,7 +768,7 @@ const inspector = mountInspector(el("inspectorHost"), {
   applyProfile: (value, tab) => {
     const profile = parseAssetProfile(value);
     if (tab === "movement") applyControlProfile(runtime, profile);
-    else applyCameraProfile(runtime, profile);
+
     profiles.set(profile.assetId, profile);
     if (paused) renderPausedState();
   },
@@ -755,9 +781,6 @@ const inspector = mountInspector(el("inspectorHost"), {
     if (tab === "movement") {
       profile.control = defaults.control;
       applyControlProfile(runtime, profile);
-    } else {
-      profile.camera = defaults.camera;
-      applyCameraProfile(runtime, profile);
     }
     profiles.set(id, profile);
     if (paused) renderPausedState();
@@ -766,15 +789,17 @@ const inspector = mountInspector(el("inspectorHost"), {
   getCamera: () => {
     camera.getWorldDirection(cameraDirection);
     return {
-      mode: follow.mode,
-      distance: camera.position.distanceTo(follow.target),
+      viewId: sdk.inspectCamera().current?.viewId??null,
+      kind: sdk.inspectCamera().resolved?.kind??null,
+      views: cameraViews(),
+      distance: camera.position.distanceTo(cameraTargetPosition()),
       fovDegrees: camera.fov,
       yawRadians: Math.atan2(cameraDirection.x, cameraDirection.z),
       pitchRadians: Math.asin(cameraDirection.y),
-      collisionLimited: follow.collisionLimited,
+      collisionLimited: cameraCollisionLimited(),
     };
   },
-  setCameraMode,
+  setCameraView,
   getTelemetry: () => ({
     speedKmh:
       (sim.controlledActor.vehicle?.velocity.length() ?? sim.controlledActor.player.velocity.length()) * 3.6,
@@ -912,6 +937,7 @@ window.addEventListener(
     pageLifetime.abort();
     disposeThumbnails?.();
     spacePanel.dispose();
+    for(const binding of cameraEditors.values())binding.state.invalidate();
     inspector.dispose();
     stageObserver.disconnect();
     footerObserver.disconnect();
@@ -1088,7 +1114,7 @@ function updateUI() {
     traversalPrompt = humanoidTraversalReady(h)
       ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
       : null;
-  const bindingSignature = JSON.stringify(sdk.getKeyBindings());
+  const bindingSignature = JSON.stringify({keys:sdk.getKeyBindings(),cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
   if (lastActive !== sim.controlledActor.vehicleIndex || lastBindings !== bindingSignature) {
     lastBindings = bindingSignature;
     library.setActive(v?.spec.id ?? "person");
@@ -1106,7 +1132,7 @@ function updateUI() {
     });
     setText("shortcutSubject", v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
-      ["T", "切换三种视角"],
+      ...(sdk.inspectCamera().document?.input?.cycleViewIds?.length ? [["T", "切换视角"] as [string,string]] : []),
       ["点击 / 拖动", "观察"],
       ["滚轮", "镜头距离"],
       ["Esc", "释放 / 暂停"],
@@ -1207,9 +1233,9 @@ function updateUI() {
   } else
     setText(
       "bottomHint",
-      follow.mode === 1
-        ? "点击画面锁定鼠标 · 自由观察不改变车辆方向 · T 切换视角 · Esc 释放 / 暂停"
-        : "点击 / 拖动观察 · 滚轮调距离 · T 循环切换三种视角 · 页面复位按钮返回起点 · Esc 暂停",
+      sdk.inspectCamera().resolved?.kind === 'first-person'
+        ? "点击画面锁定鼠标 · 自由观察不改变车辆方向 · Esc 释放 / 暂停"
+        : "点击 / 拖动观察 · 滚轮调距离 · 页面复位按钮返回起点 · Esc 暂停",
     );
   const pos = v?.position ?? p.position;
   let zone = session.map.regions[0]!,
@@ -1239,7 +1265,7 @@ function updateUI() {
   });
   setText(
     "cameraButton",
-    `相机 · ${["第三人称", "第一人称", "沉浸越肩"][follow.mode]}`,
+    `相机 · ${cameraViewLabel()}`,
   );
   const inspectorVisible =
     !shell.get().displayPinned &&
@@ -1306,7 +1332,7 @@ function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   world.update(
     sim.time,
     sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position,
-    follow.underwater,
+    (runtime.environment.map.water.some(w=>camera.position.x>=w.min[0]&&camera.position.x<=w.max[0]&&camera.position.z>=w.min[2]&&camera.position.z<=w.max[2]&&camera.position.y>=w.min[1]&&camera.position.y<w.surface-.15)),
   );
   for(const box of session.map.boxes)if(box.rigidGroup){const pose=sim.environment.propBoxPose(box.id),mesh=world.root.getObjectByName(box.id);if(pose&&mesh){mesh.position.copy(pose.position);mesh.quaternion.copy(pose.rotation);}}
   updateUI();
@@ -1331,10 +1357,10 @@ sdk.onUpdate(({ deltaSeconds }) => {
   }
   jumpPressed = false;
   humanCommands = {};
-  syncCameraProfile();
 });
 sdk.onReset(() => {
-  clearInput();
+  // The SDK already reset owned inputs; clear only application intent here.
+  pressed.clear();jumpPressed=false;humanCommands={};releaseUIOverride=undefined;
   humanDemo = null;
   lastActive = -99;
 });
@@ -1343,7 +1369,7 @@ sdk.step({}, 0);
 npcLab = createNpcPlayground(sdk, {
   focus: () => { pause(false, false); sdkPresentation.focus(); },
   beforeControl: () => { clearInput(); humanDemo = null; },
-  changed: () => { lastActive = -99; syncCameraProfile(true); refreshDisplayMetadata(); },
+  changed: () => { lastActive = -99; refreshDisplayMetadata(); },
 });
 sdkPresentation.ui.mount(npcLab.panel);
 await npcLab.setMap(session.map.id);
@@ -1361,7 +1387,6 @@ try {
     shell.flush();
     await preparePlaygroundRendering({
       prepareVisuals: () => {
-        runtime.setCameraMode(follow.mode as 0 | 1 | 2);
         updateVisuals(0);
       },
       compile: () => renderer.compileAsync(scene, camera),
@@ -1418,7 +1443,7 @@ function ensureThumbnails() {
 }
 if (library.isOpen()) ensureThumbnails();
 shell.on("exportProfiles", () => {
-  const value = { schemaVersion: 1, profiles: [...profiles.values()] };
+  const value = { schemaVersion: 2, profiles: [...profiles.values()] };
   const uri = URL.createObjectURL(
     new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
   );
@@ -1440,6 +1465,8 @@ const labAPI = {
     controlledEntityId: sdk.snapshot().controlledEntityId,
     worldErrors: sdk.snapshot().errors,
     cameraOwnership: sdk.snapshot().camera,
+    cameraProject:{...cameraProject,document:getCameraEditor().state.snapshot.draft,unsaved:getCameraEditor().state.snapshot.dirty},
+    cameraEditor:getCameraEditor().state.snapshot,
     entityIds: sdk.snapshot().entities.map(entity => entity.id),
     display: displaySettings,
     diagnosticVisible: !!displayPreview.canvas && !displayPreview.canvas.hidden,
@@ -1463,12 +1490,13 @@ const labAPI = {
     paused,
     simulationTime: sim.time,
     camera: {
-      mode: follow.mode,
-      yaw: follow.yaw,
-      pitch: follow.pitch,
-      distance: follow.distance,
+      viewId: sdk.inspectCamera().current?.viewId??null,
+      viewKind: sdk.inspectCamera().resolved?.kind??null,
+      yaw: (sdk.inspectCamera().intent?.yawRadians??0),
+      pitch: (sdk.inspectCamera().intent?.pitchRadians??0),
+      distance: (sdk.inspectCamera().current?.nominalDistanceMeters??0),
       position: camera.position.toArray(),
-      target: follow.target.toArray(),
+      target: cameraTargetPosition().toArray(),
     },
     vehicleCount: SPECS.length,
     vehicleIdentities: runtime.snapshot().vehicles.map(({instanceId,assetId})=>({instanceId,assetId})),
@@ -1485,6 +1513,7 @@ const labAPI = {
   },
   reset: async () => {
     await sdk.reset();
+  getCameraEditor().state.invalidate();
     await npcLab?.whenReady();
     if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
     else syncTeleport();

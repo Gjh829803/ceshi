@@ -84,31 +84,40 @@
       "keysUp": [
         "Space"
       ],
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 1
-        }
-      ],
-      "durationSeconds": 1
+      "durationSeconds": 0.9,
+      "keysDown": [
+        "t"
+      ]
     },
     {
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 2
-        }
+      "keysUp": [
+        "t"
       ],
-      "durationSeconds": 1
+      "durationSeconds": 0.1
     },
     {
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 0
-        }
+      "durationSeconds": 0.9,
+      "keysDown": [
+        "t"
+      ]
+    },
+    {
+      "keysUp": [
+        "t"
       ],
-      "durationSeconds": 1
+      "durationSeconds": 0.1
+    },
+    {
+      "durationSeconds": 0.9,
+      "keysDown": [
+        "t"
+      ]
+    },
+    {
+      "keysUp": [
+        "t"
+      ],
+      "durationSeconds": 0.1
     },
     {
       "keysDown": [

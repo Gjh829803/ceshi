@@ -2,7 +2,7 @@ import records from '../../../../assets/dragon-training/__creature-assets/varian
 import type {humanoid} from '@worldkit/three';
 
 export interface DragonVariant {
-  id:string;name:string;file:string;camera:number;
+  id:string;name:string;file:string;
   ground?:humanoid.VehicleSpec['flyingCreatureGround'];
   seat?:[number,number,number];
   collisionProbes?:humanoid.VehicleSpec['flyingCreatureCollision'];

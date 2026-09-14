@@ -1,0 +1,373 @@
+{
+  "kind": "world-camera",
+  "schemaVersion": 1,
+  "defaultViewId": "third-person",
+  "binding": {
+    "targetEntityId": "person",
+    "mountTarget": "vehicle",
+    "subjectOverrides": {
+      "person": {
+        "views": {
+          "third-person": {
+            "presetId": "humanoid.third-person"
+          },
+          "first-person": {
+            "presetId": "humanoid.first-person"
+          },
+          "shoulder": {
+            "presetId": "humanoid.shoulder"
+          }
+        }
+      },
+      "tank-instance-1": {
+        "views": {
+          "third-person": {
+            "presetId": "tank.third-person",
+            "overrides": {
+              "lens": {
+                "farMeters": 500
+              }
+            }
+          },
+          "first-person": {
+            "presetId": "tank.first-person",
+            "overrides": {
+              "lens": {
+                "farMeters": 500
+              }
+            }
+          },
+          "shoulder": {
+            "presetId": "tank.shoulder",
+            "overrides": {
+              "lens": {
+                "farMeters": 500
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "presets": {
+    "humanoid.third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "nearMeters": 0.08
+        },
+        "position": {
+          "anchor": {
+            "kind": "body",
+            "heightRatio": 0.655
+          },
+          "distanceMeters": 8.8,
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.09902102579427789,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "initialPitchRadians": 0.35,
+          "pitchLimitsRadians": {
+            "kind": "bounded",
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.1
+          },
+          "recenter": {
+            "enabled": false
+          }
+        },
+        "zoom": {
+          "range": {
+            "kind": "bounded",
+            "minimumDistanceMeters": 3.2,
+            "maximumDistanceMeters": 12
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.04,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      }
+    },
+    "humanoid.first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "nearMeters": 0.035
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "recenter": {
+            "enabled": false
+          },
+          "rollInheritanceRatio": 0
+        }
+      }
+    },
+    "humanoid.shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "nearMeters": 0.05
+        },
+        "position": {
+          "anchorOffset": {
+            "space": "heading",
+            "offsetMetersXYZ": [
+              0.48,
+              0.08,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.09902102579427789,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "initialPitchRadians": 0.12,
+          "pitchLimitsRadians": {
+            "kind": "bounded",
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "recenter": {
+            "enabled": false
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 5.8,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 5.8,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      }
+    },
+    "tank.third-person": {
+      "kind": "third-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.12,
+          "farMeters": 2100
+        },
+        "position": {
+          "distanceMeters": 14,
+          "anchor": {
+            "kind": "origin"
+          },
+          "anchorOffset": {
+            "space": "world",
+            "offsetMetersXYZ": [
+              0,
+              2.3,
+              0
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0.08664339756999316
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.25
+          },
+          "initialPitchRadians": 0.3,
+          "recenter": {
+            "pitch": {
+              "targetRadians": 0.28,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "zoom": {
+          "range": {
+            "minimumDistanceMeters": 6.3,
+            "maximumDistanceMeters": 35
+          }
+        },
+        "constraints": {
+          "collision": {
+            "radiusMeters": 0.25,
+            "armClearanceMeters": 0,
+            "pivotClearanceMeters": 0
+          },
+          "recovery": {
+            "halfLifeSeconds": 0
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 53.333333333333336,
+            "extendHalfLifeSeconds": 0.23104906018664842,
+            "retractHalfLifeSeconds": 0.5776226504666211
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 52.17391304347826,
+            "halfLifeSeconds": 0.23104906018664842
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "calibration.tank",
+        "version": "285246867"
+      }
+    },
+    "tank.first-person": {
+      "kind": "first-person",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.035,
+          "farMeters": 2100
+        },
+        "position": {
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "referenceFrame": "subject-up",
+          "rollInheritanceRatio": 0,
+          "recenter": {
+            "pitch": {
+              "targetRadians": 0.28,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "calibration.tank",
+        "version": "285246867"
+      }
+    },
+    "tank.shoulder": {
+      "kind": "shoulder",
+      "values": {
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.05,
+          "farMeters": 2100
+        },
+        "position": {
+          "anchor": {
+            "kind": "seat"
+          },
+          "anchorOffset": {
+            "space": "subject",
+            "offsetMetersXYZ": [
+              0.48,
+              3.1199999999999997,
+              -3.3
+            ]
+          },
+          "subjectTranslationHalfLifeSeconds": 0,
+          "anchorHalfLifeSeconds": 0.08664339756999316,
+          "armHalfLifeSeconds": 0
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "minimumRadians": -1.4835298641951802,
+            "maximumRadians": 1.05
+          },
+          "initialPitchRadians": 0.12,
+          "referenceFrame": "subject-up",
+          "recenter": {
+            "pitch": {
+              "targetRadians": 0.28,
+              "halfLifeSeconds": 0.5776226504666211
+            }
+          }
+        },
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.025
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        },
+        "effects": {
+          "speedDistance": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 12,
+            "maximumOffsetMeters": 0.3
+          },
+          "speedFov": {
+            "enabled": true,
+            "fullEffectSpeedMetersPerSecond": 12,
+            "maximumOffsetDegrees": 4,
+            "halfLifeSeconds": 0.13862943611198905
+          }
+        }
+      },
+      "sourceIdentity": {
+        "id": "calibration.tank",
+        "version": "285246867"
+      }
+    }
+  },
+  "activation": "immediate",
+  "input": {
+    "orbitRateRadiansPerSecond": 1.2,
+    "cycleViewIds": [
+      "third-person",
+      "first-person",
+      "shoulder"
+    ]
+  },
+  "views": {
+    "third-person": {
+      "kind": "third-person",
+      "overrides": {
+        "lens": {
+          "farMeters": 500
+        }
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "overrides": {
+        "lens": {
+          "farMeters": 500
+        }
+      }
+    },
+    "shoulder": {
+      "kind": "shoulder",
+      "overrides": {
+        "lens": {
+          "farMeters": 500
+        }
+      }
+    }
+  }
+}

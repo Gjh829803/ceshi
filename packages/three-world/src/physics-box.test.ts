@@ -7,11 +7,66 @@ import {readNavigationGeometry} from './physics-navigation';
 import {EnvironmentQueries,initEnvironmentQueries} from './humanoid-runtime/environment/queries';
 import {HumanoidController} from './humanoid-runtime/humanoid/controller';
 import {probeHumanoidCamera} from './humanoid-runtime/camera-queries';
+import {CameraCollisionSolver} from '@worldkit/camera-collision';
 
 beforeAll(initEnvironmentQueries);
 afterEach(()=>vi.restoreAllMocks());
 const rotation={x:0,y:0,z:0,w:1};
 const ground=(side:number,fraction=0)=>({id:'precise-ground',name:'Ground',description:'',bounds:{min:[-1000,-10,-1000] as const,max:[1000,10,1000] as const},boxes:[{id:'floor',position:[0,-.5,0] as const,size:[side,1,side] as const}],water:[],spawns:[],regions:[],playerSpawn:[side*fraction,.03,side*fraction] as const});
+
+const cameraContactCases=[0,90,1000,10000].flatMap(offset=>[0,.35,Math.PI/2,Math.PI].flatMap(angle=>[.05,.25].flatMap(radius=>[0,.02].flatMap(clearance=>[false,true].map(preserve=>({offset,angle,radius,clearance,preserve}))))));
+it.each(cameraContactCases)('keeps camera contact continuous at offset $offset angle $angle radius $radius clearance $clearance preserve $preserve',({offset,angle,radius,clearance,preserve})=>{
+ const world=new RAPIER.World({x:0,y:0,z:0}),factory=new FixedBoxColliderFactory(world);
+ const rotation=new Quaternion().setFromAxisAngle(new Vector3(1,0,0),angle),translation=new Vector3(offset,0,offset);
+ const point=(x:number,y:number,z:number)=>new Vector3(x,y,z).applyQuaternion(rotation).add(translation).toArray();
+ try{
+  const center=point(0,-.25,0);factory.create([165,.25,165],desc=>desc.setTranslation(...center).setRotation(rotation));factory.dispose();world.updateSceneQueries();
+  const solver=new CameraCollisionSolver((from,to,radius)=>probeHumanoidCamera(world,from,to,radius));
+  let current:readonly[number,number,number]=point(0,4.8,-99);
+  for(let tick=0;tick<40;tick++){
+   const z=-90+tick*.116,eye=point(0,4.8,z-9);
+   const request={target:point(0,.025,z),eye,current,pivotOrigin:point(0,1.675,z),radius,pivotClearance:clearance,armClearance:0,...(preserve?{canIgnoreArmObstruction:()=>true}:{})};
+   const fixed=solver.solve(request,{authorityTick:tick,deltaSeconds:1/60,clearHoldSeconds:0,recoveryHalfLifeSeconds:0,maximumRecoveryMetersPerSecond:'unlimited'});
+   expect(new Vector3(...fixed.position).distanceTo(new Vector3(...eye)),`fixed camera tick ${tick}`).toBeLessThan(1e-6);
+   const before=solver.captureTransactionState(),displayEye=point(0,4.8,z-9-.058);
+   const projected=solver.project({...request,target:point(0,.025,z-.058),eye:displayEye,pivotOrigin:point(0,1.675,z-.058),current:fixed.position});
+   expect(new Vector3(...projected.position).distanceTo(new Vector3(...displayEye)),`display camera tick ${tick}`).toBeLessThan(1e-6);
+   expect(solver.captureTransactionState()).toEqual(before);
+   current=fixed.position;
+  }
+ }finally{factory.dispose();world.free();}
+});
+
+it('separates a tangent cast origin without requiring a separate body pivot',()=>{
+ const world=new RAPIER.World({x:0,y:0,z:0}),factory=new FixedBoxColliderFactory(world);
+ try{
+  factory.create([165,.25,165],desc=>desc.setTranslation(0,-.25,0));factory.dispose();world.updateSceneQueries();
+  const solver=new CameraCollisionSolver((from,to,radius)=>probeHumanoidCamera(world,from,to,radius));
+  const request={target:[0,.25000004768371586,-90] as const,eye:[0,4.8,-99] as const,current:[0,4.8,-99] as const,radius:.25,pivotClearance:0,armClearance:0};
+  const result=solver.solve(request,{authorityTick:0,deltaSeconds:1/60,clearHoldSeconds:0,recoveryHalfLifeSeconds:0,maximumRecoveryMetersPerSecond:'unlimited'});
+  expect(result.position).toEqual(request.eye);
+  expect(solver.project(request).position).toEqual(request.eye);
+ }finally{factory.dispose();world.free();}
+});
+
+it('sweeps past a touching support to the intervening wall instead of crossing it',()=>{
+ const world=new RAPIER.World({x:0,y:0,z:0});
+ try{
+  world.createCollider(RAPIER.ColliderDesc.cuboid(10,.5,10).setTranslation(0,-.5,0));
+  world.createCollider(RAPIER.ColliderDesc.cuboid(.1,2,2).setTranslation(0,2,0));world.updateSceneQueries();
+  const probe=(from:readonly[number,number,number],to:readonly[number,number,number],radius:number)=>probeHumanoidCamera(world,from,to,radius);
+  const solver=new CameraCollisionSolver(probe),timing={authorityTick:0,deltaSeconds:1/60,clearHoldSeconds:0,recoveryHalfLifeSeconds:0,maximumRecoveryMetersPerSecond:'unlimited' as const};
+  const first=solver.solve({target:[-2,2,0],eye:[-2,-1,0],current:[-2,1,0],radius:.25,pivotClearance:0,armClearance:0},timing);
+  for(const origin of [first.position,[-2,.25,0] as const]){
+   const request={target:[2,2,0] as const,eye:[2,1,0] as const,current:origin,sweepFrom:origin,radius:.25,pivotClearance:0,armClearance:0};
+   const result=solver.solve(request,{...timing,authorityTick:1});
+   expect(result.position[0]).toBeLessThan(-.34999);
+   expect(result.phase).toBe('constrained');
+   expect(probe(result.position,result.position,.25).startedOverlapping).not.toBe(true);
+   const before=solver.captureTransactionState();expect(solver.project(request).position).toEqual(result.position);expect(solver.captureTransactionState()).toEqual(before);
+  }
+ }finally{world.free();}
+});
 
 it.each([12,40,200].flatMap(side=>[0,.13,.37].map(fraction=>({side,fraction}))))('keeps actual prone support and standing exit on a $side m slab at $fraction',({side,fraction})=>{
  const q=new EnvironmentQueries(ground(side,fraction)),actor=new HumanoidController(q,'person');

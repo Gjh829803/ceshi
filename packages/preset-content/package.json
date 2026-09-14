@@ -52,7 +52,9 @@
     "./unicycle": "./src/vehicles/unicycle/spec.ts",
     "./unicycle-model": "./src/vehicles/unicycle/model.ts",
     "./vehicle-animation": "./src/vehicles/animation.ts",
-    "./world": "./src/world.ts"
+    "./world": "./src/world.ts",
+    "./cameras/presets.json": "./config/cameras/presets.json",
+    "./cameras/dragon-variants.json": "./config/cameras/dragon-variants.json"
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",

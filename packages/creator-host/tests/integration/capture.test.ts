@@ -159,7 +159,7 @@ const world=await createWorld({scene,camera,renderer,navigation:false,assetDefin
  map:{id:'current-preview',name:'Current preview',description:'',bounds:{min:[-20,-5,-20],max:[20,20,20]},boxes:[{id:'ground',position:[0,-.5,0],size:[40,1,40]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
  character:{instanceId:'player',object:player},vehicles:[]}});
 await world.start();world.stop();world.step({},40);
-world.humanoid.applyProfile({cameraDistanceMeters:11,camera:{targetHeightOffset:1.1}});world.humanoid.setCameraMode(2);
+world.setCameraView('shoulder');
 window.currentPreviewWorld=world;`;
 
 it('records rejected and failed SDK actions, continues later inputs, and still fails on browser errors',async()=>{
@@ -174,7 +174,7 @@ await world.start();world.stop();`);
   await writeFile(path.join(root,'main.ts'),authored);await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
   await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:2,targets:[],steps:[
    {keysDown:['KeyW'],commands:[{type:'actor.stop',entityId:'player'},{type:'actor.move-to',entityId:'npc',targetPositionWorldMetersXYZ:[1000,0,1000]},{type:'actor.move-to',entityId:'immobile',targetPositionWorldMetersXYZ:[-8,0,0]}],durationSeconds:4.8},
-   {keysUp:['KeyW'],commands:[{type:'humanoid.set-camera-mode',mode:1}],durationSeconds:.5},
+   {keysUp:['KeyW'],commands:[{type:'humanoid.apply-profile',profile:{character:{speed:4}}}],durationSeconds:.5},
   ]}));
   const report=await service.playtest('action-outcomes',undefined,2);
   expect(report.status,report.failure??'').toBe('passed');expect(report.isCompleteEpisode).toBe(true);expect(report.completedSteps).toBe(2);
@@ -183,7 +183,11 @@ await world.start();world.stop();`);
   expect(report.feedback.actions.operationCounts.failed).toBe(2);
   expect(report.hostActionEvents).toEqual(expect.arrayContaining([expect.objectContaining({type:'world-command',worldCommandReceipt:expect.objectContaining({status:'rejected',error:expect.objectContaining({code:'PLAYER_INPUT_OWNS_ACTOR'})})})]));
   expect(report.worldOperations).toEqual(expect.arrayContaining([expect.objectContaining({status:'failed',error:expect.objectContaining({code:'NO_PATH'})}),expect.objectContaining({status:'failed',error:expect.objectContaining({message:'WORLD_ACTOR_BLOCKED'})})]));
-  expect(report.lastObservation?.snapshot?.humanoid?.cameraMode).toBe(1);
+  expect(report.lastObservation?.snapshot?.humanoid?.controls.character.speed).toBe(4);
+  const recordedTrace=JSON.parse(await readFile(path.join(path.dirname(report.videoPath!),'trace.json'),'utf8'));
+  expect(recordedTrace.samples.at(-1).camera).toEqual(report.lastObservation!.snapshot.camera);
+  expect(recordedTrace.samples.at(-1).camera).toMatchObject({viewId:'third-person',documentHash:expect.stringMatching(/^[a-f0-9]{64}$/),configurationRevision:expect.any(Number),cameraCommitRevision:expect.any(Number)});
+  expect(recordedTrace.samples.at(-1).camera).not.toHaveProperty('resolved');
   expect(report.videoMetadata?.durationSeconds).toBeGreaterThan(2);
   const candidate=await service.compiler.prepare();expect(candidate.runtimeHash).toBe(report.runtimeHash);expect(candidate.worldBuildHash).toBe(report.worldBuildHash);
   const episode=await openEpisodeBrowser({playableRoot:candidate.playableRoot});
@@ -227,7 +231,7 @@ it('captures the runtime playable footprint despite a giant sky and tall world b
     ratio:renderer.getPixelRatio(),size:[renderer.domElement.width,renderer.domElement.height],scissorTest:renderer.getScissorTest(),
     autoClear:renderer.autoClear,xr:renderer.xr.enabled,shadows:renderer.shadowMap.enabled,fog:world.scene.fog,
     objects:world.scene.children.map((o:any)=>[o.uuid,o.visible,o.layers.mask])};};
-   const before=state(),capture=host.capture('top-down'),after=state();
+   world.render();const before=state(),capture=host.capture('top-down'),after=state();
    const render=renderer.render;let error;
    renderer.render=function(scene:any,camera:any){if(camera.isOrthographicCamera)throw Error('OVERVIEW_RENDER_FAILURE');return render.call(this,scene,camera);};
    try{host.capture('top-down');}catch(e:any){error=e.message;}finally{renderer.render=render;}
@@ -253,59 +257,50 @@ it('previews the current SDK shoulder through MCP without resetting paused ticks
   await service.inspect({sections:['snapshot']});const page=(service as unknown as {session:{page:Page}}).session.page;
   const baseline=await page.evaluate(()=>{
    const observer=window.__WORLDKIT_EVAL__!;
-   return observer.withPresentation!(()=>({snapshot:observer.snapshot!(),configuration:observer.capabilities!({entityIds:[]}).humanoid!.configuration}));
+   return observer.withPresentation!(()=>({snapshot:observer.snapshot!(),configuration:observer.capabilities!({entityIds:[]}).humanoid!.configuration,cameraInspection:observer.inspectCamera!()}));
   }),before=baseline.snapshot;
-  expect(before.humanoid!.cameraMode).toBe(2);expect(before.simulationTick).toBe(40);expect(before.isRunning).toBe(false);
-  expect(baseline.configuration.profile.camera?.targetHeightOffset).toBe(1.1);
+  expect(before.camera.viewKind).toBe('shoulder');expect(before.simulationTick).toBe(40);expect(before.isRunning).toBe(false);
+  expect(baseline.cameraInspection.resolved?.kind).toBe('shoulder');
   const started=await executeThreeCreatorTool(service,'world_preview',{view:'current'}) as {operationId:string};
   const operation=await service.getOperation(started.operationId,25);expect(operation.status,operation.error).toBe('succeeded');
   const current=operation.result!;
-  expect(current.view).toBe('current');expect(current.cameraObservation).toMatchObject({simulationTick:40,isRunning:false,humanoidCameraMode:2,owner:'follow',camera:before.camera});
-  expect(current.cameraObservation.cameraOverrides).toEqual(baseline.configuration.profile.camera);
-  expect(current.cameraObservation.cameraOverrides).toEqual({targetHeightOffset:1.1});
-  expect(current.cameraObservation.cameraSettings).toEqual(baseline.configuration.effective.camera.settings);
-  expect(current.cameraObservation.cameraSettings).toMatchObject({targetHeightOffset:1.1,horizontalOffset:0,baseFovDegrees:58});
-  expect(current.cameraObservation.framing).toEqual(baseline.configuration.effective.camera.framing);
-  expect(current.cameraObservation.framing).toMatchObject({advisory:true,status:'observed',headSource:'posture-eye'});
-  expect(current.cameraObservation.framing.sampleSimulationSeconds).toBeCloseTo(before.simulationSeconds,12);
-  expect(current.cameraObservation.framing.issues).toEqual(expect.arrayContaining([expect.objectContaining({code:'SHOULDER_FRAMING_OFFSET_REVIEW'})]));
-  expect(current.cameraObservation).not.toHaveProperty('entities');expect(current.cameraObservation).not.toHaveProperty('snapshot');
+  expect(current.view).toBe('current');
+  expect(current.cameraObservation).toEqual({camera:baseline.cameraInspection,cameraAvailability:{status:'available'}});
   expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!())).toEqual(before);
   const candidate=await service.validate();expect(current).toMatchObject({sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash});
   const content=await toolContent(service,operation);expect(content.some(item=>item.type==='image')).toBe(true);
   expect((await sharp(await readFile(current.image.path)).metadata()).width).toBe(960);
   const optional=await page.evaluate(()=>{
-   const host=window.__THREE_CREATOR_HOST__!,observer=window.__WORLDKIT_EVAL__!,original=observer.capabilities,originalSnapshot=observer.snapshot!;
-   let queries=0,snapshotReads=0;
-   observer.snapshot=()=>{snapshotReads++;return originalSnapshot();};
-   observer.capabilities=query=>{queries++;if(JSON.stringify(query)!==JSON.stringify({entityIds:[]}))throw new Error('unbounded description');return original!(query);};
+   const host=window.__THREE_CREATOR_HOST__!,observer=window.__WORLDKIT_EVAL__!,original=observer.inspectCamera!;
+   let queries=0;observer.inspectCamera=()=>{queries++;return original();};
    try{
-    const present=host.capture('current') as any,currentSnapshotReads=snapshotReads;host.capture('opening');host.read();
+    const present=host.capture('current') as any;host.capture('opening');host.read();
     const onDemandQueries=queries;
-    observer.capabilities=()=>{throw new Error('optional framing unavailable');};
+    observer.inspectCamera=()=>{throw new Error('optional camera unavailable');};
     const degraded=host.capture('current') as any;
-    delete observer.capabilities;const unavailable=host.capture('current') as any;
-    observer.snapshot=()=>{throw new Error('optional snapshot unavailable');};const noSnapshot=host.capture('current') as any;
-    return {framing:present.cameraObservation.framing,onDemandQueries,currentSnapshotReads,degraded:degraded.cameraObservation,image:degraded.image,unavailable:unavailable.cameraObservation,noSnapshot:noSnapshot.cameraObservation};
-   }finally{observer.snapshot=originalSnapshot;if(original)observer.capabilities=original;else delete observer.capabilities;}
+    delete observer.inspectCamera;const unavailable=host.capture('current') as any;
+    return {camera:present.cameraObservation.camera,onDemandQueries,degraded:degraded.cameraObservation,image:degraded.image,unavailable:unavailable.cameraObservation};
+   }finally{observer.inspectCamera=original;}
   });
-  expect(optional.framing).toEqual(baseline.configuration.effective.camera.framing);expect(optional.onDemandQueries).toBe(1);
-  expect(optional.currentSnapshotReads).toBe(1);
-  expect(optional.degraded).toMatchObject({humanoidCameraMode:2,simulationTick:40,owner:'follow',framing:null,cameraOverrides:null,cameraSettings:null});expect(optional.image).toMatch(/^data:image\/png;base64,/);
-  expect(optional.unavailable).toMatchObject({humanoidCameraMode:2,simulationTick:40,framing:null,cameraOverrides:null,cameraSettings:null});
-  expect(optional.noSnapshot).toMatchObject({simulationTick:null,camera:null,humanoidCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+  expect(optional.camera).toEqual(baseline.cameraInspection);expect(optional.onDemandQueries).toBe(1);
+  expect(optional.degraded).toEqual({camera:null,cameraAvailability:{status:'unavailable',reason:'inspection-failed'}});expect(optional.image).toMatch(/^data:image\/png;base64,/);
+  expect(optional.unavailable).toEqual({camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}});
   const inherited=await page.evaluate(()=>{
    const world=(window as any).currentPreviewWorld;
-   world.useAuthoredCamera();world.camera.fov=43;world.camera.updateProjectionMatrix();world.setCameraFollow({activateOnInput:true});
+   world.useAuthoredCamera();world.camera.fov=43;world.camera.updateProjectionMatrix();
+   const edit=world.beginCameraEdit(),document={...world.inspectCamera().document,activation:'on-input',defaultViewId:'third-person',views:{...world.inspectCamera().document.views,'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},lens:{nearMeters:world.camera.near,farMeters:world.camera.far}}}}};
+   const position=world.camera.position.clone(),direction=world.camera.getWorldDirection(position.clone());
+   const draft=edit.createOpeningDraft(document,{viewId:'third-person',opening:{positionWorldMetersXYZ:position.toArray(),lookAtWorldMetersXYZ:position.clone().add(direction).toArray(),fovDegrees:43}});
+   edit.applyDraft(draft,world.inspectCamera().configurationRevision);edit.dispose();
    const before=world.snapshot(),capture=window.__THREE_CREATOR_HOST__!.capture('current') as any;
-   return {observation:capture.cameraObservation,settingsApplied:world.humanoid.inspectConfiguration().effective.camera.settingsApplied,
+   return {observation:capture.cameraObservation,settingsApplied:Object.hasOwn(world.humanoid.inspectConfiguration().effective,'camera'),
     fov:world.camera.fov,before,after:world.snapshot()};
   });
   expect(inherited.settingsApplied).toBe(false);expect(inherited.fov).toBe(43);
-  expect(inherited.observation).toMatchObject({owner:'follow-pending',cameraSettings:null,framing:{reason:'shared-camera-framing'}});
+  expect(inherited.observation).toMatchObject({camera:{mode:'follow-pending'},cameraAvailability:{status:'available'}});
   expect(inherited.after).toEqual(inherited.before);
   await service.preview('opening');const reset=await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!());
-  expect(reset.humanoid!.cameraMode).toBe(0);expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
+  expect(reset.camera.viewKind).toBe('third-person');expect(reset.simulationTick).toBe(0);expect(reset.isRunning).toBe(false);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}
 },60000);
 
@@ -320,7 +315,7 @@ it('accepts current through the actual CLI and captures raw pixels without calli
    const code=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('close',resolve);});
    expect(code,stderr||stdout).toBe(0);const operation=JSON.parse(stdout);expect(operation.status).toBe('succeeded');
    const result=operation.result;expect(result.view).toBe('current');
-   expect(result.cameraObservation).toEqual({worldRevision:null,simulationTick:null,simulationSeconds:null,isRunning:null,camera:null,humanoidCameraMode:null,owner:null,framing:null,cameraOverrides:null,cameraSettings:null});
+   expect(result.cameraObservation).toEqual({camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}});
    expect(result.sourceHash).toMatch(/^[a-f0-9]{64}$/);expect(result.runtimeHash).toMatch(/^[a-f0-9]{64}$/);
    expect((await sharp(await readFile(result.image.path)).metadata()).width).toBe(960);
   }finally{child.kill('SIGTERM');}

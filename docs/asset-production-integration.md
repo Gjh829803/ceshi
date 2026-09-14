@@ -154,15 +154,16 @@ Agent 的使用顺序应明确为：**搜索资产 → 查看能力说明 → �
 ### 新主体的镜头与输入接入
 
 初始关系与镜头的接入顺序统一遵循 [编程规范](../packages/creator-host/docs/agent/programming.md#initial-state-and-camera)。资产侧提供下表事实；不在资产包中另写初始化按键或镜头接管脚本。
+新增视角策略或按行动状态选视角时，遵循 [相机扩展维护规范](three-sdk-architecture.md#相机扩展维护规范)；该文档区分当前能力与待实现的状态选择合同。
 
 资产生产侧提供以下事实，并由接入同事绑定到实际接口。仅命名一个 `camera.driver` 节点不会自动启用驾驶视角。
 
 | 资产侧提供 | 接入位置与约定 |
 | --- | --- |
 | 根节点、尺寸、正前方与单位 | 米制、+Y 向上；普通主体语义前方默认局部 -Z，Humanoid/载具航向使用 +Z。记录实际转换，不旋转预设骨架来迁就镜头 |
-| 身体范围与独立主体眼位 | `addCharacter({body})` 与 `setCameraFollow({view:{eyeOffsetLocalMetersXYZ}})`；眼位是主体根节点的局部坐标，随缩放/旋转变换，不能照抄人形眼高 |
+| 身体范围与独立主体眼位 | `addCharacter({body,eyePositionLocalMetersXYZ})`；眼位是主体根节点的局部坐标，随缩放/旋转变换，不能照抄人形眼高 |
 | 骑乘座位与眼位来源 | `VehicleInstance.spec.seat` 是局部骨盆锚点；人形眼位来自真实头部姿态。先校验座位和骑手贴合，不靠抬高镜头掩盖错位 |
-| 支持的视角、触发与限制 | 在能力说明中指出使用普通主体 `view` 或 Humanoid `profile.view`，是否有第一人称/肩后视角；保留统一输入语义，按需配置 `cameraToggle` |
+| 支持的视角、触发与限制 | 在能力说明中指出使用 CameraDocument 的命名 views 与 binding，是否有第一人称/肩后视角；保留统一输入语义，按需配置 `input.cycleViewIds` |
 
 镜头信息的简短用途与限制写进工具可见的资产条目（如 `limitations`、适用时的 `vehicle.spec.hint`）；数值和绑定代码放入对应 topic/示例。新加目录字段前先接通实际读取方，不能把未消费的元数据当作已支持能力。
 
@@ -174,7 +175,7 @@ PI/2 朝 −X、PI 朝 +Z，与 Episode 朝向约定一致。资产正面轴转�
 不得通过旋转镜头或每帧改人物根节点补偿。初始朝向在首次启动前封存，重置和
 Creator 首帧捕获一致恢复，Episode 可显式指定片段朝向。
 
-新增控制器的 PR 要通过公共 `world.setCameraFollow` 入口的共同契约测试：任意首帧位置/朝向/FOV、首次输入、移动、可用的主体切换、碰撞恢复及重置；检查键盘和程序化输入共享行为，Creator/Episode 捕获不接管镜头。将新主体 fixture 加入 [camera-public-conformance.test.ts](../packages/three-world/src/camera-public-conformance.test.ts) 的 `fixtures`，复用整组断言；适配器的局部计算另在 [camera-subject.test.ts](../packages/three-world/src/camera-subject.test.ts) 验证，不能只测试内部相机类。Creator 则在现有真实操作自检中对照首帧和首次操作，不另加一轮生成流程。
+新增控制器的 PR 要通过公共 `world.setCameraFollow` 入口的共同契约测试：任意首帧位置/朝向/FOV、首次输入、移动、可用的主体切换、碰撞恢复及重置；检查键盘和程序化输入共享行为，Creator/Episode 捕获不接管镜头。将新主体 fixture 加入 [camera-public-conformance.test.ts](../packages/three-world/src/camera-public-conformance.test.ts) 的 `fixtures`，复用整组断言；适配器的局部计算另在 [camera-world-integration.test.ts](../packages/three-world/src/camera-world-integration.test.ts) 验证，不能只测试内部相机类。Creator 则在现有真实操作自检中对照首帧和首次操作，不另加一轮生成流程。
 
 ## 5. 提 PR 时写清楚这些
 

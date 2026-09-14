@@ -86,7 +86,7 @@ it('keeps one interaction edge and canonical camera/actors identical at 30, 60 a
       }
       expect(entered).toHaveBeenCalledTimes(1);
       expect(runtime.simulation.controlledActor.vehicle?.spec.id).toBe('horse-1');
-      results.push({ tick: world.simulationTick, horse: runtime.simulation.controlledActor.vehicle!.position.toArray(), rider: runtime.simulation.controlledActor.player.position.toArray(), yaw: runtime.followCamera.yaw, collision:runtime.followCamera.collisionState });
+      results.push({ tick: world.simulationTick, horse: runtime.simulation.controlledActor.vehicle!.position.toArray(), rider: runtime.simulation.controlledActor.player.position.toArray(), yaw: world.inspectCamera().intent?.yawRadians, collision:world.inspectCamera().diagnostics });
     } finally { world.dispose(); }
   }
   expect(results[1]).toEqual(results[0]);
@@ -97,15 +97,12 @@ it('renders without changing canonical camera orbit, timers, or the following fi
   const a = await createMountedFixture(), b = await createMountedFixture();
   try {
     for (const world of [a,b]) {world.humanoid!.enter('horse-1');world.step({},31);world.step({humanoid:{...emptyInput(),forward:1},cameraYawRatio:.3},20);}
-    const camera=a.humanoid!.followCamera;
-    const state={yaw:camera.yaw,pitch:camera.pitch,lastOrbit:camera.lastOrbit,distance:camera.distance,target:camera.target.clone()};
-    const collision=camera.collisionState;
+    const state=a.inspectCamera();
     engineOf(a).render(.4);engineOf(a).render(.4);
-    expect(camera.collisionState).toEqual(collision);
-    expect({yaw:camera.yaw,pitch:camera.pitch,lastOrbit:camera.lastOrbit,distance:camera.distance,target:camera.target}).toEqual(state);
+    expect(a.inspectCamera()).toEqual(state);
     for (const world of [a,b])world.step({humanoid:{...emptyInput(),forward:1}},1);
     expect(a.humanoid!.camera.position).toEqual(b.humanoid!.camera.position);
-    expect(a.humanoid!.followCamera.yaw).toBe(b.humanoid!.followCamera.yaw);
+    expect(a.inspectCamera().intent?.yawRadians).toBe(b.inspectCamera().intent?.yawRadians);
     expect(a.humanoid!.simulation.controlledActor.vehicle!.position).toEqual(b.humanoid!.simulation.controlledActor.vehicle!.position);
   } finally {a.dispose();b.dispose();}
 });

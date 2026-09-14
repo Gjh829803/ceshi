@@ -71,7 +71,6 @@ export interface CharacterTrial {
 }
 export interface LooseCrate { id: string; position: Vec3; size: number }
 export interface EnvironmentDefinition {
-  characterCameraDistanceMeters?:number;
   id: string;
   name: string;
   description: string;

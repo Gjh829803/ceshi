@@ -32,6 +32,7 @@ export function presetImportDetails(spec: PresetImportSpec, previous?: CuratedPr
     'creatures/LICENSE-ANIMALS.txt',
     'creatures/LICENSE-MONSTERS.txt',
   ] : [];
+  const {assetId,specId}=presetImportIdentity(spec.id),key=spec.id==='dragon'?'dragon':specId;
   return {
     dependencyPaths,
     // Only the procedural export branch creates and names this node. Raw
@@ -39,6 +40,6 @@ export function presetImportDetails(spec: PresetImportSpec, previous?: CuratedPr
     sockets: importedCreature ? [] : [{ id: 'driver', node: 'seat.driver', positionMetersXYZ: [...spec.seat] }],
     limitations: [...(previous?.limitations ?? [])],
     ...(previous?.recommendedFor ? {recommendedFor:[...previous.recommendedFor]} : {}),
-    ...(previous?.integrationMetadata ? { integrationMetadata: structuredClone(previous.integrationMetadata) } : {}),
+    integrationMetadata:{...structuredClone(previous?.integrationMetadata??{}) as Record<string,unknown>,cameraPresetReferences:['third-person','first-person','shoulder'].map(viewId=>({presetId:`${assetId}.${viewId}`,source:'presets',key:`${key}.${viewId}`,viewId}))} as Record<string,unknown>,
   };
 }

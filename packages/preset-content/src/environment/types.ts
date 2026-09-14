@@ -77,7 +77,6 @@ export interface EnvironmentDefinition {
   regions: readonly MapRegion[];
   spawns: readonly MapSpawn[];
   playerSpawn: Vec3;
-  characterCameraDistanceMeters?: number;
   interactions?: readonly MapInteraction[];
   climbSurfaces?: readonly MapClimbSurface[];
   characterTrials?: readonly CharacterTrial[];

@@ -28,7 +28,7 @@ try{
  const source=await prepareEpisodeSource({payloadRoot:path.join(unpacked,'payload'),outputRoot:path.join(output,'episode-source'),worldId:'self-drawn-car-local-smoke'});
  const session=await openEpisodeBrowser({playableRoot:source.playableRoot});
  try{
-  const start={positionWorldMetersXYZ:[0,.03,0] as const,facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'rover',mounted:true,cameraMode:0 as const}};
+  const start={positionWorldMetersXYZ:[0,.03,0] as const,facingYawRadians:Math.PI,cameraViewId:'third-person',humanoid:{vehicleInstanceId:'rover',mounted:true}};
   const probe=await session.probeStart(start);if(!probe.isValid)throw new Error(JSON.stringify(probe));
   const before=await session.prepareSegment(start,{widthPixels:1280,heightPixels:720});
   const after=await session.advance({humanoid:{forward:1,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false}},180);

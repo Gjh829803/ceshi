@@ -61,7 +61,6 @@
         0.2,
         0
       ],
-      "camera": 6,
       "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
       "characterPose": "stand",
       "archetype": "skateboard",
@@ -102,6 +101,28 @@
       0,
       1,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.skateboard.third-person",
+        "source": "presets",
+        "key": "skateboard.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.skateboard.first-person",
+        "source": "presets",
+        "key": "skateboard.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.skateboard.shoulder",
+        "source": "presets",
+        "key": "skateboard.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

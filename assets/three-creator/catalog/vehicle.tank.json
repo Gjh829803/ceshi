@@ -73,7 +73,6 @@
         2.1
       ],
       "characterPose": "tank",
-      "camera": 14,
       "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
       "bodyPhysics": {
         "kind": "tracks",
@@ -233,6 +232,28 @@
       0,
       2.08,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.tank.third-person",
+        "source": "presets",
+        "key": "tank.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.tank.first-person",
+        "source": "presets",
+        "key": "tank.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.tank.shoulder",
+        "source": "presets",
+        "key": "tank.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

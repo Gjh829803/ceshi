@@ -1,5 +1,6 @@
+import cameraData from './config/camera.json';
 import * as THREE from 'three';
-import {createHumanoidWorld,humanoid,type EnvironmentDefinition} from '@worldkit/three';
+import {createHumanoidWorld,parseCameraDocument,humanoid,type EnvironmentDefinition} from '@worldkit/three';
 
 // Select flight handling first. airframe is the existing solver's fixed metre-scale
 // authoring reference, not a bag of per-instance physics overrides.
@@ -44,8 +45,8 @@ for(const [index,w] of spec.airframe.wheels.entries()){
 }
 const mechanical={wheelRigs,steering:wheelRigs.filter((_,i)=>spec.airframe.wheels[i]!.steering).map(w=>w.steering)};
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person',
- vehicles:[{instanceId:spec.id,assetId:'custom.plane',object:plane,spec}],
- profile:{view:{defaultPerspective:'third-person',keyboardToggleEnabled:true},cameraDistanceMeters:15}});
+ vehicles:[{instanceId:spec.id,assetId:'custom.plane',object:plane,spec}],});
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 world.humanoid!.onVisualUpdate((dt,sample)=>{
  const runtime=world.humanoid!,state=runtime.simulation.vehicles[0]!;
  humanoid.updateVehicleWheels(mechanical,sample.vehicles[0]!,{dt,grounded:state.grounded,revision:sample.epoch});

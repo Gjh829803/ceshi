@@ -2,10 +2,9 @@ import type { CommandReceipt, OperationStatus, Vec3, WorldInput, WorldSnapshot }
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
- /** Optional segment view; takes precedence over humanoid.cameraMode. */
- readonly cameraPerspective?:import('./contracts.js').CameraPerspective;
+ readonly cameraViewId?:string;
  readonly humanoid?: {
-  readonly vehicleInstanceId?:string; readonly mounted?:boolean; readonly cameraMode?:0|1|2;
+  readonly vehicleInstanceId?:string; readonly mounted?:boolean;
   readonly velocityWorldMetersPerSecondXYZ?:Vec3; readonly pitchRadians?:number;readonly rollRadians?:number;
   readonly throttle?:number;readonly launched?:boolean;
  };
@@ -23,9 +22,9 @@ export interface EpisodeCapabilities {
  readonly humanoid?:{
   readonly mapId:string;readonly characterInstanceId:string;
   readonly vehicles:readonly {readonly instanceId:string;readonly assetId:string;readonly mode:import('./humanoid-runtime/config').Mode;readonly available:boolean}[];
-  readonly cameraModes:readonly (0|1|2)[];readonly inputAxes:readonly string[];
+  readonly inputAxes:readonly string[];
  };
- readonly schemaVersion: 1;
+ readonly schemaVersion: 2;
  readonly controlledEntityId: string;
  readonly fixedTimeStepSeconds: number;
  readonly movement: {
@@ -35,7 +34,15 @@ export interface EpisodeCapabilities {
   readonly heightMeters: number; readonly radiusMeters: number;
   readonly maximumStepHeightMeters: number; readonly maximumSlopeRadians: number;
  };
- readonly camera: { readonly mode: 'authored' | 'follow-pending' | 'follow'; readonly segmentInitialization: 'relative-authored-pose' };
+ readonly camera: {
+  readonly mode: import('./contracts').CameraState['mode'];
+  readonly baselineMode: import('./contracts').CameraState['mode'];
+  readonly documentHash:string|null;
+  readonly views:readonly {readonly viewId:string;readonly kind:import('./config/camera/index').CameraViewConfiguration['kind']}[];
+  readonly defaultViewId:string|null;
+  readonly current:import('./contracts').CameraState;
+  readonly segmentInitialization:'relative-authored-pose';
+ };
  readonly maximumStartAlignmentMeters: number;
  readonly worldBounds: { readonly minimumWorldMetersXYZ: Vec3; readonly maximumWorldMetersXYZ: Vec3 };
 }
@@ -52,10 +59,10 @@ export interface EpisodeFrame {
 export type EpisodeCommand=Extract<import('./humanoid-runtime/runtime').HumanoidCommand,{readonly type:'humanoid.perform-action'|'humanoid.set-input'|'vehicle.exit'}>
  | Extract<import('./contracts').PrimitiveCommand,{readonly type:'actor.move-to'|'actor.follow'|'actor.stop'}>
  | {readonly type:'vehicle.enter';readonly instanceId:string;readonly actorId?:string}
- | {readonly type:'camera.set-perspective';readonly perspective:import('./contracts').CameraPerspective};
+ | {readonly type:'camera.set-view';readonly viewId:string};
 export interface EpisodeRouteInputRequest {readonly targetPositionWorldMetersXYZ:Vec3;readonly gait:'walk'|'run';readonly mode?:'travel'|'stop'}
 export interface EpisodeRuntimePort {
- readonly schemaVersion: 1;
+ readonly schemaVersion: 2;
  capabilities(): EpisodeCapabilities;
  boarding?(instanceId:string):import('./humanoid-runtime/runtime').BoardingObservation;
  routeInput?(request:EpisodeRouteInputRequest):WorldInput;

@@ -151,3 +151,71 @@ pnpm verify:dragon-training -- http://127.0.0.1:5178
 
 This browser case exercises ground start, real summon/boarding/takeoff inputs,
 flight and flame, native variant loading, map/reset/reload and history navigation.
+
+## Local camera configuration files
+
+The app-owned registry in `src/camera/project-files.ts` binds campus, indoor-lab
+and npc-workshop IDs to their complete camera documents. Pure calibration/editor
+logic uses `createCameraProjectState(id, sourceDocument, variantId)` and
+`selectDragonCameraVariant` from `src/camera/project-state.ts`; these functions
+return document state without claiming a build identity. The Vite-only adapter
+`loadCameraProject` in `src/camera-project.ts` rejects missing loader identity and
+returns `configurationId`, `savedDocument`, the variant-selected `document`,
+`unsaved`, and `importedFileSha256`. Variant selection can produce an unsaved edit.
+The `?camera-document` Vite adapter generates the document and SHA from one file
+Buffer; the SHA identifies the exact imported bytes, including whitespace, in dev
+and static bundles. A later file read or a matching canonical hash does not prove
+that a running bundle adopted those bytes. Runtime inspection must also match the
+intended configuration. Standard Vite invalidation applies; the editor owns draft
+recovery before accepting an HMR reload.
+
+`createCameraFileClient()` in `src/camera/file-client.ts` returns a local client or
+null when the service is unavailable. Its `read(id)` returns present/missing and
+`save(id, expectedFileSha256, document)` returns saved/conflict with current data.
+Null SHA only creates a missing file. Writes use the SDK parser/serializer and
+serialize requests per fixed path, stage a temporary file, recheck SHA, and
+atomically publish it. Existing symlink components are rejected. This is optimistic
+concurrency in a trusted local worktree, not an OS transaction against another
+process replacing directories during a filesystem operation.
+
+The service requires the actual loopback socket, exact origin/Host, and a session
+header obtained through a same-origin POST. Binding dev to a network address
+disables the service. Static builds and Vite preview have no write endpoint and
+use import/export. Vite's filesystem read allowlist grants no write permission.
+The app scripts use Vite's config runner to consume the workspace SDK TypeScript
+exports without duplicating its parser.
+
+## Shared camera document editor
+
+Inspector's **相机模式** and Workbench's **3C 调试与配置** mount the same
+`src/camera/panel.tsx`, with one `CameraEditorState` per active fixed configuration
+ID. Select a view, subject and preset/project-view/project-subject scope. Fields
+come from public SDK metadata; explicit layer values and the SDK's last committed
+provenance are shown separately. Unobserved subjects/views have unknown effective
+values. Union-valued fields use JSON; the complete-document section edits opening,
+input and transition data without another schema.
+
+**重新绑定预览** explicitly obtains an SDK editing session after normal startup has
+sealed the baseline. **应用草稿**, **取消应用**, **采用当前画面为开场** and
+**提交相机基线** are separate actions. Invalid field text stays recoverable and
+leaves the last valid document/preview intact. Focused field changes form one undo
+group. Independent free preview uses a cloned Three camera and OrbitControls;
+it neither writes the managed camera nor advances simulation. Opening conversion
+and baseline ownership remain in the SDK. Lease failures retain offline drafts;
+reset/map replacement invalidates the session and requires explicit rebind.
+
+**保存项目文件** uses Task 9's fixed-ID client with the last file SHA. Save completion
+cannot overwrite newer edits. External changes preserve both versions for explicit
+resolution. Saving and JSON HMR never apply a draft or commit a World baseline.
+The Vite adapter's actual import SHA must match the saved file SHA and actual SDK
+inspection before the panel reports build adoption. Reload can therefore adopt
+saved source while a recovered draft still differs. Variant navigation records an
+explicit edit of the current draft and preserves project overrides. Local storage
+under `worldkit.camera-draft.v1.<configurationId>` is recovery only; static builds
+support JSON import/export and cannot write project files.
+
+Run `pnpm exec tsx apps/sdk-playground/scripts/camera-editor-smoke.ts http://127.0.0.1:5196`
+against `pnpm dev:editor --port 5196` for the actual save/HMR/reload/static rebuild,
+shared Workbench, invalid input, independent preview and source capture checks.
+The smoke temporarily changes the campus file and restores its exact bytes in
+`finally`; evidence is written to `output/playwright/camera-editor/`.

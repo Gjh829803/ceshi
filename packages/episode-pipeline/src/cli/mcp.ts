@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalHash, EPISODE_PLAN_SCHEMA, EPISODE_START_SCHEMA, validateEpisodePlan, type EpisodePlan, type EpisodeSourceManifest } from '../contracts.js';
+import { canonicalHash, EPISODE_PLAN_SCHEMA, EPISODE_START_SCHEMA, validateEpisodePlan, validateEpisodePlanViews, type EpisodePlan, type EpisodeSourceManifest } from '../contracts.js';
 import { closedPath, loadEpisodeSource, resolveEpisodeSourcePaths, verifyFile } from '../source/source.js';
 import { openEpisodeBrowser, type BrowserSession, type EpisodeObserveOptions } from '../capture/browser.js';
 import type { EpisodeStart } from '@worldkit/three';
@@ -145,7 +145,8 @@ export class EpisodePlannerTools {
     const session = await this.session();
     result = { ...this.identity(), result: args.kind === 'start' ? await session.probeStart(args.start as EpisodeStart) : await session.pick(args.viewId, args.pixelUv), browserErrors: [...session.errors].slice(-32) };
    } else {
-    const plan = validateEpisodePlan(args.plan, { worldBuildHash: this.source.worldBuildHash });
+    const session=await this.session(),capabilities=await session.capabilities();
+    const plan = validateEpisodePlan(args.plan, { worldBuildHash: this.source.worldBuildHash });validateEpisodePlanViews(plan,capabilities.camera);
     if (this.repair) for (const previous of this.repair.previousPlan.segments) {
      if (!this.repair.failedSegmentIds.includes(previous.id) && canonicalHash(previous) !== canonicalHash(plan.segments.find(segment => segment.id === previous.id))) throw new Error(`EPISODE_REPAIR_CHANGED_PASSING_SEGMENT: ${previous.id}`);
     }

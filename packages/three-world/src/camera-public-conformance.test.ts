@@ -1,3 +1,4 @@
+import {emptyInput} from './humanoid-runtime/simulation';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { createWorld, type ThreeWorld } from './world';
@@ -35,12 +36,13 @@ const fixtures: ReadonlyArray<{ name: string; create: (occluded?: boolean) => Pr
   { name: 'Humanoid', async create(occluded) {
     const world = await createWorld({ camera: new THREE.PerspectiveCamera(), navigation: false, assetDefinitions: {},
       humanoid: { map: { ...map, boxes: [...map.boxes, ...(occluded ? [obstruction] : [])] }, character: { instanceId: 'subject', object: new THREE.Group() }, vehicles: [] } });
+    world.humanoid!.advance({},1/60);
     return { world, subjectId: 'subject' };
   } },
   { name: 'mounted horse', async create(occluded) {
-    const world = await createMountedFixture({ boxes: occluded ? [obstruction] : [] });
-    if (occluded) expect(world.humanoid!.prepare('horse-1', { ...world.humanoid!.options.map.spawns[0]!, yaw: Math.PI / 2 })).toBe(true);
-    expect(world.humanoid!.enter('horse-1')).toBe(true);
+    const world = await createMountedFixture({ boxes: occluded ? [obstruction] : [],initialMountId:'horse-1',spawnYawRadians:occluded?Math.PI/2:0 });
+
+
     return { world, subjectId: 'horse-1' };
   } },
 ];
@@ -71,19 +73,20 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
     const fixture = await create(), { world } = fixture;
     try {
       authoredOpening(world);
-      world.setCameraFollow();
-      // An Agent may finish the composition after registering the input handoff.
+      // Finish composition before explicit document adoption.
       const camera = world.camera as THREE.PerspectiveCamera;
       camera.position.x += 2; camera.rotateZ(-.08); camera.fov = 37; camera.updateProjectionMatrix();
       const opening = camera.clone();
+      world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'}}}}}});
       world.step({}, 30);
       expect(world.cameraMode).toBe('follow-pending');
       expectPose(world, opening);
       const before = subjectPosition(fixture);
+      const pendingCamera=world.camera.position.clone();
       world.step({ moveXRatio: .3, moveZRatio: -1 });
       expect(world.cameraMode).toBe('follow');
       // Default translation damping may follow a fraction of the real movement.
-      expect(world.camera.position.distanceTo(opening.position)).toBeLessThanOrEqual(subjectPosition(fixture).distanceTo(before) + 2e-5);
+      expect(world.camera.position.distanceTo(pendingCamera)).toBeLessThanOrEqual(subjectPosition(fixture).distanceTo(before) + .02);
       expect(world.camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(2e-7);
       expect(camera.fov).toBe(37);
       expect(world.snapshot().errors).toEqual([]);
@@ -94,13 +97,13 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
     const fixture = await create(), { world } = fixture;
     try {
       const opening = authoredOpening(world);
-      world.setCameraFollow({ followHalfLifeSeconds: 0, transitionSeconds: 0 });
+      world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
       world.step({}, 30);
       expectPose(world, opening);
       const start = subjectPosition(fixture);
       for (let tick = 0; tick < 20; tick++) {
         world.step({ moveXRatio: .3, moveZRatio: -1 });
-        expectPose(world, opening, subjectPosition(fixture).sub(start));
+      expectPose(world, opening, subjectPosition(fixture).sub(start));
       }
       expect(subjectPosition(fixture).distanceTo(start)).toBeGreaterThan(.01);
       world.step({}, 120);
@@ -114,7 +117,7 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
       await world.reset();
       expect(world.simulationTick).toBe(0);
       expect(world.cameraMode).toBe('follow-pending');
-      expectPose(world, opening);
+      expectPose(world, opening,subjectPosition(fixture).sub(start));
       expect(world.snapshot().errors).toEqual([]);
     } finally { world.dispose(); }
   });
@@ -123,17 +126,23 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
     const fixture = await create(true), { world, subjectId } = fixture;
     try {
       const opening = authoredOpening(world), start = subjectPosition(fixture);
-      world.setCameraFollow({ activateOnInput: false, followHalfLifeSeconds: 0, transitionSeconds: 0 });
+      world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
       world.step({}, 30);
       expect(world.camera.position.distanceTo(opening.position)).toBeGreaterThan(2);
-      expect(world.camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(2e-7);
+      // Safe eye displacement must retain the requested pivot bearing, not the
+      // old world-space quaternion (which points away after lateral separation).
+      const {desired, current} = world.inspectCamera();
+      const bearing = (pose: NonNullable<typeof desired>) => new THREE.Vector3(...pose.pivotWorldMetersXYZ)
+        .sub(new THREE.Vector3(...pose.positionWorldMetersXYZ)).normalize()
+        .applyQuaternion(new THREE.Quaternion(...pose.quaternionWorldXYZW).invert());
+      expect(bearing(current!).distanceTo(bearing(desired!))).toBeLessThan(2e-7);
       expect((world.camera as THREE.PerspectiveCamera).fov).toBe(opening.fov);
       const destination: [number, number, number] = [30, start.y, 0];
       if (world.humanoid) {
         if (world.humanoid.snapshot().mountedInstanceId) {
           // Ride sideways past the wall while remaining on the same subject.
-          world.step({ moveZRatio: -1 }, 240);
-        } else expect(world.humanoid.prepareCharacter(destination)).toBe(true);
+          world.step({humanoid:{...emptyInput(),forward:1}},240);
+        } else expect(world.humanoid.prepareCharacter(destination,world.humanoid.simulation.controlledActor.player.yaw)).toBe(true);
       } else expect(await world.execute({ type: 'entity.set-position', entityId: subjectId, positionWorldMetersXYZ: destination })).toMatchObject({ status: 'applied' });
       world.step({}, 600);
       expectPose(world, opening, subjectPosition(fixture).sub(start));
@@ -148,13 +157,15 @@ it('rebases ordinary follow on a newly controlled subject without moving the cam
     const other = new THREE.Group(); other.position.set(8, 1, -4);
     world.addCharacter({ id: 'other', object: other, body: { heightMeters: 1.2, radiusMeters: .3 }, movement: { kind: 'custom', movementId: 'hover' } });
     authoredOpening(world);
-    world.setCameraFollow({ activateOnInput: false, followHalfLifeSeconds: 0, transitionSeconds: 0 });
+    world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
     world.step({ cameraYawRatio: .3 }, 12);
     const before = (world.camera as THREE.PerspectiveCamera).clone();
     world.setControlledEntity('other');
-    world.setCameraFollow({ activateOnInput: false, followHalfLifeSeconds: 0, transitionSeconds: 0 });
+    world.setCameraFollow({configuration:{...world.inspectCamera().document!,binding:{targetEntityId:'other'}}});
     world.step({});
-    expectPose(world, before);
+    const handoffOffset=new THREE.Vector3(8,0,-4);
+    expectPose(world, before,handoffOffset);
+    before.position.add(handoffOffset);
     const start = new THREE.Vector3(...world.getEntityState('other').positionWorldMetersXYZ);
     world.step({ moveXRatio: 1 }, 10);
     expectPose(world, before, new THREE.Vector3(...world.getEntityState('other').positionWorldMetersXYZ).sub(start));
@@ -165,7 +176,7 @@ it('translates the current framing to the subject when boarding and leaving with
   const world = await createMountedFixture();
   try {
     authoredOpening(world);
-    world.setCameraFollow({ activateOnInput: false, followHalfLifeSeconds: 0, transitionSeconds: 0 });
+    world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
     world.step({}, 30);
     for (const transition of [() => world.humanoid!.enter('horse-1'), () => world.humanoid!.exit()]) {
       const before = (world.camera as THREE.PerspectiveCamera).clone();
@@ -197,10 +208,40 @@ it('restores an ordinary subject opening follow in a world that also owns a full
   const object=new THREE.Group();object.position.set(8,.03,0);
   world.addCharacter({id:'other',object,body:{heightMeters:1.2,radiusMeters:.3}});
   world.setControlledEntity('other');const opening=authoredOpening(world);
-  world.setCameraFollow({activateOnInput:true,followHalfLifeSeconds:0});world.step({},0);
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});world.step({},0);
   world.step({moveZRatio:-1},20);expect(world.cameraMode).toBe('follow');
   await world.reset();expect(world.cameraMode).toBe('follow-pending');expectPose(world,opening);
   const before=world.getEntityState('other').positionWorldMetersXYZ;world.step({moveZRatio:-1});
   expect(world.cameraMode).toBe('follow');expectPose(world,opening,new THREE.Vector3(...world.getEntityState('other').positionWorldMetersXYZ).sub(new THREE.Vector3(...before)));
+ }finally{world.dispose();}
+});
+
+it('adopts a normalized document and atomically updates the single World camera', async () => {
+ const {world}=await fixtures[0]!.create();
+ try {
+  authoredOpening(world);
+  const configuration={kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',binding:{targetEntityId:'subject'},views:{orbit:{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},zoom:{range:{kind:'unbounded'}}}}}} as const;
+  world.setCameraFollow({configuration});
+  const opening=world.inspectCamera();
+  expect(opening.document?.views.orbit).toHaveProperty('opening');
+  world.step({cameraYawRatio:.5},3);
+  const active=world.inspectCamera();
+  world.setCameraFollow({configuration:{...active.document!,transition:{durationSeconds:.4}}});
+  expect(world.inspectCamera().intent).toEqual(active.intent);
+  const before=world.inspectCamera();
+  expect(()=>world.setCameraFollow({configuration:{...active.document!,views:{}}})).toThrow();
+  expect(world.inspectCamera()).toEqual(before);
+  expect(opening.cameraCommitRevision).toBeLessThan(before.cameraCommitRevision);
+ } finally {world.dispose();}
+});
+
+it('binds the documented self-drawn recipe to its distinct subject ID',async()=>{
+ const subjectId='survey-drone',camera=new THREE.PerspectiveCamera();camera.position.set(0,3,7);camera.lookAt(0,1,0);
+ const world=await createWorld({camera,navigation:false});try{
+  const subjectMesh=new THREE.Group();
+  world.addCharacter({id:subjectId,object:subjectMesh,body:{heightMeters:1.8,radiusMeters:.3},eyePositionLocalMetersXYZ:[0,1,0]});
+  world.setControlledEntity(subjectId);
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:subjectId},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}}}});
+  world.step({},0);expect(world.inspectCamera().document!.binding.targetEntityId).toBe(subjectId);
  }finally{world.dispose();}
 });

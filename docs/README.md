@@ -21,6 +21,7 @@
 | 运行数据生产 | [生产流程](three-sdk-data-production.md) · [云生成](../apps/creator-cloud/three-eval-README.md) |
 | 生成 Seedance 视频、恢复任务和回收成片 | [Seedance 云端链路](three-episode-seedance.md) |
 | 共享相机避障、状态交接与验证 | [职责原则](three-sdk-architecture.md#相机控制权与交接) · [验证记录](reviews/2026-09-08-shared-camera-collision.md) · [状态交接 TODO](reviews/2026-09-12-camera-handoff-todo.md) |
+| 评审相机架构、可视化配置和旧标定迁移（提案） | [相机技术设计](superpowers/specs/2026-09-13-camera-configuration-design.md) · [深度审查](reviews/2026-09-13-camera-configuration-design-review.md) |
 | 骑乘接入、马动画与实现记录 | [SDK 骑乘](../packages/three-world/README.md#imported-horse-and-rider-anchors) · [设计](superpowers/specs/2026-09-08-three-mounted-interaction-design.md) · [实现记录](reviews/2026-09-08-three-mounted-interaction.md) |
 | 查看 Agent 能力缺口的修复和本地 case | [闭环修复记录](reviews/2026-09-09-agent-capability-closure.md) |
 | 对照 Agent 链路与 Playground 的能力和剩余缺口 | [能力闭环审查](reviews/2026-09-08-agent-playground-capability-audit.md) |

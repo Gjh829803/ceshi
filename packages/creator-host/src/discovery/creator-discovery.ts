@@ -1,3 +1,4 @@
+import {cameraPresetSnapshots} from './camera-presets.js';
 import {bindingExample,type BindingVariant} from './binding-examples.js';
 import {agentDocument,AGENT_READING_GUIDE,readAgentDocument,AGENT_DOCUMENT_PATHS,documentNavigation,topicDocument,type AgentDocumentPath} from './agent-docs.js';
 import { readFile } from 'node:fs/promises';
@@ -13,6 +14,7 @@ import { mountUsage } from './mount-guidance.js';
 import { readRuntimeGuidance, type RuntimeGuidance } from './runtime-guidance.js';
 import {subjectAuthoringGuidance} from './subject-guidance.js';
 import { characterUsage, humanAuthoringGuidance } from './character-guidance.js';
+import {cameraConfiguration,CAMERA_CONTRACT_FILES} from './camera-configuration.js';
 import {cameraAuthoringGuidance} from './camera-guidance.js';
 import {qualityAuthoringGuidance} from './quality-guidance.js';
 
@@ -20,7 +22,7 @@ export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'obs
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
   guide: ['navigation','assetIndex','readingGuide','entryPoint', 'sdkGuide', 'cameraAuthoring', 'qualityAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
-  contracts: ['sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions', 'boundaryContracts', 'objectColorContracts'], project: ['project'], episode: ['episode', 'episodeNote'],
+  contracts: ['cameraConfiguration','cameraSourceContracts','sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions', 'boundaryContracts', 'objectColorContracts'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
   humanoid: ['aircraftConfigurations', 'roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions','objectColorContracts'],
 } as const;
@@ -43,7 +45,7 @@ export class CreatorDiscovery {
     const suggestedExample = topic === 'mounted-interaction' ? 'mounted-interaction' :
       topic === 'character-actions' ? 'character-actions' : 'getting-started';
     const humanoidExampleTopic = includesHumanoid && await this.exampleAvailable(suggestedExample) ? suggestedExample : undefined;
-    const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
+    const sourceFiles = ['humanoid-runtime/config.ts', 'config/control.ts', 'config/camera/types.ts', 'config/input.ts', 'humanoid-runtime/environment/types.ts', 'humanoid-runtime/runtime.ts'];
     if (topic === 'mounted-interaction' || topic === 'all') sourceFiles.push('humanoid-runtime/horse.ts');
     if (['humanoid','mounted-interaction','all'].includes(topic)) sourceFiles.push('humanoid-runtime/aircraft-spec.ts','humanoid-runtime/vehicle-inspection.ts','humanoid-runtime/solver-sample.ts','humanoid-runtime/road-vehicle.ts','humanoid-runtime/motion-families/ground-vehicle/wheel-physics.ts','humanoid-runtime/powertrain.ts','humanoid-runtime/vehicle-animation.ts');
     if (['character-actions', 'mounted-interaction', 'all'].includes(topic)) sourceFiles.push('humanoid-runtime/humanoid/action-schema.ts', 'humanoid-runtime/simulation.ts');
@@ -79,6 +81,8 @@ export class CreatorDiscovery {
       } : {}),
       observationScope: 'Shared minimal same-scene observer. SDK telemetry and commands are only available in the SDK profile.',
       ...sdk,
+      ...(isSdk&&wants('cameraConfiguration')?{cameraConfiguration:await cameraConfiguration(guidance)}:{}),
+      ...(isSdk&&wants('cameraSourceContracts')?{cameraSourceContracts:Object.fromEntries(await Promise.all(CAMERA_CONTRACT_FILES.map(async name=>[name,runtimeContractSource(await guidance.source(name))])))}:{}),
       ...(isSdk&&['boundaries','all'].includes(topic)?{boundaryContracts:Object.fromEntries(await Promise.all(
         ['boundaries.ts','humanoid-runtime/environment/types.ts'].map(async name=>[name,runtimeContractSource(await guidance.source(name))]),
       ))}:{}),
@@ -250,7 +254,7 @@ export class CreatorDiscovery {
     const flying=metadata?.classification==='flying-mount',document=metadata?.documentation;
     const mount=result.mountUsage.find(usage=>usage.assetId===assetId);
     const registeredDocument=typeof document==='string'&&AGENT_DOCUMENT_PATHS.includes(document as AgentDocumentPath)?document:undefined;
-    return {...result,documentation:{tool:'creator_get_authoring_schema',arguments:{document:registeredDocument??`assets/${category}/README.md`}},
+    return {...result,cameraPresetSnapshots:cameraPresetSnapshots(metadata?.cameraPresetReferences,guidance.isWorkspace),documentation:{tool:'creator_get_authoring_schema',arguments:{document:registeredDocument??`assets/${category}/README.md`}},
       ...(flying&&mount?.integrationReady?{bindingExample:{tool:'creator_get_examples',arguments:{topic:mount.exampleTopic,variant:mount.exampleVariant}}}:{}),
       ...(guidance.isWorkspace?{runtimeDefinitions:await guidance.definitions()}:{}),runtimeGuidance:guidance.provenance};
   }

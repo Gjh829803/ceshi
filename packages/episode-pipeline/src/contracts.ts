@@ -1,5 +1,5 @@
 import Ajv from 'ajv';
-import type { Vec3, EpisodeStart } from '@worldkit/three';
+import type { Vec3, EpisodeStart, EpisodeCapabilities } from '@worldkit/three';
 import { sha256Canonical } from './serialization/canonical-json.mjs';
 
 export const EPISODE_VERSION = 'three-episode-agent@2';
@@ -19,7 +19,7 @@ export type EpisodeActionIntent =
   | { kind: 'climb'; direction: 'enter' | 'exit' | 'up' | 'down' | 'left' | 'right' }
   | { kind: 'swim-style'; style: 'freestyle' | 'breaststroke' }
   | { kind: 'mount'; action: 'enter' | 'exit' }
-  | { kind: 'view'; perspective: 'first-person' | 'third-person' };
+  | { kind: 'view'; viewId: string };
 export interface EpisodeActionGoal {
   id: string;
   trigger: { waypointIndex: number; radiusMeters: number };
@@ -72,7 +72,7 @@ export const ACTION_GOAL_SCHEMA = object({
     object({ kind: { const: 'climb' }, direction: { enum: ['enter', 'exit', 'up', 'down', 'left', 'right'] } }),
     object({ kind: { const: 'swim-style' }, style: { enum: ['freestyle', 'breaststroke'] } }),
     object({ kind: { const: 'mount' }, action: { enum: ['enter', 'exit'] } }),
-    object({ kind: { const: 'view' }, perspective: { enum: ['first-person', 'third-person'] } }),
+    object({ kind: { const: 'view' }, viewId: {type:'string',minLength:1} }),
   ] },
   completion: { oneOf: [
     object({ kind: { const: 'settled' }, holdSeconds: { type: 'number', minimum: 0, maximum: 20 } }),
@@ -80,8 +80,8 @@ export const ACTION_GOAL_SCHEMA = object({
   ] },
   timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
-export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraPerspective:{enum:['first-person','third-person']},humanoid:object({
-    vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},cameraMode:{enum:[0,1,2]},
+export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraViewId:{type:'string',minLength:1},humanoid:object({
+    vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
   },[]) },['positionWorldMetersXYZ','facingYawRadians']);
 export const SEGMENT_SCHEMA = object({
@@ -123,6 +123,41 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
     });
   }
   return structuredClone(plan);
+}
+type CameraDeclaration=Pick<EpisodeCapabilities['camera'],'views'|'defaultViewId'>;
+/** Explicit import boundary. Returns new canonical data; never rewrites a frozen plan or receipt. */
+export function importEpisodePlan(value:unknown,camera:CameraDeclaration,options:{worldBuildHash:string;requireSix?:boolean}):EpisodePlan {
+ const plan=structuredClone(value) as any;
+ if(!plan||!Array.isArray(plan.segments))return validateEpisodePlan(plan,options);
+ const select=(kind:string)=>{
+  if(!['third-person','first-person','shoulder'].includes(kind))throw new Error('EPISODE_CAMERA_VIEW_INVALID');
+  const matches=camera.views.filter(v=>v.kind===kind);
+  if(matches.length===1)return matches[0]!.viewId;
+  if(matches.some(v=>v.viewId===camera.defaultViewId))return camera.defaultViewId!;
+  throw new Error(matches.length?'EPISODE_CAMERA_VIEW_AMBIGUOUS':'EPISODE_CAMERA_VIEW_UNDECLARED');
+ };
+ for(const segment of plan.segments){
+  const start=segment?.start;if(!start)continue;
+  const legacy=start.cameraPerspective!==undefined||start.humanoid?.cameraMode!==undefined;
+  if(legacy&&start.cameraViewId!==undefined)throw new Error('EPISODE_CAMERA_FIELDS_CONFLICT');
+  if(legacy){
+   const numeric=start.humanoid?.cameraMode;
+   if(numeric!==undefined&&![0,1,2].includes(numeric))throw new Error('EPISODE_CAMERA_VIEW_INVALID');
+   start.cameraViewId=select(start.cameraPerspective??(['third-person','first-person','shoulder'][numeric]));
+   delete start.cameraPerspective;if(start.humanoid)delete start.humanoid.cameraMode;
+  }
+  for(const goal of segment.actionGoals??[])if(goal.intent?.kind==='view'&&goal.intent.perspective!==undefined){
+   if(goal.intent.viewId!==undefined)throw new Error('EPISODE_CAMERA_FIELDS_CONFLICT');
+   goal.intent={kind:'view',viewId:select(goal.intent.perspective)};
+  }
+ }
+ const result=validateEpisodePlan(plan,options);validateEpisodePlanViews(result,camera);return result;
+}
+export function validateEpisodePlanViews(plan:EpisodePlan,camera:CameraDeclaration):void {
+ for(const segment of plan.segments){
+  const ids=[segment.start.cameraViewId,...(segment.actionGoals??[]).flatMap(goal=>goal.intent.kind==='view'?[goal.intent.viewId]:[])];
+  for(const id of ids)if(id!==undefined&&!camera.views.some(view=>view.viewId===id))throw new Error('EPISODE_CAMERA_VIEW_UNDECLARED');
+ }
 }
 /** This run's explicit user stop is durable; a caller cannot bypass it with a stage option. */
 export function assertPreSeedanceProfile(value: unknown): asserts value is typeof PRE_SEEDANCE_PROFILE {

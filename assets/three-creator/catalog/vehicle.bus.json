@@ -87,7 +87,6 @@
         1.13,
         1.38
       ],
-      "camera": 10,
       "hint": "W 油门 · S 制动后倒车 · A / D 转向 · Space 刹车 · F 上下车 · T 切换视角",
       "wheelPhysics": {
         "chassis": {
@@ -219,6 +218,28 @@
       0,
       1.34,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.bus.third-person",
+        "source": "presets",
+        "key": "bus.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.bus.first-person",
+        "source": "presets",
+        "key": "bus.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.bus.shoulder",
+        "source": "presets",
+        "key": "bus.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

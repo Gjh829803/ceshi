@@ -16,16 +16,16 @@ export interface WorldObservation {
  reset():void|Promise<void>;
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
- 'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraPerspective','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','start','stop','reset','dispose'],
+ 'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraView','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','start','stop','reset','dispose'],
  programming: ['getKeyBindings','createPresentation','onUpdate','onReset','onDispose','start','stop','reset','dispose'],
  quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets'],
  boundaries: ['getEntityState','describe','snapshot'],
- 'nonhuman-subject': ['scene','camera','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraPerspective','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
+ 'nonhuman-subject': ['scene','camera','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','inspectCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
- humanoid:['addCharacter','setControlledEntity','setCameraFollow','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ humanoid:['addCharacter','setControlledEntity','setCameraFollow','setCameraView','inspectCamera','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
  'mounted-interaction':['inspectVehicles','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['addEntity','registerPrototype','humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
@@ -49,7 +49,7 @@ export function publicContractTopic(source: string, topic: AuthoringTopic, optio
  };
  add(topic==='observation'?'WorldObservation':'World');
  const ordered=[...declarations.keys()].filter(name=>required.has(name)).map(name=>texts.get(name));
- return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/humanoid-runtime\/[^']+'\)/g,"import('@worldkit/three').humanoid")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?"export declare function createWorld(options?:import('@worldkit/three').WorldOptions):Promise<import('@worldkit/three').ThreeWorld>;":''}`;
+ return `import type * as THREE from 'three';\n${ordered.join('\n').replace(/import\('\.\/(?:config\/camera\/index|camera\/state)'\)/g,"import('@worldkit/three')").replace(/import\('\.\/humanoid-runtime\/[^']+'\)/g,"import('@worldkit/three').humanoid")}\n${['getting-started','nonhuman-subject'].includes(topic)&&options.includeHostFactory!==false?"export declare function createWorld(options?:import('@worldkit/three').WorldOptions):Promise<import('@worldkit/three').ThreeWorld>;":''}`;
 }
 export function guideTopic(markdown: string, topic: AuthoringTopic): string {
  if (topic==='all') return markdown;
@@ -118,7 +118,7 @@ export function runtimeContractSource(source:string):string {
  const file=ts.createSourceFile('humanoid.ts',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  let resolvedChecker:ts.TypeChecker|undefined;const checker=()=>resolvedChecker??=sourceChecker(file);
  const declarations=file.statements.filter(statement=>(ts.isInterfaceDeclaration(statement)||ts.isTypeAliasDeclaration(statement))&&statement.modifiers?.some(m=>m.kind===ts.SyntaxKind.ExportKeyword)).map(node=>node.getText(file));
- for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&['createRoadVehicleSpec','createAircraftSpec','compileBoundaryBoxes','setObjectColor'].includes(node.name?.text??'')){
+ for(const node of file.statements)if(ts.isFunctionDeclaration(node)&&['createRoadVehicleSpec','createAircraftSpec','compileBoundaryBoxes','setObjectColor','createHumanoidCameraDocument','parseCameraDocument','serializeCameraDocument','hashCameraDocument','resolveCameraConfiguration'].includes(node.name?.text??'')){
   if(node.name?.text==='setObjectColor')declarations.unshift(...file.statements.filter(ts.isImportDeclaration).map(statement=>statement.getText(file)));
   declarations.push(declarationPrinter.printNode(ts.EmitHint.Unspecified,ts.factory.updateFunctionDeclaration(node,
    [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword),ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
@@ -130,7 +130,7 @@ export function runtimeContractSource(source:string):string {
   const color=character.members.find((member):member is ts.GetAccessorDeclaration=>ts.isGetAccessorDeclaration(member)&&member.name.getText(file)==='color');
   if(color&&methods.length)declarations.push(`/** Color methods of Character (exported as HumanoidCharacter). */\nexport declare class Character { readonly color: ${color.type?.getText(file)}; ${methods.join('\n')} }`);
  }
- if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraMode','setCameraFollow','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
+ if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraFollow','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
   declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');

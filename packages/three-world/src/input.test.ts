@@ -3,11 +3,11 @@ import type { Browser, Page } from 'playwright';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { launchChromiumWithSystemFallback } from '@worldkit/browser-capture/browser';
 import type { WorldInput } from './engine-contracts.js';
-import type { CameraRigInput } from './camera.js';
+import type { CameraPointerInput } from './input.js';
 
 type TestWorld = {
   sample(): WorldInput;
-  events: CameraRigInput[];
+  events: CameraPointerInput[];
   releases: number;
   resets: number;
   running: boolean;
@@ -80,13 +80,13 @@ describe('world input follows the presented surface and UI focus', () => {
       (async()=>{
         document.body.innerHTML='<div id="player-stage" style="position:relative;width:600px;height:400px"><canvas id="player-canvas"></canvas></div>';
         const canvas=document.querySelector('canvas'),renderer=new T.WebGLRenderer({canvas,antialias:false});renderer.setSize(600,400);
-        const spec={id:'car',name:'Car',mode:'wheeled',kernel:'K03',color:'#fff',spawn:[0,0,0],yaw:0,speed:30,accel:10,grip:12,steer:1,radius:1.5,seat:[0,1,0],camera:8,hint:'',archetype:'racer',envelope:{kind:'box',halfExtents:[1,1,2],offset:[0,1,0]}};
+        const spec={id:'car',name:'Car',mode:'wheeled',kernel:'K03',color:'#fff',spawn:[0,0,0],yaw:0,speed:30,accel:10,grip:12,steer:1,radius:1.5,seat:[0,1,0],hint:'',archetype:'racer',envelope:{kind:'box',halfExtents:[1,1,2],offset:[0,1,0]}};
         const map={id:'wheel-test',name:'Wheel test',description:'',bounds:{min:[-50,-5,-50],max:[50,30,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['character','wheeled']}],spawns:[{id:'car',vehicleId:'car',name:'Car',position:[0,.03,0],yaw:0,regionId:'road'}],playerSpawn:[3,.03,0]};
         const world=await createWorld({renderer,canvas,camera:new T.PerspectiveCamera(55,1.5,.05,200),assetDefinitions:{},navigation:false,humanoid:{map,character:{instanceId:'person',object:new T.Group()},vehicles:[{instanceId:'car',assetId:'car',spec,object:new T.Group()}]}});
         const presentation=world.createPresentation({container:document.getElementById('player-stage')});
         const ui=document.createElement('button');ui.id='playground-ui';ui.textContent='UI';ui.style.cssText='position:absolute;left:10px;top:10px;width:80px;height:40px';presentation.ui.mount(ui);
         world.humanoid.enter('car');await world.start();presentation.focus();
-        window.humanoidWheelTest={world,presentation,state:()=>({mode:world.humanoid.followCamera.mode,distance:world.humanoid.followCamera.distance,transition:world.humanoid.simulation.controlledActor.transition,zoom:world.humanoid.followCamera.zoom,position:world.camera.position.toArray()}),mode:n=>world.humanoid.setCameraMode(n),authored:()=>world.humanoid.useAuthoredCamera(),dispose:()=>world.dispose()};
+        window.humanoidWheelTest={world,presentation,state:()=>({mode:(['third-person','first-person','shoulder'].indexOf(world.inspectCamera().resolved?.kind)),distance:(world.inspectCamera().current?.nominalDistanceMeters??0),transition:world.humanoid.simulation.controlledActor.transition,cameraTransition:world.inspectCamera().transition.kind,zoom:(world.inspectCamera().intent?.distanceMeters??0),position:world.camera.position.toArray()}),view:id=>world.setCameraView(id),authored:()=>world.humanoid.useAuthoredCamera(),dispose:()=>world.dispose()};
       })();
     `},bundle:true,write:false,format:'iife',platform:'browser',target:'es2022',logLevel:'silent'});
     await page.addScriptTag({content:compiled.outputFiles[0]!.text});
@@ -94,18 +94,18 @@ describe('world input follows the presented surface and UI focus', () => {
     const state=()=>page.evaluate(()=>(window as any).humanoidWheelTest.state());
     const wheel=async(delta:number)=>{await page.mouse.move(350,250);await page.mouse.wheel(0,delta);};
     try{
-      await wheel(200);await expect.poll(async()=>(await state()).distance).toBeGreaterThan(8.5);
-      await wheel(-200);await expect.poll(async()=>(await state()).distance).toBeLessThan(8.3);
+      const openingDistance=(await state()).distance;await wheel(200);await expect.poll(async()=>(await state()).distance).toBeGreaterThan(openingDistance+.8);
+      const zoomedOut=(await state()).distance;await wheel(-200);await expect.poll(async()=>(await state()).distance).toBeLessThan(zoomedOut-.5);
       expect(await page.evaluate(()=>(window as any).humanoidWheelTest.world.humanoid.exit())).toBe(true);
       await expect.poll(async()=>(await state()).transition).toBe(0);
       const onFoot=(await state()).distance;await wheel(200);await expect.poll(async()=>(await state()).distance).toBeGreaterThan(onFoot+.4);
       expect(await page.evaluate(()=>(window as any).humanoidWheelTest.world.humanoid.enter('car'))).toBe(true);
-      await page.evaluate(()=>(window as any).humanoidWheelTest.mode(2));
+      await page.evaluate(()=>(window as any).humanoidWheelTest.view('shoulder'));await expect.poll(async()=>(await state()).cameraTransition).toBe('none');
       const shoulder=(await state()).distance;await wheel(100);await expect.poll(async()=>(await state()).distance).toBeGreaterThan(shoulder+.2);
-      await page.evaluate(()=>(window as any).humanoidWheelTest.mode(1));const first=(await state()).position;
+      await page.evaluate(()=>(window as any).humanoidWheelTest.view('first-person'));await expect.poll(async()=>(await state()).cameraTransition).toBe('none');const first=(await state()).position;
       await wheel(200);await page.waitForTimeout(150);expect(Math.hypot(...(await state()).position.map((v:number,i:number)=>v-first[i]))).toBeLessThan(.001);
-      await page.evaluate(()=>(window as any).humanoidWheelTest.mode(0));await page.locator('#playground-ui').click();
-      await page.mouse.wheel(0,200);await page.waitForTimeout(150);expect((await state()).zoom).toBe(1);
+      await page.evaluate(()=>(window as any).humanoidWheelTest.view('third-person'));const beforeUiZoom=(await state()).zoom;await page.locator('#playground-ui').click();
+      await page.mouse.wheel(0,200);await page.waitForTimeout(150);expect((await state()).zoom).toBe(beforeUiZoom);
       await page.evaluate(()=>(window as any).humanoidWheelTest.authored());const authored=(await state()).position;
       await wheel(200);await page.waitForTimeout(150);expect((await state()).position).toEqual(authored);
     }finally{await page.evaluate(()=>(window as any).humanoidWheelTest.dispose());}

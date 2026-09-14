@@ -90,7 +90,7 @@ export class CharacterContinuityMonitor {
    snapshot.controlledEntityId===character.instanceId?world.controlledObject:undefined;
   if(!root)return unavailable('CHARACTER_ROOT_UNOBSERVED');
   const current=visuals(root);
-  const firstPerson=snapshot.humanoid!.cameraMode===1&&snapshot.camera?.mode==='follow';
+  const firstPerson=snapshot.camera?.viewKind==='first-person'&&snapshot.camera?.mode==='follow';
   let baseline=this.baselines.get(world.scene);
   if(!baseline){
    if(!current.some(value=>value.bones.length>0))return unavailable('CHARACTER_RIG_UNOBSERVED');

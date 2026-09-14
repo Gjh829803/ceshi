@@ -7,7 +7,7 @@ export const TANK_SPEC:VehicleSpec={
   spawn:[-240,0,64],yaw:0,speed:12,accel:3,grip:10,steer:.75,
   maxSpeed:18,reverseSpeed:4,coastDeceleration:1.4,brakeDeceleration:7,
   steeringResponse:3,steeringReturn:5,throttleResponse:2,pitchResponse:5,rollResponse:5,
-  radius:5.4,seat:[0,1.45,2.1],characterPose:'tank',camera:14,
+  radius:5.4,seat:[0,1.45,2.1],characterPose:'tank',
   hint:'W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角',
   bodyPhysics:{kind:'tracks',mass:30000,centerOfMassHeight:1.4,driveRadius:.72,powertrain:TANK_POWERTRAIN},
   envelope:{kind:'box',halfExtents:[2.9,2.08,4.65],offset:[0,2.08,0]},

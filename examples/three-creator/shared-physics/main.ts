@@ -1,3 +1,5 @@
+import cameraData from './config/camera.json';
+import {parseCameraDocument} from '@worldkit/three';
 import * as THREE from 'three';
 import {createHumanoidWorld,type EnvironmentDefinition} from '@worldkit/three';
 
@@ -16,7 +18,7 @@ const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'pers
 const crate=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:'#d2a452'}));
 crate.position.set(0,2.5,2);
 world.addEntity({id:'crate',object:crate,role:'obstacle',physics:{kind:'dynamic',shape:'box',massKilograms:2}});
-world.setCaptureTargets(['person','crate']);world.humanoid!.setCameraMode(0);
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});world.setCaptureTargets(['person','crate']);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;top:16px;left:16px;padding:12px;background:#ffffffdd;font:14px sans-serif';
 const text=document.createElement('p');text.textContent='WASD 移动并推动方块 · Space 跳跃';

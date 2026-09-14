@@ -73,7 +73,6 @@
         0
       ],
       "characterPose": "unicycle",
-      "camera": 4.6,
       "bodyPhysics": {
         "kind": "unicycle",
         "mass": 90,
@@ -144,6 +143,28 @@
       0,
       0.49,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.unicycle.third-person",
+        "source": "presets",
+        "key": "unicycle.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.unicycle.first-person",
+        "source": "presets",
+        "key": "unicycle.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.unicycle.shoulder",
+        "source": "presets",
+        "key": "unicycle.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

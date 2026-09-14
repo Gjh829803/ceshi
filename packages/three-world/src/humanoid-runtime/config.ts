@@ -22,7 +22,7 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
    * skateboard is the vehicle; slide is a separate humanoid action. */
   mode: Mode; kernel: string; color: string;
   spawn: [number, number, number]; yaw: number; speed: number; accel: number; grip: number;
-  steer: number; radius: number; seat: [number, number, number]; camera: number; hint: string;
+  steer: number; radius: number; seat: [number, number, number]; hint: string;
   /** Rider pose, not propulsion. paddling is shared by kayak, canoe and raft;
    * the runtime binds hands to the stroke state. Omission uses the drive pose. */
   characterPose?: 'unicycle' | 'atv' | 'stand' | 'ride' | 'sled' | 'ski' | 'tank' | 'submarine' | 'paddling';

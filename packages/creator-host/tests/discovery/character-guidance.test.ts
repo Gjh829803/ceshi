@@ -1,6 +1,7 @@
-import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile as writeFixtureFile,readFile,mkdir} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+const writeFile:typeof writeFixtureFile=async(file,data,options)=>{await mkdir(path.dirname(String(file)),{recursive:true});return writeFixtureFile(file,data,options);};
 import {afterEach,expect,it} from 'vitest';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {executeThreeCreatorTool} from '../../src/cli/mcp';

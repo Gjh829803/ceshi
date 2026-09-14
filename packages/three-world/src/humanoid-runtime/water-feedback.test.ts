@@ -15,7 +15,7 @@ function pool(overrides: Partial<EnvironmentDefinition> = {}): EnvironmentDefini
 }
 const boat: VehicleSpec = { id: 'boat', name: 'Boat', en: 'BOAT', mode: 'boat', kernel: 'fixture',
   color: '#fff', spawn: [3, 2, 0], yaw: 0, speed: 8, accel: 4, grip: 4, steer: 1,
-  radius: 0.8, seat: [0, 0.5, 0], camera: 8, hint: '', archetype: 'boat',
+  radius: 0.8, seat: [0, 0.5, 0], hint: '', archetype: 'boat',
   envelope: { kind: 'box', halfExtents: [0.6, 0.4, 1], offset: [0, 0.4, 0] } };
 async function fixture(map: EnvironmentDefinition, withBoat = false) {
   return createWorld({ camera: new PerspectiveCamera(), navigation: false, assetDefinitions: {},

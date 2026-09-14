@@ -1,3 +1,5 @@
+import {parseCameraDocument} from '@worldkit/three';
+import cameraData from './config/camera.json';
 import * as THREE from 'three';
 import {createWorld} from '@worldkit/three';
 
@@ -35,10 +37,10 @@ for(const x of [-.19,.19])for(const z of [-.27,.27]){
  part([.12,.4,.13],[0,-.2,0],dark,leg);legs.push(leg);
 }
 // Capsule height includes both end caps and extends upward from the root.
-world.addCharacter({id:'fox',name:'狐狸',object:fox,body:{heightMeters:1.15,radiusMeters:.45},
+world.addCharacter({id:'fox',name:'狐狸',object:fox,eyePositionLocalMetersXYZ:[0,.82,-.5],body:{heightMeters:1.15,radiusMeters:.45},
  movement:{kind:'ground',walkSpeedMetersPerSecond:2.5,runSpeedMetersPerSecond:4,jumpSpeedMetersPerSecond:3}});
 world.setControlledEntity('fox');
-world.setCameraFollow({targetEntityId:'fox',view:{eyeOffsetLocalMetersXYZ:[0,.82,-.5],defaultPerspective:'third-person',keyboardToggleEnabled:true}});
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 world.setCaptureTargets(['fox','wall']);
 const presentation=world.createPresentation(),hud=document.createElement('div');
 hud.style.cssText='position:absolute;left:16px;top:16px;background:#333c;color:white;padding:12px;font:14px sans-serif;white-space:pre';

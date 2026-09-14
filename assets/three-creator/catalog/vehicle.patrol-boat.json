@@ -61,7 +61,6 @@
         0.35,
         -0.3
       ],
-      "camera": 9.8,
       "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
       "archetype": "boat",
       "visualVariant": "patrol",
@@ -102,6 +101,28 @@
       0,
       0.65,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.patrol-boat.third-person",
+        "source": "presets",
+        "key": "patrol-boat.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.patrol-boat.first-person",
+        "source": "presets",
+        "key": "patrol-boat.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.patrol-boat.shoulder",
+        "source": "presets",
+        "key": "patrol-boat.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

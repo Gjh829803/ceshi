@@ -12,12 +12,14 @@ export async function bindingExample(profile:CreatorProfile,topic:ExampleTopic='
   if(profile==='three-raw'&&topic!=='getting-started')throw new Error('THREE_SDK_EXAMPLE_UNSUPPORTED');
   const name=variant==='flying-creature'?'assets/animals/flying-mounts.ts':`examples/${profile==='three-raw'?'raw.ts':sources[topic as keyof typeof sources]}`;
   const source=await readFile(new URL(`../../docs/agent/${name}`,import.meta.url),'utf8');
-  if(files?.some(file=>file!=='main.ts'))throw new Error('THREE_EXAMPLE_FILE_UNKNOWN');
+  const available:Record<string,string>={'main.ts':source};
+  if(topic==='nonhuman-subject'||topic==='getting-started'&&profile==='three-sdk')available['config/camera.json']=await readFile(new URL('../../docs/agent/examples/config/camera.json',import.meta.url),'utf8');
+  if(files?.some(file=>!Object.hasOwn(available,file)))throw new Error('THREE_EXAMPLE_FILE_UNKNOWN');
   return {profile,topic,exampleKind:'binding-snippet',requiresAuthoredScene:true,
     source:`packages/creator-host/docs/agent/${name}`,
     ...(variant!==undefined||topic==='custom-vehicle'?{variant:variant??'motorcycle'}:{}),
-    files:files?.length===0?{}:{'main.ts':source},
-    fileManifest:[{path:'main.ts',byteLength:Buffer.byteLength(source),sha256:sha256(source),readable:true}],
+    files:Object.fromEntries((files??Object.keys(available)).map(name=>[name,available[name]])),
+    fileManifest:Object.entries(available).map(([path,source])=>({path,byteLength:Buffer.byteLength(source),sha256:sha256(source),readable:true})),
     readHint:'Supply the values marked declare from your authored project, then use the shown SDK calls. Create the world once; asset snippets prepare bindings and action snippets use that existing world. This is a binding snippet, not a complete runnable world. Select assets through project.json; author the real input plan in episode.json.',
   };
 }

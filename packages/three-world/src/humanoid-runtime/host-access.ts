@@ -1,4 +1,4 @@
-import type { CameraRigInput } from '../camera';
+import type { CameraPointerInput } from '../input';
 import type { WorldInput } from '../engine-contracts';
 import type { EpisodeStart } from '../episode-contracts';
 import type { HumanoidRuntime, HumanoidCommand } from './runtime';
@@ -15,14 +15,21 @@ export interface HumanoidHostAccess {
   bindCharacter(id:string,binding:import('./character-binding').RuntimeActorBinding,settings?:import('../engine-contracts').CharacterOptions,prevalidated?:boolean):void;
   command(command: HumanoidCommand): SkillResult | undefined;
   setEpisodeOwned(owned: boolean): void;
-  advance(input: WorldInput, dt: number, pointer?: CameraRigInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>,controlYawRadians?:number): void;
+  advance(input: WorldInput, dt: number, pointer?: CameraPointerInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>,controlYawRadians?:number): void;
   reset(): void;
   finishReset():void;
   clearInput(): void;
   setControlledActor(id:string|undefined):void;
+  applyImpulse(id:string,impulse:import('../engine-contracts').Vec3):void;
   teleportCharacter(id:string,position:import('../engine-contracts').Vec3):void;
   prepareEpisodeStart(start: EpisodeStart): void;
-  present(alpha: number, tick: number, view?:'world'|'object'): () => void;
+  hasMovementIntent():boolean;
+  bindCamera(requests:import('./camera-host').HumanoidCameraRequests):void;
+  sampleCamera(binding:import('../config/camera/index').CameraDocument['binding'],generation:(id:string)=>number|undefined,display?:boolean):import('../camera/subject').CameraSubjectFacts|undefined;
+  cameraGeometry(subject:import('../camera/subject').CameraSubjectFacts):ReturnType<import('../camera/constraints').CameraGeometryProvider>;
+  cameraOperation(binding:import('../config/camera/index').CameraDocument['binding']):string;
+  presentationDiscontinuity():boolean;
+  present(context:import('../camera/state').PresentationSampleContext,view?:'world'|'object'):()=>void;
 }
 const hosts = new WeakMap<HumanoidRuntime, HumanoidHostAccess>();
 export function registerHumanoidHost(runtime: HumanoidRuntime, host: HumanoidHostAccess): void {

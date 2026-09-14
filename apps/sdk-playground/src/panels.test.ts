@@ -33,7 +33,7 @@ describe("React workbench and humanoid controls", () => {
       const workbench=mountWorkbench(document.body, {
         onOpenChange:open=>events.push(['workbench',open]), onPrepare:(...args)=>events.push(['prepare',...args]),
         getMapId:()=> 'character-workshop', getAssetId:()=> 'person', getProfile:id=>structuredClone(id==='person'?profile:getDefaultProfile(id)),
-        applyProfile:p=>{profile=p;events.push(['apply',p.camera.distance]);}, saveProfile:p=>events.push(['save',p.camera.distance]),
+        applyProfile:p=>{profile=p;events.push(['apply',p.control.speed]);}, saveProfile:p=>events.push(['save',p.control.speed]),
         resetProfile:id=>{profile=getDefaultProfile(id);events.push(['reset',id]);}, getState:()=>({marker:'runtime-state'}),
         togglePause:()=>events.push(['pause']),step:()=>events.push(['step'])
       });
@@ -78,12 +78,12 @@ describe("React workbench and humanoid controls", () => {
     await browser?.close();
   });
   const state = () => page.evaluate(() => (window as any).panelTest.state());
-  it("applies, validates, saves and resets camera edits and exposes explicit stepping", async () => {
+  it("applies, validates, saves and resets movement edits and exposes explicit stepping", async () => {
     await page.getByRole("button", { name: "Workbench", exact: true }).click();
-    const distance = page.getByRole("spinbutton", { name: "跟随距离 / 米" });
+    const distance = page.getByRole("spinbutton", { name: /基础移速基准/ });
     await distance.fill("5");
     await distance.blur();
-    expect((await state()).profile.camera.distance).toBe(5);
+    expect((await state()).profile.control.speed).toBe(5);
     await page.getByRole("button", { name: "保存这个资产的配置" }).click();
     expect((await state()).events).toContainEqual(["save", 5]);
     await distance.fill("999");

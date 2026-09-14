@@ -22,17 +22,17 @@ describe("React playground inspector", () => {
    import {mountInspector} from './apps/sdk-playground/src/inspector.tsx';
    import {getDefaultProfile,parseAssetProfile} from './packages/preset-content/src/profiles/profiles.ts';
    import {SPECS,vehicleControlFamily} from './packages/preset-content/src/config.ts';
-   let current='person',mode=0,interactions=0,speedKmh=0;const appliedSections=[];
+   let current='person',viewId='third-person',views=[{id:'third-person',kind:'third-person',label:'第三人称'},{id:'first-person',kind:'first-person',label:'第一人称'},{id:'shoulder',kind:'shoulder',label:'沉浸越肩'}],interactions=0,speedKmh=0;const appliedSections=[];
    const profiles=new Map(['person',...SPECS.map(s=>s.id)].map(id=>[id,getDefaultProfile(id)])),saved=[];
    const inspector=mountInspector(document.querySelector('#host'),{
     getAssetId:()=>current,getSubject:()=>({name:current}),getProfile:id=>structuredClone(profiles.get(id)),
     applyProfile:(p,section)=>{appliedSections.push(section);profiles.set(p.assetId,parseAssetProfile(p));},saveProfile:p=>saved.push(structuredClone(p)),
     resetProfile:(id,section)=>{const p=structuredClone(profiles.get(id));p[section==='movement'?'control':'camera']=getDefaultProfile(id)[section==='movement'?'control':'camera'];profiles.set(id,p);},
     getMovement:()=>({family:vehicleControlFamily(SPECS.find(s=>s.id===current)),control:profiles.get(current).control,velocity:[1,2,3],grounded:true}),
-    getCamera:()=>({mode,distance:8,fovDegrees:60,yawRadians:0,pitchRadians:0,collisionLimited:false}),
-    getTelemetry:()=>({speedKmh}),setCameraMode:v=>mode=v,onInteract:()=>interactions++
+    getCamera:()=>({viewId,views,kind:views.find(view=>view.id===viewId).kind,distance:8,fovDegrees:60,yawRadians:0,pitchRadians:0,collisionLimited:false}),
+    getTelemetry:()=>({speedKmh}),setCameraView:v=>viewId=v,onInteract:()=>interactions++
    });
-   window.inspectorTest={toasts:()=>toast.getHistory().map(item=>item.title),sync:()=>inspector.sync(),telemetry:value=>{speedKmh=value;inspector.sync();},ids:[...profiles.keys()],select:id=>{current=id;inspector.sync();},state:()=>({profile:profiles.get(current),saved,interactions,mode,appliedSections}),dispose:()=>inspector.dispose()};
+   window.inspectorTest={toasts:()=>toast.getHistory().map(item=>item.title),sync:()=>inspector.sync(),telemetry:value=>{speedKmh=value;inspector.sync();},ids:[...profiles.keys()],select:id=>{current=id;inspector.sync();},state:()=>({profile:profiles.get(current),saved,interactions,viewId,appliedSections}),setViews:(next,selected)=>{views=next;viewId=selected;inspector.sync();},dispose:()=>inspector.dispose()};
   `,
       },
       bundle: true,
@@ -76,32 +76,24 @@ describe("React playground inspector", () => {
   it("offers only first person, third person and shoulder with truthful mode-specific controls", async () => {
     await page.getByRole("tab", { name: "相机模式" }).click();
     expect(
-      await page.locator("[data-mode].inspector-mode").allTextContents(),
-    ).toEqual(["第一人称", "第三人称", "沉浸越肩"]);
+      await page.locator("[data-view-id].inspector-mode").allTextContents(),
+    ).toEqual(["第三人称", "第一人称", "沉浸越肩"]);
     await page.getByRole("button", { name: "沉浸越肩", exact: true }).click();
-    expect((await state()).mode).toBe(2);
-    expect(
-      await page.locator('[data-camera-field="distance"]').isVisible(),
-    ).toBe(false);
-    expect(
-      await page
-        .locator('[data-camera-field="horizontalOffset"] input[type=number]')
-        .isEnabled(),
-    ).toBe(true);
-    await page.getByRole("button", { name: "第一人称", exact: true }).click();
-    expect((await state()).mode).toBe(1);
-    expect(
-      await page
-        .locator('[data-camera-field="horizontalOffset"] input[type=number]')
-        .isDisabled(),
-    ).toBe(true);
-    await page.getByRole("button", { name: "第三人称", exact: true }).click();
-    expect((await state()).mode).toBe(0);
-    expect(
-      await page
-        .locator('[data-camera-field="distance"] input[type=number]')
-        .isEnabled(),
-    ).toBe(true);
+    expect((await state()).viewId).toBe('shoulder');
+    expect(await page.locator('[data-camera-field]').count()).toBe(0);
+    await page.getByRole('button',{name:'第一人称',exact:true}).click();
+    expect((await state()).viewId).toBe('first-person');
+    expect((await state()).profile).not.toHaveProperty('camera');
+  });
+  it('selects distinct custom IDs of the same view kind',async()=>{
+    await page.evaluate(()=>(window as any).inspectorTest.setViews([{id:'explore',kind:'third-person',label:'Explore'},{id:'aim',kind:'third-person',label:'Aim'},{id:'overview',kind:'third-person',label:'Long named overview view'},{id:'eye',kind:'first-person',label:'Eye'},{id:'close',kind:'shoulder',label:'Close'}],'explore'));
+    await page.getByRole('tab',{name:'相机模式'}).click();
+    await expect.poll(()=>page.getByRole('button',{name:'Explore',exact:true}).getAttribute('aria-pressed')).toBe('true');
+    await page.getByRole('button',{name:'Aim',exact:true}).click();expect((await state()).viewId).toBe('aim');
+    const boxes=await page.locator('.inspector-mode').evaluateAll(nodes=>nodes.map(node=>{const rect=node.getBoundingClientRect();return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,client:node.clientWidth,scroll:node.scrollWidth};}));
+    for(const box of boxes)expect(box.scroll).toBeLessThanOrEqual(box.client);
+    expect(new Set(boxes.map(box=>box.y)).size).toBeGreaterThan(1);
+    expect(await page.getByRole('button',{name:'Explore',exact:true}).getAttribute('aria-pressed')).toBe('false');
   });
   it("edits independent speed, coasting and braking values and switches family-specific fields", async () => {
     await page.evaluate(() => (window as any).inspectorTest.select("rover"));
@@ -158,15 +150,10 @@ describe("React playground inspector", () => {
     await control("speed").fill("6");
     expect((await state()).profile.control.speed).toBe(6);
     expect((await state()).appliedSections.at(-1)).toBe("movement");
-    await page.getByRole("tab", { name: "相机模式" }).click();
-    await page
-      .locator('[data-camera-field="distance"] input[type=number]')
-      .fill("10");
-    expect((await state()).appliedSections.at(-1)).toBe("camera");
     await page.getByRole("tab", { name: "运动属性" }).click();
     await page.getByRole("button", { name: "恢复运动默认" }).click();
     expect((await state()).profile.control.speed).toBe(3.1);
-    expect((await state()).profile.camera.distance).toBe(10);
+    expect((await state()).profile).not.toHaveProperty("camera");
     await page.evaluate(() => (window as any).inspectorTest.select("rover"));
     await control("speed").fill("12");
     await page.evaluate(() => (window as any).inspectorTest.select("person"));
@@ -176,7 +163,7 @@ describe("React playground inspector", () => {
     await page.getByRole("button", { name: "保存到本地" }).click();
     expect((await state()).saved.at(-1).control.speed).toBe(12);
     await page.getByRole("tab", { name: "相机模式" }).click();
-    await page.getByRole("button", { name: "恢复相机默认" }).click();
+    expect(await page.getByRole("button", { name: "恢复相机默认" }).count()).toBe(0);
     expect((await state()).profile.control.speed).toBe(12);
   });
   it("populates every configured subject and applies its speed control independently", async () => {

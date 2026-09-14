@@ -15,11 +15,11 @@ try{
   for(const [name,source] of Object.entries(example.files)){
     const code=ordinary&&name==='main.ts'?source.replace('world.setCaptureTargets(',`const ordinary=new THREE.Group(),visual=new THREE.Mesh(new THREE.BoxGeometry(.8,1.2,.8),new THREE.MeshStandardMaterial({color:'#d99937'}));
 visual.position.y=.6;ordinary.add(visual);ordinary.position.set(7,.04,0);
-world.addCharacter({id:'${ordinaryId}',object:ordinary,body:{heightMeters:1.2,radiusMeters:.4},movement:{kind:'ground',walkSpeedMetersPerSecond:2}});
-${ordinaryControlled?`world.setControlledEntity('${ordinaryId}');world.setCameraFollow({targetEntityId:'${ordinaryId}',view:{eyeOffsetLocalMetersXYZ:[0,1,0]}});`:`world.setAutonomy('${ordinaryId}',{kind:'patrol',waypointPositionsWorldMetersXYZ:[[7,0,7],[7,0,-3]],pauseSeconds:.5});`}
+world.addCharacter({id:'${ordinaryId}',object:ordinary,body:{heightMeters:1.2,radiusMeters:.4},eyePositionLocalMetersXYZ:[0,1,0],movement:{kind:'ground',walkSpeedMetersPerSecond:2}});
+${ordinaryControlled?`world.setControlledEntity('${ordinaryId}');world.setCameraFollow({configuration:{...parseCameraDocument(cameraData),binding:{targetEntityId:'${ordinaryId}'},views:{...cameraData.views,'first-person':{kind:'first-person',overrides:{lens:{verticalFovDegrees:55,nearMeters:.05,farMeters:150}}}}}});`:`world.setAutonomy('${ordinaryId}',{kind:'patrol',waypointPositionsWorldMetersXYZ:[[7,0,7],[7,0,-3]],pauseSeconds:.5});`}
 world.onDispose(()=>{visual.geometry.dispose();visual.material.dispose();});
 world.setCaptureTargets(`):source;
-    await writeFile(path.join(workspace,name),code);
+    await mkdir(path.dirname(path.join(workspace,name)),{recursive:true});await writeFile(path.join(workspace,name),code);
   }
   const candidate=await service.validate();report.compiled=candidate;await save();
   const recording=await service.playtest('multiple-actors');report.creator=recording;await save();assert.equal(recording.status,'passed');await service.close();
@@ -45,9 +45,9 @@ world.setCaptureTargets(`):source;
     assert(displacement.reduce((dot,value,index)=>dot+value*forward[index]!,0)>1,'controlled actor must move along the measured input basis');
     if(ordinaryControlled){
       assert.equal(moved.humanoid,undefined);assert(Math.abs(moved.entities.find(entity=>entity.id==='person')!.positionWorldMetersXYZ[2])<.01);
-      assert.equal((await episode.execute({type:'camera.set-perspective',perspective:'first-person'})).status,'applied');
+      assert.equal((await episode.execute({type:'camera.set-view',viewId:'first-person'})).status,'applied');
       const firstPerson=await episode.frame('image/png');await writeFile(path.join(output,'ordinary-first-person.png'),Buffer.from(firstPerson.imageDataUrl.split(',')[1]!,'base64'));
-      assert.equal(firstPerson.snapshot.camera.perspective,'first-person');
+      assert.equal(firstPerson.snapshot.camera.viewKind,'first-person');
     }
     report.reset=await episode.prepareSegment(start,{widthPixels:1280,heightPixels:720});
     if(ordinary)assert.deepEqual((report.reset as typeof before).entities.find(entity=>entity.id===ordinaryId)!.positionWorldMetersXYZ,before.entities.find(entity=>entity.id===ordinaryId)!.positionWorldMetersXYZ);

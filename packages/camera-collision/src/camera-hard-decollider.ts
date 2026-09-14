@@ -27,7 +27,8 @@ export interface CameraHardDecolliderSolveRequestV1 {
   readonly minimumUsableArmLengthMeters: number;
   readonly clearHoldSeconds: number;
   readonly recoveryHalfLifeSeconds: number;
-  readonly maximumRecoveryMetersPerSecond: number;
+  /** Explicit unlimited recovery keeps exponential damping without a speed cap. */
+  readonly maximumRecoveryMetersPerSecond: number | "unlimited";
   readonly deltaSeconds: number;
   readonly geometryHit?: CameraGeometryHitV2;
   readonly preferCurrentEmergencyPosition?: boolean;
@@ -116,7 +117,7 @@ function recoverTowards(
   targetMeters: number,
   deltaSeconds: number,
   halfLifeSeconds: number,
-  maximumMetersPerSecond: number,
+  maximumMetersPerSecond: number | "unlimited",
 ): number {
   if (targetMeters <= currentMeters) return targetMeters;
   const safeDeltaSeconds = Math.max(0, deltaSeconds);
@@ -125,7 +126,9 @@ function recoverTowards(
     ? targetMeters - currentMeters
     : (targetMeters - currentMeters) *
       (1 - Math.pow(0.5, safeDeltaSeconds / halfLifeSeconds));
-  const speedDelta = Math.max(0, maximumMetersPerSecond) * safeDeltaSeconds;
+  const speedDelta = maximumMetersPerSecond === "unlimited"
+    ? exponentialDelta
+    : Math.max(0, maximumMetersPerSecond) * safeDeltaSeconds;
   return Math.min(targetMeters, currentMeters + Math.min(exponentialDelta, speedDelta));
 }
 
@@ -384,11 +387,11 @@ export class CameraHardDecolliderV1 {
         input.minimumUsableArmLengthMeters,
         input.clearHoldSeconds,
         input.recoveryHalfLifeSeconds,
-        input.maximumRecoveryMetersPerSecond,
         input.deltaSeconds,
       ].every(Number.isFinite) || input.minimumUsableArmLengthMeters < 0 ||
       input.clearHoldSeconds < 0 || input.recoveryHalfLifeSeconds < 0 ||
-      input.maximumRecoveryMetersPerSecond < 0) {
+      (input.maximumRecoveryMetersPerSecond !== "unlimited" &&
+        (!Number.isFinite(input.maximumRecoveryMetersPerSecond) || input.maximumRecoveryMetersPerSecond < 0))) {
       throw new RangeError("CAMERA_HARD_DECOLLIDER_INPUT_INVALID");
     }
     if (input.preferCurrentEmergencyPosition !== undefined &&

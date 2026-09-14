@@ -528,3 +528,34 @@ it('rejects synchronous initialization after prototype preparation has failed',a
  await expect(world.registerPrototype({id:'broken',description:'Failed source',template:{kind:'entity',options:{role:'decoration',object}}})).rejects.toThrow('prototype clone failed');
  expect(()=>world.step({},0)).toThrow();await expect(world.start()).rejects.toMatchObject({message:expect.stringContaining('prototype clone failed')});
 });
+
+it('renders stopped command effects once and publishes queued commands only at the outer frame boundary',async()=>{
+ const {vi}=await import('vitest');
+ let nextFrame:FrameRequestCallback|undefined;
+ vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{nextFrame=callback;return 1;});
+ vi.stubGlobal('cancelAnimationFrame',()=>{});
+ let failDraw=false;const draws:boolean[]=[];const npc=new THREE.Group();
+ const renderer={domElement:{},shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},render:()=>{if(failDraw)throw new Error('STOPPED_RENDER_FAILURE');draws.push(npc.visible);}} as unknown as THREE.WebGLRenderer;
+ const world=await createWorld({scene:new THREE.Scene(),camera:new THREE.PerspectiveCamera(),renderer,navigation:false});
+ try{
+  world.addCharacter({id:'hero',object:new THREE.Group(),body:{heightMeters:1.8,radiusMeters:.3}});
+  world.addCharacter({id:'npc',object:npc,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('hero');
+  const stopped=await world.execute({type:'entity.set-visible',entityId:'npc',isVisible:false});
+  expect(stopped.status).toBe('applied');expect(draws).toEqual([false]);
+  await world.start();const frameTime=performance.now();nextFrame!(frameTime);const before=draws.length;
+  const pending=world.execute({type:'actor.stop',entityId:'npc'});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(draws).toHaveLength(before);
+  nextFrame!(frameTime+30);
+  expect((await pending).status).toBe('applied');
+  expect(world.snapshot().errors).toEqual([]);expect(world.isRunning).toBe(true);
+  expect(draws.length).toBe(before+1);
+  // advance accepts this fixed boundary within its numerical tolerance; the
+  // outer renderer must not receive the resulting tiny negative remainder.
+  nextFrame!(frameTime+1000/30-5e-8);
+  expect(world.snapshot().errors).toEqual([]);expect(world.isRunning).toBe(true);
+  world.stop();failDraw=true;
+  expect((await world.execute({type:'entity.set-visible',entityId:'npc',isVisible:true})).status).toBe('applied');
+  expect(world.snapshot().errors).toEqual(expect.arrayContaining([expect.objectContaining({message:'STOPPED_RENDER_FAILURE',phase:'commit'})]));
+ }finally{world.dispose();vi.unstubAllGlobals();}
+});

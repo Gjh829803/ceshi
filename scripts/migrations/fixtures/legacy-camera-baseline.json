@@ -1,0 +1,4810 @@
+{
+  "source": "285246867",
+  "notes": "Pre-migration numerical baseline; Group fixtures do not establish visual quality.",
+  "profiles": {
+    "person": {
+      "version": 1,
+      "assetId": "person",
+      "control": {
+        "speed": 3.1,
+        "accel": 14,
+        "grip": 5,
+        "steer": 8,
+        "maxSpeed": 4.731578947368422,
+        "reverseSpeed": 0.9299999999999999,
+        "slowSpeed": 1.1828947368421054,
+        "groundSpeed": 5,
+        "coastDeceleration": 23.333333333333332,
+        "brakeDeceleration": 25.2,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 14,
+        "directionChangeDeceleration": 28,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 11.200000000000001,
+        "linearDamping": 5,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 7,
+        "baseFovDegrees": 58,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.2,
+        "distance": 8.8
+      },
+      "envelope": {
+        "kind": "capsule",
+        "radius": 0.28,
+        "halfHeight": 0.56,
+        "offset": [
+          0,
+          0.84,
+          0
+        ]
+      }
+    },
+    "rover": {
+      "version": 1,
+      "assetId": "rover",
+      "control": {
+        "speed": 44.44444444444444,
+        "accel": 10,
+        "grip": 11,
+        "steer": 1,
+        "maxSpeed": 55.55555555555556,
+        "reverseSpeed": 8.4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 18,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 10,
+        "directionChangeDeceleration": 20,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 8,
+        "linearDamping": 11,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8.2
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      }
+    },
+    "racer": {
+      "version": 1,
+      "assetId": "racer",
+      "control": {
+        "speed": 50,
+        "accel": 12,
+        "grip": 14,
+        "steer": 1.08,
+        "maxSpeed": 61.11111111111111,
+        "reverseSpeed": 10.799999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 21.6,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 12,
+        "directionChangeDeceleration": 24,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 9.600000000000001,
+        "linearDamping": 14,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9400000000000001,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.26,
+          0
+        ]
+      }
+    },
+    "motorcycle": {
+      "version": 1,
+      "assetId": "motorcycle",
+      "control": {
+        "speed": 41.666666666666664,
+        "accel": 12,
+        "grip": 13,
+        "steer": 1.12,
+        "maxSpeed": 50,
+        "reverseSpeed": 2,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 21.6,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 12,
+        "directionChangeDeceleration": 24,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 9.600000000000001,
+        "linearDamping": 13,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6.8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    "skateboard": {
+      "version": 1,
+      "assetId": "skateboard",
+      "control": {
+        "speed": 22,
+        "accel": 8,
+        "grip": 2.8,
+        "steer": 1.65,
+        "maxSpeed": 25.299999999999997,
+        "reverseSpeed": 6.6,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 14.4,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 8,
+        "directionChangeDeceleration": 16,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 6.4,
+        "linearDamping": 2.8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.45,
+          1.05,
+          1.2
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      }
+    },
+    "hovercraft": {
+      "version": 1,
+      "assetId": "hovercraft",
+      "control": {
+        "speed": 28,
+        "accel": 11,
+        "grip": 4.8,
+        "steer": 1.5,
+        "maxSpeed": 32.199999999999996,
+        "reverseSpeed": 8.4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 3,
+        "brakeDeceleration": 19.8,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 11,
+        "directionChangeDeceleration": 22,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 8.8,
+        "linearDamping": 4.8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.7,
+          1.15,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    "boat": {
+      "version": 1,
+      "assetId": "boat",
+      "control": {
+        "speed": 24,
+        "accel": 7,
+        "grip": 3,
+        "steer": 1.05,
+        "maxSpeed": 27.599999999999998,
+        "reverseSpeed": 7.199999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 12.6,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 7,
+        "directionChangeDeceleration": 14,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 5.6000000000000005,
+        "linearDamping": 3,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 9
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.25,
+          2.85
+        ],
+        "offset": [
+          0,
+          0.5,
+          0
+        ]
+      }
+    },
+    "submarine": {
+      "version": 1,
+      "assetId": "submarine",
+      "control": {
+        "speed": 16,
+        "accel": 6.5,
+        "grip": 2.4,
+        "steer": 1.15,
+        "maxSpeed": 16,
+        "reverseSpeed": 4.8,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 11.700000000000001,
+        "brakeDamping": 6,
+        "groundDeceleration": 6.5,
+        "directionChangeDeceleration": 13,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 5.2,
+        "linearDamping": 0.9,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 9
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.8,
+          1.6,
+          2.9
+        ],
+        "offset": [
+          0,
+          0.2,
+          0
+        ]
+      }
+    },
+    "glider": {
+      "version": 1,
+      "assetId": "glider",
+      "control": {
+        "speed": 32,
+        "accel": 0,
+        "grip": 1,
+        "steer": 1.05,
+        "maxSpeed": 32,
+        "reverseSpeed": 9.6,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 0,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 0,
+        "directionChangeDeceleration": 0,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 0,
+        "linearDamping": 1,
+        "verticalDamping": 1.8,
+        "drag": 0.26,
+        "dragQuadratic": 0.0008,
+        "pitchResponse": 2.6,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 7,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 11
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.6,
+          1.1,
+          3.3
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    "plane": {
+      "version": 1,
+      "assetId": "plane",
+      "control": {
+        "speed": 58,
+        "accel": 12,
+        "grip": 1,
+        "steer": 1.05,
+        "maxSpeed": 58,
+        "reverseSpeed": 17.4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 21.6,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 12,
+        "directionChangeDeceleration": 24,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 9.600000000000001,
+        "linearDamping": 1,
+        "verticalDamping": 1.8,
+        "drag": 0.8,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 13
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.2,
+          1.25,
+          3.35
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    "spacecraft": {
+      "version": 1,
+      "assetId": "spacecraft",
+      "control": {
+        "speed": 36,
+        "accel": 14,
+        "grip": 2.4,
+        "steer": 1.45,
+        "maxSpeed": 36,
+        "reverseSpeed": 10.799999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 25.2,
+        "brakeDamping": 8,
+        "groundDeceleration": 14,
+        "directionChangeDeceleration": 28,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 11.200000000000001,
+        "linearDamping": 2.4,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 12
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.1,
+          1.5,
+          3.8
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    "trail-rover": {
+      "version": 1,
+      "assetId": "trail-rover",
+      "control": {
+        "speed": 44.44444444444444,
+        "accel": 8,
+        "grip": 12,
+        "steer": 0.95,
+        "maxSpeed": 55.55555555555556,
+        "reverseSpeed": 7.199999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 14.4,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 8,
+        "directionChangeDeceleration": 16,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 6.4,
+        "linearDamping": 12,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8.8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.25
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      }
+    },
+    "touring-motorcycle": {
+      "version": 1,
+      "assetId": "touring-motorcycle",
+      "control": {
+        "speed": 41.666666666666664,
+        "accel": 9,
+        "grip": 14,
+        "steer": 1.05,
+        "maxSpeed": 50,
+        "reverseSpeed": 2,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 16.2,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 9,
+        "directionChangeDeceleration": 18,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 7.2,
+        "linearDamping": 14,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 7.3
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    "rescue-hovercraft": {
+      "version": 1,
+      "assetId": "rescue-hovercraft",
+      "control": {
+        "speed": 24,
+        "accel": 9,
+        "grip": 6,
+        "steer": 1.3,
+        "maxSpeed": 27.599999999999998,
+        "reverseSpeed": 7.199999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 3,
+        "brakeDeceleration": 16.2,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 9,
+        "directionChangeDeceleration": 18,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 7.2,
+        "linearDamping": 6,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8.8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.75,
+          1.15,
+          2.3
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    "patrol-boat": {
+      "version": 1,
+      "assetId": "patrol-boat",
+      "control": {
+        "speed": 21,
+        "accel": 7.5,
+        "grip": 3.8,
+        "steer": 1.15,
+        "maxSpeed": 24.15,
+        "reverseSpeed": 6.3,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 13.5,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 7.5,
+        "directionChangeDeceleration": 15,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 6,
+        "linearDamping": 3.8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 9.8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.45,
+          1.4,
+          3
+        ],
+        "offset": [
+          0,
+          0.65,
+          0
+        ]
+      }
+    },
+    "trainer-plane": {
+      "version": 1,
+      "assetId": "trainer-plane",
+      "control": {
+        "speed": 46,
+        "accel": 10,
+        "grip": 1.4,
+        "steer": 0.9,
+        "maxSpeed": 46,
+        "reverseSpeed": 13.799999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 18,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 10,
+        "directionChangeDeceleration": 20,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 8,
+        "linearDamping": 1.4,
+        "verticalDamping": 1.8,
+        "drag": 0.8,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 13.5
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.6,
+          1.25,
+          3.5
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    "survey-spacecraft": {
+      "version": 1,
+      "assetId": "survey-spacecraft",
+      "control": {
+        "speed": 28,
+        "accel": 7,
+        "grip": 2,
+        "steer": 1,
+        "maxSpeed": 28,
+        "reverseSpeed": 8.4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 12.6,
+        "brakeDamping": 8,
+        "groundDeceleration": 7,
+        "directionChangeDeceleration": 14,
+        "steeringResponse": 9,
+        "steeringReturn": 14,
+        "verticalAcceleration": 5.6000000000000005,
+        "linearDamping": 2,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 16
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          1.5,
+          5.5
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    "supercar": {
+      "version": 1,
+      "assetId": "supercar",
+      "control": {
+        "speed": 65,
+        "accel": 17,
+        "grip": 18,
+        "steer": 0.88,
+        "maxSpeed": 74.75,
+        "reverseSpeed": 19.5,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 30.6,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 17,
+        "directionChangeDeceleration": 34,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 13.600000000000001,
+        "linearDamping": 18,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8.2
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.3,
+          0.74,
+          2.5
+        ],
+        "offset": [
+          0,
+          1.06,
+          0
+        ]
+      }
+    },
+    "kart": {
+      "version": 1,
+      "assetId": "kart",
+      "control": {
+        "speed": 24,
+        "accel": 10,
+        "grip": 19,
+        "steer": 1.65,
+        "maxSpeed": 27.599999999999998,
+        "reverseSpeed": 7.199999999999999,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 18,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 10,
+        "directionChangeDeceleration": 20,
+        "steeringResponse": 14,
+        "steeringReturn": 22,
+        "verticalAcceleration": 8,
+        "linearDamping": 19,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1,
+          0.69,
+          1.45
+        ],
+        "offset": [
+          0,
+          1.01,
+          0
+        ]
+      }
+    },
+    "horse": {
+      "version": 1,
+      "assetId": "horse",
+      "control": {
+        "speed": 12,
+        "accel": 5,
+        "grip": 9,
+        "steer": 1.6,
+        "maxSpeed": 12,
+        "reverseSpeed": 2.5,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 5,
+        "brakeDeceleration": 20,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 5,
+        "directionChangeDeceleration": 10,
+        "steeringResponse": 10,
+        "steeringReturn": 10,
+        "verticalAcceleration": 4,
+        "linearDamping": 9,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.8,
+          1.65,
+          1.9
+        ],
+        "offset": [
+          0,
+          1.65,
+          0
+        ]
+      }
+    },
+    "carriage": {
+      "version": 1,
+      "assetId": "carriage",
+      "control": {
+        "speed": 9,
+        "accel": 3.5,
+        "grip": 8,
+        "steer": 1.15,
+        "maxSpeed": 9,
+        "reverseSpeed": 1.4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 3.5,
+        "brakeDeceleration": 20,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 3.5,
+        "directionChangeDeceleration": 7,
+        "steeringResponse": 10,
+        "steeringReturn": 10,
+        "verticalAcceleration": 2.8000000000000003,
+        "linearDamping": 8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 12
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.4,
+          1.8
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      }
+    },
+    "dragon": {
+      "version": 1,
+      "assetId": "dragon",
+      "control": {
+        "speed": 28,
+        "accel": 10,
+        "grip": 3,
+        "steer": 1.25,
+        "maxSpeed": 33.6,
+        "reverseSpeed": 5.6000000000000005,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 6,
+        "brakeDeceleration": 18,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 10,
+        "directionChangeDeceleration": 20,
+        "steeringResponse": 10,
+        "steeringReturn": 10,
+        "verticalAcceleration": 8,
+        "linearDamping": 3,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3.2,
+        "rollResponse": 3.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 17
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          2.8,
+          4.5
+        ],
+        "offset": [
+          0,
+          2.6,
+          0
+        ]
+      }
+    },
+    "unicycle": {
+      "version": 1,
+      "assetId": "unicycle",
+      "control": {
+        "speed": 4.2,
+        "accel": 2.2,
+        "grip": 12,
+        "steer": 1.3,
+        "maxSpeed": 5.5,
+        "reverseSpeed": 1.8,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 2.8,
+        "brakeDeceleration": 4.5,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 2.2,
+        "directionChangeDeceleration": 4.4,
+        "steeringResponse": 5,
+        "steeringReturn": 7,
+        "verticalAcceleration": 1.7600000000000002,
+        "linearDamping": 12,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 8,
+        "rollResponse": 7,
+        "throttleResponse": 5,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 4.6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.34,
+          0.49,
+          0.39
+        ],
+        "offset": [
+          0,
+          0.49,
+          0
+        ]
+      }
+    },
+    "observation-submarine": {
+      "version": 1,
+      "assetId": "observation-submarine",
+      "control": {
+        "speed": 5,
+        "accel": 2.1,
+        "grip": 1.4,
+        "steer": 0.75,
+        "maxSpeed": 5,
+        "reverseSpeed": 2.2,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.8,
+        "brakeDeceleration": 3.7800000000000002,
+        "brakeDamping": 2.8,
+        "groundDeceleration": 2.1,
+        "directionChangeDeceleration": 4.2,
+        "steeringResponse": 2.5,
+        "steeringReturn": 3,
+        "verticalAcceleration": 4.5,
+        "linearDamping": 0.5,
+        "verticalDamping": 2.6,
+        "drag": 0.18,
+        "dragQuadratic": 0.08,
+        "pitchResponse": 3,
+        "rollResponse": 3,
+        "throttleResponse": 2.5,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6.5
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.55,
+          1.2,
+          1.55
+        ],
+        "offset": [
+          0,
+          0.15,
+          0
+        ]
+      }
+    },
+    "canoe": {
+      "version": 1,
+      "assetId": "canoe",
+      "control": {
+        "speed": 3.1,
+        "accel": 1.9,
+        "grip": 1.2,
+        "steer": 1.7,
+        "maxSpeed": 3.1,
+        "reverseSpeed": 1.2,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 0.11,
+        "brakeDeceleration": 3.42,
+        "brakeDamping": 1.8,
+        "groundDeceleration": 1.9,
+        "directionChangeDeceleration": 3.8,
+        "steeringResponse": 2.8,
+        "steeringReturn": 3,
+        "verticalAcceleration": 1.52,
+        "linearDamping": 1.2,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.11,
+        "pitchResponse": 3,
+        "rollResponse": 2.5,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6.5
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.6,
+          0.34,
+          2.4
+        ],
+        "offset": [
+          0,
+          0.1,
+          0
+        ]
+      }
+    },
+    "kayak": {
+      "version": 1,
+      "assetId": "kayak",
+      "control": {
+        "speed": 4.6,
+        "accel": 2.7,
+        "grip": 1.8,
+        "steer": 3,
+        "maxSpeed": 4.6,
+        "reverseSpeed": 1.8,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 0.16,
+        "brakeDeceleration": 4.86,
+        "brakeDamping": 2.1,
+        "groundDeceleration": 2.7,
+        "directionChangeDeceleration": 5.4,
+        "steeringResponse": 5,
+        "steeringReturn": 5,
+        "verticalAcceleration": 2.16,
+        "linearDamping": 1.8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.08,
+        "pitchResponse": 4,
+        "rollResponse": 4,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.4,
+          0.24,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ]
+      }
+    },
+    "raft": {
+      "version": 1,
+      "assetId": "raft",
+      "control": {
+        "speed": 6.944444444444445,
+        "accel": 7.5,
+        "grip": 1.4,
+        "steer": 1.8,
+        "maxSpeed": 6.944444444444445,
+        "reverseSpeed": 2,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 0.08,
+        "brakeDeceleration": 5,
+        "brakeDamping": 7,
+        "groundDeceleration": 7.5,
+        "directionChangeDeceleration": 15,
+        "steeringResponse": 3.5,
+        "steeringReturn": 4,
+        "verticalAcceleration": 6,
+        "linearDamping": 1.4,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.045,
+        "pitchResponse": 6,
+        "rollResponse": 6,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 7
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.84,
+          0.34,
+          2.15
+        ],
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "jetski": {
+      "version": 1,
+      "assetId": "jetski",
+      "control": {
+        "speed": 23,
+        "accel": 6.5,
+        "grip": 4,
+        "steer": 1.15,
+        "maxSpeed": 29,
+        "reverseSpeed": 5,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 0.65,
+        "brakeDeceleration": 8,
+        "brakeDamping": 3.5,
+        "groundDeceleration": 6.5,
+        "directionChangeDeceleration": 13,
+        "steeringResponse": 7,
+        "steeringReturn": 9,
+        "verticalAcceleration": 5.2,
+        "linearDamping": 4,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 6,
+        "rollResponse": 6,
+        "throttleResponse": 5,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6.2
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.72,
+          0.84,
+          1.65
+        ],
+        "offset": [
+          0,
+          0.54,
+          0
+        ]
+      }
+    },
+    "atv": {
+      "version": 1,
+      "assetId": "atv",
+      "control": {
+        "speed": 30.555555555555554,
+        "accel": 7.5,
+        "grip": 8,
+        "steer": 0.42,
+        "maxSpeed": 34.72222222222222,
+        "reverseSpeed": 6,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.25,
+        "brakeDeceleration": 6,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 7.5,
+        "directionChangeDeceleration": 15,
+        "steeringResponse": 7,
+        "steeringReturn": 9,
+        "verticalAcceleration": 6,
+        "linearDamping": 8,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 8,
+        "rollResponse": 7,
+        "throttleResponse": 5,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6.2
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.91,
+          0.71,
+          1.25
+        ],
+        "offset": [
+          0,
+          0.71,
+          0
+        ]
+      }
+    },
+    "ski": {
+      "version": 1,
+      "assetId": "ski",
+      "control": {
+        "speed": 24,
+        "accel": 5,
+        "grip": 4.5,
+        "steer": 1.1,
+        "maxSpeed": 24,
+        "reverseSpeed": 0,
+        "slowSpeed": 2.5,
+        "groundSpeed": 3,
+        "coastDeceleration": 0.18,
+        "brakeDeceleration": 7,
+        "brakeDamping": 0,
+        "groundDeceleration": 5,
+        "directionChangeDeceleration": 10,
+        "steeringResponse": 3.5,
+        "steeringReturn": 5,
+        "verticalAcceleration": 4,
+        "linearDamping": 4.5,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.004,
+        "pitchResponse": 12,
+        "rollResponse": 10,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.9,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    "sled": {
+      "version": 1,
+      "assetId": "sled",
+      "control": {
+        "speed": 24,
+        "accel": 4,
+        "grip": 2.2,
+        "steer": 0.9,
+        "maxSpeed": 24,
+        "reverseSpeed": 0,
+        "slowSpeed": 2.5,
+        "groundSpeed": 3,
+        "coastDeceleration": 0.22,
+        "brakeDeceleration": 6,
+        "brakeDamping": 0,
+        "groundDeceleration": 4,
+        "directionChangeDeceleration": 8,
+        "steeringResponse": 4,
+        "steeringReturn": 6,
+        "verticalAcceleration": 3.2,
+        "linearDamping": 2.2,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.006,
+        "pitchResponse": 12,
+        "rollResponse": 10,
+        "throttleResponse": 0.38,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 5.8
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.78,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.78,
+          0
+        ]
+      }
+    },
+    "tank": {
+      "version": 1,
+      "assetId": "tank",
+      "control": {
+        "speed": 12,
+        "accel": 3,
+        "grip": 10,
+        "steer": 0.75,
+        "maxSpeed": 18,
+        "reverseSpeed": 4,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 1.4,
+        "brakeDeceleration": 7,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 3,
+        "directionChangeDeceleration": 6,
+        "steeringResponse": 3,
+        "steeringReturn": 5,
+        "verticalAcceleration": 2.4000000000000004,
+        "linearDamping": 10,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 5,
+        "rollResponse": 5,
+        "throttleResponse": 2,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 14
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.9,
+          2.08,
+          4.65
+        ],
+        "offset": [
+          0,
+          2.08,
+          0
+        ]
+      }
+    },
+    "bus": {
+      "version": 1,
+      "assetId": "bus",
+      "control": {
+        "speed": 22,
+        "accel": 2.1,
+        "grip": 12,
+        "steer": 0.52,
+        "maxSpeed": 22,
+        "reverseSpeed": 2.5,
+        "slowSpeed": 2.5,
+        "groundSpeed": 5,
+        "coastDeceleration": 0.55,
+        "brakeDeceleration": 3.8,
+        "brakeDamping": 3.8,
+        "groundDeceleration": 2.1,
+        "directionChangeDeceleration": 4.2,
+        "steeringResponse": 2.5,
+        "steeringReturn": 3.2,
+        "verticalAcceleration": 1.6800000000000002,
+        "linearDamping": 12,
+        "verticalDamping": 1.8,
+        "drag": 0.25,
+        "dragQuadratic": 0.002,
+        "pitchResponse": 3,
+        "rollResponse": 2.5,
+        "throttleResponse": 1.6,
+        "minimumSpeed": 0,
+        "launchSpeed": 22,
+        "jumpSpeed": 6.3
+      },
+      "camera": {
+        "recenterDelaySeconds": 1.5,
+        "recenterResponsePerSecond": 1.9,
+        "followResponsePerSecond": 8,
+        "baseFovDegrees": 55,
+        "targetHeightOffset": 0,
+        "horizontalOffset": 0,
+        "collisionEnabled": true,
+        "collisionRadiusMeters": 0.25,
+        "distance": 10
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.22,
+          1.34,
+          2.96
+        ],
+        "offset": [
+          0,
+          1.34,
+          0
+        ]
+      }
+    }
+  },
+  "persistedProfiles": {
+    "schemaVersion": 1,
+    "profiles": []
+  },
+  "vehicles": [
+    {
+      "id": "rover",
+      "mode": "wheeled",
+      "camera": 8.2,
+      "seat": [
+        0,
+        1.108,
+        0
+      ],
+      "speed": 44.44444444444444,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      }
+    },
+    {
+      "id": "racer",
+      "mode": "wheeled",
+      "camera": 8,
+      "seat": [
+        0,
+        0.968,
+        0
+      ],
+      "speed": 50,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9400000000000001,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.26,
+          0
+        ]
+      }
+    },
+    {
+      "id": "motorcycle",
+      "mode": "motorcycle",
+      "camera": 6.8,
+      "seat": [
+        0,
+        1.135,
+        -0.19999999999999996
+      ],
+      "speed": 41.666666666666664,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "skateboard",
+      "mode": "skateboard",
+      "camera": 6,
+      "seat": [
+        0,
+        0.2,
+        0
+      ],
+      "speed": 22,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.45,
+          1.05,
+          1.2
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "hovercraft",
+      "mode": "hover",
+      "camera": 8,
+      "seat": [
+        0,
+        0.48,
+        -0.1
+      ],
+      "speed": 28,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.7,
+          1.15,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    {
+      "id": "boat",
+      "mode": "boat",
+      "camera": 9,
+      "seat": [
+        0,
+        0.35,
+        -0.3
+      ],
+      "speed": 24,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.25,
+          2.85
+        ],
+        "offset": [
+          0,
+          0.5,
+          0
+        ]
+      }
+    },
+    {
+      "id": "submarine",
+      "mode": "submarine",
+      "camera": 9,
+      "seat": [
+        0,
+        0.1,
+        0.5
+      ],
+      "speed": 16,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.8,
+          1.6,
+          2.9
+        ],
+        "offset": [
+          0,
+          0.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "glider",
+      "mode": "glider",
+      "camera": 11,
+      "seat": [
+        0,
+        0.46,
+        0
+      ],
+      "speed": 32,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.6,
+          1.1,
+          3.3
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    {
+      "id": "plane",
+      "mode": "plane",
+      "camera": 13,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "speed": 58,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.2,
+          1.25,
+          3.35
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    {
+      "id": "spacecraft",
+      "mode": "spacecraft",
+      "camera": 12,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "speed": 36,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.1,
+          1.5,
+          3.8
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "trail-rover",
+      "mode": "wheeled",
+      "camera": 8.8,
+      "seat": [
+        0,
+        1.108,
+        0
+      ],
+      "speed": 44.44444444444444,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.25
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      }
+    },
+    {
+      "id": "touring-motorcycle",
+      "mode": "motorcycle",
+      "camera": 7.3,
+      "seat": [
+        0,
+        1.135,
+        -0.19999999999999996
+      ],
+      "speed": 41.666666666666664,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "rescue-hovercraft",
+      "mode": "hover",
+      "camera": 8.8,
+      "seat": [
+        0,
+        0.48,
+        -0.1
+      ],
+      "speed": 24,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.75,
+          1.15,
+          2.3
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    {
+      "id": "patrol-boat",
+      "mode": "boat",
+      "camera": 9.8,
+      "seat": [
+        0,
+        0.35,
+        -0.3
+      ],
+      "speed": 21,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.45,
+          1.4,
+          3
+        ],
+        "offset": [
+          0,
+          0.65,
+          0
+        ]
+      }
+    },
+    {
+      "id": "trainer-plane",
+      "mode": "plane",
+      "camera": 13.5,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "speed": 46,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.6,
+          1.25,
+          3.5
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    {
+      "id": "survey-spacecraft",
+      "mode": "spacecraft",
+      "camera": 16,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "speed": 28,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          1.5,
+          5.5
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "supercar",
+      "mode": "wheeled",
+      "camera": 8.2,
+      "seat": [
+        0,
+        0.778,
+        -0.3
+      ],
+      "speed": 65,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.3,
+          0.74,
+          2.5
+        ],
+        "offset": [
+          0,
+          1.06,
+          0
+        ]
+      }
+    },
+    {
+      "id": "kart",
+      "mode": "wheeled",
+      "camera": 6,
+      "seat": [
+        0,
+        0.6679999999999999,
+        -0.32
+      ],
+      "speed": 24,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1,
+          0.69,
+          1.45
+        ],
+        "offset": [
+          0,
+          1.01,
+          0
+        ]
+      }
+    },
+    {
+      "id": "horse",
+      "mode": "mount",
+      "camera": 8,
+      "seat": [
+        0,
+        1.65,
+        0
+      ],
+      "speed": 12,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.8,
+          1.65,
+          1.9
+        ],
+        "offset": [
+          0,
+          1.65,
+          0
+        ]
+      }
+    },
+    {
+      "id": "carriage",
+      "mode": "carriage",
+      "camera": 12,
+      "seat": [
+        0,
+        1.45,
+        0.55
+      ],
+      "speed": 9,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.4,
+          1.8
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      }
+    },
+    {
+      "id": "dragon",
+      "mode": "dragon",
+      "camera": 17,
+      "seat": [
+        0,
+        2.1,
+        0.4
+      ],
+      "speed": 28,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          2.8,
+          4.5
+        ],
+        "offset": [
+          0,
+          2.6,
+          0
+        ]
+      }
+    },
+    {
+      "id": "unicycle",
+      "mode": "unicycle",
+      "camera": 4.6,
+      "seat": [
+        0,
+        0.94,
+        0
+      ],
+      "speed": 4.2,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.34,
+          0.49,
+          0.39
+        ],
+        "offset": [
+          0,
+          0.49,
+          0
+        ]
+      }
+    },
+    {
+      "id": "observation-submarine",
+      "mode": "submarine",
+      "camera": 6.5,
+      "seat": [
+        0,
+        0.24,
+        0.25
+      ],
+      "speed": 5,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.55,
+          1.2,
+          1.55
+        ],
+        "offset": [
+          0,
+          0.15,
+          0
+        ]
+      }
+    },
+    {
+      "id": "canoe",
+      "mode": "paddled_boat",
+      "camera": 6.5,
+      "seat": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "speed": 3.1,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.6,
+          0.34,
+          2.4
+        ],
+        "offset": [
+          0,
+          0.1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "kayak",
+      "mode": "paddled_boat",
+      "camera": 6,
+      "seat": [
+        0,
+        0.23,
+        -0.35
+      ],
+      "speed": 4.6,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.4,
+          0.24,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ]
+      }
+    },
+    {
+      "id": "raft",
+      "mode": "paddled_boat",
+      "camera": 7,
+      "seat": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "speed": 6.944444444444445,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.84,
+          0.34,
+          2.15
+        ],
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "jetski",
+      "mode": "boat",
+      "camera": 6.2,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "speed": 23,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.72,
+          0.84,
+          1.65
+        ],
+        "offset": [
+          0,
+          0.54,
+          0
+        ]
+      }
+    },
+    {
+      "id": "atv",
+      "mode": "wheeled",
+      "camera": 6.2,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "speed": 30.555555555555554,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.91,
+          0.71,
+          1.25
+        ],
+        "offset": [
+          0,
+          0.71,
+          0
+        ]
+      }
+    },
+    {
+      "id": "ski",
+      "mode": "ski",
+      "camera": 6,
+      "seat": [
+        0,
+        0.91,
+        0
+      ],
+      "speed": 24,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.9,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    {
+      "id": "sled",
+      "mode": "sled",
+      "camera": 5.8,
+      "seat": [
+        0,
+        0.63,
+        -0.22
+      ],
+      "speed": 24,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.78,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.78,
+          0
+        ]
+      }
+    },
+    {
+      "id": "tank",
+      "mode": "tank",
+      "camera": 14,
+      "seat": [
+        0,
+        1.45,
+        2.1
+      ],
+      "speed": 12,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.9,
+          2.08,
+          4.65
+        ],
+        "offset": [
+          0,
+          2.08,
+          0
+        ]
+      }
+    },
+    {
+      "id": "bus",
+      "mode": "bus",
+      "camera": 10,
+      "seat": [
+        0.47,
+        1.13,
+        1.38
+      ],
+      "speed": 22,
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.22,
+          1.34,
+          2.96
+        ],
+        "offset": [
+          0,
+          1.34,
+          0
+        ]
+      }
+    }
+  ],
+  "traces": [
+    {
+      "kind": "ordinary",
+      "samples": [
+        {
+          "tick": 0,
+          "camera": {
+            "mode": "follow-pending",
+            "positionWorldMetersXYZ": [
+              9,
+              6,
+              13
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.03201498835539621,
+              0.24891929632526683,
+              0.0955644015247267,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.2684760566838989,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 0,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              1,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              1.65,
+              0
+            ]
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9,
+            6,
+            13
+          ],
+          "quaternion": [
+            -0.03201498835539621,
+            0.2489192963252668,
+            0.09556440152472669,
+            0.9632661468144507
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 1,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              9.014999999664726,
+              6,
+              12.949999999254942
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396186,
+              0.24891929632526685,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.014999999664726,
+              6,
+              12.949999999254942
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.2684760566838989,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0.014999999664723873,
+              1,
+              -0.05000000074505806
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0.014999999664723873,
+              1.65,
+              -0.05000000074505806
+            ],
+            "safeArmDistanceMeters": 16.398856667463132,
+            "actualArmDistanceMeters": 16.398856667463132,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0.014999999664723873,
+                1,
+                -0.05000000074505806
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0.20496595892701486,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0.8999999165534973,
+                  0,
+                  -2.999999761581421
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9.014999999664726,
+            6,
+            12.949999999254942
+          ],
+          "quaternion": [
+            -0.032014988355396186,
+            0.24891929632526685,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 30,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              9.449999809265138,
+              6,
+              11.500000357627869
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396186,
+              0.24891929632526685,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.449999809265138,
+              6,
+              11.500000357627869
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.2684760566838989,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1,
+              -1.4999996423721313
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1.65,
+              -1.4999996423721313
+            ],
+            "safeArmDistanceMeters": 16.398856667463132,
+            "actualArmDistanceMeters": 16.398856667463132,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0.4499998092651367,
+                1,
+                -1.4999996423721313
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0.20496595892701486,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0.8999990820884705,
+                  0,
+                  -2.9999969005584717
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9.449999809265138,
+            6,
+            11.500000357627869
+          ],
+          "quaternion": [
+            -0.032014988355396186,
+            0.24891929632526685,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 42,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.34047605668389896,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1,
+              -1.4999996423721313
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1.65,
+              -1.4999996423721313
+            ],
+            "safeArmDistanceMeters": 16.398856667463132,
+            "actualArmDistanceMeters": 16.398856667463132,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0.4499998092651367,
+                1,
+                -1.4999996423721313
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0.20496595892701486,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.767957312709592,
+            7.126166287778306,
+            9.027960309053679
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 60,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.34047605668389896,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1,
+              -1.4999996423721313
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1.65,
+              -1.4999996423721313
+            ],
+            "safeArmDistanceMeters": 16.398856667463132,
+            "actualArmDistanceMeters": 16.398856667463132,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0.4499998092651367,
+                1,
+                -1.4999996423721313
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0.20496595892701486,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.767957312709592,
+            7.126166287778306,
+            9.027960309053679
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 120,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.767957312709592,
+              7.126166287778306,
+              9.027960309053679
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.34047605668389896,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.398856667463132,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1,
+              -1.4999996423721313
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0.4499998092651367,
+              1.65,
+              -1.4999996423721313
+            ],
+            "safeArmDistanceMeters": 16.398856667463132,
+            "actualArmDistanceMeters": 16.398856667463132,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "hover",
+              "name": "subject",
+              "tags": [],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0.4499998092651367,
+                1,
+                -1.4999996423721313
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0.20496595892701486,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.767957312709592,
+            7.126166287778306,
+            9.027960309053679
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        }
+      ],
+      "reset": {
+        "tick": 0,
+        "mode": "follow-pending",
+        "pose": [
+          9,
+          6,
+          13
+        ],
+        "quaternion": [
+          -0.03201498835539621,
+          0.2489192963252668,
+          0.09556440152472669,
+          0.9632661468144507
+        ],
+        "fov": 41
+      },
+      "errors": []
+    },
+    {
+      "kind": "humanoid",
+      "samples": [
+        {
+          "tick": 0,
+          "camera": {
+            "mode": "follow-pending",
+            "positionWorldMetersXYZ": [
+              9,
+              6,
+              13
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.03201498835539621,
+              0.24891929632526683,
+              0.0955644015247267,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.29924738412914453,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 0,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.03,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              1.122,
+              0
+            ]
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.03,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                1.2246467991473532e-16,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "falling",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": false,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9,
+            6,
+            13
+          ],
+          "quaternion": [
+            -0.03201498835539621,
+            0.2489192963252668,
+            0.09556440152472669,
+            0.9632661468144507
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 1,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              8.999528856860708,
+              5.985000495910644,
+              12.997733639087528
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396186,
+              0.24891929632526685,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              8.999528856860708,
+              5.985000495910644,
+              12.997733639087528
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.29924738412914453,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              -0.00047114313929341733,
+              0.015000495910644451,
+              -0.0022663609124720097
+            ],
+            "targetPositionWorldMetersXYZ": [
+              -0.00047114313929341733,
+              1.1070004959106445,
+              -0.0022663609124720097
+            ],
+            "safeArmDistanceMeters": 16.546748441914502,
+            "actualArmDistanceMeters": 16.546748441914502,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                -0.00047114313929341733,
+                0.015000495910644451,
+                -0.0022663609124720097
+              ],
+              "rotationLocalRadiansXYZ": [
+                -3.141592653589793,
+                -0.529354187414494,
+                -3.141592653589793
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  -0.028268587708389838,
+                  0,
+                  -0.1359816546662203
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            8.999528856860708,
+            5.985000495910644,
+            12.997733639087528
+          ],
+          "quaternion": [
+            -0.032014988355396186,
+            0.24891929632526685,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 30,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              8.788386613130571,
+              5.98509991645813,
+              11.982050776481628
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396186,
+              0.24891929632526685,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              8.788386613130571,
+              5.98509991645813,
+              11.982050776481628
+            ],
+            "desiredYawRadians": 0.49642275340488196,
+            "desiredPitchRadians": 0.29924738412914453,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              -0.21161338686943054,
+              0.015099916458129803,
+              -1.0179492235183716
+            ],
+            "targetPositionWorldMetersXYZ": [
+              -0.21161338686943054,
+              1.1070999164581299,
+              -1.0179492235183716
+            ],
+            "safeArmDistanceMeters": 16.546748441914502,
+            "actualArmDistanceMeters": 16.546748441914502,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                -0.21161338686943054,
+                0.015099916458129803,
+                -1.0179492235183716
+              ],
+              "rotationLocalRadiansXYZ": [
+                -3.141592653589793,
+                -0.20496595892701447,
+                -3.141592653589793
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  -0.5147263475576078,
+                  0,
+                  -2.476011223596083
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": [
+                  "floor"
+                ]
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            8.788386613130571,
+            5.98509991645813,
+            11.982050776481628
+          ],
+          "quaternion": [
+            -0.032014988355396186,
+            0.24891929632526685,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 42,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.054765033235507,
+              7.109798321974469,
+              9.369798643440369
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.054765033235507,
+              7.109798321974469,
+              9.369798643440369
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.3712473841291446,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              -0.23538124561309814,
+              0.015000019073486248,
+              -1.132291316986084
+            ],
+            "targetPositionWorldMetersXYZ": [
+              -0.23538124561309814,
+              1.1070000190734863,
+              -1.132291316986084
+            ],
+            "safeArmDistanceMeters": 16.546748441914502,
+            "actualArmDistanceMeters": 16.546748441914502,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                -0.23538124561309814,
+                0.015000019073486248,
+                -1.132291316986084
+              ],
+              "rotationLocalRadiansXYZ": [
+                -3.141592653589793,
+                -0.20496595892701447,
+                -3.141592653589793
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": [
+                  "floor"
+                ]
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.054765033235507,
+            7.109798321974469,
+            9.369798643440369
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 60,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.054765092840151,
+              7.109898278963757,
+              9.369798643440369
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.054765092840151,
+              7.109898278963757,
+              9.369798643440369
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.3712473841291446,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              -0.23538118600845337,
+              0.015099976062774578,
+              -1.132291316986084
+            ],
+            "targetPositionWorldMetersXYZ": [
+              -0.23538118600845337,
+              1.1070999760627747,
+              -1.132291316986084
+            ],
+            "safeArmDistanceMeters": 16.546748441914502,
+            "actualArmDistanceMeters": 16.546748441914502,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                -0.23538118600845337,
+                0.015099976062774578,
+                -1.132291316986084
+              ],
+              "rotationLocalRadiansXYZ": [
+                -3.141592653589793,
+                -0.20496595892701447,
+                -3.141592653589793
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": [
+                  "floor"
+                ]
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.054765092840151,
+            7.109898278963757,
+            9.369798643440369
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 120,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.054767462124781,
+              7.109798381579114,
+              9.369798047393921
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773094,
+              0.3527020883029153,
+              0.11062046016688283,
+              0.9275451083905968
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.054767462124781,
+              7.109798381579114,
+              9.369798047393921
+            ],
+            "desiredYawRadians": 0.7112691577813897,
+            "desiredPitchRadians": 0.3712473841291446,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "subject",
+            "desiredArmDistanceMeters": 16.546748441914502,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              -0.23537881672382355,
+              0.015000078678131024,
+              -1.1322919130325317
+            ],
+            "targetPositionWorldMetersXYZ": [
+              -0.23537881672382355,
+              1.107000078678131,
+              -1.1322919130325317
+            ],
+            "safeArmDistanceMeters": 16.546748441914502,
+            "actualArmDistanceMeters": 16.546748441914502,
+            "collisionPhase": "clear"
+          },
+          "controlled": "subject",
+          "entities": [
+            {
+              "id": "subject",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "subject",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                -0.23537881672382355,
+                0.015000078678131024,
+                -1.1322919130325317
+              ],
+              "rotationLocalRadiansXYZ": [
+                -3.141592653589793,
+                -0.20496595892701447,
+                -3.141592653589793
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": [
+                  "floor"
+                ]
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.054767462124781,
+            7.109798381579114,
+            9.369798047393921
+          ],
+          "quaternion": [
+            -0.05499475065773095,
+            0.3527020883029153,
+            0.11062046016688283,
+            0.9275451083905967
+          ],
+          "fov": 41
+        }
+      ],
+      "reset": {
+        "tick": 0,
+        "mode": "follow-pending",
+        "pose": [
+          9,
+          6,
+          13
+        ],
+        "quaternion": [
+          -0.03201498835539621,
+          0.2489192963252668,
+          0.09556440152472669,
+          0.9632661468144507
+        ],
+        "fov": 41
+      },
+      "errors": []
+    },
+    {
+      "kind": "mounted",
+      "samples": [
+        {
+          "tick": 0,
+          "camera": {
+            "mode": "follow-pending",
+            "positionWorldMetersXYZ": [
+              9,
+              6,
+              13
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.03201498835539621,
+              0.24891929632526683,
+              0.0955644015247267,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13.000000000000002
+            ],
+            "desiredYawRadians": 0.496422753404882,
+            "desiredPitchRadians": 0.2376529015500508,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 0,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.025,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.17,
+              0
+            ]
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.025,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.6749999999999998,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9,
+            6,
+            13
+          ],
+          "quaternion": [
+            -0.03201498835539621,
+            0.2489192963252668,
+            0.09556440152472669,
+            0.9632661468144507
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 1,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13.000000000000002
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396214,
+              0.24891929632526688,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13.000000000000002
+            ],
+            "desiredYawRadians": 0.496422753404882,
+            "desiredPitchRadians": 0.2376529015500508,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.025,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.17,
+              0
+            ],
+            "safeArmDistanceMeters": 16.26864776187622,
+            "actualArmDistanceMeters": 16.26864776187622,
+            "collisionPhase": "clear"
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.025,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.6749999999999998,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9.000000000000002,
+            6,
+            13.000000000000002
+          ],
+          "quaternion": [
+            -0.03201498835539621,
+            0.24891929632526688,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 30,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13.000000000000002
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.032014988355396214,
+              0.24891929632526688,
+              0.09556440152472671,
+              0.9632661468144506
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              9.000000000000002,
+              6,
+              13.000000000000002
+            ],
+            "desiredYawRadians": 0.496422753404882,
+            "desiredPitchRadians": 0.2376529015500508,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.025,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.17,
+              0
+            ],
+            "safeArmDistanceMeters": 16.26864776187622,
+            "actualArmDistanceMeters": 16.26864776187622,
+            "collisionPhase": "clear"
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.025,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.6749999999999998,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            9.000000000000002,
+            6,
+            13.000000000000002
+          ],
+          "quaternion": [
+            -0.03201498835539621,
+            0.24891929632526688,
+            0.0955644015247267,
+            0.9632661468144506
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 42,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.34534734584946,
+              7.12751353518122,
+              10.553437972864572
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773091,
+              0.35270208830291544,
+              0.11062046016688286,
+              0.9275451083905966
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.34534734584946,
+              7.12751353518122,
+              10.553437972864572
+            ],
+            "desiredYawRadians": 0.7112691577813899,
+            "desiredPitchRadians": 0.3096529015500509,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.02499998956918823,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.169999989569188,
+              0
+            ],
+            "safeArmDistanceMeters": 16.268647761876217,
+            "actualArmDistanceMeters": 16.268647761876217,
+            "collisionPhase": "clear"
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.02499998956918823,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0.0000011399388366584162,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.674999989569188,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0.0000011399388366584162,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.34534734584946,
+            7.12751353518122,
+            10.553437972864572
+          ],
+          "quaternion": [
+            -0.05499475065773092,
+            0.3527020883029154,
+            0.11062046016688283,
+            0.9275451083905966
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 60,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.34534734584946,
+              7.127513519535002,
+              10.553437972864572
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773091,
+              0.35270208830291544,
+              0.11062046016688286,
+              0.9275451083905966
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.34534734584946,
+              7.127513519535002,
+              10.553437972864572
+            ],
+            "desiredYawRadians": 0.7112691577813899,
+            "desiredPitchRadians": 0.3096529015500509,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.024999973922970577,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.1699999739229705,
+              0
+            ],
+            "safeArmDistanceMeters": 16.268647761876217,
+            "actualArmDistanceMeters": 16.268647761876217,
+            "collisionPhase": "clear"
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.024999973922970577,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  -0.0000024363398498650213,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.6749999739229704,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  -0.0000024363398498650213,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.34534734584946,
+            7.127513519535002,
+            10.553437972864572
+          ],
+          "quaternion": [
+            -0.05499475065773092,
+            0.3527020883029154,
+            0.11062046016688283,
+            0.9275451083905966
+          ],
+          "fov": 41
+        },
+        {
+          "tick": 120,
+          "camera": {
+            "mode": "follow",
+            "positionWorldMetersXYZ": [
+              11.34534734584946,
+              7.127513586590233,
+              10.553437972864572
+            ],
+            "orientationWorldQuaternionXYZW": [
+              -0.05499475065773091,
+              0.35270208830291544,
+              0.11062046016688286,
+              0.9275451083905966
+            ],
+            "desiredPositionWorldMetersXYZ": [
+              11.34534734584946,
+              7.127513586590233,
+              10.553437972864572
+            ],
+            "desiredYawRadians": 0.7112691577813899,
+            "desiredPitchRadians": 0.3096529015500509,
+            "headingFollow": "fixed",
+            "headingTargetYawRadians": null,
+            "subjectEntityId": "horse-1",
+            "desiredArmDistanceMeters": 16.268647761876217,
+            "framingMode": "preserve-opening",
+            "transitionProgressRatio": 1,
+            "subjectPositionWorldMetersXYZ": [
+              0,
+              0.025000040978201278,
+              0
+            ],
+            "targetPositionWorldMetersXYZ": [
+              0,
+              2.170000040978201,
+              0
+            ],
+            "safeArmDistanceMeters": 16.268647761876217,
+            "actualArmDistanceMeters": 16.268647761876217,
+            "collisionPhase": "clear"
+          },
+          "controlled": "person",
+          "entities": [
+            {
+              "id": "horse-1",
+              "generation": 1,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "骑乘骏马",
+              "tags": [
+                "vehicle",
+                "creature.horse"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                0.025000040978201278,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0.000004716217523181854,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "user-command"
+                }
+              ]
+            },
+            {
+              "id": "person",
+              "generation": 2,
+              "geometryVersion": 0,
+              "movementId": "ground",
+              "name": "person",
+              "tags": [
+                "humanoid-character"
+              ],
+              "appearancePrompt": "",
+              "role": "actor",
+              "positionWorldMetersXYZ": [
+                0,
+                1.675000040978201,
+                0
+              ],
+              "rotationLocalRadiansXYZ": [
+                0,
+                0,
+                0
+              ],
+              "scaleLocalXYZ": [
+                1,
+                1,
+                1
+              ],
+              "isVisibleLocal": true,
+              "isVisibleEffective": true,
+              "motion": {
+                "phase": "grounded",
+                "velocityWorldMetersPerSecondXYZ": [
+                  0,
+                  0.000004716217523181854,
+                  0
+                ],
+                "isGrounded": true,
+                "collisionEntityIds": []
+              },
+              "controlOwners": [
+                {
+                  "channel": "locomotion",
+                  "ownerKind": "player-input"
+                }
+              ]
+            }
+          ],
+          "pose": [
+            11.34534734584946,
+            7.127513586590233,
+            10.553437972864572
+          ],
+          "quaternion": [
+            -0.05499475065773092,
+            0.3527020883029154,
+            0.11062046016688283,
+            0.9275451083905966
+          ],
+          "fov": 41
+        }
+      ],
+      "reset": {
+        "tick": 0,
+        "mode": "follow-pending",
+        "pose": [
+          9,
+          6,
+          13
+        ],
+        "quaternion": [
+          -0.03201498835539621,
+          0.2489192963252668,
+          0.09556440152472669,
+          0.9632661468144507
+        ],
+        "fov": 41
+      },
+      "errors": []
+    }
+  ]
+}

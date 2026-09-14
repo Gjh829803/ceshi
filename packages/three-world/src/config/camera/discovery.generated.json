@@ -1,0 +1,3911 @@
+{
+  "schemaVersion": 1,
+  "entry": "config/camera/index.ts",
+  "sources": {
+    "config/camera/behavior-fields.ts": "1fb5b0446a5ff8d16990e9726e108c259fca99681bbda2e3d0af01e157c0f002",
+    "config/camera/defaults.ts": "70c514d0935125d492560418abe001edb02d87b54ab2e4f13ea42a213d59692b",
+    "config/camera/field-primitives.ts": "e976a58d2e84f9c4986f10b7f431a50b7a0fbd823187f81a44a0ad4c4fe6c737",
+    "config/camera/fields.ts": "b4c9aaa4e380ef8949d6f21a3e3fa048ef59e78ca9eff1aec7ede8303dfde31c",
+    "config/camera/humanoid.ts": "84c5269236fb96911e7b593328ff6d6c3ce1425f2b4b802dc4a4cd64d4e878ea",
+    "config/camera/index.ts": "cc16fb803240d8b3f0ca660f0ad56edb6051dec2e519e3b760436cc8d41cb1a3",
+    "config/camera/resolve.ts": "250e21457ba3f0a4f3e664ca8d5ec50b0615a5c0b65032dfa5699d63d90c0fc3",
+    "config/camera/serialization.ts": "ee8638e736b32e472be5f9aa2eda0722eb00ee77b9efaf52158c6d77a1c43f84",
+    "config/camera/validation.ts": "4e5f828ff7f6c05357a881f656bf6c30128811c3f0b67f665b5912427ed59bc1",
+    "config/camera/validator.generated.ts": "e0e074a5ff249f2748b498277c135e2d4c588dc3f693cf332e084bda0efddafe",
+    "control-support.ts": "57e0b6190cc281a71dec3f5b92531ae7e38a58c10614e3cb15dd5b9fed3f5008"
+  },
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "kind": {
+        "const": "world-camera"
+      },
+      "schemaVersion": {
+        "const": 1
+      },
+      "defaultViewId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "views": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "third-person"
+                },
+                "presetId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "overrides": {
+                  "$ref": "#/$defs/third-person"
+                },
+                "opening": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "positionWorldMetersXYZ": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "lookAtWorldMetersXYZ": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "upWorldXYZ": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "fovDegrees": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "exclusiveMaximum": 180,
+                      "$comment": "unit:degrees"
+                    }
+                  },
+                  "required": [
+                    "positionWorldMetersXYZ",
+                    "lookAtWorldMetersXYZ",
+                    "fovDegrees"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "first-person"
+                },
+                "presetId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "overrides": {
+                  "$ref": "#/$defs/first-person"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "shoulder"
+                },
+                "presetId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "overrides": {
+                  "$ref": "#/$defs/shoulder"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            }
+          ]
+        },
+        "minProperties": 1
+      },
+      "binding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targetEntityId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mountTarget": {
+            "type": "string",
+            "enum": [
+              "actor",
+              "vehicle"
+            ]
+          },
+          "subjectOverrides": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "views": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "presetId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "overrides": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/third-person"
+                          },
+                          {
+                            "$ref": "#/$defs/first-person"
+                          },
+                          {
+                            "$ref": "#/$defs/shoulder"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "required": [
+                "views"
+              ]
+            }
+          }
+        },
+        "required": [
+          "targetEntityId"
+        ]
+      },
+      "presets": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "third-person"
+                },
+                "values": {
+                  "$ref": "#/$defs/third-person"
+                },
+                "sourceIdentity": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "values"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "first-person"
+                },
+                "values": {
+                  "$ref": "#/$defs/first-person"
+                },
+                "sourceIdentity": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "values"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "shoulder"
+                },
+                "values": {
+                  "$ref": "#/$defs/shoulder"
+                },
+                "sourceIdentity": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "values"
+              ]
+            }
+          ]
+        }
+      },
+      "activation": {
+        "type": "string",
+        "enum": [
+          "on-input",
+          "immediate"
+        ]
+      },
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "orbitRateRadiansPerSecond": {
+            "type": "number",
+            "minimum": 0,
+            "$comment": "unit:radians/second"
+          },
+          "cycleViewIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "transition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "durationSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "$comment": "unit:seconds"
+          }
+        }
+      }
+    },
+    "required": [
+      "kind",
+      "schemaVersion",
+      "defaultViewId",
+      "views",
+      "binding"
+    ],
+    "$id": "https://worldkit.dev/schema/camera-document-v1.json",
+    "$defs": {
+      "third-person": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lens": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "verticalFovDegrees": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 180,
+                "$comment": "unit:degrees"
+              },
+              "nearMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              },
+              "farMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "origin"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "seat"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "body"
+                      },
+                      "heightRatio": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "$comment": "unit:ratio"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "subject-local"
+                      },
+                      "positionMetersXYZ": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              "anchorOffset": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "space": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading",
+                      "subject"
+                    ]
+                  },
+                  "offsetMetersXYZ": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "subjectTranslationHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "anchorHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "armHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "distanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "orientation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "initialPitchRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "pitchLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "yawLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "referenceFrame": {
+                "type": "string",
+                "enum": [
+                  "world-up",
+                  "subject-up"
+                ]
+              },
+              "recenter": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "delaySeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "minimumSpeedMetersPerSecond": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "yawHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "pitch": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "targetRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "halfLifeSeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:seconds"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constraints": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "collision": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "radiusMeters": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "armClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "pivotClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              },
+              "retraction": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "recovery": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "clearHoldSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "releaseDeadbandMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "preserve-framing",
+                  "require-line-of-sight"
+                ]
+              }
+            }
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "speedFov": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "fullEffectSpeedMetersPerSecond": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "maximumOffsetDegrees": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:degrees"
+                  },
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  }
+                }
+              },
+              "speedDistance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "fullEffectSpeedMetersPerSecond": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "maximumOffsetMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "extendHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "retractHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  }
+                }
+              }
+            }
+          },
+          "subjectFade": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "startDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              },
+              "endDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "zoom": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "range": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumDistanceMeters": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:meters"
+                      },
+                      "maximumDistanceMeters": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:meters"
+                      }
+                    }
+                  }
+                ]
+              },
+              "halfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              }
+            }
+          },
+          "framing": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "preserve-opening",
+                  "look-at"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "first-person": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lens": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "verticalFovDegrees": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 180,
+                "$comment": "unit:degrees"
+              },
+              "nearMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              },
+              "farMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "origin"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "seat"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "body"
+                      },
+                      "heightRatio": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "$comment": "unit:ratio"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "subject-local"
+                      },
+                      "positionMetersXYZ": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              "anchorOffset": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "space": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading",
+                      "subject"
+                    ]
+                  },
+                  "offsetMetersXYZ": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "subjectTranslationHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "anchorHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "armHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              }
+            }
+          },
+          "orientation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "initialPitchRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "pitchLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "yawLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "referenceFrame": {
+                "type": "string",
+                "enum": [
+                  "world-up",
+                  "subject-up"
+                ]
+              },
+              "recenter": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "delaySeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "minimumSpeedMetersPerSecond": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "yawHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "pitch": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "targetRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "halfLifeSeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:seconds"
+                      }
+                    }
+                  }
+                }
+              },
+              "rollInheritanceRatio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "$comment": "unit:ratio"
+              }
+            }
+          },
+          "constraints": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "collision": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "radiusMeters": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "armClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "pivotClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              },
+              "retraction": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "recovery": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "clearHoldSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "releaseDeadbandMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              }
+            }
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "speedFov": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "fullEffectSpeedMetersPerSecond": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "maximumOffsetDegrees": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:degrees"
+                  },
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "shoulder": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lens": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "verticalFovDegrees": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 180,
+                "$comment": "unit:degrees"
+              },
+              "nearMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              },
+              "farMeters": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "position": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "anchor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "origin"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "seat"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "body"
+                      },
+                      "heightRatio": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "$comment": "unit:ratio"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "subject-local"
+                      },
+                      "positionMetersXYZ": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              "anchorOffset": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "space": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading",
+                      "subject"
+                    ]
+                  },
+                  "offsetMetersXYZ": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              },
+              "subjectTranslationHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "anchorHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "armHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              },
+              "distanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "orientation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "initialPitchRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "pitchLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "yawLimitsRadians": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "maximumRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      }
+                    }
+                  }
+                ]
+              },
+              "referenceFrame": {
+                "type": "string",
+                "enum": [
+                  "world-up",
+                  "subject-up"
+                ]
+              },
+              "recenter": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "delaySeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "minimumSpeedMetersPerSecond": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "yawHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "pitch": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "targetRadians": {
+                        "type": "number",
+                        "$comment": "unit:radians"
+                      },
+                      "halfLifeSeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:seconds"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constraints": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "collision": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "radiusMeters": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "armClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "pivotClearanceMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              },
+              "retraction": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "recovery": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "speedLimit": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "unlimited"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "limited"
+                          },
+                          "maximumSpeedMetersPerSecond": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "$comment": "unit:meters/second"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "clearHoldSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "releaseDeadbandMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  }
+                }
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "preserve-framing",
+                  "require-line-of-sight"
+                ]
+              }
+            }
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "speedFov": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "fullEffectSpeedMetersPerSecond": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "maximumOffsetDegrees": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:degrees"
+                  },
+                  "halfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  }
+                }
+              },
+              "speedDistance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "fullEffectSpeedMetersPerSecond": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "$comment": "unit:meters/second"
+                  },
+                  "maximumOffsetMeters": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:meters"
+                  },
+                  "extendHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  },
+                  "retractHalfLifeSeconds": {
+                    "type": "number",
+                    "minimum": 0,
+                    "$comment": "unit:seconds"
+                  }
+                }
+              }
+            }
+          },
+          "subjectFade": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "startDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              },
+              "endDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            }
+          },
+          "zoom": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "range": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "unbounded"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "bounded"
+                      },
+                      "minimumDistanceMeters": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:meters"
+                      },
+                      "maximumDistanceMeters": {
+                        "type": "number",
+                        "minimum": 0,
+                        "$comment": "unit:meters"
+                      }
+                    }
+                  }
+                ]
+              },
+              "halfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "fields": [
+    {
+      "kind": "third-person",
+      "path": "lens.verticalFovDegrees",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 180,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "look-at-only",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "lens.nearMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "lens.farMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.anchor",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "origin"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "seat"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "body"
+              },
+              "heightRatio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "$comment": "unit:ratio"
+              }
+            },
+            "required": [
+              "kind",
+              "heightRatio"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-local"
+              },
+              "positionMetersXYZ": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "kind",
+              "positionMetersXYZ"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.anchorOffset.space",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world",
+          "heading",
+          "subject"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.anchorOffset.offsetMetersXYZ",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.subjectTranslationHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.anchorHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.armHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "position.distanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "look-at-only",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.initialPitchRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "look-at-only",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.pitchLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.yawLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.referenceFrame",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world-up",
+          "subject-up"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.delaySeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.minimumSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.yawHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.pitch.targetRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.pitch.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.collision.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.collision.radiusMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.collision.armClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.collision.pivotClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.retraction.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.retraction.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.recovery.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.recovery.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.recovery.clearHoldSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.recovery.releaseDeadbandMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "constraints.visibility",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "preserve-framing",
+          "require-line-of-sight"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedFov.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedFov.fullEffectSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedFov.maximumOffsetDegrees",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedFov.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedDistance.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedDistance.fullEffectSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedDistance.maximumOffsetMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedDistance.extendHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "effects.speedDistance.retractHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "subjectFade.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "subjectFade.startDistanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "subjectFade.endDistanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "zoom.range",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              },
+              "maximumDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumDistanceMeters",
+              "maximumDistanceMeters"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "zoom.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "framing.kind",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "preserve-opening",
+          "look-at"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "lens.verticalFovDegrees",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 180,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "lens.nearMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "lens.farMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.anchor",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "origin"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "seat"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "body"
+              },
+              "heightRatio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "$comment": "unit:ratio"
+              }
+            },
+            "required": [
+              "kind",
+              "heightRatio"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-local"
+              },
+              "positionMetersXYZ": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "kind",
+              "positionMetersXYZ"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.anchorOffset.space",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world",
+          "heading",
+          "subject"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.anchorOffset.offsetMetersXYZ",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.subjectTranslationHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.anchorHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "position.armHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.initialPitchRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.pitchLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.yawLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.referenceFrame",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world-up",
+          "subject-up"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.delaySeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.minimumSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.yawHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.pitch.targetRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.pitch.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.rollInheritanceRatio",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "$comment": "unit:ratio"
+      },
+      "unit": "ratio",
+      "applicability": "always",
+      "visibility": "advanced"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.collision.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.collision.radiusMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.collision.armClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.collision.pivotClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.retraction.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.retraction.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.recovery.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.recovery.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.recovery.clearHoldSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "constraints.recovery.releaseDeadbandMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "effects.speedFov.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "effects.speedFov.fullEffectSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "effects.speedFov.maximumOffsetDegrees",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "effects.speedFov.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "lens.verticalFovDegrees",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 180,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "lens.nearMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "lens.farMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.anchor",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "origin"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "seat"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "body"
+              },
+              "heightRatio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "$comment": "unit:ratio"
+              }
+            },
+            "required": [
+              "kind",
+              "heightRatio"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-local"
+              },
+              "positionMetersXYZ": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "kind",
+              "positionMetersXYZ"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.anchorOffset.space",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world",
+          "heading",
+          "subject"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.anchorOffset.offsetMetersXYZ",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.subjectTranslationHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.anchorHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.armHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "position.distanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.initialPitchRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.pitchLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.yawLimitsRadians",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              },
+              "maximumRadians": {
+                "type": "number",
+                "$comment": "unit:radians"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumRadians",
+              "maximumRadians"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.referenceFrame",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "world-up",
+          "subject-up"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.delaySeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.minimumSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.yawHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.pitch.targetRadians",
+      "schema": {
+        "type": "number",
+        "$comment": "unit:radians"
+      },
+      "unit": "radians",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.pitch.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.collision.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.collision.radiusMeters",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.collision.armClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.collision.pivotClearanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.retraction.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.retraction.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.recovery.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.recovery.speedLimit",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unlimited"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "limited"
+              },
+              "maximumSpeedMetersPerSecond": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "$comment": "unit:meters/second"
+              }
+            },
+            "required": [
+              "kind",
+              "maximumSpeedMetersPerSecond"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.recovery.clearHoldSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.recovery.releaseDeadbandMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "constraints.visibility",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "preserve-framing",
+          "require-line-of-sight"
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedFov.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedFov.fullEffectSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedFov.maximumOffsetDegrees",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:degrees"
+      },
+      "unit": "degrees",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedFov.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedDistance.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedDistance.fullEffectSpeedMetersPerSecond",
+      "schema": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "$comment": "unit:meters/second"
+      },
+      "unit": "meters/second",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedDistance.maximumOffsetMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedDistance.extendHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "effects.speedDistance.retractHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "subjectFade.enabled",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "subjectFade.startDistanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "subjectFade.endDistanceMeters",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:meters"
+      },
+      "unit": "meters",
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "zoom.range",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "unbounded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bounded"
+              },
+              "minimumDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              },
+              "maximumDistanceMeters": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:meters"
+              }
+            },
+            "required": [
+              "kind",
+              "minimumDistanceMeters",
+              "maximumDistanceMeters"
+            ]
+          }
+        ]
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "zoom.halfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
+      "visibility": "standard"
+    }
+  ]
+}

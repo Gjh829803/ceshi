@@ -1,3 +1,4 @@
+import {createHumanoidCameraDocument} from '../config/camera/index';
 import {createSpaceTrainingMap} from '@worldkit/preset-content/environment/space-training';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';
@@ -102,9 +103,9 @@ describe('native space family',()=>{
  });
  it('reuses mounted SDK input, all three camera modes, runtime commands and reset',async()=>{
   const model=buildSpaceModel(spec),world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'space',assetId:'space',spec,object:model.root}]}});
-  try{const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'space',mounted:true,cameraMode:0}});
-   r.applyProfile({view:{keyboardToggleEnabled:true}});r.command({type:'space.set-drive-mode',mode:'assisted'});world.step({humanoid:{...emptyInput(),forward:1}},60);const speed=r.simulation.controlledActor.vehicle!.speed;world.step({humanoid:emptyInput()},120);expect(r.simulation.controlledActor.vehicle!.speed).toBeLessThan(speed*.1);
-   for(const mode of [1,2,0]){world.step({cameraTogglePressed:true},1);expect(r.snapshot().cameraMode).toBe(mode);world.step({},1);}
+  try{world.setCameraFollow({configuration:{...createHumanoidCameraDocument('person'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'space',mounted:true,}});
+   world.setCameraFollow({configuration:{...world.inspectCamera().document!,input:{cycleViewIds:['third-person','first-person','shoulder']}}});r.command({type:'space.set-drive-mode',mode:'assisted'});world.step({humanoid:{...emptyInput(),forward:1}},60);const speed=r.simulation.controlledActor.vehicle!.speed;world.step({humanoid:emptyInput()},120);expect(r.simulation.controlledActor.vehicle!.speed).toBeLessThan(speed*.1);
+   for(const mode of [1,2,0]){world.step({cameraTogglePressed:true},1);expect(world.snapshot().camera.viewKind).toBe(['third-person','first-person','shoulder'][mode]);world.step({},1);}
    const rotation=r.simulation.controlledActor.vehicle!.rotation.clone();world.step({cameraYawRatio:1,cameraPitchRatio:1},30);expect(r.simulation.controlledActor.vehicle!.rotation.angleTo(rotation)).toBeLessThan(.001);
    expect(r.snapshot().vehicles[0]!.spaceFlight).not.toHaveProperty('fuelKilograms');r.snapshot().vehicles[0]!.spaceFlight!.thrustNewtonsXYZ[0]=999;expect(r.snapshot().vehicles[0]!.spaceFlight!.thrustNewtonsXYZ[0]).not.toBe(999);
    r.reset();expect(r.snapshot().vehicles[0]!.spaceFlight).toMatchObject({driveMode:'inertial'});expect(()=>r.command({type:'space.set-drive-mode',mode:'assisted'})).toThrow('SPACE_VEHICLE_NOT_MOUNTED');
@@ -127,7 +128,7 @@ it.each(['spacecraft','survey-spacecraft'])('fits the current Source101 driver i
  const config={...SPECS.find(s=>s.id===id)!,spawn:[0,20,0] as [number,number,number]},model=buildSpaceModel(config);
  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:character.root,animation:character},vehicles:[{instanceId:'craft',assetId:id,spec:config,object:model.root}]}});
  try{
-  const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'craft',mounted:true,cameraMode:0}});
+  world.setCameraFollow({configuration:{...createHumanoidCameraDocument('person'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});const r=world.humanoid!;r.prepareEpisodeStart({positionWorldMetersXYZ:[0,20,0],facingYawRadians:-Math.PI,humanoid:{vehicleInstanceId:'craft',mounted:true,}});
   for(const input of [{},{forward:1,steer:-1},{forward:-1,steer:1,roll:1}]){
    world.step({humanoid:{...emptyInput(),...input}},30);model.root.updateMatrixWorld(true);character.root.updateMatrixWorld(true);
    const inverse=model.root.matrixWorld.clone().invert(),points:Vector3[]=[],pelvis=new Box3();
@@ -140,7 +141,7 @@ it.each(['spacecraft','survey-spacecraft'])('fits the current Source101 driver i
    expect(floor).toBeGreaterThanOrEqual(.69);
    for(const x of [-.16,.16]){const sole=Math.min(...points.filter(p=>Math.abs(p.x-x)<.09&&Math.abs(p.z-.5)<.15).map(p=>p.y));expect(sole-.7025).toBeGreaterThanOrEqual(0);expect(sole-.7025).toBeLessThan(.01);}
    for(const [name,target] of [['hand_l',new Vector3(.214,1.508,.52)],['hand_r',new Vector3(-.195,1.524,.495)]] as const){const hand=character.root.getObjectByName(name)!.getWorldPosition(new Vector3()).applyMatrix4(inverse);expect(hand.distanceTo(target)).toBeLessThan(.12);}
-   r.setCameraMode(1);world.step({},1);const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);expect(r.followCamera.camera.position.distanceTo(eye)).toBeLessThan(.003);r.setCameraMode(0);
+   world.setCameraView('first-person');const cameraDocument=world.inspectCamera().document!;world.setCameraFollow({configuration:{...cameraDocument,views:{...cameraDocument.views,'first-person':{kind:'first-person',overrides:{position:{subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0}}}}}});world.step({},1);const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);expect(world.camera.position.distanceTo(eye)).toBeLessThan(.003);world.setCameraView('third-person');
   }
  }finally{world.dispose();}
 },30000);

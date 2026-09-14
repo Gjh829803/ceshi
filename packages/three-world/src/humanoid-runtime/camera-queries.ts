@@ -10,6 +10,14 @@ export function probeHumanoidCamera(
   exclude?: RAPIER.Collider, predicate?: (collider: RAPIER.Collider)=>boolean,
   targetDistance=0,
 ): CameraCollisionProbeResult {
+  if(radius===0){
+    const dx=to[0]-from[0],dy=to[1]-from[1],dz=to[2]-from[2],length=Math.hypot(dx,dy,dz);
+    if(length<=1e-12)return {distanceMeters:0};
+    const ray=new RAPIER.Ray({x:from[0],y:from[1],z:from[2]},{x:dx/length,y:dy/length,z:dz/length});
+    const hit=world.castRayAndGetNormal(ray,length,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,exclude,undefined,predicate);
+    return hit?{distanceMeters:hit.timeOfImpact,colliderEntityId:String(hit.collider.handle),startedOverlapping:hit.timeOfImpact===0,
+      ...(hit.timeOfImpact>0?{normalWorldXYZ:[hit.normal.x,hit.normal.y,hit.normal.z] as Vec3}:{})}:{distanceMeters:length};
+  }
   const start={x:from[0],y:from[1],z:from[2]},shape=new RAPIER.Ball(radius);
   const collider=world.intersectionWithShape(start,identity,shape,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,exclude,undefined,predicate);
   if(collider){

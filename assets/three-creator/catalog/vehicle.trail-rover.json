@@ -61,7 +61,6 @@
         0.91,
         0.1
       ],
-      "camera": 8.8,
       "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹",
       "archetype": "rover",
       "visualVariant": "utility",
@@ -102,6 +101,28 @@
       0,
       1.15,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.trail-rover.third-person",
+        "source": "presets",
+        "key": "trail-rover.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.trail-rover.first-person",
+        "source": "presets",
+        "key": "trail-rover.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.trail-rover.shoulder",
+        "source": "presets",
+        "key": "trail-rover.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

@@ -1,0 +1,57 @@
+{
+  "kind": "world-camera",
+  "schemaVersion": 1,
+  "defaultViewId": "third-person",
+  "binding": {
+    "targetEntityId": "fox"
+  },
+  "activation": "on-input",
+  "views": {
+    "third-person": {
+      "kind": "third-person",
+      "opening": {
+        "positionWorldMetersXYZ": [
+          0,
+          4,
+          8
+        ],
+        "lookAtWorldMetersXYZ": [
+          0,
+          0.5,
+          0
+        ],
+        "fovDegrees": 55
+      },
+      "overrides": {
+        "framing": {
+          "kind": "preserve-opening"
+        },
+        "lens": {
+          "nearMeters": 0.1,
+          "farMeters": 200
+        }
+      }
+    },
+    "first-person": {
+      "kind": "first-person",
+      "overrides": {
+        "position": {
+          "anchor": {
+            "kind": "eye"
+          }
+        },
+        "lens": {
+          "verticalFovDegrees": 55,
+          "nearMeters": 0.1,
+          "farMeters": 200
+        }
+      }
+    }
+  },
+  "input": {
+    "cycleViewIds": [
+      "third-person",
+      "first-person"
+    ]
+  }
+}

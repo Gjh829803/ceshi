@@ -1,5 +1,6 @@
+import cameraData from './config/camera.json';
 import * as THREE from 'three';
-import {createHumanoidWorld,humanoid} from '@worldkit/three';
+import {createHumanoidWorld,parseCameraDocument,humanoid} from '@worldkit/three';
 import {map} from './map';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color('#eeeeee');
@@ -43,6 +44,7 @@ const water=new THREE.Mesh(new THREE.PlaneGeometry(11,40),new THREE.MeshStandard
 water.rotation.x=-Math.PI/2;water.position.set(10.5,0,0);scene.add(water);
 
 const world=await createHumanoidWorld({scene,camera,canvas,map,characterId:'person'});
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 world.setCaptureTargets(['person']);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;max-width:460px;padding:12px;background:#16313ddd;color:white;font:14px sans-serif';

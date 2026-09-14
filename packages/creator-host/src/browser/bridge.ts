@@ -11,12 +11,12 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
-export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles';
+export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles' | 'camera';
 export interface InspectionQuery {
   query?: string;
   entityIds?: string[];
   vehicleDetail?: 'summary' | 'wheels';
-  /** Omit for standard sections; vehicles is opt-in. */
+  /** Omit for standard sections; vehicles and camera are opt-in. */
   sections?: InspectionSection[];
 }
 function observation(): WorldObservation {
@@ -30,26 +30,14 @@ function describe(object: THREE.Object3D) {
   const box = new THREE.Box3().setFromObject(object, true);
   return { uuid: object.uuid, name: object.name, type: object.type, parentUuid: object.parent?.uuid ?? null, positionMetersXYZ: position(object), visible: object.visible, childCount: object.children.length, bounds: box.isEmpty() ? null : { minimumMetersXYZ: box.min.toArray(), maximumMetersXYZ: box.max.toArray() } };
 }
-/** Optional camera feedback for one current-view capture, never the recording sampler. */
+/** Read the exact committed SDK result; auxiliary failures never prevent pixels. */
+function committedCameraObservation(world: WorldObservation) {
+  if (!world.inspectCamera) return {camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}};
+  try { return {camera:world.inspectCamera(),cameraAvailability:{status:'available'}}; }
+  catch { return {camera:null,cameraAvailability:{status:'unavailable',reason:'inspection-failed'}}; }
+}
 function currentCameraObservation(world: WorldObservation) {
-  let snapshot: ReturnType<NonNullable<WorldObservation['snapshot']>> | null = null;
-  try { snapshot = world.snapshot?.() ?? null; } catch { /* Raw/older observers may not provide telemetry. */ }
-  let framing: unknown = null, cameraOverrides: unknown = null, cameraSettings: unknown = null;
-  if (snapshot?.humanoid) {
-    try {
-      const configuration = world.capabilities?.({entityIds: []})?.humanoid?.configuration;
-      const camera = configuration?.effective?.camera;
-      cameraOverrides = configuration?.profile?.camera ?? null;
-      cameraSettings = camera?.settingsApplied === false ? null : camera?.settings ?? null;
-      framing = camera && 'framing' in camera ? camera.framing ?? null : null;
-    } catch { /* Advisory diagnostics must not prevent a real image capture. */ }
-  }
-  return {
-    worldRevision: snapshot?.worldRevision ?? null, simulationTick: snapshot?.simulationTick ?? null,
-    simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null,
-    camera: snapshot?.camera ?? null, humanoidCameraMode: snapshot?.humanoid?.cameraMode ?? null,
-    owner: snapshot?.camera?.mode ?? null, framing, cameraOverrides, cameraSettings,
-  };
+  return committedCameraObservation(world);
 }
 function createBridge() {
   const characterContinuity=new CharacterContinuityMonitor();
@@ -143,6 +131,7 @@ function createBridge() {
         ...(includes('snapshot') ? {snapshot, characterContinuity: characterContinuity.read(world, snapshot)} : {}),
         ...(includes('description') ? {description: world.capabilities?.(selection) ?? null} : {}),
         ...(includes('diagnostics') ? {diagnostics: world.inspect?.() ?? null} : {}),
+        ...(sections?.includes('camera') ? committedCameraObservation(world) : {}),
         ...(sections?.includes('vehicles') ? {vehicles: (()=>{try{return world.inspectVehicles?.({...selection,...(vehicleDetail?{detail:vehicleDetail}:{})})??null;}catch{return null;}})()} : {}),
       };
     },

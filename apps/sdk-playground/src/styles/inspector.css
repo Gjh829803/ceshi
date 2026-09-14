@@ -244,7 +244,8 @@
   letter-spacing: 1px;
 }
 .inspector-modes {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
   background: #122a2e;
   border: 1px solid #ffffff06;
@@ -252,7 +253,10 @@
   padding: 3px;
 }
 .inspector-mode {
-  flex: 1;
+  height: auto;
+  min-height: 36px;
+  white-space: normal;
+  overflow-wrap: anywhere;
   min-width: 0;
   border: 1px solid transparent;
   border-radius: 4px;

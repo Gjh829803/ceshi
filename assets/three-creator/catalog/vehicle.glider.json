@@ -61,7 +61,6 @@
         0.46,
         0
       ],
-      "camera": 11,
       "hint": "W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚 · Shift 释放滑翔",
       "archetype": "glider",
       "envelope": {
@@ -101,6 +100,28 @@
       0,
       0.9,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.glider.third-person",
+        "source": "presets",
+        "key": "glider.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.glider.first-person",
+        "source": "presets",
+        "key": "glider.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.glider.shoulder",
+        "source": "presets",
+        "key": "glider.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

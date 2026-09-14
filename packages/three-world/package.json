@@ -16,15 +16,19 @@
     "three": "0.185.1"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "@types/three": "0.185.4",
     "@worldkit/browser-capture": "workspace:*",
     "@worldkit/preset-content": "workspace:*",
     "typescript": "^5.9.2",
-    "@types/node": "^24.3.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tsx": "^4.23.12",
+    "ajv": "8.17.1",
+    "esbuild": "0.28.2"
   },
   "scripts": {
     "test": "vitest run --root ../.. packages/three-world",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate:camera-validator": "tsx scripts/generate-camera-validator.ts"
   }
 }

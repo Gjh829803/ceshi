@@ -73,7 +73,6 @@
         -0.15
       ],
       "characterPose": "atv",
-      "camera": 6.2,
       "wheelbaseMeters": 1.6,
       "rearAxleZMeters": -0.8,
       "wheelPhysics": {
@@ -280,6 +279,28 @@
       0,
       0.71,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.atv.third-person",
+        "source": "presets",
+        "key": "atv.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.atv.first-person",
+        "source": "presets",
+        "key": "atv.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.atv.shoulder",
+        "source": "presets",
+        "key": "atv.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

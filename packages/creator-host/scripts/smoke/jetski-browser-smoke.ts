@@ -26,14 +26,14 @@ try{
   (window as any).finishJetSkiVideo=()=>new Promise<string>(resolve=>{recorder.onstop=()=>{const reader=new FileReader();reader.onload=()=>{stream.getTracks().forEach(t=>t.stop());resolve(String(reader.result).split(',')[1]!);};reader.readAsDataURL(new Blob(chunks,{type:'video/webm'}));};recorder.stop();});
  });
  await page.screenshot({path:path.join(output,'third-person.png')});
- await page.keyboard.press('t');await elapsed(.4);const first=await snapshot();assert.equal(first.humanoid.cameraMode,1);
+ await page.keyboard.press('t');await elapsed(.4);const first=await snapshot();assert.equal(first.camera.viewKind,'first-person');
  await page.screenshot({path:path.join(output,'first-person.png')});
  await page.keyboard.press('t');await page.keyboard.press('t');await hold('w',2);const forward=await state();assert(forward.speed>2);
  await page.keyboard.down('w');await hold('Shift',1.5);await page.keyboard.up('w');const boosted=await state();assert(boosted.speed>forward.speed+1);await page.screenshot({path:path.join(output,'high-speed-spray.png')});const spray=await snapshot();assert(spray.humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='jetski').jetski.sprayCount>30);await page.keyboard.press('t');
  await hold('s',.3);const braking=await state();assert(braking.speed<boosted.speed);
  await hold('s',5);const reverse=await state();assert(reverse.movement.velocity[2]<-1);
  await hold('Space',1);assert((await state()).speed<.1);
- await page.keyboard.press('t');await elapsed(.4);assert.equal((await snapshot()).humanoid.cameraMode,2);await page.screenshot({path:path.join(output,'shoulder.png')});
+ await page.keyboard.press('t');await elapsed(.4);assert.equal((await snapshot()).camera.viewKind,'shoulder');await page.screenshot({path:path.join(output,'shoulder.png')});
  await page.keyboard.press('t');await elapsed(.4);
  const beforeTurn=await state();await hold('a',.7);const stationary=await state();assert(Math.abs(stationary.camera.yaw-beforeTurn.camera.yaw)<.01);
  const lock=await snapshot();assert(Math.abs(lock.humanoid.vehicleDynamics.find((v:any)=>v.instanceId==='jetski').jetski.steeringAngle)>.3);

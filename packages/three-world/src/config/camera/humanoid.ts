@@ -1,0 +1,12 @@
+import type {CameraDocument,CameraPreset} from './types';
+/** Native on-foot calibration. Content exports snapshot this data; generic views remain generic. */
+export const HUMANOID_CAMERA_PRESETS:Readonly<Record<string,CameraPreset>>={
+ 'humanoid.third-person':{kind:'third-person',values:{lens:{nearMeters:.08},position:{anchor:{kind:'body',heightRatio:.655},distanceMeters:8.8,subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:Math.LN2/7,armHalfLifeSeconds:0},orientation:{initialPitchRadians:.35,pitchLimitsRadians:{kind:'bounded',minimumRadians:-85*Math.PI/180,maximumRadians:1.1},recenter:{enabled:false}},zoom:{range:{kind:'bounded',minimumDistanceMeters:3.2,maximumDistanceMeters:12}},constraints:{collision:{armClearanceMeters:.04,pivotClearanceMeters:0},recovery:{halfLifeSeconds:Math.LN2/5}}}},
+ 'humanoid.first-person':{kind:'first-person',values:{lens:{nearMeters:.035},position:{subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0},orientation:{recenter:{enabled:false},rollInheritanceRatio:0}}},
+ 'humanoid.shoulder':{kind:'shoulder',values:{lens:{nearMeters:.05},position:{anchorOffset:{space:'heading',offsetMetersXYZ:[.48,.08,0]},subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:Math.LN2/7,armHalfLifeSeconds:0},orientation:{initialPitchRadians:.12,pitchLimitsRadians:{kind:'bounded',minimumRadians:-85*Math.PI/180,maximumRadians:1.05},recenter:{enabled:false}},constraints:{collision:{armClearanceMeters:.025},recovery:{halfLifeSeconds:Math.LN2/5}},effects:{speedDistance:{enabled:true,fullEffectSpeedMetersPerSecond:5.8,maximumOffsetMeters:.3},speedFov:{enabled:true,fullEffectSpeedMetersPerSecond:5.8,maximumOffsetDegrees:4,halfLifeSeconds:Math.LN2/5}}}},
+};
+function freeze(value:unknown):void{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}}
+freeze(HUMANOID_CAMERA_PRESETS);
+export function createHumanoidCameraDocument(targetEntityId:string,defaultViewId='third-person'):CameraDocument {
+ return {kind:'world-camera',schemaVersion:1,defaultViewId,binding:{targetEntityId,mountTarget:'vehicle',subjectOverrides:{[targetEntityId]:{views:{'third-person':{presetId:'humanoid.third-person'},'first-person':{presetId:'humanoid.first-person'},shoulder:{presetId:'humanoid.shoulder'}}}}},presets:structuredClone(HUMANOID_CAMERA_PRESETS),activation:'immediate',input:{orbitRateRadiansPerSecond:1.2,cycleViewIds:[]},views:{'third-person':{kind:'third-person'},'first-person':{kind:'first-person'},shoulder:{kind:'shoulder'}}};
+}

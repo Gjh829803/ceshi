@@ -16,7 +16,7 @@ Mesh/Group subjects matching the reference.
 
 One world owns one fixed clock, physics backend, controller per actor, animation
 owner and active camera writer. Creator compiles and validates; Episode records.
-Ordinary and Humanoid authored follow use the same camera rig and subject-data
+Ordinary and Humanoid views use the same CameraController and subject-data
 contract. Subject-specific perspectives retain their visibility policy and use the
 shared [collision solver](../camera-collision/README.md). Display interpolation and
 repeated captures do not advance collision recovery; fallback positions come from fixed snapshots.
@@ -71,8 +71,8 @@ The same humanoid world accepts ordinary NPCs through
 `world.addCharacter({id,object,body,movement})` or an `AssetInstance` binding.
 Their own capsule dimensions, navigation, custom movement intent and asset mixer
 run in the shared fixed tick. `world.setControlledEntity(id)` can select either
-kind; `world.setCameraFollow({targetEntityId:id})` chooses the camera target
-independently. Ordinary first-person views declare a local `view.eyeOffsetLocalMetersXYZ`. Character colliders participate in physical contact
+kind; `world.setCameraFollow({configuration:document})` chooses the camera target
+independently. Ordinary characters declare their real local eye with `addCharacter({eyePositionLocalMetersXYZ,...})` when using first-person views. Character colliders participate in physical contact
 and local avoidance, but are excluded from static navigation geometry. Full
 humanoid abilities still require a complete humanoid binding.
 
@@ -100,7 +100,7 @@ so stopping navigation then playing an animation is a valid handoff.
 
 Use `humanoid.perform-action` for contextual humanoid actions, `vehicle.*` for
 boarding and recovery, and `humanoid.set-input`, `humanoid.apply-profile` and
-`humanoid.set-camera-mode` for the controller's input, settings and camera.
+`world.setCameraView(viewId)` for the camera; humanoid commands retain input and movement settings.
 Reusable asset IDs describe the object (`vehicle.rover`, `creature.horse`);
 `asset.vehicle` describes its vehicle controller binding. Source provenance
 remains separate from asset identity and controller capability.
@@ -220,7 +220,7 @@ const world = await createWorld({scene, camera, canvas});
 world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
 world.addCharacter({id:subjectId, object:subjectMesh, body:subjectBody, movement:subjectMovement});
 world.setControlledEntity(subjectId);
-world.setCameraFollow();
+world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:subjectId},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}}}});
 await world.start();
 ```
 
@@ -261,13 +261,20 @@ both entity metadata and runtime state, even for zero ticks. Finish registration
 first. If resources or parameters need initialization, await `world.start()` and
 then stop before stepping. Invalid input and failed prototype preparation cannot
 leave a partially sealed baseline.
-The fixed engine activates one camera writer. Changing the controlled actor does
-not change the camera target. Following an ordinary actor releases the humanoid
-camera; following a full actor releases the ordinary rig. `useAuthoredCamera()`
-releases both. A rejected follow/mode request leaves the current owner intact.
-Editing an inactive humanoid camera's default perspective only stores the setting;
-explicit camera commands choose its owner. In humanoid configuration inspection,
-`effective.camera.settings` is null when that follow camera is inactive.
+The fixed engine activates one camera writer for every subject and view. Changing
+the controlled actor does not change the document binding. `useAuthoredCamera()`
+releases SDK ownership; rejected configuration and view requests leave the current
+owner intact. `inspectCamera()` reports the committed document, named view, intent,
+pose, resolution provenance and diagnostics. `desired` is the last committed
+unconstrained proposal; snapshot desired position and actual position remain distinct
+when safety retracts the camera. With collision enabled, `require-line-of-sight`
+also reports a ray from the safe eye to the actual subject target under
+`diagnostics.visibility`. An occluded result is limited framing, not proof that no
+other view exists; it does not search for or automatically select a different pose.
+With collision enabled, solid focus-to-eye arm obstructions are checked in every
+follow view; `preserve-framing` does not permit the arm to pass through a wall.
+Disabled collision, preserve-framing and first person do not claim the additional
+verified actual-subject sightline. Movement profiles cannot change camera configuration.
 Do not install an additional simulation timer or mixer.
 
 <!-- topic:nonhuman-subject -->
@@ -299,19 +306,15 @@ For first/third-person switching, supply an eye in the subject root's **local**
 coordinates. It follows the root's scale and rotation; initial looking direction
 uses the actor's semantic front (`frontYawRadians`, default local -Z).
 
-Configure before `start()` to establish the reset baseline. Without `view`, the
-existing third-person behavior is unchanged. With `view`, defaults are third
-person and shortcut disabled (`view.keyboardToggleEnabled:false`); selecting first person applies the eye immediately.
-Keyboard switching respects UI focus and pause and keeps one edge per press.
-Programmatic switching remains available with the shortcut disabled. First-person
-zoom is ignored and the existing third-person distance is retained. Mouse look
-uses a stable horizon; the SDK does not infer a creature's neck rig or wing motion.
-The subject itself is excluded only while rendering the primary first-person
-view, then its render layers are restored; object views show the complete model.
-Eye collision uses the existing camera solver. Read the effective configuration,
-current `perspective` and collision result from `world.snapshot().camera`.
-Episode starts inherit the saved view; optional `start.cameraPerspective` selects
-a segment view without changing that default. Keep capture targets on the actor.
+Declare `eyePositionLocalMetersXYZ` on `addCharacter`, then declare named views in
+a CameraDocument. `defaultViewId` chooses the reset view; `input.cycleViewIds`
+explicitly permits keyboard cycling. Empty cycles leave programmatic
+`world.setCameraView(viewId)` available. Keyboard switching respects UI focus,
+pause and one edge per press. First-person ignores zoom; each third-person view
+retains its own intent. The subject is hidden only during primary first-person
+presentation and restored afterward; object views show the complete model.
+Read `world.snapshot().camera.viewId` / `viewKind` and `world.inspectCamera()` for
+actual committed state. Episode uses `cameraViewId` for a segment start.
 
 This route has no human mount/dismount controller. Show controls for its actual
 abilities, exercise movement/collision/camera/reset, and use the same Creator
@@ -577,17 +580,25 @@ world.addCharacter({id:actorId,humanoid:character,movement});
 world.setAutonomy(actorId,autonomy);
 // Input selection and camera targeting are independent choices.
 world.setControlledEntity(inputActorId);
-world.setCameraFollow({targetEntityId:cameraActorId,activateOnInput:true});
+world.setCameraFollow({configuration:{
+  kind:'world-camera', schemaVersion:1, defaultViewId:'explore',
+  binding:{targetEntityId:cameraActorId}, activation:'on-input',
+  views:{explore:{kind:'third-person',overrides:{framing:{kind:'preserve-opening'}}}},
+}});
 ```
 
-`setCameraFollow` accepts `targetEntityId` and the shared framing/follow parameters
-for ordinary and complete Humanoid actors. Author the opening pose/projection,
-then use `activateOnInput:true` to inherit it on first input. Selecting another
-camera target does not select its controls. Explicit `view` configures the selected
-subject's eye and perspective; otherwise use `world.humanoid.setCameraMode(0|1|2)`
-and `applyProfile({cameraDistanceMeters,camera,view})` for tuned Humanoid views.
-Inspection reports `settingsApplied:false` and `settings:null` when tuned profile
-values are not driving the authored/shared camera.
+`setCameraFollow` accepts a complete `CameraDocument` for ordinary and complete
+humanoid actors. Author the opening pose/projection, then declare
+`framing:{kind:'preserve-opening'}` with `activation:'on-input'` to retain it until
+meaningful input. The document's `binding.targetEntityId` is independent of controls.
+Declare named views in `document.views` and select them with `world.setCameraView(viewId)`.
+Ordinary first-person subjects supply `eyePositionLocalMetersXYZ` at registration;
+complete humanoids supply the eye from their animation binding. Inspect
+`world.inspectCamera()` for the active document, resolved configuration and committed
+camera state; movement profiles do not configure or report camera settings.
+The native `prepareEpisodeStart` helper only places physical subjects and rejects
+`cameraViewId`. Recording starts that select views use the World Episode port
+`prepareSegment(start, viewport)`, which owns reset, placement and camera initialization.
 
 Each actor has its own controller, skeleton, mixer and action state. All actors
 share the physics world, interaction targets and fixed clock. Ground navigation
@@ -705,11 +716,11 @@ spaceship or submarine. Aircraft pitch uses `forward`; spaceship pitch uses
 Camera angular deltas use radians and distance deltas change the nominal arm in
 meters; collision response, speed pullback and smoothing still affect the final view.
 
-`world.humanoid` provides prepare, approach/enter/exit, map switching, camera
-modes and profile methods. These preparation helpers may relocate; normal
+`world.humanoid` provides prepare, approach/enter/exit, map switching and movement
+profile methods. Camera configuration and named view selection belong to World. These preparation helpers may relocate; normal
 movement uses real input. Generic navigation, impulse and root-edit commands are
 unavailable for contextual actors. Commands are `vehicle.prepare`,
-`vehicle.approach`, `vehicle.enter`, `vehicle.exit`, `humanoid.set-camera-mode`,
+`vehicle.approach`, `vehicle.enter`, `vehicle.exit`,
 `humanoid.set-input`, `humanoid.apply-profile` and `humanoid.perform-action`.
 `vehicle.approach` is a preparation relocation to a safe boarding position,
 with velocity cleared. It does not walk there. Its applied command receipt
@@ -731,9 +742,9 @@ const current = world.humanoid!.inspectConfiguration();
 ```
 
 Profiles merge by instance ID and persist across reset/map/Episode initialization.
-`exportProfile()` returns a replayable profile: complete controls and explicit camera
-overrides. `inspectConfiguration()` reports the active subject/family, applicable
-control values, camera owner/mode and resolved camera settings alongside that profile.
+`exportProfile()` returns complete replayable movement controls.
+`inspectConfiguration()` reports the active subject/family and applicable control
+values alongside that profile; `world.inspectCamera()` reports camera state.
 Read operations return copies without advancing time. Save the profile in project
 source and apply it during initialization. Browser-local tuning alone is not delivery
 configuration. Humanoid normal movement is `speed * 3.1 / 3.8`; acceleration is
@@ -751,183 +762,80 @@ following actions must execute through actual input.
 
 ### Default view and keyboard switching
 
-Configure view behavior through the existing profile only when the task requires it.
-
-Defaults are `third-person` and `keyboardToggleEnabled: false`. Each press cycles
-third person → first person → shoulder → third person, matching the Playground
-camera button; it works on foot and while driving. Held-key repeats, paused worlds
-and focused UI controls do not toggle. Authored camera ownership is preserved.
-Read effective configuration from `world.snapshot().humanoid.view` or
-`world.humanoid.exportProfile()`. Reset and map replacement restore the configured
-default. Episode starts inherit it unless `start.humanoid.cameraMode` explicitly
-selects a view for that segment; the override does not change the saved default.
-
-Use `world.humanoid.applyProfile({view: {...}})` or `humanoid.apply-profile` to update
-settings. Setting `defaultPerspective` selects it immediately only while the
-humanoid follow camera is active; otherwise it stores the next default. Updating only
-`keyboardToggleEnabled` preserves the current view. Disabling the shortcut does
-not disable programmatic `world.humanoid.setCameraMode(0 | 1 | 2)` or
-`humanoid.set-camera-mode` commands. `cameraTogglePressed` is the corresponding one-shot
-Humanoid input and respects the same permission. Inspect the actual scene before
-claiming recording or visual acceptance.
-
-First-person driving inherits the vehicle controller's existing tilt, including
-for custom vehicle geometry bound to that controller. This remains the default.
-Developer-only presentation tuning lives in `src/config/presentation.ts`; it is not
-a profile field. Scene code does not add another camera sway loop.
-These profile settings apply to Humanoid. Independent subjects configure the eye
-through `setCameraFollow({view})` as shown in the `nonhuman-subject` topic.
+Install a complete, parsed CameraDocument with `world.setCameraFollow({configuration})`.
+`defaultViewId` selects the initial/reset view. `input.cycleViewIds` is an explicit
+ordered list of declared IDs; an empty list disables keyboard cycling without
+blocking `world.setCameraView(viewId)`. Native defaults declare third-person,
+first-person and shoulder, with keyboard cycling disabled. Playground and examples
+that enable T do so in their project documents. Held repeats, pause and focused UI
+do not toggle. Selecting a view preserves each view's own input intent and uses the
+configured transition; interruption starts from the currently committed pose.
 
 ### Authored opening and subject integration
 
-The [initial state and camera guide](../creator-host/docs/agent/programming.md#initial-state-and-camera)
-defines the authoring sequence. `HumanoidWorldOptions.initialMountId` selects a
-grounded initial ride using the existing map spawn and seat; invalid placement fails.
-`CameraFollowOptions.opening` configures world position, look-at/up and FOV once.
-`headingFollow` defaults to `fixed`; `vehicle` enables the followed mount's recenter
-tuning while retaining the opening's distance, pitch, roll and FOV. Snapshot reports
-the chosen policy, actual subject ID and current heading target.
+Import project `config/camera.json` relatively, parse it with `parseCameraDocument`,
+and install it before the first start/step/reset seals the baseline. Referenced
+presets are snapshots embedded in `document.presets`; there is no runtime preset
+fetch or asset/map-name tuning override. `createHumanoidCameraDocument(actorId)`
+returns the SDK-owned native calibration, separately from generic strategy defaults.
+Creator `assets_describe` can return registered `cameraPresetSnapshots` for explicit
+embedding. These describe content calibration; workspace SDK compatibility is
+unverified and the actual subject must still be resolved and inspected.
 
-With no orbit override, `framingMode:'preserve-opening'` is the default. The first
-movement/look input activates follow from the current authored position, orientation
-and FOV. Starting the clock or sending empty input does not recenter, zoom or blend
-toward a preset view. Translation follows the subject; optional heading recentering
-starts gradually after activation and the manual-orbit hold interval;
-`followHalfLifeSeconds:0` follows translation immediately. SDK input handles both
-keyboard and programmatic movement/look; scene code must not install a first-key
-`setCameraMode` listener. Explicit view switching, orbit/zoom and collision avoidance
-can change the view. Once an obstruction clears, collision recovery restores the
-intended framing. Changing carrier retains the current orbit, zoom and relative
-composition while following the new subject. A collision-retracted camera does not
-replace the intended follow distance or become the dismounted person's new opening.
+A third-person view uses `framing.kind:'preserve-opening'` with its own `opening`,
+or explicitly adopts the first authored pose when no opening is present. Its
+world position, look-at/up and FOV remain canonical configuration data. Near/far
+are explicit lens fields. Both third-person framing modes use the declared
+`position.anchor` and `anchorOffset`; `preserve-opening` derives initial orbit
+angles and distance from that anchor while retaining the authored pose. Use a body
+anchor preset for humanoids; the generic preserve-opening default is origin.
+`look-at` uses the declared initial distance and angles. Position/arm smoothing,
+zoom, safe collision retraction and recovery are separate channels. Near-subject
+fading is controlled by `subjectFade` and affects only the world render transaction. Angles use radians, lengths use meters, and half-lives use
+seconds. `orientation.recenter` is an explicit behavior; it never follows an asset
+name. Zero-time lifecycle changes and cuts clear incompatible path history.
 
-`distanceMeters` or `pitchRadians` explicitly selects target framing unless a
-mode is specified. Do not combine either with `framingMode:'preserve-opening'`.
-`setCameraPerspective` or Humanoid `setCameraMode(0 | 1 | 2)` requests a view change;
-it is not needed to begin moving. A supplied `view` configures a subject-local eye.
-Select first person only when the request calls for that change.
+`binding.targetEntityId` is independent of input ownership; `mountTarget` declares
+whether the actor's current vehicle or actor is followed. Ordinary characters
+provide optional local eye geometry through `addCharacter`; native subjects use
+actual posture/driver eye and seat facts. Subject sampling does not write cameras
+or advance simulation. All strategies feed one controller and the shared collision
+solver. Other actors remain potential obstructions; only the actual subject is
+excluded. Presentation interpolates fixed history, applies stateless safety and
+never advances damping or recovery.
 
-The first lifecycle transition seals the reset opening. Reset restores that pose
-and pending follow policy. Agent edits to the opening source take effect after
-recompilation and establish the new world's baseline. Runtime `useAuthoredCamera()`
-followed by `setCameraFollow()` can rebase current follow; it does not rewrite an
-already sealed reset opening. Do not add an `onReset` camera writer.
+`useAuthoredCamera()` releases the owner. `beginCameraEdit()` requires a sealed
+baseline; applying a draft changes live configuration, while `commitBaseline()`
+explicitly changes reset configuration. `createOpeningDraft()` performs SDK-owned
+current-to-initial reference conversion, with subject/generation checks. Saving
+project JSON does not implicitly commit a World baseline. Session cancellation
+restores configuration only while its ownership and reference checks remain valid.
 
-SDK integrations provide a read-only
-[`CameraSubjectAdapter`](src/camera-subject.ts): `sample` supplies actual subject ID,
-world position, optional body dimensions and world transform/semantic front;
-`collisionRequest` supplies subject-specific collision exclusions when needed.
-Eye offsets belong to `CameraFollowOptions.view`; Humanoid's dedicated perspectives
-derive posture and rider eye from their existing runtime. A custom `view` eye is
-local to the actual followed subject, including the vehicle while mounted; omit
-`view` to use Humanoid's calibrated first-person/shoulder modes. These are data/policy
-adapters, not new camera or input owners. Read queries never step simulation; a new
-subject must use the common rig for authored follow and explicitly reject unsupported
-configuration instead of silently dropping it.
-
-Every new controller must join the `fixtures` in the
-[public-entry contract tests](src/camera-public-conformance.test.ts): authored pose
-and FOV, first input, translation, supported target/carrier changes, collision
-recovery and reset, with Creator/Episode lifecycle coverage. This is SDK integration
-CI. Creator checks opening/first-input continuity within its existing playtest and
-uses actual pixels alongside camera state. Asset submission and Agent registration
-are described in the [asset integration guide](../../docs/asset-production-integration.md#新主体的镜头与输入接入).
+Episode port version 2 declares sealed baseline view IDs and selects named views
+through `cameraViewId` or `camera.set-view`. Prepare cuts to the requested start;
+commands within the segment honor transitions and settle against actual view ID
+and transition state. Authored worlds without a camera document declare no managed
+views. Explicit v1 translation belongs only to the Episode import boundary.
 
 ### Humanoid camera perspectives
 
-Start with the tuned defaults: omit `profile.camera` and `cameraDistanceMeters`
-when creating the world. Large whitebox landmarks do not require raising the
-humanoid eye. Override only a specific framing defect observed in real views.
+Use `world.inspectCamera()` for current view kind, resolved fields, provenance,
+fixed pose and measured collision diagnostics. `world_preview({view:'current'})`
+captures the current state; `view:'opening'` restores the sealed opening. Diagnostic
+projections do not prove pixel visibility; inspect actual images separately.
 
-`profile.camera.targetHeightOffset` and `horizontalOffset` are **increments in
-metres**, both defaulting to **0**, added to the controller's existing target or
-eye-based anchor. The vertical offset is not eye height or absolute world height:
-`targetHeightOffset:1.1` adds another 1.1 m. Both offsets are shared by mode 0 and
-mode 2; mode 1 ignores them. They remain valid adjustments, including negative
-values. `cameraDistanceMeters` affects only mode 0; mode 2 owns its independent
-shoulder distance. These tuned-mode parameters do not replace an authored opening
-in `preserve-opening` follow.
+First-person presentation clips the native head/neck in temporary instance-private
+geometry and restores original geometry afterward. Body transforms, animation,
+movement and vehicle attitude remain owned by their existing runtime. Roll
+inheritance is a view orientation field; it does not rotate the vehicle.
 
-Humanoid follows the [same opening contract](#authored-opening-and-subject-integration).
-`profile.view.defaultPerspective` configures tuned views; it does not force a preset
-view when an authored opening begins playing. To deliberately inspect a different
-perspective, select it and capture its actual world pixels:
-
-```js
-world_execute_command({command:{type:'humanoid.set-camera-mode',mode:2}})
-world_preview({view:'current'})
-world_inspect({sections:['description']})
-```
-
-`creator_get_examples({topic:'getting-started',files:['main.ts']})` returns a
-direct SDK calls that preserve the supplied opening with authored follow.
-Episode independently selects its segment camera and pauses the live clock;
-scene input handlers must not take it over.
-
-`world_preview({view:'current'})` preserves the current view without resetting or
-advancing simulation. Its `cameraObservation` includes `cameraOverrides` (explicit
-`profile.camera`), `cameraSettings` (tuned modes only; otherwise null) and `framing`,
-alongside the real pixels. `configuration.effective.camera.settingsApplied:false`
-means profile tuning does not control the displayed authored/shared follow; inspect
-`world.snapshot().camera` and pixels instead. `world_preview({view:'opening'})` stops and resets the world;
-use opening only to check the reset opening. Top-down and object triviews do not
-establish gameplay framing.
-
-On demand, `world.describe().humanoid.configuration.effective.camera.framing`
-reports `status`/`reason`, `sampleSimulationSeconds`, `headSource`, the head anchor
-in world space, and `headScreenPositionNormalizedXY` (top-left `[0,0]`, bottom-right
-`[1,1]`; null behind the camera or unavailable). Creator forwards it in
-`world_inspect({sections:['description']})` under `observation.description`.
-Read the current mode from `configuration.effective.camera.mode` and explicit
-offsets from `configuration.profile.camera`. `framing.sampledOffsets` identifies
-the offset inputs associated with the displayed pose; `offsetsPending:true` means
-new configuration has not yet reached that sample (for example, an edit while
-paused). Do not interpret the old image using the newly configured values.
-`SHOULDER_FRAMING_OFFSET_REVIEW`
-advises checking nonzero offsets in mode 2 when the head projects near an edge or
-outside the frame. Empty `issues` is not visual acceptance; projection does not
-prove pixel visibility or absence of occlusion. Reading this advice does not step
-simulation or adjust the camera.
-
-These defaults describe the supplied Humanoid runtime. For an edited project SDK,
-read its current `sdk/three-world/src/config/camera.ts` and `humanoid-runtime/camera.ts`,
-rebuild and inspect the matching runtime; Host examples are reference material.
-Independent subjects use their own `setCameraFollow({view})` contract.
-
-Humanoid camera modes are `0` (third-person follow), `1` (first person) and `2`
-(immersive over-the-shoulder). Mode 2 replaces the former overview; it uses a
-2 m right-shoulder boom (wheel: 1.3–3.2 m), collision retraction and up to 4°
-speed FOV expansion. Mode 1 has zero arm length and a 0.035 m near plane; zoom and framing
-offsets do not move the eye. On foot it follows physical posture with a stable
-horizon; mounted it uses the animated rider's eye and the vehicle's orientation,
-with independent seat-local look (±150° yaw). Steering still comes from vehicle
-input. It uses the existing single camera/input owner, including Episode stepping.
-The capabilities playground enables **T** to cycle all three views, matching its
-camera button. Click the view in first person or shoulder mode to lock the mouse;
-**Esc** releases/pauses, and dragging
-remains available when locking is unavailable. Character action bindings retain their configured values.
-Local head/neck triangles are excluded from an instance-private geometry while
-first person is active; original geometry and all bone transforms are preserved
-and restored for third person/authored views. The humanoid runtime supports one
-controlled rider/driver, not a multiplayer passenger system. Existing mounted
-poses remain procedural approximations rather than imported PUBG animations.
-
-Vehicle movement still uses `spec.envelope`. Camera queries refine that envelope
-with the vehicle's rigid Mesh triangles, so an open cabin is not a solid wall.
-Solid panels block the camera; transparent materials with opacity below one and
-transmission materials do not count as opaque sight blockers. Glass still blocks
-the camera's collision sphere. The mounted carrier is excluded from its own
-camera arm; other vehicles remain obstacles. Empty, skinned or actively morphed
-vehicle roots retain conservative envelope queries. Geometry edits follow Three's
-`needsUpdate` convention; models attached after initialization are discovered.
-Texture alpha cutouts and custom shader transparency are conservatively opaque
-for these geometry queries.
-
-Whitebox recoloring must preserve glass transparency, opacity, side and material
-array slots. Clone source materials and modify their palette instead of replacing
-every surface with an opaque material. Inspect first-person pixels as well as
-the mode number. Use public pending follow for authored openings; reset needs no
-scene camera handoff, including while Episode owns the recording clock.
+Vehicle camera queries refine envelopes using rigid Mesh triangles. Open cabins
+remain open; solid panels obstruct. Transparent materials with opacity below one
+and transmission materials are not opaque sight blockers, while glass still blocks
+the collision sphere. Other vehicles remain obstacles. Empty, skinned or actively
+morphed roots retain conservative envelope queries. Preserve material transparency,
+side and array slots when recoloring whitebox models. Inspect actual first-person
+pixels and complete object views separately.
 
 <!-- topic:control -->
 ## One state for gameplay and text commands
@@ -995,14 +903,9 @@ reports the actual boarding approach and eligibility; select `entityIds` to quer
 only the relevant vehicle. These spatial queries are not repeated in every frame
 snapshot. `world.humanoid.inspectBoarding(id)` provides the same targeted query.
 
-`profile.camera` is a partial set of explicit overrides. Each field takes effect
-independently of `cameraDistanceMeters`; `exportProfile().camera` retains those
-explicit fields, subject to the [camera mode rules](#humanoid-camera-perspectives).
-The framing offsets default to 0 and add to an existing anchor; they are not
-absolute coordinates. Unset fields keep the mode's default (humanoid third person uses
-FOV 58, response 7, collision radius .2; vehicle defaults remain unchanged).
-The SDK and Creator command transport share the same `(0,100]` meter range for
-`cameraDistanceMeters` in mode 0; null returns to the subject's default distance.
+Camera configuration is a separate CameraDocument. Read the current committed view,
+configuration provenance, pose and diagnostics through `world.inspectCamera()`;
+movement profile updates cannot install camera fields.
 
 <!-- topic:extensions -->
 ## Configure or implement a behavior

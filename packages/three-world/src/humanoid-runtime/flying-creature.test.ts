@@ -1,3 +1,4 @@
+import {createHumanoidCameraDocument} from '../config/camera/index';
 import {requestDragonLanding} from './motion-families/flying-creature/ground';
 import {actionForKey,createKeyBindings} from './input';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -180,7 +181,7 @@ it('keeps independent stamina/action state and resets to hover',()=>{
 it('runs dedicated actions, camera switching and map reset through the public SDK owner',async()=>{
   const spec=createFlyingCreatureSpec('dragon'),map=createDragonTrainingMap(),world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,vehicles:[{instanceId:'dragon',assetId:'creature.dragon.d01',spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
   try{
-    const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
+    world.setCameraFollow({configuration:{...createHumanoidCameraDocument('person'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});const runtime=world.humanoid!;runtime.prepareEpisodeStart({positionWorldMetersXYZ:[0,40,0],facingYawRadians:Math.PI,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
     const descriptors=JSON.stringify(runtime.commandDescriptors('person'));
     expect(descriptors).toContain('松键减速度');expect(descriptors).toContain('振翅加速度');
     const originalSpeed=runtime.simulation.controlledActor.vehicle!.spec.speed;
@@ -188,7 +189,7 @@ it('runs dedicated actions, camera switching and map reset through the public SD
     expect(runtime.simulation.controlledActor.vehicle!.spec.speed).toBe(originalSpeed);
     const release=runtime.setInput({...emptyInput(),primary:true});world.step({},60);release();
     expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.flamePhase).toBe('loop');expect(runtime.simulation.controlledActor.vehicle!.speed).toBe(0);
-    runtime.applyProfile({view:{keyboardToggleEnabled:true}});world.step({cameraTogglePressed:true},1);expect(runtime.followCamera.mode).toBe(1);
+    world.setCameraFollow({configuration:{...world.inspectCamera().document!,input:{cycleViewIds:['third-person','first-person','shoulder']}}});world.step({cameraTogglePressed:true},1);expect(world.inspectCamera().resolved?.kind).toBe('first-person');
     const snapshot=structuredClone(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature);world.snapshot();world.snapshot();expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature).toEqual(snapshot);
     runtime.switchMap(map);expect(runtime.simulation.vehicles[0]!.motion.flyingCreature!.flamePhase).toBe('off');expect(runtime.simulation.vehicles[0]!.speed).toBe(0);expect(runtime.simulation.controlledActor.vehicleIndex).toBe(-1);
   }finally{world.dispose();}

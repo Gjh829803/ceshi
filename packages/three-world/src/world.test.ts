@@ -13,7 +13,7 @@ function actor(): THREE.Group {
 async function fixture(navigation = false) {
   const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(47, 1.7, .05, 500); camera.position.set(3, 4, 6); camera.lookAt(0, 1, 0);
   const world = await createWorld({ scene, camera, navigation }); world.addEntity({ id: '地形:Main', object: ground(), role: 'terrain' });
-  world.addCharacter({ id: 'Player-A', object: actor() }); world.setControlledEntity('Player-A'); return world;
+  world.cameraSubjects.generation=id=>world.snapshot().entities.some(entity=>entity.id===id)?1:undefined;world.addCharacter({ id: 'Player-A', object: actor() }); world.setControlledEntity('Player-A'); return world;
 }
 const point = (world: Awaited<ReturnType<typeof fixture>>, id = 'Player-A') => world.snapshot().entities.find(e => e.id === id)!.positionMetersXYZ;
 
@@ -35,7 +35,7 @@ describe('ThreeWorld', () => {
   it('uses held arrow keys to orbit the camera without driving the character', async () => {
     const world = await fixture();
     try {
-      world.setCameraFollow({ distanceMeters: 6, pitchRadians: .3, activateOnInput: true }); world.step({}, 30);
+      world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'Player-A'},activation:'on-input',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:6,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0},orientation:{initialPitchRadians:.3}}}}}}); world.step({}, 30);
       const humanoidBefore = point(world); const cameraBefore = world.camera.quaternion.clone();
       world.keyboard.enabled = true; world.keyboard.keyDown('ArrowRight');
       for (let i = 0; i < 60; i++) world.advance(1 / 60);
@@ -216,7 +216,7 @@ describe('ThreeWorld', () => {
     const camera = new THREE.PerspectiveCamera(); rig.add(camera); camera.position.set(-12, 2, 4); camera.lookAt(0, 1, 0);
     const world = await createWorld({ scene, camera, navigation: false });
     try {
-      world.addCharacter({ id: 'hero', object: actor() }); world.setControlledEntity('hero'); world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0 }); world.step();
+      world.cameraSubjects.generation=id=>world.snapshot().entities.some(entity=>entity.id===id)?1:undefined;world.addCharacter({ id: 'hero', object: actor() }); world.setControlledEntity('hero'); world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'hero'},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,armHalfLifeSeconds:0,anchor:{kind:'subject-local',positionMetersXYZ:[0,1.3,0]}},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0},orientation:{initialPitchRadians:0}}}}}}); world.step();
       const target = world.getObject('hero').getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.3, 0));
       expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(target)).toBeCloseTo(4, 5);
     } finally { world.dispose(); }
@@ -236,7 +236,7 @@ describe('ThreeWorld', () => {
       const obstacle = new THREE.Group(); const child = new THREE.Mesh(new THREE.BoxGeometry(2, 3, .2), new THREE.MeshBasicMaterial()); child.position.set(0, 1.5, 2); obstacle.add(child);
       world.addEntity({ id: 'Hidden wall', object: obstacle, role: 'obstacle' }); child.visible = false;
       // Isolate visibility filtering from the intentional target-follow lag.
-      world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0, targetHalfLifeSeconds: 0 }); world.step();
+      world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'Player-A'},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'look-at'},position:{distanceMeters:4,subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0,anchor:{kind:'subject-local',positionMetersXYZ:[0,1.3,0]}},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0},orientation:{initialPitchRadians:0}}}}}}); world.step();
       const target = world.getObject('Player-A').getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.3, 0));
       expect(world.camera.getWorldPosition(new THREE.Vector3()).distanceTo(target)).toBeCloseTo(4, 5);
     } finally { world.dispose(); }
@@ -272,4 +272,20 @@ it.each([new Error('callback failed'),'string callback failure'])('retains runti
   expect(thrown).toBe(error);
   expect(world.snapshot().errors[0]?.message).toBe(error instanceof Error?error.message:error);
  }finally{world.dispose();}
+});
+
+it('bounds only the internal frame alpha while preserving catch-up debt and strict explicit alpha validation',async()=>{
+ let nextFrame:FrameRequestCallback|undefined;
+ vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{nextFrame=callback;return 1;});vi.stubGlobal('cancelAnimationFrame',()=>{});
+ const world=await createWorld({fixedTimeStepSeconds:1/240,navigation:false});
+ try{
+  world.start();nextFrame!(1000);
+  for(const tick of [15,30,45,60]){
+   nextFrame!(1250);expect(world.simulationTick).toBe(tick);expect(world.isRunning).toBe(true);expect(world.snapshot().errors).toEqual([]);
+  }
+  for(const alpha of [-.01,1.01,NaN]){
+   expect(()=>world.render(alpha)).toThrow('WORLD_PRESENTATION_ALPHA_INVALID');
+   expect(()=>world.withPresentation(()=>{},alpha)).toThrow('WORLD_PRESENTATION_ALPHA_INVALID');
+  }
+ }finally{world.dispose();vi.unstubAllGlobals();}
 });

@@ -33,7 +33,7 @@ export function createDoctorDeliveryGate({truncated,complete,playtest,validation
 }
 export function createDoctorCommands(entityId) {
  return {
-  supported:[{type:'humanoid.set-camera-mode',mode:1},{type:'humanoid.set-camera-mode',mode:0}],
+  supported:[{type:'humanoid.apply-profile',profile:{character:{speed:5}}},{type:'humanoid.apply-profile',profile:{character:{speed:3.1}}}],
   forbidden:{type:'actor.move-to',entityId,targetPositionWorldMetersXYZ:[99,0,99]},
  };
 }
@@ -98,7 +98,7 @@ try{
     const requests=createDoctorCommands(entityId);
     for(const request of requests.supported){
      const command=(await operation('world_execute_command',{command:request})).value.result;
-     assert.equal(command.worldCommandReceipt.status,'applied');assert.equal(typeof command.worldCommandReceipt.commandId,'string');assert(command.worldCommandReceipt.commandId.length>0);assert.equal(command.sourceHash,validation.sourceHash);assert.equal(command.worldBuildHash,validation.worldBuildHash);assert.equal(command.after.isRunning,false);assert.equal(command.after.simulationTick,initial.simulationTick);assert.notEqual(command.before.humanoid.cameraMode,request.mode);assert.equal(command.after.humanoid.cameraMode,request.mode);entry.commandChecks.push(command);
+     assert.equal(command.worldCommandReceipt.status,'applied');assert.equal(typeof command.worldCommandReceipt.commandId,'string');assert(command.worldCommandReceipt.commandId.length>0);assert.equal(command.sourceHash,validation.sourceHash);assert.equal(command.worldBuildHash,validation.worldBuildHash);assert.equal(command.after.isRunning,false);assert.equal(command.after.simulationTick,initial.simulationTick);assert.notEqual(command.before.humanoid.controls.character.speed,request.profile.character.speed);assert.equal(command.after.humanoid.controls.character.speed,request.profile.character.speed);entry.commandChecks.push(command);
     }
     const forbidden=(await operation('world_execute_command',{command:requests.forbidden})).value.result;
     assert.equal(forbidden.worldCommandReceipt.status,'rejected');assert.equal(forbidden.worldCommandReceipt.error.code,'PLAYER_INPUT_OWNS_ACTOR');assert.equal(forbidden.sourceHash,validation.sourceHash);assert.equal(forbidden.worldBuildHash,validation.worldBuildHash);assert.equal(forbidden.after.isRunning,false);assert.equal(forbidden.after.simulationTick,initial.simulationTick);assert.deepEqual(forbidden.after.entities.find(entity=>entity.id===entityId).positionWorldMetersXYZ,forbidden.before.entities.find(entity=>entity.id===entityId).positionWorldMetersXYZ);entry.commandChecks.push(forbidden);

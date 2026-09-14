@@ -61,7 +61,6 @@
         0.99,
         -0.2
       ],
-      "camera": 6.8,
       "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
       "archetype": "motorcycle",
       "envelope": {
@@ -101,6 +100,28 @@
       0,
       1.2,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.motorcycle.third-person",
+        "source": "presets",
+        "key": "motorcycle.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.motorcycle.first-person",
+        "source": "presets",
+        "key": "motorcycle.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.motorcycle.shoulder",
+        "source": "presets",
+        "key": "motorcycle.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

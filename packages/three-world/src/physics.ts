@@ -461,17 +461,33 @@ export class ThreePhysics implements PhysicsPort {
     if (overlapping) return invalid('EPISODE_START_BODY_OVERLAP', 'The actual character capsule overlaps geometry or another actor at the requested start.', overlapping);
     return { isValid: true, requestedPositionWorldMetersXYZ: requested, resolvedPositionWorldMetersXYZ: resolved, diagnostics: [] };
   }
-  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): CameraArmHit {
-    this.live(); validateVec(targetMetersXYZ, 'camera target'); validateVec(desiredEyeMetersXYZ, 'camera eye'); validateNumber(radiusMeters, 0, 'camera radius', false);
+  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number, excludedEntityId?:string): CameraArmHit {
+    this.live(); validateVec(targetMetersXYZ, 'camera target'); validateVec(desiredEyeMetersXYZ, 'camera eye'); validateNumber(radiusMeters, 0, 'camera radius');
     const target = new THREE.Vector3(...targetMetersXYZ), direction = new THREE.Vector3(...desiredEyeMetersXYZ).sub(target), length = direction.length();
-    const shape = new RAPIER.Ball(radiusMeters), rotation = { x: 0, y: 0, z: 0, w: 1 };
     const includeSolid = (collider: Collider): boolean => {
       const entry = this.entries.get(this.colliderOwners.get(collider.handle) ?? '');
       const source = this.colliderSources.get(collider.handle);
-      if (!entry || entry.kind === 'character' || !entry.body.isEnabled() || collider.isSensor()) return false;
+      if (!entry || this.colliderOwners.get(collider.handle)===excludedEntityId || !entry.body.isEnabled() || collider.isSensor()) return false;
       if (entry.boundary) return entry.boundary.blocksCamera;
       return Boolean(source && isWorldVisible(entry.object) && isWorldVisible(source));
     };
+    // A zero-radius request is a real ray using the same camera filtering and dirty geometry.
+    if(radiusMeters===0){
+      if(length===0)return {distanceMeters:0};
+      const ray=new RAPIER.Ray(target,direction.divideScalar(length));
+      const hit=this.world.castRayAndGetNormal(ray,length,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,includeSolid);
+      const describeRay=(collider:Collider,time:number,normal:RAPIER.Vector):CameraArmHit=>({
+        distanceMeters:time,colliderEntityId:this.colliderOwners.get(collider.handle)!,startedOverlapping:time===0,
+        ...(time>0?{normalWorldXYZ:vec(normal)}:{}),
+      });
+      let result:CameraArmHit=hit?describeRay(hit.collider,hit.timeOfImpact,hit.normal):{distanceMeters:length};
+      for(const id of this.queryDirty)for(const collider of this.entries.get(id)?.colliders??[])if(includeSolid(collider)){
+        const direct=collider.castRayAndGetNormal(ray,result.distanceMeters,true);
+        if(direct&&(!result.colliderEntityId||direct.timeOfImpact<result.distanceMeters))result=describeRay(collider,direct.timeOfImpact,direct.normal);
+      }
+      return result;
+    }
+    const shape = new RAPIER.Ball(radiusMeters), rotation = { x: 0, y: 0, z: 0, w: 1 };
     let overlap: CameraArmHit | undefined;
     const considerOverlap = (collider: Collider): boolean => {
       if (!includeSolid(collider)) return true;

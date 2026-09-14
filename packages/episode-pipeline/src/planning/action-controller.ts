@@ -16,7 +16,7 @@ function observedState(snapshot: WorldSnapshot) {
   return { positionWorldMetersXYZ: position(snapshot), character: t?.character ?? null, surface: t?.surface ?? null,
     interactionClaims: t?.interactionTargets.filter(target => target.claim?.actorId === t.character.instanceId).map(({ id, slotId, generation, claim }) => ({ id, slotId, generation, claim })) ?? [],
     mount: t ? { instanceId: t.mountedInstanceId, transition: t.transition } : null,
-    perspective: snapshot.camera?.perspective ?? (t ? t.cameraMode === 1 ? 'first-person' : 'third-person' : null),
+    camera: snapshot.camera ?? null,
     water: t ? { swimming: t.water.swimming, volumeId: t.water.contact?.volumeId ?? null } : null };
 }
 /** Send the family's documented stopping intent; the SDK still owns all damping and motion. */
@@ -74,7 +74,7 @@ export class EpisodeActionController {
     const state = observedState(snapshot), tick = this.tick(snapshot);
     // Positions accumulate every tick; emit only real controller state/phase changes.
     const key = JSON.stringify({ character: state.character && { ...state.character, activeAction: state.character.activeAction && {
-      ...state.character.activeAction, elapsedSeconds: 0 } }, surface: state.surface && { ...state.surface, pose: state.surface.pose && { ...state.surface.pose, timeSeconds: 0 } }, water: state.water, mount: state.mount && { instanceId: state.mount.instanceId, transition: state.mount.transition && { kind: state.mount.transition.kind, active: state.mount.transition.remainingSeconds > 0 } }, perspective: state.perspective });
+      ...state.character.activeAction, elapsedSeconds: 0 } }, surface: state.surface && { ...state.surface, pose: state.surface.pose && { ...state.surface.pose, timeSeconds: 0 } }, water: state.water, mount: state.mount && { instanceId: state.mount.instanceId, transition: state.mount.transition && { kind: state.mount.transition.kind, active: state.mount.transition.remainingSeconds > 0 } }, camera: state.camera && {viewId:state.camera.viewId,viewKind:state.camera.viewKind,documentHash:state.camera.documentHash,configurationRevision:state.camera.configurationRevision,logicalTargetId:state.camera.logicalTargetId,resolvedSubjectId:state.camera.resolvedSubjectId,subjectGeneration:state.camera.subjectGeneration,lifecycleGeneration:state.camera.lifecycleGeneration,transition:state.camera.transition?.kind} });
     const stateKey = JSON.stringify([key, state.interactionClaims]);
     if (force || stateKey !== active.lastStateKey) {
       active.entry.stateChanges.push({ tick, frame: this.frame(tick), state }); active.lastStateKey = stateKey;
@@ -99,7 +99,7 @@ export class EpisodeActionController {
   private stateMatches(snapshot: WorldSnapshot) {
     const { goal, initialState } = this.active!, t = snapshot.humanoid;
     const intent = goal.intent;
-    if (intent.kind === 'view') return observedState(snapshot).perspective === intent.perspective;
+    if (intent.kind === 'view') return snapshot.camera?.viewId === intent.viewId && snapshot.camera.transition?.kind === 'none';
     if (!t) return false;
     if (intent.kind === 'mount') return t.transition.remainingSeconds <= 0 && (intent.action === 'enter' ? t.mountedInstanceId === goal.targetId : t.mountedInstanceId === null);
     if (intent.kind === 'posture') return intent.stance === 'prone'
@@ -198,7 +198,7 @@ export class EpisodeActionController {
       else if (intent.kind === 'mount') {
         if (!this.stateMatches(snapshot)) command = intent.action === 'enter' ? { type: 'vehicle.enter', instanceId: goal.targetId! } : { type: 'vehicle.exit' };
       } else if (intent.kind === 'view') {
-        if (!this.stateMatches(snapshot)) command = { type: 'camera.set-perspective', perspective: intent.perspective };
+        if (!this.stateMatches(snapshot)) command = { type: 'camera.set-view', viewId: intent.viewId };
       } else if (!this.stateMatches(snapshot)) {
         const player = emptyHumanoidInput();
         if (intent.kind === 'posture') {

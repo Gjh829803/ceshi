@@ -56,3 +56,24 @@ it("checks real imports and every dependency scope while ignoring negative fixtu
     "@whitebox-world/protocol", "@whitebox-world/runtime-host", "@whitebox-world/world",
   ].sort());
 });
+
+
+it("detects escaped retired specifiers in every executable form, including generated files", () => {
+  const source = [
+    String.raw`import "\u0040babylonjs/core";`,
+    String.raw`export * from "\x40whitebox-world/exported";`,
+    String.raw`import legacy = require("@whitebox-\u0077orld/equal");`,
+    String.raw`type Old = import("@whitebox-world\/types").Old;`,
+    String.raw`require.resolve("@whitebox-worl\d/runtime");`,
+    'import(`@babylonjs/template`);',
+    String.raw`import("@baby\
+lonjs/continued");`,
+    '// import "@babylonjs/comment";',
+    'const negative = "@whitebox-world/fixture";',
+  ].join("\n");
+  const violations = checkThreeWorkspaceFiles({...retained, "packages/three-world/src/validator.generated.ts": source});
+  expect(violations.map(({specifier}) => specifier).sort()).toEqual([
+    "@babylonjs/core", "@babylonjs/template", "@babylonjs/continued",
+    "@whitebox-world/exported", "@whitebox-world/equal", "@whitebox-world/types", "@whitebox-world/runtime",
+  ].sort());
+});

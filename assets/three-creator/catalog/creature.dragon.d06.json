@@ -49,9 +49,9 @@
     },
     {
       "path": "flying-creatures/variants.json",
-      "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-      "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-      "byteLength": 50268,
+      "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+      "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+      "byteLength": 50069,
       "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
     },
     {
@@ -103,7 +103,6 @@
         2.5861761679004016,
         0.646139228254275
       ],
-      "camera": 40,
       "brakeDeceleration": 22,
       "coastDeceleration": 7,
       "pitchResponse": 3.4,
@@ -397,6 +396,26 @@
     "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
   ],
   "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "creature.dragon.d06.third-person",
+        "source": "dragon-variants",
+        "key": "D06",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "creature.dragon.d06.first-person",
+        "source": "dragon-variants",
+        "key": "D06",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "creature.dragon.d06.shoulder",
+        "source": "dragon-variants",
+        "key": "D06",
+        "viewId": "shoulder"
+      }
+    ],
     "classification": "flying-mount",
     "exampleTopic": "mounted-interaction",
     "exampleVariant": "flying-creature",

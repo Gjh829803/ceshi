@@ -145,31 +145,40 @@
       "durationSeconds": 0.4
     },
     {
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 1
-        }
-      ],
-      "durationSeconds": 1.5
+      "durationSeconds": 1.4,
+      "keysDown": [
+        "t"
+      ]
     },
     {
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 2
-        }
+      "keysUp": [
+        "t"
       ],
-      "durationSeconds": 1.5
+      "durationSeconds": 0.1
     },
     {
-      "commands": [
-        {
-          "type": "humanoid.camera",
-          "mode": 0
-        }
+      "durationSeconds": 1.4,
+      "keysDown": [
+        "t"
+      ]
+    },
+    {
+      "keysUp": [
+        "t"
       ],
-      "durationSeconds": 1.5
+      "durationSeconds": 0.1
+    },
+    {
+      "durationSeconds": 1.4,
+      "keysDown": [
+        "t"
+      ]
+    },
+    {
+      "keysUp": [
+        "t"
+      ],
+      "durationSeconds": 0.1
     },
     {
       "keysDown": [

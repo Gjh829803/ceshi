@@ -1,3 +1,4 @@
+import {assertEpisodeCameraCapabilities,assertEpisodeCameraStart,assertEpisodeCameraPrepared} from './browser.js';
 import { createHash } from 'node:crypto';
 import { readdir, lstat, readFile, mkdir, writeFile, rename, realpath } from 'node:fs/promises';
 import path from 'node:path';
@@ -115,11 +116,13 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
   let failure: ReturnType<typeof safeFailure> | undefined, media: Awaited<ReturnType<typeof inspectRenderedVideo>> | undefined;
   const initialErrorCount = session.errors.length;
   try {
+    assertEpisodeCameraStart(segment.start,capabilities);
     const probe = await session.probeStart(segment.start);
     await atomicJson(path.join(root, 'start-probe.json'), probe);
     artifacts.push(await artifact(root, 'start-probe.json'));
     if (!probe.isValid) throw new Error(`EPISODE_START_INVALID: ${JSON.stringify(probe.diagnostics)}`);
     initialSnapshot = await session.prepareSegment(segment.start, { widthPixels: PROFILE.widthPixels, heightPixels: PROFILE.heightPixels });
+    assertEpisodeCameraPrepared(segment.start,capabilities,initialSnapshot);
     capabilities=await session.capabilities();
     initialTick = initialSnapshot.simulationTick;
     const opening = await session.frame('image/png');
@@ -196,9 +199,9 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
   actions?.finish(terminalSnapshot, !!failure);
   const status = failure ? 'failed' : 'completed';
   const actionTimeline = actions?.timeline ?? (segment.actionGoals ?? []).map(goal => ({ goalId: goal.id, intent: goal.intent, targetId: goal.targetId ?? null, result: 'missing', diagnostic: 'Capture could not initialize.' }));
-  await atomicJson(path.join(root, 'action-timeline.json'), { kind: 'three-episode-action-timeline', schemaVersion: 1, simulationTickRate: PROFILE.simulationTickRate, captureFps: PROFILE.captureFps, initialTick, actionTimeline });
+  await atomicJson(path.join(root, 'action-timeline.json'), { kind: 'three-episode-action-timeline', schemaVersion: 1, worldBuildHash:options.plan.worldBuildHash,runtimeHash:options.runtimeHash??null,recipeHash,simulationTickRate: PROFILE.simulationTickRate, captureFps: PROFILE.captureFps, initialTick, actionTimeline });
   await atomicJson(path.join(root, 'trace.json'), { kind: 'three-episode-trace', schemaVersion: 2,
-    worldBuildHash: options.plan.worldBuildHash, recipeHash, segment, profile: PROFILE,
+    worldBuildHash: options.plan.worldBuildHash,runtimeHash:options.runtimeHash??null,capabilities, recipeHash, segment, profile: PROFILE,
     controllerVersion: ROUTE_CONTROLLER_VERSION, playerCaptureVersion: PLAYER_CAPTURE_VERSION, actionCaptureVersion: ACTION_CAPTURE_VERSION, actionTimeline, initialSnapshot, terminalSnapshot, frames: trace });
   await atomicJson(path.join(root, 'health.json'), { kind: 'three-episode-capture-health', schemaVersion: 1,
     status, frameCount, capturedDurationSeconds: frameCount / PROFILE.captureFps,
@@ -234,7 +237,9 @@ export async function runCaptureSegments(options: CaptureSegmentsOptions): Promi
       if (cached) { results.push(cached); await options.onProgress?.({ segmentId: segment.id, frameCount: cached.frameCount, totalFrameCount: PROFILE.captureFrameCount, status: 'cached' }); continue; }
       if (!session) {
         session = await (options.openBrowser ?? openEpisodeBrowser)({ ...options.browserOptions, playableRoot: options.playableRoot, widthPixels: PROFILE.widthPixels, heightPixels: PROFILE.heightPixels });
-        capabilities = await session.capabilities(); frameSimulationTick(0, capabilities.fixedTimeStepSeconds);
+        capabilities = await session.capabilities(); assertEpisodeCameraCapabilities(capabilities);
+        for(const segment of segments){assertEpisodeCameraStart(segment.start,capabilities);for(const goal of segment.actionGoals??[]){const intent=goal.intent;if(intent.kind==='view'&&!capabilities.camera.views.some(v=>v.viewId===intent.viewId))throw new Error('EPISODE_CAMERA_VIEW_UNDECLARED');}}
+        frameSimulationTick(0, capabilities.fixedTimeStepSeconds);
       }
       results.push(await captureSegment(options, session, capabilities!, segment, root, recipeHash));
       await atomicJson(path.join(options.outputRoot, 'capture-progress.json'), { worldBuildHash: plan.worldBuildHash, playableFilesHash, segments: results });

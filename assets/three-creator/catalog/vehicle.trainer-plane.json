@@ -61,7 +61,6 @@
         0.6,
         0.4
       ],
-      "camera": 13.5,
       "hint": "Shift 加油门 / Ctrl 减油门 · W / S 俯仰 · A / D 转弯 · Q / E 横滚",
       "archetype": "plane",
       "visualVariant": "trainer",
@@ -102,6 +101,28 @@
       0,
       0.45,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.trainer-plane.third-person",
+        "source": "presets",
+        "key": "trainer-plane.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.trainer-plane.first-person",
+        "source": "presets",
+        "key": "trainer-plane.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.trainer-plane.shoulder",
+        "source": "presets",
+        "key": "trainer-plane.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

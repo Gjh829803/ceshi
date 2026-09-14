@@ -77,11 +77,11 @@ it('fits both aircraft to actual Source101 skin, controls, pedals and ground cle
    expect(gap,`${spec.id} pelvis/cushion gap`).toBeGreaterThanOrEqual(-.005);
    expect(contactHeight-top,`${spec.id} body floating over cushion`).toBeLessThan(.03);
    expect(intersectingVertices,`${spec.id} body intersects cushion`).toBe(0);
-   runtime.setCameraMode(1);world.step({},1);
+   world.setCameraView('first-person');world.step({},1);
    const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);
-   expect(runtime.followCamera.camera.position.distanceTo(eye)).toBeLessThan(.002);
+   expect(world.camera.position.distanceTo(eye)).toBeLessThan(.002);
    expect(eye.y-top).toBeGreaterThan(.65);
-   runtime.setCameraMode(0);world.step({},1);
+   world.setCameraView('third-person');world.step({},1);
    // 通过同一 SDK 输入链检查爬升、左右满转向和俯冲时的接触，不额外写骨骼。
    for(const input of [{boost:true},{forward:-1},{steer:1},{steer:-1},{forward:1}]){
     world.step({humanoid:{...humanoid.emptyInput(),...input}},input.boost?300:90);

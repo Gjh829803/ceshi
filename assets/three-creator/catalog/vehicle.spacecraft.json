@@ -61,7 +61,6 @@
         0.15,
         0.4
       ],
-      "camera": 9,
       "hint": "W / S 前后 · A / D 偏航 · Space / Ctrl 升降 · Q / E 横滚 · ↑↓ 俯仰 / ←→ 侧移 · Shift 制动",
       "archetype": "spacecraft",
       "envelope": {
@@ -101,6 +100,28 @@
       0,
       0.35,
       0
+    ]
+  },
+  "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "vehicle.spacecraft.third-person",
+        "source": "presets",
+        "key": "spacecraft.third-person",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "vehicle.spacecraft.first-person",
+        "source": "presets",
+        "key": "spacecraft.first-person",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "vehicle.spacecraft.shoulder",
+        "source": "presets",
+        "key": "spacecraft.shoulder",
+        "viewId": "shoulder"
+      }
     ]
   }
 }

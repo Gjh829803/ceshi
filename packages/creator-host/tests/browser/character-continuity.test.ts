@@ -13,7 +13,7 @@ function fixture(){
 }
 
 function firstPerson(snapshot:WorldSnapshot):WorldSnapshot{
- return {...snapshot,camera:{...snapshot.camera,mode:'follow'},humanoid:{...snapshot.humanoid!,cameraMode:1}};
+ return {...snapshot,camera:{...snapshot.camera,mode:'follow',viewKind:'first-person'},humanoid:{...snapshot.humanoid!}};
 }
 
 it('defers temporary first-person geometry and verifies the original geometry on return',()=>{

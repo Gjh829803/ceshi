@@ -49,9 +49,9 @@
     },
     {
       "path": "flying-creatures/variants.json",
-      "uri": "./assets/resources/e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e.json",
-      "sha256": "e83918084a6b8fca35f62a0b1ddcb1a330fdf9ed210b45f5eb5b2dc55ae7482e",
-      "byteLength": 50268,
+      "uri": "./assets/resources/4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b.json",
+      "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+      "byteLength": 50069,
       "sourcePath": "assets/dragon-training/__creature-assets/variants.json"
     },
     {
@@ -99,11 +99,10 @@
       "steer": 1.4,
       "radius": 1.8299999999999998,
       "seat": [
-        -9.398425572572594e-05,
+        -0.00009398425572572594,
         2.0080233088879798,
         0.7441157487464997
       ],
-      "camera": 38,
       "brakeDeceleration": 22,
       "coastDeceleration": 7,
       "pitchResponse": 3.4,
@@ -397,6 +396,26 @@
     "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
   ],
   "integrationMetadata": {
+    "cameraPresetReferences": [
+      {
+        "presetId": "creature.dragon.d05.third-person",
+        "source": "dragon-variants",
+        "key": "D05",
+        "viewId": "third-person"
+      },
+      {
+        "presetId": "creature.dragon.d05.first-person",
+        "source": "dragon-variants",
+        "key": "D05",
+        "viewId": "first-person"
+      },
+      {
+        "presetId": "creature.dragon.d05.shoulder",
+        "source": "dragon-variants",
+        "key": "D05",
+        "viewId": "shoulder"
+      }
+    ],
     "classification": "flying-mount",
     "exampleTopic": "mounted-interaction",
     "exampleVariant": "flying-creature",

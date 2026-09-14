@@ -2,6 +2,8 @@
 
 Read [the SDK guide](README.md), [runtime checklist](../../docs/reviews/runtime-deep-review-checklist.md)
 and the architecture's design background before changing public behavior.
+For camera work, read the [camera extension maintenance contract](../../docs/three-sdk-architecture.md#相机扩展维护规范),
+including the distinction between implemented capabilities and future state-driven view selection.
 
 - Maintain one fixed clock, Rapier world, controller per actor, animation owner
   and active camera writer. Extensions return intent; no second execution loop.

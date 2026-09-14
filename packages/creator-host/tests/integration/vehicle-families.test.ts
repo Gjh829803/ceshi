@@ -4,7 +4,7 @@ import { Group, PerspectiveCamera } from 'three';
 import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, type VehicleSpec } from '@worldkit/three';
 
 // Headless physical integration evidence, not rendered Creator self-check or Episode
-// video acceptance. Starts use the Episode runtime initializer; subsequent motion
+// video acceptance. Starts use the native physical placement helper; subsequent motion
 // uses only the SDK fixed input path, with no renderer or campus imports.
 const catalog = JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
@@ -29,12 +29,12 @@ function course(family: Family | 'character', barrier = false): EnvironmentDefin
   };
 }
 
-function vehicleStart(family: Family, spec: VehicleSpec, instanceId = 'subject'): EpisodeStart {
+function vehicleStart(family: Family, spec: VehicleSpec, instanceId = 'subject'): Omit<EpisodeStart,'cameraViewId'> {
   const clearance = Math.max(0, spec.envelope.halfExtents[1] - spec.envelope.offset[1]);
   const y = (family === 'boat'||family === 'paddled_boat') ? .1 : family === 'submarine' ? -15 : family === 'hover' ? 1.3 :
     ['plane', 'glider', 'spacecraft', 'dragon'].includes(family) ? 100 : clearance + .03;
   return { positionWorldMetersXYZ: [0, y, 0], facingYawRadians: Math.PI,
-    humanoid: { vehicleInstanceId: instanceId, mounted: true, cameraMode: 0,
+    humanoid: { vehicleInstanceId: instanceId, mounted: true,
       ...(['plane', 'glider'].includes(family) ? { velocityWorldMetersPerSecondXYZ: [0, 0, 30] as const, throttle: .7, launched: true } : {}),
       ...(family === 'dragon' ? { launched: true } : {}) } };
 }

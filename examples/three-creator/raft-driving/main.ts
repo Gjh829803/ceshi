@@ -1,3 +1,5 @@
+import cameraData from './config/camera.json';
+import {parseCameraDocument} from '@worldkit/three';
 import * as THREE from 'three';
 import {createWorld,HumanoidCharacter,type EnvironmentDefinition,type VehicleSpec} from '@worldkit/three';
 // Asset discovery supplies IDs; compiler closes primary models, clips, notices and hashes.
@@ -31,16 +33,15 @@ structure('shore-slope',[16,.4,40/Math.cos(a)],[0,-.2*Math.cos(a),0],[a,0,0]);
 structure('boarding-step',[1.5,.2,3],[2.1,2.9,-15]);
 structure('pier',[14,4,.6],[0,1,65]);
 const vehicleObject=new THREE.Group();
-const spec=structuredClone(selected.humanoid.spec) as VehicleSpec;
+const spec=structuredClone(selected.vehicle.spec) as VehicleSpec;
 const world=await createWorld({scene,camera,canvas,assetDefinitions:definitions,humanoid:{map,vehicles:[{instanceId:'raft-instance-1',assetId:selected.id,spec,object:vehicleObject}],character:{instanceId:'person',object:character.root,animation:character}}});
 // The same catalog asset can be loaded/cloned into additional independent instance roots.
 const model=await world.assets.load(selected.id);vehicleObject.add(model.object);
 
 world.setCaptureTargets([{entityId:'person'},{entityId:'raft-instance-1'}]);
+world.setCameraFollow({configuration:parseCameraDocument(cameraData)});
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;background:#102c35d9;color:white;padding:12px;font:14px sans-serif';
 hud.textContent='橡皮艇 · F 进出 · W / S 划桨、倒划 · A / D 换侧转向 · Shift 快划 · Space 制动 · T 视角';presentation.ui.mount(hud);
-const button=document.createElement('button');button.textContent='走近橡皮艇';button.onclick=async()=>{await world.execute({type:'humanoid.approach',instanceId:'raft-instance-1'});presentation.focus();};hud.append(button);
-const cycleCamera=(key:KeyboardEvent)=>{if(key.code==='KeyT'&&!key.repeat){const mode=((world.snapshot().humanoid!.cameraMode+1)%3) as 0|1|2;void world.execute({type:'humanoid.camera',mode});}};
-window.addEventListener('keydown',cycleCamera);world.onDispose(()=>window.removeEventListener('keydown',cycleCamera));
+const button=document.createElement('button');button.textContent='走近橡皮艇';button.onclick=async()=>{await world.execute({type:'vehicle.approach',instanceId:'raft-instance-1'});presentation.focus();};hud.append(button);
 await world.start();presentation.focus();

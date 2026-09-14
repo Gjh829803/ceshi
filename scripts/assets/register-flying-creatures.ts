@@ -24,7 +24,7 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
     const model=await resource(`flying-creatures/${variant.id}/model.glb`,`${sourceDirectory}/${variant.file}`);
     const name=variant.id==='D09'?`长身飞龙 ${variant.id}`:`飞龙 ${variant.id}`;
     const english=variant.id==='D09'?`Long-bodied flying dragon ${variant.id}`:`Flying dragon ${variant.id}`;
-    const spec={...humanoid.createFlyingCreatureSpec(id),name,en:english,camera:variant.camera,
+    const spec={...humanoid.createFlyingCreatureSpec(id),name,en:english,
       ...(variant.seat?{seat:structuredClone(variant.seat)}:{}),
       ...(variant.envelope?{envelope:structuredClone(variant.envelope)}:{}),
       ...(variant.collisionProbes?{flyingCreatureCollision:structuredClone(variant.collisionProbes)}:{}),
@@ -41,7 +41,7 @@ export async function flyingCreatureCatalogEntries(root=repositoryRoot){
         'Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles.',
         'Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.',
       ],
-      integrationMetadata:{classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.uefn-mannequin',id],
+      integrationMetadata:{cameraPresetReferences:['third-person','first-person','shoulder'].map(viewId=>({presetId:`${id}.${viewId}`,source:'dragon-variants',key:variant.id,viewId})),classification:'flying-mount',exampleTopic:'mounted-interaction',exampleVariant:'flying-creature',documentation:'assets/animals/flying-mounts.md',requiredAssetIds:['humanoid.uefn-mannequin',id],
         visual:{animationPrefix:variant.id,modelResource:model.path,flameResource:flame.path},
         useWhen:`使用编号 ${variant.id} 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。`,
         binding:'Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.',

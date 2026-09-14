@@ -4,6 +4,7 @@ import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { cameraConfigPlugin } from "./server/camera-config";
 import { dragonTrainingPlugin } from "./dragon-training-plugin";
 import {
   catalogResources,
@@ -95,7 +96,7 @@ function catalogPlugin(): Plugin {
   };
 }
 export default defineConfig({
-  plugins: [react(), tailwind(), catalogPlugin(), dragonTrainingPlugin(repository)],
+  plugins: [...cameraConfigPlugin(import.meta.dirname), react(), tailwind(), catalogPlugin(), dragonTrainingPlugin(repository)],
   resolve: { dedupe: ["react", "react-dom", "three"] },
   server: {
     host: "127.0.0.1",
