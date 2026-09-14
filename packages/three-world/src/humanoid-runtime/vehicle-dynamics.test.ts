@@ -43,10 +43,12 @@ it.each(['atv','tank','canoe','kayak','raft','observation-submarine'])('%s keeps
   const {q,v,run}=fixture(id),root=new Group(),panel=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());
   panel.scale.set(1,1.1,.9);root.add(panel);v.rotation.setFromAxisAngle(new Vector3(0,1,0),.7);
   const query=new VehicleCameraQueries([{instanceId:id,object:root}]),build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
+  const probe=()=>query.probe(new Vector3(4,0,0).applyQuaternion(root.quaternion).add(root.position).toArray(),root.position.toArray(),.1);
   try{
     root.quaternion.copy(v.rotation);query.sync();const built=build.mock.calls.length;expect(built).toBe(2);
-    for(let n=0;n<120;n++){run(1,{...emptyInput(),forward:1,steer:.4});root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();}
-    expect(build.mock.calls.length).toBe(built);panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBeGreaterThan(built);
+    for(let n=0;n<120;n++){run(1,{...emptyInput(),forward:1,steer:.4});root.position.copy(v.position);root.quaternion.copy(v.rotation);query.sync();expect(probe().distanceMeters).toBeCloseTo(2.9,4);}
+    expect(build.mock.calls.length).toBe(built);panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBe(built);
+    expect(probe().distanceMeters).toBeCloseTo(1.9,4);expect(build.mock.calls.length).toBeGreaterThan(built);
   }finally{query.dispose();build.mockRestore();panel.geometry.dispose();panel.material.dispose();q.dispose();}
 });
 it('native bodies exchange collision impulses, retain one owner, and release/reset through the runtime',async()=>{

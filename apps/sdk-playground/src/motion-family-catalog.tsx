@@ -1,8 +1,9 @@
-import {useState} from 'react';
+import {memo,useState} from 'react';
 import {humanoid} from '@worldkit/three';
 import {ChoiceSelect,ChoiceOption} from './components/choice-select';
 const families=humanoid.listMotionFamilies();
-export function MotionFamilyCatalog({onInteract}:{onInteract?:()=>void}){
+// Telemetry refreshes do not change this independently browsed capability catalog.
+export const MotionFamilyCatalog = memo(function MotionFamilyCatalog({onInteract}:{onInteract?:()=>void}){
   const [familyId,setFamilyId]=useState<humanoid.MotionFamilyId>('human');
   const [subtypeId,setSubtypeId]=useState(families[0]!.subtypes[0]!.id);
   const family=families.find(f=>f.id===familyId)!,subtype=family.subtypes.find(s=>s.id===subtypeId)!;
@@ -20,4 +21,4 @@ export function MotionFamilyCatalog({onInteract}:{onInteract?:()=>void}){
     <p data-motion-subtype-status={subtype.status}>{subtype.status==='implemented'?'已有运行实现':'预留，未实现'} · {subtype.description}</p>
     <ul aria-label="小类参数范围" style={{paddingLeft:18,fontSize:12}}>{fields.map(f=><li key={f.key}>{f.label}：{humanoid.CONTROL_RANGES[f.key].join('–')} {f.unit}</li>)}</ul>
   </details>;
-}
+});

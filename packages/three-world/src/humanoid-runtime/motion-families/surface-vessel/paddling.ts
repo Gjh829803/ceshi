@@ -1,5 +1,3 @@
-import RAPIER from '@dimforge/rapier3d-compat';
-import {exactBoxHalfExtents} from '../../../physics-box';
 import { Euler,Quaternion,Vector3 } from 'three';
 import type { EnvironmentQueries,QueryBody } from '../../environment/queries';
 import type { Input,VehicleState } from '../../simulation';
@@ -62,17 +60,8 @@ export function advancePaddleStroke(v:VehicleState,i:Input,h:number,q:Environmen
  if(k.effort>.005&&!switching)k.phase+= (k.blocked?-1:1)*h/period;
  if(k.phase<Math.floor(before.phase)+.015&&k.blocked){k.phase=Math.floor(before.phase);k.blocked=false;}
  const bladeWorld=(state:typeof k)=>{const p=kayakPaddlePose(state);return paddleBlade(state,state.brake&&state.craft!=='canoe'?1:kayakStroke(state).side).applyQuaternion(p.rotation).add(p.position).applyQuaternion(v.rotation).add(v.position);};
- const from=bladeWorld(before),to=bladeWorld(k),excludedColliderHandles=new Set<number>();
- // 桨叶只对路径附近的盒体做精确扫掠，避免给远处的大量地面格子重复创建原生形状。
- // 使用当前碰撞体的位置及旋转；不缓存静态位置，也不修改环境碰撞几何。
- q.borrowPhysics().world.colliders.forEach(other=>{
-  const shape=other.shape,half=exactBoxHalfExtents(shape)??(shape instanceof RAPIER.Cuboid?[shape.halfExtents.x,shape.halfExtents.y,shape.halfExtents.z]:undefined);
-  if(!half)return;
-  const center=other.translation(),inverse=new Quaternion().copy(other.rotation()).invert();
-  const a=from.clone().sub(new Vector3(center.x,center.y,center.z)).applyQuaternion(inverse),b=to.clone().sub(new Vector3(center.x,center.y,center.z)).applyQuaternion(inverse);
-  if(half.some((extent,axis)=>Math.min(a.getComponent(axis),b.getComponent(axis))>extent+.1||Math.max(a.getComponent(axis),b.getComponent(axis))< -extent-.1))excludedColliderHandles.add(other.handle);
- });
- const filter={excludedActorIds:new Set([v.spec.id]),excludedColliderHandles};
+ const from=bladeWorld(before),to=bladeWorld(k);
+ const filter={excludedActorIds:new Set([v.spec.id])};
  // 桨叶在水中可自由运动，接触实体岸壁时停止这一推进行程并沿来路收桨。
  const body={kind:'capsule' as const,radius:.07,height:.14,offset:[0,0,0] as const},rotation=new Quaternion();
  if(!before.blocked&&q.bodyPathBlocked([{position:from,rotation,body},{position:to,rotation,body}],filter)){

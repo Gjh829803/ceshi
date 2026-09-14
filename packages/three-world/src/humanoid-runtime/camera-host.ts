@@ -49,16 +49,22 @@ export class HumanoidCameraGeometry {
  private readonly vehicles:VehicleCameraQueries;
  constructor(vehicles:readonly {instanceId:string;object:THREE.Object3D}[]){this.vehicles=new VehicleCameraQueries(vehicles);}
  bind(environment:EnvironmentQueries,simulation:Simulation,subject:CameraSubjectFacts){
-  this.vehicles.sync();
-  const excluded=new Set(this.vehicles.refinedActorIds);excluded.add(subject.id);
-  const baseFilter=environment.cameraFilter(excluded);
-  const filter=(collider:import('@dimforge/rapier3d-compat').Collider)=>baseFilter(collider)&&environment.colliderId(collider.handle)!==subject.id;
+  this.vehicles.sync(environment.cameraFallbackBounds());
   const capsule=simulation.actors.get(subject.id)?.controller.capsule;
   const world=environment.borrowPhysics().world;
+  let filterRevision=-1,filter:((collider:import('@dimforge/rapier3d-compat').Collider)=>boolean)|undefined;
   return {probe:(from:readonly [number,number,number],to:readonly [number,number,number],radius:number)=>{
+   // Refine current candidates before excluding their movement envelopes. Each
+   // probe may reach a different vehicle or discover a whole-vehicle fallback.
+   const refined=this.vehicles.probe(from,to,radius,subject.id);
+   if(filterRevision!==this.vehicles.refinementRevision){
+    const excluded=new Set(this.vehicles.refinedActorIds);excluded.add(subject.id);
+    const baseFilter=environment.cameraFilter(excluded);
+    filter=collider=>baseFilter(collider)&&environment.colliderId(collider.handle)!==subject.id;
+    filterRevision=this.vehicles.refinementRevision;
+   }
    const raw=probeHumanoidCamera(world,from,to,radius,capsule,filter,0);
    const hit={...raw,...(raw.colliderEntityId?{colliderEntityId:environment.colliderId(Number(raw.colliderEntityId))}:{})};
-   const refined=this.vehicles.probe(from,to,radius,subject.id);
    return refined.startedOverlapping||refined.distanceMeters<hit.distanceMeters?refined:hit;
   }};
  }

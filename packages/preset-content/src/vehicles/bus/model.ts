@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createInstancedParts} from '../shared/instanced-parts';
 import type {WheelRig} from '../../models';
 import {BUS_SPEC} from './spec';
 
@@ -32,7 +33,7 @@ export function buildBusModel(){
     box('window.lower-rail',[.09,.12,5.48],[x,1.44,0],cream);
     box('window.upper-rail',[.09,.13,5.45],[x,2.42,0],cream);
     const divisions=[-2.7,-1.62,-.54,.54,1.62,2.68];
-    for(const z of divisions)box('window.pillar',[.09,.96,.065],[x,1.94,z],cream);
+    const pillars=createInstancedParts(new T.BoxGeometry(.09,.96,.065),cream,divisions.map(z=>new T.Matrix4().makeTranslation(x,1.94,z)));pillars.name='window.pillar';root.add(pillars);
     for(let n=0;n<divisions.length-1;n++){
       const z=(divisions[n]!+divisions[n+1]!)/2,length=divisions[n+1]!-divisions[n]!-.07;
       box('window.side',[.012,.87,length],[x,1.94,z],glass);
@@ -57,7 +58,7 @@ export function buildBusModel(){
   for(const y of [1.5,2.43])box('rear.window.rail',[2.12,.10,.09],[0,y,-2.73],cream);
   box('grille.frame',[.94,.6,.045],[0,.88,2.79],steel);
   box('grille',[.82,.5,.035],[0,.88,2.82],dark);
-  for(const y of [.72,.85,.98,1.11])box('grille.slat',[.8,.018,.04],[0,y,2.845],steel);
+  const grilleSlats=createInstancedParts(new T.BoxGeometry(.8,.018,.04),steel,[.72,.85,.98,1.11].map(y=>new T.Matrix4().makeTranslation(0,y,2.845)));grilleSlats.name='grille.slat';root.add(grilleSlats);
   for(const z of [-2.84,2.84])box('bumper',[2.21,.14,.16],[0,.5,z],steel);
   for(const x of [-.8,.8])for(const y of [.8,1.13]){
     const ring=new T.Mesh(new T.CylinderGeometry(.145,.145,.075,20),steel);ring.rotation.x=Math.PI/2;ring.position.set(x,y,2.8);root.add(ring);
@@ -71,13 +72,11 @@ export function buildBusModel(){
     const hub=new T.Mesh(new T.CylinderGeometry(.14,.14,.25,12),steel);hub.rotation.z=Math.PI/2;spin.add(hub);
     wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius:.46});if(z>0)steering.push(pivot);
   }
-  const seat=(x:number,z:number)=>{
-    box('seat.cushion',[.66,.10,.62],[x,.94,z],dark);
-    box('seat.back',[.68,.67,.11],[x,1.3,z-.32],dark);
-    for(const dx of [-.23,.23])rod('seat.leg',[x+dx,.52,z],[x+dx,.9,z],.025,dark);
-  };
-  seat(.47,1.38);seat(-.47,1.38);
-  for(const z of [.24,-.94,-2.04])for(const x of [-.49,.49])seat(x,z);
+  const seats=[[.47,1.38],[-.47,1.38],...[.24,-.94,-2.04].flatMap(z=>[-.49,.49].map(x=>[x,z]))] as [number,number][];
+  const cushions=createInstancedParts(new T.BoxGeometry(.66,.10,.62),dark,seats.map(([x,z])=>new T.Matrix4().makeTranslation(x,.94,z)));cushions.name='seat.cushion';
+  const backs=createInstancedParts(new T.BoxGeometry(.68,.67,.11),dark,seats.map(([x,z])=>new T.Matrix4().makeTranslation(x,1.3,z-.32)));backs.name='seat.back';
+  const legs=createInstancedParts(new T.CylinderGeometry(.025,.025,.38,8),dark,seats.flatMap(([x,z])=>[-.23,.23].map(dx=>new T.Matrix4().makeTranslation(x+dx,.71,z))));legs.name='seat.leg';
+  root.add(cushions,backs,legs);
   box('dashboard',[1.97,.16,.38],[0,1.27,2.35],dark);
   const instrument=box('instrument.panel',[.48,.19,.045],[.47,1.40,2.19],steel);instrument.rotation.x=.2;
   for(const x of [.35,.59]){const dial=new T.Mesh(new T.CircleGeometry(.065,16),dark);dial.rotation.y=Math.PI;dial.position.set(x,1.42,2.16);root.add(dial);}

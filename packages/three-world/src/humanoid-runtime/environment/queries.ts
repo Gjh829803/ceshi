@@ -9,7 +9,7 @@ import type {BorrowedPhysicsWorld} from '../../physics-host';
 import {DYNAMIC_PROP_COLLISION_GROUPS,DEFAULT_CHARACTER_OPTIONS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CameraCollisionSolver } from '@worldkit/camera-collision';
-import { Euler,Quaternion,Vector3 } from 'three';
+import { Box3,Euler,Quaternion,Vector3 } from 'three';
 import type { Vec3 } from '../../contracts';
 import { probeHumanoidCamera } from '../camera-queries';
 import type { VehicleSpec } from '../config';
@@ -272,49 +272,54 @@ export class EnvironmentQueries {
     const previous=this.suppressContactImpulses;this.suppressContactImpulses=true;
     try{return read();}finally{this.suppressContactImpulses=previous;}
   }
-  /** Direct per-collider queries read current poses without advancing Rapier's broadphase. */
-  private directColliders(filter: BodyQueryFilter = {}): RAPIER.Collider[] {
+  /** The caller refreshes once; candidate collection must not reenter borrowed WASM. */
+  private nearbyColliders(bounds:Box3,padding:number,filter:BodyQueryFilter={}):RAPIER.Collider[]{
     this.assertLive();
-    const excluded = new Set(filter.excludedColliderHandles);
+    const center=bounds.getCenter(new Vector3()),half=bounds.getSize(new Vector3()).multiplyScalar(.5);
+    // The BVH uses f32. Conservative rounding only admits extra candidates;
+    // contacts and casts below retain their original shapes and tolerances.
+    const magnitude=Math.max(1,...center.toArray().map(Math.abs),...half.toArray());
+    half.addScalar(padding+magnitude*2**-20);
+    const candidates:RAPIER.Collider[]=[];
+    this.world.collidersWithAabbIntersectingAabb(center,half,collider=>{candidates.push(collider);return true;});
+    return this.filterColliders(candidates,filter);
+  }
+  /** The support ray retains its existing live-collider traversal and tie order. */
+  private directColliders(filter:BodyQueryFilter={}):RAPIER.Collider[]{
+    this.assertLive();const candidates:RAPIER.Collider[]=[];
+    this.world.colliders.forEach(collider=>candidates.push(collider));
+    return this.filterColliders(candidates,filter);
+  }
+  private filterColliders(candidates:readonly RAPIER.Collider[],filter:BodyQueryFilter):RAPIER.Collider[]{
+    const excluded=new Set(filter.excludedColliderHandles);
     for(const [id,rig] of this.vehicleRigs)if(filter.excludedActorIds?.has(id))for(const collider of rig.colliders)excluded.add(collider.handle);
-    for (const entry of this.actorColliders.values()) {
-      // Actor part IDs are retained; exclusion names the exact instance, never a prefix.
-      if (filter.excludedActorIds?.has(entry.actorId))
-        excluded.add(entry.collider.handle);
-    }
-    const colliders: RAPIER.Collider[] = [];
-    this.world.colliders.forEach((c) => {
-      if (c.isEnabled() && !c.isSensor() && !excluded.has(c.handle))
-        colliders.push(c);
-    });
-    return colliders;
+    for(const entry of this.actorColliders.values())if(filter.excludedActorIds?.has(entry.actorId))excluded.add(entry.collider.handle);
+    return candidates.filter(c=>c.isEnabled()&&!c.isSensor()&&!excluded.has(c.handle));
+  }
+  private bodyQueryBounds(pose:BodyPose):Box3{
+    validatePose(pose);
+    const c=center(pose.position,pose.body,pose.rotation),e=extents(pose.body,pose.rotation);
+    return new Box3(c.clone().sub(e),c.clone().add(e));
+  }
+  private outsideMap(bounds:Box3):boolean{
+    return bounds.min.toArray().some((v,i)=>v<this.map.bounds.min[i]!)||bounds.max.toArray().some((v,i)=>v>this.map.bounds.max[i]!);
   }
   bodyOverlap(
     pose: BodyPose,
     filter?: BodyQueryFilter,
     contactToleranceMeters = 0,
   ): boolean {
-    validatePose(pose);
-    if (!Number.isFinite(contactToleranceMeters) || contactToleranceMeters < 0)
-      throw new Error("HUMANOID_QUERY_INVALID");
-    contactToleranceMeters = Math.min(contactToleranceMeters, this.controller.offset());
-    const c = center(pose.position, pose.body, pose.rotation),
-      e = extents(pose.body, pose.rotation);
-    if (
-      c
-        .clone()
-        .sub(e)
-        .toArray()
-        .some((v, i) => v < this.map.bounds.min[i]!) ||
-      c
-        .clone()
-        .add(e)
-        .toArray()
-        .some((v, i) => v > this.map.bounds.max[i]!)
-    )
-      return true;
+    this.assertLive();
+    const bounds=this.bodyQueryBounds(pose);
+    if(!Number.isFinite(contactToleranceMeters)||contactToleranceMeters<0)throw new Error("HUMANOID_QUERY_INVALID");
+    if(this.outsideMap(bounds))return true;
+    this.world.updateSceneQueries();
+    return this.overlapCandidates(pose,this.nearbyColliders(bounds,0,filter),Math.min(contactToleranceMeters,this.controller.offset()));
+  }
+  private overlapCandidates(pose:BodyPose,colliders:readonly RAPIER.Collider[],contactToleranceMeters:number):boolean{
+    const c=center(pose.position,pose.body,pose.rotation);
     const body = shape(pose.body);
-    return this.directColliders(filter).some((other) => {
+    return colliders.some((other) => {
       const hit = contactColliderVolume(other,body,c,pose.rotation,0);
       // Native capsule contact can report zero depth for coincident segments.
       // A slightly inset intersection distinguishes penetration from mere contact.
@@ -337,12 +342,16 @@ export class EnvironmentQueries {
     poses: readonly BodyPose[],
     filter?: BodyQueryFilter,
   ): boolean {
+    this.assertLive();
     const clearance =
       this.rigs.values().next().value?.controller.offset() ??
       this.controller.offset();
-    for (const pose of poses)
-      if (this.bodyOverlap(pose, filter, clearance)) return true;
-    const colliders = this.directColliders(filter);
+    if(!poses.length)return false;
+    const bounds=new Box3();
+    for(const pose of poses){const next=this.bodyQueryBounds(pose);if(this.outsideMap(next))return true;bounds.union(next);}
+    this.world.updateSceneQueries();
+    const colliders=this.nearbyColliders(bounds,clearance,filter);
+    for(const pose of poses)if(this.overlapCandidates(pose,colliders,Math.min(clearance,this.controller.offset())))return true;
     for (let n = 1; n < poses.length; n++) {
       const from = poses[n - 1]!,
         to = poses[n]!;
@@ -532,6 +541,20 @@ export class EnvironmentQueries {
     for(let axis=0;axis<3;axis++){if(p.getComponent(axis)<min.getComponent(axis))normals.push(new Vector3().setComponent(axis,1));if(p.getComponent(axis)>max.getComponent(axis))normals.push(new Vector3().setComponent(axis,-1));}
     p.clamp(min,max);
     return {position:p,grounded,normal:normals[0]??new Vector3(0,1,0),normals,contacts,blocked:p.clone().sub(position).distanceToSquared(delta)>1e-6};
+  }
+  /** Detached bounds of the actual native proxies that cameraFilter can restore. */
+  cameraFallbackBounds():ReadonlyMap<string,Box3> {
+    this.assertLive();const bounds=new Map<string,Box3>();
+    for(const {actorId,collider} of this.actorColliders.values()){
+      const position=new Vector3().copy(collider.translation()),rotation=new Quaternion().copy(collider.rotation()),native=collider.shape;
+      let extent:Vector3;
+      if(native instanceof RAPIER.Cuboid)extent=extents({kind:'box',halfExtents:[native.halfExtents.x,native.halfExtents.y,native.halfExtents.z],offset:[0,0,0]},rotation);
+      else if(native instanceof RAPIER.Capsule)extent=extents({kind:'capsule',radius:native.radius,height:2*(native.halfHeight+native.radius),offset:[0,0,0]},rotation);
+      else extent=new Vector3(Infinity,Infinity,Infinity);
+      const box=new Box3(position.clone().sub(extent),position.clone().add(extent)).expandByScalar(1e-5+Math.max(extent.x,extent.y,extent.z)*1e-6);
+      const previous=bounds.get(actorId);if(previous)previous.union(box);else bounds.set(actorId,box);
+    }
+    return bounds;
   }
   cameraFilter(excludedActorIds:ReadonlySet<string>):(collider:RAPIER.Collider)=>boolean {
     const excluded=new Set(this.queryExcluded);

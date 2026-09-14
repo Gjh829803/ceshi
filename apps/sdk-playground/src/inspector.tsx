@@ -234,6 +234,7 @@ function Inspector({
 }) {
   const { assetId, subject, profile, movement, camera, telemetry } = snapshot;
   const [tab, setTab] = useState<InspectorTab>("movement");
+  const interact = useCallback(() => options.onInteract?.(), [options]);
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
   const person = assetId === "person",
     shoulder = camera.kind === "shoulder",
@@ -354,7 +355,7 @@ function Inspector({
             <Group title="运动控制" kicker="MOVEMENT">
               <p className="inspector-group-note">{`当前家族 ${movement.family} · 仅应用到当前资产；灰色项不参与该家族运动。`}</p>
             </Group>
-            <MotionFamilyCatalog onInteract={()=>options.onInteract?.()} />
+            <MotionFamilyCatalog onInteract={interact} />
             {["速度范围", "加速与减速", "转向与稳定", "专项运动"].map(
               (section) => {
                 const fields = descriptions.filter(

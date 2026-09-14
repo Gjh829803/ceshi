@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createInstancedParts} from '../shared/instanced-parts';
 import {humanoid} from '@worldkit/three';
 import {ATV_SPEC,ATV_SOCKETS} from './spec';
 
@@ -32,7 +33,8 @@ export function buildAtvModel():T.Group{
   const pivot=new T.Group(),spin=new T.Group();pivot.name=`atv.wheel.${index}`;spin.name=`atv.spin.${index}`;pivot.position.set(...p);pivot.add(spin);root.add(pivot);
   const tyre=new T.Mesh(new T.CylinderGeometry(.365,.365,.35,20),dark);tyre.rotation.z=Math.PI/2;spin.add(tyre);
   const rim=new T.Mesh(new T.CylinderGeometry(.21,.21,.365,12),metal);rim.rotation.z=Math.PI/2;spin.add(rim);
-  for(let n=0;n<24;n++){const a=n*Math.PI/12;const tread=box(spin,'tread',[.36,.05,.09],[0,Math.cos(a)*.37,Math.sin(a)*.37],dark);tread.rotation.x=a;}
+  const treads=createInstancedParts(new T.BoxGeometry(.36,.05,.09),dark,Array.from({length:24},(_,n)=>{const a=n*Math.PI/12;return new T.Matrix4().makeRotationX(a).setPosition(0,Math.cos(a)*.37,Math.sin(a)*.37);}));
+  treads.name='tread';spin.add(treads);
   const axle=box(spin,'hub',[.38,.07,.07],[0,0,0],dark);axle.rotation.x=Math.PI/4;
  });
  for(const [name,p] of Object.entries(ATV_SOCKETS)){const socket=new T.Group();socket.name=name;socket.position.set(...p);root.add(socket);}

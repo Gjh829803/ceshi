@@ -90,11 +90,13 @@ describe('per-wheel road vehicle',()=>{
   const f=fixture(),root=new Group(),panel=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());
   panel.scale.set(1,1.1,.9);root.add(panel);f.v.rotation.setFromAxisAngle(new Vector3(0,1,0),.7);
   const query=new VehicleCameraQueries([{instanceId:'car',object:root}]),build=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
+  const probe=()=>query.probe(new Vector3(4,0,0).applyQuaternion(root.quaternion).add(root.position).toArray(),root.position.toArray(),.1);
   try{
    root.quaternion.copy(f.v.rotation);query.sync();const built=build.mock.calls.length;expect(built).toBe(2);
-   for(let n=0;n<180;n++){run(f,1,{...emptyInput(),forward:1,steer:.4});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();}
+   for(let n=0;n<180;n++){run(f,1,{...emptyInput(),forward:1,steer:.4});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();expect(probe().distanceMeters).toBeCloseTo(2.9,4);}
    expect(build.mock.calls.length).toBe(built);
-   panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBeGreaterThan(built);
+   panel.scale.x=2;query.sync();expect(build.mock.calls.length).toBe(built);
+   expect(probe().distanceMeters).toBeCloseTo(1.9,4);expect(build.mock.calls.length).toBeGreaterThan(built);
   }finally{query.dispose();build.mockRestore();panel.geometry.dispose();panel.material.dispose();f.q.dispose();}
  });
  it.each(['rover','racer','trail-rover','supercar','kart'])('keeps turning rather than translating sideways during boosted countersteering: %s',id=>{

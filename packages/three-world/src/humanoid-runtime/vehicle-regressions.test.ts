@@ -142,7 +142,7 @@ it.each(['horse','boat','patrol-boat','submarine','hovercraft','rescue-hovercraf
 it.each(['plane','trainer-plane','glider'])('%s does not rebuild rigid camera geometry during flight',id=>{
  const f=fixture(id),root=new Group(),mesh=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());root.add(mesh);
  const query=new VehicleCameraQueries([{instanceId:id,object:root}]),spy=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
- try{for(let n=0;n<600;n++){f.run(1,{forward:-1,boost:true});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();}expect(f.v.position.y).toBeGreaterThan(2);expect(spy).toHaveBeenCalledTimes(2);expect(f.v.rotation.lengthSq()).toBeCloseTo(1,12);}
+ try{for(let n=0;n<600;n++){f.run(1,{forward:-1,boost:true});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();expect(query.probe(new Vector3(4,0,0).applyQuaternion(root.quaternion).add(root.position).toArray(),root.position.toArray(),.1).distanceMeters).toBeCloseTo(2.9,4);}expect(f.v.position.y).toBeGreaterThan(2);expect(spy).toHaveBeenCalledTimes(2);expect(f.v.rotation.lengthSq()).toBeCloseTo(1,12);}
  finally{spy.mockRestore();query.dispose();mesh.geometry.dispose();mesh.material.dispose();f.q.dispose();}
 });
 it.each(['tank','sled','ski','unicycle','horse','skateboard'])('%s follows both cross slopes with real support',id=>{
@@ -167,7 +167,7 @@ it.each(['rover','racer','trail-rover'])('%s upper cabin stops before the suspen
  try{f.run(360,{forward:1});expect(f.v.position.z).toBeLessThan(13.9);const z=f.v.position.z;f.run(180,{forward:-1});expect(f.v.position.z).toBeLessThan(z-1);}finally{f.q.dispose();}
 });
 it('bus opaque geometry casts shadows but transparent windows do not',()=>{
- const bus=buildBusModel();let opaque=0;bus.root.traverse(node=>{if(node instanceof Mesh){const mats=Array.isArray(node.material)?node.material:[node.material];const solid=mats.every(m=>!m.transparent);if(solid){opaque++;expect(node.castShadow).toBe(true);expect(node.receiveShadow).toBe(true);}node.geometry.dispose();for(const m of mats)m.dispose();}});expect(opaque).toBeGreaterThan(80);
+ const bus=buildBusModel();let opaque=0;bus.root.traverse(node=>{if(node instanceof Mesh){const mats=Array.isArray(node.material)?node.material:[node.material];const solid=mats.every(m=>!m.transparent);if(solid){opaque+=('isInstancedMesh' in node&&node.isInstancedMesh)?(node as import('three').InstancedMesh).count:1;expect(node.castShadow).toBe(true);expect(node.receiveShadow).toBe(true);}node.geometry.dispose();for(const m of mats)m.dispose();}});expect(opaque).toBeGreaterThan(80);
 });
 it('aircraft third and shoulder views remain continuous through a complete loop and mode switches',()=>{
  const f=fixture('plane'),controller=cameraController(f.v,f.q),identity=f.v.rotation.clone();
