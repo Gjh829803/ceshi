@@ -1,4 +1,5 @@
 import { prepareCameraIntent } from "./evaluation";
+import { composeCameraAtPosition } from "../composition";
 import { describe, expect, it } from "vitest";
 import { Quaternion, Vector3 } from "three";
 import {
@@ -221,7 +222,7 @@ describe("independent fixed history channels", () => {
       [15, 3, 0],
     );
   });
-  it("keeps zoom, arm and speed effects separate and explicit", () => {
+  it("applies explicit zoom before the combined distance response and Cartesian arm", () => {
     const configuration = config({
       kind: "third-person",
       overrides: {
@@ -264,7 +265,7 @@ describe("independent fixed history channels", () => {
     });
     expect(next.history.zoomDistanceMeters).toBe(6);
     expect(next.history.speedDistanceMeters).toBe(2);
-    expect(next.proposal.positionWorldMetersXYZ[2]).toBe(6);
+    expect(next.proposal.positionWorldMetersXYZ[2]).toBe(5.5);
     expect(next.proposal.lens.verticalFovDegrees).toBe(63);
     const retract = evaluateThirdPerson({
       subject,
@@ -809,7 +810,7 @@ it("preserves explicit opening roll through a smoothed orbit", () => {
   ).toBeCloseTo(Math.sin(roll), 8);
 });
 
-it("moves a large yaw intent along a constant-radius orbit without a quaternion jump", () => {
+it("damps a half-turn along the source camera Cartesian chord", () => {
   const configuration = config({
     kind: "third-person",
     overrides: {
@@ -834,26 +835,14 @@ it("moves a large yaw intent along a constant-radius orbit without a quaternion 
     intent: { ...initial.intent, yawRadians: Math.PI },
     deltaSeconds: 0.01,
   });
-  const expectedYaw = Math.PI * (1 - 2 ** -0.01);
-  const expectedArm = new Vector3(
-    Math.sin(expectedYaw) * Math.cos(0.4),
-    Math.sin(0.4),
-    Math.cos(expectedYaw) * Math.cos(0.4),
-  ).multiplyScalar(4);
-  close(
-    new Vector3(...result.proposal.positionWorldMetersXYZ)
-      .sub(new Vector3(...result.proposal.pivotWorldMetersXYZ))
-      .toArray(),
-    expectedArm.toArray(),
-  );
-  expect(
-    new Quaternion(...initial.proposal.quaternionWorldXYZW).angleTo(
-      new Quaternion(...result.proposal.quaternionWorldXYZW),
-    ),
-  ).toBeCloseTo(expectedYaw, 8);
-  expect(result.proposal.upWorldXYZ[1]).toBeCloseTo(Math.cos(0.4), 8);
+  const alpha=1-2**-.01;
+  const expectedArm=new Vector3(0,4*Math.sin(.4),4*Math.cos(.4)*(1-2*alpha));
+  close(new Vector3(...result.proposal.positionWorldMetersXYZ).sub(new Vector3(...result.proposal.pivotWorldMetersXYZ)).toArray(),expectedArm.toArray());
+  const sight=new Vector3(0,0,-1).applyQuaternion(new Quaternion(...result.proposal.quaternionWorldXYZW));
+  expect(sight.angleTo(expectedArm.clone().negate())).toBeLessThan(1e-7);
+
 });
-it("smooths explicit yaw, pitch and radius with one arm half-life and preserves the unwrapped path", () => {
+it("damps the Cartesian destination when yaw pitch and distance change together", () => {
   const configuration = config({
     kind: "third-person",
     overrides: {
@@ -889,12 +878,8 @@ it("smooths explicit yaw, pitch and radius with one arm half-life and preserves 
   });
   const position = new Vector3(...result.proposal.positionWorldMetersXYZ);
   const pivot = new Vector3(...result.proposal.pivotWorldMetersXYZ);
-  close(position.clone().sub(pivot).toArray(), [
-    -6 * Math.cos(0.4),
-    6 * Math.sin(0.4),
-    0,
-  ]);
-  expect(position.distanceTo(pivot)).toBeCloseTo(6, 8);
+  close(position.clone().sub(pivot).toArray(), [0,4*Math.sin(.8),2-4*Math.cos(.8)]);
+  expect(position.distanceTo(pivot)).toBeCloseTo(Math.hypot(4*Math.sin(.8),2-4*Math.cos(.8)),8);
   const orientation = new Quaternion(...result.proposal.quaternionWorldXYZW);
   expect(new Vector3(1, 0, 0).applyQuaternion(orientation).y).toBeCloseTo(
     0,
@@ -903,10 +888,10 @@ it("smooths explicit yaw, pitch and radius with one arm half-life and preserves 
   expect(
     new Vector3(0, 0, -1)
       .applyQuaternion(orientation)
-      .angleTo(pivot.sub(position).normalize()),
+      .distanceTo(pivot.sub(position).normalize()),
   ).toBeLessThan(1e-8);
 });
-it("keeps a half-smoothed quarter turn on the four metre arc", () => {
+it("keeps the source half-smoothed quarter turn on its chord", () => {
   const configuration = config({
     kind: "third-person",
     overrides: {
@@ -932,9 +917,9 @@ it("keeps a half-smoothed quarter turn on the four metre arc", () => {
     deltaSeconds: 1,
   });
   close(result.proposal.positionWorldMetersXYZ, [
-    10 + 2 * Math.sqrt(2),
+    12,
     0,
-    2 * Math.sqrt(2),
+    2,
   ]);
 });
 it.each([-Math.PI / 2, Math.PI / 2])(
@@ -1031,4 +1016,63 @@ it('preserves an opening pose while orbiting the declared body anchor and offset
  expect(opening.distanceMeters).toBeCloseTo(Math.hypot(8,1.7),8);
  const turned=evaluateThirdPersonPose({subject,configuration,opening,intent:{...intent,yawRadians:intent.yawRadians+Math.PI/2},deltaSeconds:0}).proposal;
  close(turned.pivotWorldMetersXYZ,[10,1.3,0]);close(turned.positionWorldMetersXYZ,[18,3,0]);
+});
+
+// Recovery contract: main 28524686 inherits translation and damps the Cartesian
+// arm. A 90-degree turn at one half-life reaches the chord midpoint, not the arc.
+it('restores the main camera Cartesian arm response', () => {
+ const configuration=config({kind:'third-person',overrides:{position:{anchor:{kind:'origin'},distanceMeters:4,subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:1},orientation:{initialPitchRadians:0,recenter:{enabled:false}},zoom:{halfLifeSeconds:0}}});
+ if(configuration.kind!=='third-person')throw new Error();
+ const initial=evaluateThirdPerson({subject,configuration,deltaSeconds:0});
+ const result=evaluateThirdPerson({subject,configuration,history:initial.history,intent:{...initial.intent,yawRadians:Math.PI/2},deltaSeconds:1});
+ close(new Vector3(...result.proposal.positionWorldMetersXYZ).sub(new Vector3(...result.proposal.pivotWorldMetersXYZ)).toArray(),[2,0,2]);
+ const sight=new Vector3(0,0,-1).applyQuaternion(new Quaternion(...result.proposal.quaternionWorldXYZW));
+ expect(sight.angleTo(new Vector3(...result.proposal.pivotWorldMetersXYZ).sub(new Vector3(...result.proposal.positionWorldMetersXYZ)))).toBeLessThan(1e-7);
+});
+
+it('keeps the committed horizon while a Cartesian arm approaches a pole',()=>{
+ const configuration=config({kind:'third-person',overrides:{position:{anchor:{kind:'origin'},distanceMeters:4,armHalfLifeSeconds:.1},orientation:{initialPitchRadians:80*Math.PI/180,pitchLimitsRadians:{kind:'unbounded'},recenter:{enabled:false}}}});
+ if(configuration.kind!=='third-person')throw new Error();
+ const initial=evaluateThirdPerson({subject,configuration,deltaSeconds:0});
+ const result=evaluateThirdPerson({subject,configuration,history:initial.history,intent:{...initial.intent,pitchRadians:91*Math.PI/180},deltaSeconds:1/60});
+ expect(new Vector3(...initial.proposal.upWorldXYZ).dot(new Vector3(...result.proposal.upWorldXYZ))).toBeGreaterThan(.99);
+});
+
+it('retains the PR 240 upright aircraft shoulder while using local seat yaw',()=>{
+ const configuration=config({kind:'shoulder',overrides:{position:{anchor:{kind:'eye'},anchorOffset:{space:'orbit',offsetMetersXYZ:[.48,.22,0]},distanceMeters:2,armHalfLifeSeconds:0},orientation:{referenceFrame:'subject-heading',initialPitchRadians:0,yawLimitsRadians:{kind:'bounded',minimumRadians:-Math.PI*5/6,maximumRadians:Math.PI*5/6},recenter:{enabled:false}}}});
+ if(configuration.kind!=='shoulder')throw new Error();
+ const rolled={...subject,continuousHeadingSeedRadians:0,semanticQuaternionWorldXYZW:new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI).toArray()};
+ const result=evaluateShoulder({subject:rolled,configuration,deltaSeconds:0});
+ expect(result.intent.yawRadians).toBe(0);
+ expect(new Vector3(1,0,0).applyQuaternion(new Quaternion(...result.proposal.quaternionWorldXYZW)).y).toBeCloseTo(0,10);
+ expect(result.proposal.upWorldXYZ[1]).toBeCloseTo(1,10);
+ close(new Vector3(...result.proposal.pivotWorldMetersXYZ).sub(new Vector3(...rolled.eyeWorldMetersXYZ!)).toArray(),[.48,.22,0]);
+});
+
+it('uses an explicit posture recenter preference without changing the selected view',()=>{
+ const configuration=config({kind:'third-person',overrides:{orientation:{recenter:{enabled:true,delaySeconds:0,minimumSpeedMetersPerSecond:0,pitch:{targetSource:'subject',targetRadians:.2,halfLifeSeconds:0}}}}});
+ if(configuration.kind!=='third-person')throw new Error();
+ const seated={...subject,preferredOrbitPitchRadians:.25};
+ const result=evaluateThirdPerson({subject:seated,configuration,deltaSeconds:1/60});
+ expect(result.intent.pitchRadians).toBe(.25);
+ expect(result.history.viewId).toBe(configuration.viewId);
+ const fallback=evaluateThirdPerson({subject,configuration,deltaSeconds:1/60});expect(fallback.intent.pitchRadians).toBe(.2);
+});
+
+it('retains the smoothed spacecraft horizon when collision shortens the arm', () => {
+  const configuration = config({kind:'third-person', overrides:{
+    position:{anchor:{kind:'origin'}, distanceMeters:4, armHalfLifeSeconds:0},
+    orientation:{referenceFrame:'subject-up', inheritSubjectYaw:false, initialPitchRadians:0,
+      upHalfLifeSeconds:Math.LN2/5, recenter:{enabled:false}},
+  }});
+  if(configuration.kind!=='third-person') throw new Error();
+  const initial = evaluateThirdPerson({subject, configuration, deltaSeconds:0});
+  const banked = {...subject, semanticQuaternionWorldXYZW:new Quaternion()
+    .setFromAxisAngle(new Vector3(0,0,1), Math.PI/4).toArray()};
+  const result = evaluateThirdPerson({subject:banked, configuration, history:initial.history, deltaSeconds:1/60});
+  const pivot = new Vector3(...result.proposal.pivotWorldMetersXYZ);
+  const safeEye = new Vector3(...result.proposal.positionWorldMetersXYZ).lerp(pivot, .5);
+  const corrected = composeCameraAtPosition(result.proposal, safeEye.toArray());
+  expect(new Quaternion(...corrected.quaternionWorldXYZW)
+    .angleTo(new Quaternion(...result.proposal.quaternionWorldXYZW))).toBeLessThan(1e-7);
 });

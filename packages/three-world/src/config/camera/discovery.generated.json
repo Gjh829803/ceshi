@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "entry": "config/camera/index.ts",
   "sources": {
-    "config/camera/behavior-fields.ts": "1fb5b0446a5ff8d16990e9726e108c259fca99681bbda2e3d0af01e157c0f002",
-    "config/camera/defaults.ts": "70c514d0935125d492560418abe001edb02d87b54ab2e4f13ea42a213d59692b",
+    "config/camera/behavior-fields.ts": "da2cd000c7c8d3d3591b4e74540dcf667ddcf3ff094d6a094639b499799daeca",
+    "config/camera/defaults.ts": "f60352526d744ec7e2cc3173281c6d883c291380013d62246b1ff768db811bf9",
     "config/camera/field-primitives.ts": "e976a58d2e84f9c4986f10b7f431a50b7a0fbd823187f81a44a0ad4c4fe6c737",
-    "config/camera/fields.ts": "b4c9aaa4e380ef8949d6f21a3e3fa048ef59e78ca9eff1aec7ede8303dfde31c",
-    "config/camera/humanoid.ts": "84c5269236fb96911e7b593328ff6d6c3ce1425f2b4b802dc4a4cd64d4e878ea",
+    "config/camera/fields.ts": "e3b59e2d554d0c63d6719e704e46431f7c8ef4fe07a296bcc5aaacb6adb3bc7c",
+    "config/camera/humanoid.ts": "9d13277448bfdb63622dca1b4692f434c9f40b10886b0925789f4074c2f15d8f",
     "config/camera/index.ts": "cc16fb803240d8b3f0ca660f0ad56edb6051dec2e519e3b760436cc8d41cb1a3",
-    "config/camera/resolve.ts": "250e21457ba3f0a4f3e664ca8d5ec50b0615a5c0b65032dfa5699d63d90c0fc3",
+    "config/camera/resolve.ts": "c77cffa1cea8fa87b2e47989f015b9e07668b4482eac5aa6a08f6ceb09f4a6e9",
     "config/camera/serialization.ts": "ee8638e736b32e472be5f9aa2eda0722eb00ee77b9efaf52158c6d77a1c43f84",
     "config/camera/validation.ts": "4e5f828ff7f6c05357a881f656bf6c30128811c3f0b67f665b5912427ed59bc1",
-    "config/camera/validator.generated.ts": "e0e074a5ff249f2748b498277c135e2d4c588dc3f693cf332e084bda0efddafe",
+    "config/camera/validator.generated.ts": "b0fe33b28cf72ee808f6e03233413a732a7c8ee8d2221b57d904e8a33bcb3ef5",
     "control-support.ts": "57e0b6190cc281a71dec3f5b92531ae7e38a58c10614e3cb15dd5b9fed3f5008"
   },
   "schema": {
@@ -333,6 +333,11 @@
             "minimum": 0,
             "$comment": "unit:radians/second"
           },
+          "orbitPitchRateRadiansPerSecond": {
+            "type": "number",
+            "minimum": 0,
+            "$comment": "unit:radians/second"
+          },
           "cycleViewIds": {
             "type": "array",
             "items": {
@@ -428,6 +433,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "kind": {
+                        "const": "follow-pivot"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "shoulder-eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
                         "const": "body"
                       },
                       "heightRatio": {
@@ -466,7 +489,8 @@
                     "enum": [
                       "world",
                       "heading",
-                      "subject"
+                      "subject",
+                      "orbit"
                     ]
                   },
                   "offsetMetersXYZ": {
@@ -569,11 +593,15 @@
                   }
                 ]
               },
+              "inheritSubjectYaw": {
+                "type": "boolean"
+              },
               "referenceFrame": {
                 "type": "string",
                 "enum": [
                   "world-up",
-                  "subject-up"
+                  "subject-up",
+                  "subject-heading"
                 ]
               },
               "recenter": {
@@ -606,6 +634,13 @@
                         "type": "number",
                         "$comment": "unit:radians"
                       },
+                      "targetSource": {
+                        "type": "string",
+                        "enum": [
+                          "configured",
+                          "subject"
+                        ]
+                      },
                       "halfLifeSeconds": {
                         "type": "number",
                         "minimum": 0,
@@ -614,6 +649,11 @@
                     }
                   }
                 }
+              },
+              "upHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
               }
             }
           },
@@ -642,44 +682,6 @@
                     "type": "number",
                     "minimum": 0,
                     "$comment": "unit:meters"
-                  }
-                }
-              },
-              "retraction": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "halfLifeSeconds": {
-                    "type": "number",
-                    "minimum": 0,
-                    "$comment": "unit:seconds"
-                  },
-                  "speedLimit": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "unlimited"
-                          }
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "limited"
-                          },
-                          "maximumSpeedMetersPerSecond": {
-                            "type": "number",
-                            "exclusiveMinimum": 0,
-                            "$comment": "unit:meters/second"
-                          }
-                        }
-                      }
-                    ]
                   }
                 }
               },
@@ -940,6 +942,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "kind": {
+                        "const": "follow-pivot"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "shoulder-eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
                         "const": "body"
                       },
                       "heightRatio": {
@@ -978,7 +998,8 @@
                     "enum": [
                       "world",
                       "heading",
-                      "subject"
+                      "subject",
+                      "orbit"
                     ]
                   },
                   "offsetMetersXYZ": {
@@ -1076,11 +1097,15 @@
                   }
                 ]
               },
+              "inheritSubjectYaw": {
+                "type": "boolean"
+              },
               "referenceFrame": {
                 "type": "string",
                 "enum": [
                   "world-up",
-                  "subject-up"
+                  "subject-up",
+                  "subject-heading"
                 ]
               },
               "recenter": {
@@ -1112,6 +1137,13 @@
                       "targetRadians": {
                         "type": "number",
                         "$comment": "unit:radians"
+                      },
+                      "targetSource": {
+                        "type": "string",
+                        "enum": [
+                          "configured",
+                          "subject"
+                        ]
                       },
                       "halfLifeSeconds": {
                         "type": "number",
@@ -1155,44 +1187,6 @@
                     "type": "number",
                     "minimum": 0,
                     "$comment": "unit:meters"
-                  }
-                }
-              },
-              "retraction": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "halfLifeSeconds": {
-                    "type": "number",
-                    "minimum": 0,
-                    "$comment": "unit:seconds"
-                  },
-                  "speedLimit": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "unlimited"
-                          }
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "limited"
-                          },
-                          "maximumSpeedMetersPerSecond": {
-                            "type": "number",
-                            "exclusiveMinimum": 0,
-                            "$comment": "unit:meters/second"
-                          }
-                        }
-                      }
-                    ]
                   }
                 }
               },
@@ -1342,6 +1336,24 @@
                     "additionalProperties": false,
                     "properties": {
                       "kind": {
+                        "const": "follow-pivot"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "shoulder-eye"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
                         "const": "body"
                       },
                       "heightRatio": {
@@ -1380,7 +1392,8 @@
                     "enum": [
                       "world",
                       "heading",
-                      "subject"
+                      "subject",
+                      "orbit"
                     ]
                   },
                   "offsetMetersXYZ": {
@@ -1483,11 +1496,15 @@
                   }
                 ]
               },
+              "inheritSubjectYaw": {
+                "type": "boolean"
+              },
               "referenceFrame": {
                 "type": "string",
                 "enum": [
                   "world-up",
-                  "subject-up"
+                  "subject-up",
+                  "subject-heading"
                 ]
               },
               "recenter": {
@@ -1520,6 +1537,13 @@
                         "type": "number",
                         "$comment": "unit:radians"
                       },
+                      "targetSource": {
+                        "type": "string",
+                        "enum": [
+                          "configured",
+                          "subject"
+                        ]
+                      },
                       "halfLifeSeconds": {
                         "type": "number",
                         "minimum": 0,
@@ -1528,6 +1552,11 @@
                     }
                   }
                 }
+              },
+              "upHalfLifeSeconds": {
+                "type": "number",
+                "minimum": 0,
+                "$comment": "unit:seconds"
               }
             }
           },
@@ -1556,44 +1585,6 @@
                     "type": "number",
                     "minimum": 0,
                     "$comment": "unit:meters"
-                  }
-                }
-              },
-              "retraction": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "halfLifeSeconds": {
-                    "type": "number",
-                    "minimum": 0,
-                    "$comment": "unit:seconds"
-                  },
-                  "speedLimit": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "unlimited"
-                          }
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "properties": {
-                          "kind": {
-                            "const": "limited"
-                          },
-                          "maximumSpeedMetersPerSecond": {
-                            "type": "number",
-                            "exclusiveMinimum": 0,
-                            "$comment": "unit:meters/second"
-                          }
-                        }
-                      }
-                    ]
                   }
                 }
               },
@@ -1863,6 +1854,30 @@
             "additionalProperties": false,
             "properties": {
               "kind": {
+                "const": "follow-pivot"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "shoulder-eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
                 "const": "body"
               },
               "heightRatio": {
@@ -1911,7 +1926,8 @@
         "enum": [
           "world",
           "heading",
-          "subject"
+          "subject",
+          "orbit"
         ]
       },
       "applicability": "always",
@@ -2080,12 +2096,22 @@
     },
     {
       "kind": "third-person",
+      "path": "orientation.inheritSubjectYaw",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
       "path": "orientation.referenceFrame",
       "schema": {
         "type": "string",
         "enum": [
           "world-up",
-          "subject-up"
+          "subject-up",
+          "subject-heading"
         ]
       },
       "applicability": "always",
@@ -2149,6 +2175,19 @@
     },
     {
       "kind": "third-person",
+      "path": "orientation.recenter.pitch.targetSource",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "configured",
+          "subject"
+        ]
+      },
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
       "path": "orientation.recenter.pitch.halfLifeSeconds",
       "schema": {
         "type": "number",
@@ -2157,6 +2196,18 @@
       },
       "unit": "seconds",
       "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.upHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
       "visibility": "standard"
     },
     {
@@ -2201,58 +2252,6 @@
         "$comment": "unit:meters"
       },
       "unit": "meters",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "third-person",
-      "path": "constraints.retraction.halfLifeSeconds",
-      "schema": {
-        "type": "number",
-        "minimum": 0,
-        "$comment": "unit:seconds"
-      },
-      "unit": "seconds",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "third-person",
-      "path": "constraints.retraction.speedLimit",
-      "schema": {
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "unlimited"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "limited"
-              },
-              "maximumSpeedMetersPerSecond": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "$comment": "unit:meters/second"
-              }
-            },
-            "required": [
-              "kind",
-              "maximumSpeedMetersPerSecond"
-            ]
-          }
-        ]
-      },
       "applicability": "always",
       "visibility": "standard"
     },
@@ -2634,6 +2633,30 @@
             "additionalProperties": false,
             "properties": {
               "kind": {
+                "const": "follow-pivot"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "shoulder-eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
                 "const": "body"
               },
               "heightRatio": {
@@ -2682,7 +2705,8 @@
         "enum": [
           "world",
           "heading",
-          "subject"
+          "subject",
+          "orbit"
         ]
       },
       "applicability": "always",
@@ -2839,12 +2863,22 @@
     },
     {
       "kind": "first-person",
+      "path": "orientation.inheritSubjectYaw",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
       "path": "orientation.referenceFrame",
       "schema": {
         "type": "string",
         "enum": [
           "world-up",
-          "subject-up"
+          "subject-up",
+          "subject-heading"
         ]
       },
       "applicability": "always",
@@ -2903,6 +2937,19 @@
         "$comment": "unit:radians"
       },
       "unit": "radians",
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.pitch.targetSource",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "configured",
+          "subject"
+        ]
+      },
       "applicability": "heading-required",
       "visibility": "standard"
     },
@@ -2973,58 +3020,6 @@
         "$comment": "unit:meters"
       },
       "unit": "meters",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "first-person",
-      "path": "constraints.retraction.halfLifeSeconds",
-      "schema": {
-        "type": "number",
-        "minimum": 0,
-        "$comment": "unit:seconds"
-      },
-      "unit": "seconds",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "first-person",
-      "path": "constraints.retraction.speedLimit",
-      "schema": {
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "unlimited"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "limited"
-              },
-              "maximumSpeedMetersPerSecond": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "$comment": "unit:meters/second"
-              }
-            },
-            "required": [
-              "kind",
-              "maximumSpeedMetersPerSecond"
-            ]
-          }
-        ]
-      },
       "applicability": "always",
       "visibility": "standard"
     },
@@ -3232,6 +3227,30 @@
             "additionalProperties": false,
             "properties": {
               "kind": {
+                "const": "follow-pivot"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "shoulder-eye"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
                 "const": "body"
               },
               "heightRatio": {
@@ -3280,7 +3299,8 @@
         "enum": [
           "world",
           "heading",
-          "subject"
+          "subject",
+          "orbit"
         ]
       },
       "applicability": "always",
@@ -3449,12 +3469,22 @@
     },
     {
       "kind": "shoulder",
+      "path": "orientation.inheritSubjectYaw",
+      "schema": {
+        "type": "boolean"
+      },
+      "applicability": "always",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
       "path": "orientation.referenceFrame",
       "schema": {
         "type": "string",
         "enum": [
           "world-up",
-          "subject-up"
+          "subject-up",
+          "subject-heading"
         ]
       },
       "applicability": "always",
@@ -3518,6 +3548,19 @@
     },
     {
       "kind": "shoulder",
+      "path": "orientation.recenter.pitch.targetSource",
+      "schema": {
+        "type": "string",
+        "enum": [
+          "configured",
+          "subject"
+        ]
+      },
+      "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
       "path": "orientation.recenter.pitch.halfLifeSeconds",
       "schema": {
         "type": "number",
@@ -3526,6 +3569,18 @@
       },
       "unit": "seconds",
       "applicability": "heading-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.upHalfLifeSeconds",
+      "schema": {
+        "type": "number",
+        "minimum": 0,
+        "$comment": "unit:seconds"
+      },
+      "unit": "seconds",
+      "applicability": "always",
       "visibility": "standard"
     },
     {
@@ -3570,58 +3625,6 @@
         "$comment": "unit:meters"
       },
       "unit": "meters",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "shoulder",
-      "path": "constraints.retraction.halfLifeSeconds",
-      "schema": {
-        "type": "number",
-        "minimum": 0,
-        "$comment": "unit:seconds"
-      },
-      "unit": "seconds",
-      "applicability": "always",
-      "visibility": "standard"
-    },
-    {
-      "kind": "shoulder",
-      "path": "constraints.retraction.speedLimit",
-      "schema": {
-        "oneOf": [
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "unlimited"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "kind": {
-                "const": "limited"
-              },
-              "maximumSpeedMetersPerSecond": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "$comment": "unit:meters/second"
-              }
-            },
-            "required": [
-              "kind",
-              "maximumSpeedMetersPerSecond"
-            ]
-          }
-        ]
-      },
       "applicability": "always",
       "visibility": "standard"
     },

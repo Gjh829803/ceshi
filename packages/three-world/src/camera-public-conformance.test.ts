@@ -132,13 +132,9 @@ describe.each(fixtures)('public camera subject contract: $name', ({ create }) =>
       world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:world.snapshot().controlledEntityId!},activation:'immediate',transition:{durationSeconds:0},views:{'third-person':{kind:'third-person',overrides:{lens:{nearMeters:(world.camera as THREE.PerspectiveCamera).near,farMeters:(world.camera as THREE.PerspectiveCamera).far},constraints:{visibility:'require-line-of-sight'},orientation:{recenter:{enabled:false}},framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:0,armHalfLifeSeconds:0},zoom:{range:{kind:'unbounded'},halfLifeSeconds:0}}}}}});
       world.step({}, 30);
       expect(world.camera.position.distanceTo(opening.position)).toBeGreaterThan(2);
-      // Safe eye displacement must retain the requested pivot bearing, not the
-      // old world-space quaternion (which points away after lateral separation).
-      const {desired, current} = world.inspectCamera();
-      const bearing = (pose: NonNullable<typeof desired>) => new THREE.Vector3(...pose.pivotWorldMetersXYZ)
-        .sub(new THREE.Vector3(...pose.positionWorldMetersXYZ)).normalize()
-        .applyQuaternion(new THREE.Quaternion(...pose.quaternionWorldXYZW).invert());
-      expect(bearing(current!).distanceTo(bearing(desired!))).toBeLessThan(2e-7);
+      // The source preserve-opening rig retains the authored orientation during
+      // arm contraction. Look-at views have a different composition policy.
+      expect(world.camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(2e-7);
       expect((world.camera as THREE.PerspectiveCamera).fov).toBe(opening.fov);
       const destination: [number, number, number] = [30, start.y, 0];
       if (world.humanoid) {

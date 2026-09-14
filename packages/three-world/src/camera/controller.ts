@@ -1,6 +1,6 @@
-import {cameraSubjectHeading} from './strategies/heading';
+import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
-import {cameraDisplayAnchor} from './display-anchor';
+import {cameraDisplayAnchor, cameraDisplaySubject} from './display-anchor';
 import {cameraFramesCompatible} from './state';
 import {
   resolve,
@@ -38,7 +38,7 @@ import {
 } from "./presentation";
 import type { CameraFixedFrame, PresentationSampleContext } from "./state";
 import { cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
-import { prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
+import { orbitQuaternion, prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
 import { evaluateFirstPerson } from "./strategies/first-person";
 import type {
   CameraIntent,
@@ -162,6 +162,8 @@ export class CameraController {
       subject.geometryScaleXYZ,
       ...(subject.eyeWorldMetersXYZ ? [subject.eyeWorldMetersXYZ] : []),
       ...(subject.seatWorldMetersXYZ ? [subject.seatWorldMetersXYZ] : []),
+      ...(subject.followPivotWorldMetersXYZ ? [subject.followPivotWorldMetersXYZ] : []),
+      ...(subject.shoulderEyeWorldMetersXYZ ? [subject.shoulderEyeWorldMetersXYZ] : []),
     ];
     const rotations = [
       subject.geometryQuaternionWorldXYZW,
@@ -175,6 +177,7 @@ export class CameraController {
       subject.generation < 0 ||
       !Number.isFinite(subject.speedMetersPerSecond) ||
       (subject.continuousHeadingSeedRadians !== undefined && !Number.isFinite(subject.continuousHeadingSeedRadians)) ||
+      (subject.preferredOrbitPitchRadians !== undefined && !Number.isFinite(subject.preferredOrbitPitchRadians)) ||
       vectors.some(
         (value) => value.length !== 3 || !value.every(Number.isFinite),
       ) ||
@@ -237,6 +240,7 @@ export class CameraController {
       headingHistory: state.history ?? headingHistory,
       opening: state.openings.get(state.resolved!.viewId),
       deltaSeconds: dt,
+      previousVerticalFovDegrees: state.current?.lens.verticalFovDegrees ?? state.initialVerticalFovDegrees,
     };
     return input.configuration.kind === "first-person"
       ? evaluateFirstPerson({
@@ -315,7 +319,8 @@ export class CameraController {
     const current: CameraFixedFrame = {
       ...solved.proposal,
       subject:clone(candidate.subject!),
-      subjectAnchorWorldMetersXYZ:cameraDisplayAnchor(candidate.subject!,candidate.resolved!,result.history.headingRadians).toArray(),
+      subjectAnchorWorldMetersXYZ:cameraDisplayAnchor(candidate.subject!,candidate.resolved!,result.history.headingRadians,result.intent.yawRadians).toArray(),
+      orbitYawRadians:result.intent.yawRadians,
       lifecycleGeneration: frame.lifecycleGeneration,
       simulationTick: frame.simulationTick,
       configurationRevision: candidate.configurationRevision,
@@ -334,7 +339,7 @@ export class CameraController {
     this.state = {
       ...candidate,
       views,
-      history: result.history,
+      history: {...result.history, armWorldMetersXYZ: new Vector3(...solved.proposal.positionWorldMetersXYZ).sub(new Vector3(...solved.proposal.pivotWorldMetersXYZ)).toArray()},
       pendingPose: candidate.mode === "follow-pending" ? desired : undefined,
       base,
       transition,
@@ -347,7 +352,7 @@ export class CameraController {
   install(
     value: unknown,
     frame: CameraControllerFrame,
-    options: { readonly authoredPose?: CameraProposal } = {},
+    options: { readonly initialVerticalFovDegrees?: number; readonly authoredPose?: CameraProposal } = {},
   ): void {
     this.installCandidate(value,frame,options);
   }
@@ -449,7 +454,7 @@ export class CameraController {
     });
   }
 
-  private installCandidate(value:unknown,frame:CameraControllerFrame,options:{readonly authoredPose?:CameraProposal},capture?:CameraProposal,preserveIntent=false):void {
+  private installCandidate(value:unknown,frame:CameraControllerFrame,options:{readonly initialVerticalFovDegrees?:number;readonly authoredPose?:CameraProposal},capture?:CameraProposal,preserveIntent=false):void {
     this.admit(frame);
     this.transaction(() => {
       let document = parseCameraDocument(value);
@@ -545,8 +550,7 @@ export class CameraController {
           );
         else {
           if (!reanchoredReference &&
-            previous.resolved.values.orientation.referenceFrame !==
-            resolved.values.orientation.referenceFrame
+            !sameCameraReference(previous.resolved.values.orientation,resolved.values.orientation)
           )
             intent = this.rebaseIntent(
               intent,
@@ -611,6 +615,7 @@ export class CameraController {
         initialSubject,
         initialReferenceIdentity:previous.initialSubject?previous.initialReferenceIdentity:this.referenceIdentity(document,subject,frame),
         authoredPose,
+        initialVerticalFovDegrees: options.initialVerticalFovDegrees ?? previous.initialVerticalFovDegrees,
         pendingPose: openingChanged || reanchoredReference ? undefined : previous.pendingPose,
         subject,
         resolved,
@@ -698,34 +703,12 @@ export class CameraController {
       let intent = initialIntent(resolved, subject, activated.openings.get(viewId));
       if(subject.continuousHeadingSeedRadians !== undefined && resolved.values.orientation.referenceFrame === 'world-up' && !activated.openings.has(viewId))
         intent = clampCameraIntent({...intent, yawRadians: cameraSubjectHeading(subject, old.history) ?? intent.yawRadians}, resolved);
-      if (cached && cached.configuration.kind === resolved.kind) {
-        const changedReference =
-          cached.configuration.values.orientation.referenceFrame !==
-          resolved.values.orientation.referenceFrame;
-        const handedOff =
-          cached.configuration.subjectId !== resolved.subjectId ||
-          cached.configuration.subjectGeneration !== resolved.subjectGeneration;
-        intent =
-          !sameCameraSubject(cached.subject, subject) || changedReference
-            ? this.rebaseIntent(
-                cached.intent,
-                cached.subject,
-                subject,
-                cached.configuration,
-                resolved,
-                false,
-              )
-            : cached.intent;
-        intent = handedOff
-          ? clampCameraIntent(intent, resolved)
-          : validateHotIntent(cached.configuration, resolved, intent);
-      }
+      // Each explicit selection starts from the calibrated view opening.
       const firstPerson =
         old.resolved.kind === "first-person" ||
         resolved.kind === "first-person";
       const incompatible =
-        old.resolved.values.orientation.referenceFrame !==
-        resolved.values.orientation.referenceFrame;
+        !sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
       const duration =
         firstPerson || options.cut || incompatible
           ? 0
@@ -809,7 +792,7 @@ export class CameraController {
         ratio[0] * old.resolved!.input.orbitRateRadiansPerSecond * deltaSeconds;
       const pitch =
         delta[1] +
-        ratio[1] * old.resolved!.input.orbitRateRadiansPerSecond * deltaSeconds;
+        ratio[1] * (old.resolved!.input.orbitPitchRateRadiansPerSecond ?? old.resolved!.input.orbitRateRadiansPerSecond) * deltaSeconds;
       const active = !!input.movement || yaw !== 0 || pitch !== 0 || (input.zoomDeltaMeters ?? 0) !== 0;
       const activated = active ? this.activatePendingFollow(old, subject) : old;
       const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
@@ -838,22 +821,12 @@ export class CameraController {
         intent,
         mode: active ? "follow" : old.mode,
       };
-      // Predict the same base pose from prepared intent, including current blend time.
-      let base = this.pose(state, subject, deltaSeconds, old.history).proposal;
-      if (old.transition.kind === "blend")
-        base = blendCameraProposals(
-          old.transition.source,
-          base,
-          Math.min(
-            1,
-            (old.transition.elapsedSeconds + deltaSeconds) /
-              old.transition.durationSeconds,
-          ),
-        );
-      const predicted = this.constraints.predict(this.desiredPose(state, base), resolved, subject,
-        {...frame, deltaSeconds, cut: false, previous: old.current});
+      // Movement follows the player's orbit intent. Collision changes the eye,
+      // never the movement heading, and is solved once after physics.
+      const relativeYaw=resolved.values.orientation.referenceFrame!=='world-up'&&resolved.values.orientation.inheritSubjectYaw;
+      const heading=relativeYaw?(cameraSubjectHeading(subject,old.history)??0):0;
       const basis: CameraControlBasis = {
-        quaternionWorldXYZW: predicted.quaternionWorldXYZW,
+        quaternionWorldXYZW: orbitQuaternion(heading+intent.yawRadians,0).toArray(),
         viewId: old.resolved!.viewId,
         resolvedSubjectId: subject.id,
         subjectGeneration: subject.generation,
@@ -1028,17 +1001,16 @@ export class CameraController {
       event.subject,
       openings.get(old.resolved.viewId),
     );
-    const intent = this.rebaseIntent(
+    const intent = resolved.kind === "third-person" && resolved.values.framing.kind === "preserve-opening" ? this.rebaseIntent(
       old.intent!,
       relocate ? event.previousSubject : old.subject,
       event.subject,
       old.resolved,
       resolved,
       relocate,
-    );
+    ) : initialIntent(resolved,event.subject,openings.get(resolved.viewId));
     const incompatible =
-      old.resolved.values.orientation.referenceFrame !==
-      resolved.values.orientation.referenceFrame;
+      !sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
     let transition: CameraTransition = {
       kind: "none",
       configuredDurationSeconds: resolved.transition.durationSeconds,
@@ -1212,17 +1184,20 @@ export class CameraController {
     if (!s.current || !s.previous)
       return s.authoredPose ? clone(s.authoredPose) : undefined;
     if (!s.resolved || !s.subject) return clone(s.current);
-    const subject = displaySubject ?? s.subject;
+    let subject = displaySubject ?? s.subject;
     if (!sameCameraSubject(subject, s.subject))
       throw failure("CAMERA_PRESENTATION_IDENTITY_MISMATCH");
     let proposal = sampleCameraPresentation(s.previous, s.current, context);
     if(displaySubject&&s.previous.subjectAnchorWorldMetersXYZ&&s.current.subjectAnchorWorldMetersXYZ){
       const alpha=context.cut||!cameraFramesCompatible(s.previous,s.current)?1:context.alpha;
+      const sampled=cameraDisplaySubject(s.previous.subject!,s.current.subject!,displaySubject,alpha);
+      subject=sampled;
       const fixedAnchor=new Vector3(...s.previous.subjectAnchorWorldMetersXYZ).lerp(new Vector3(...s.current.subjectAnchorWorldMetersXYZ),alpha);
-      // Re-express the committed continuous heading at this display pose. This
-      // pure delta evaluation neither advances nor replaces strategy history.
-      const displayHeading=cameraSubjectHeading(displaySubject,s.history) ?? s.history?.headingRadians;
-      const correction=cameraDisplayAnchor(displaySubject,s.resolved,displayHeading).sub(fixedAnchor);
+      // Preserve PR 240's pure displayed-heading correction. Posture facts use
+      // the same pair of fixed samples, never the latest un-interpolated height.
+      const displayHeading=cameraSubjectHeading(sampled,s.history) ?? s.history?.headingRadians;
+      const orbitYaw=(s.previous.orbitYawRadians??s.intent!.yawRadians)+((s.current.orbitYawRadians??s.intent!.yawRadians)-(s.previous.orbitYawRadians??s.intent!.yawRadians))*alpha;
+      const correction=cameraDisplayAnchor(sampled,s.resolved,displayHeading,orbitYaw).sub(fixedAnchor);
       const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
       proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
     }

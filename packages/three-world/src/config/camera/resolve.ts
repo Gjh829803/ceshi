@@ -334,21 +334,23 @@ export function resolveCameraConfiguration(
     if (
       view.kind === "shoulder" &&
       anchor.kind !== "eye" &&
-      anchor.kind !== "seat"
+      anchor.kind !== "seat" &&
+      anchor.kind !== "shoulder-eye"
     )
       fail(`/views/${viewId}/position/anchor`, "shoulder requires eye or seat");
     if (
       view.kind === "third-person" &&
       anchor.kind !== "body" &&
       anchor.kind !== "subject-local" &&
-      anchor.kind !== "origin"
+      anchor.kind !== "origin" &&
+      anchor.kind !== "follow-pivot"
     )
       fail(
         `/views/${viewId}/position/anchor`,
         "third-person requires body, origin or subject-local",
       );
     if (
-      (anchor.kind === "eye" || anchor.kind === "seat") &&
+      (anchor.kind === "eye" || anchor.kind === "seat" || anchor.kind === "follow-pivot" || anchor.kind === "shoulder-eye") &&
       !subjectContext.availableAnchors.includes(anchor.kind)
     )
       fail(

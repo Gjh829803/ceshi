@@ -1,5 +1,5 @@
-import {cameraSubjectHeading} from "./heading";
-import { Euler, MathUtils, Quaternion, Vector3 } from "three";
+import {cameraReferenceRotation,cameraSubjectHeading} from "./heading";
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 import type {
   CameraAngleLimits,
   CameraKind,
@@ -87,7 +87,7 @@ export function prepareCameraIntent<K extends CameraKind>(
       : 0;
   const initialYaw = preserving
     ? opening!.yawRadians
-    : values.orientation.referenceFrame === "subject-up"
+    : (values.orientation.referenceFrame !== "world-up" && values.orientation.inheritSubjectYaw)
       ? 0
       : heading;
   let intent: CameraIntent = input.intent ?? {
@@ -116,7 +116,7 @@ export function prepareCameraIntent<K extends CameraKind>(
     // Only integrate the part of this step after the delay expires.
     const recenterDelta = Math.min(dt, elapsed - recenter.delaySeconds);
     const targetYaw =
-      values.orientation.referenceFrame === "subject-up" ? 0 : heading;
+      (values.orientation.referenceFrame !== "world-up" && values.orientation.inheritSubjectYaw) ? 0 : heading;
     yaw +=
       (recenterYawTarget(yaw, targetYaw, values.orientation.yawLimitsRadians) -
         yaw) *
@@ -124,7 +124,7 @@ export function prepareCameraIntent<K extends CameraKind>(
     if (recenter.pitch)
       pitch = smooth(
         pitch,
-        recenter.pitch.targetRadians,
+        recenter.pitch.targetSource==='subject' ? subject.preferredOrbitPitchRadians??recenter.pitch.targetRadians : recenter.pitch.targetRadians,
         recenterDelta,
         recenter.pitch.halfLifeSeconds,
       );
@@ -179,10 +179,7 @@ export function evaluateStrategy<K extends CameraKind>(
     throw new Error("CAMERA_OPENING_REFERENCE_REQUIRED");
   const measuredHeading = cameraSubjectHeading(subject, input.headingHistory ?? history);
   const heading = measuredHeading ?? history?.headingRadians ?? 0;
-  const reference =
-    values.orientation.referenceFrame === "subject-up"
-      ? new Quaternion(...(subject.semanticQuaternionWorldXYZW ?? [0, 0, 0, 1]))
-      : new Quaternion();
+  const reference = cameraReferenceRotation(subject,values.orientation.referenceFrame,heading,values.orientation.inheritSubjectYaw);
   const intent = input.intent;
   const {
     yawRadians: yaw,
@@ -192,7 +189,7 @@ export function evaluateStrategy<K extends CameraKind>(
   if (!Object.values(intent).every(Number.isFinite))
     throw new Error("CAMERA_INTENT_INVALID");
   const origin = new Vector3(...subject.positionWorldMetersXYZ);
-  const anchor = cameraPositionAnchor(subject, values.position, heading);
+  const anchor = cameraPositionAnchor(subject, values.position, heading, {yawRadians:yaw,referenceQuaternionWorldXYZW:reference.toArray()});
   const translation = history
     ? new Vector3(...history.translationWorldMetersXYZ).lerp(
         origin,
@@ -225,9 +222,10 @@ export function evaluateStrategy<K extends CameraKind>(
         1,
       ) * fovEffect.maximumOffsetDegrees
     : 0;
-  const fov = history
-    ? smooth(history.speedFovDegrees, fovTarget, dt, fovEffect.halfLifeSeconds)
-    : fovTarget;
+  const baseFov=values.lens.verticalFovDegrees;
+  const previousFov=input.previousVerticalFovDegrees ?? (history ? baseFov+history.speedFovDegrees : baseFov+fovTarget);
+  let fov=fovEffect.enabled ? smooth(previousFov,baseFov+fovTarget,dt,fovEffect.halfLifeSeconds)-baseFov : 0;
+  if(configuration.kind==='third-person'&&fovEffect.enabled&&Math.abs(baseFov+fov-previousFov)<=.0001)fov=previousFov-baseFov;
   let speedDistance = 0;
   if ("speedDistance" in values.effects) {
     const effect = values.effects.speedDistance;
@@ -249,26 +247,47 @@ export function evaluateStrategy<K extends CameraKind>(
         )
       : target;
   }
-  // Filter explicit orbit coordinates, never a Cartesian chord or an inferred
-  // orientation branch. The controller supplies a continuous, unwrapped intent.
-  const armHalfLife = values.position.armHalfLifeSeconds;
-  const orbitYaw =
-    history && configuration.kind !== "first-person"
-      ? smooth(history.orbitYawRadians, yaw, dt, armHalfLife)
-      : yaw;
-  const orbitPitch =
-    history && configuration.kind !== "first-person"
-      ? smooth(history.orbitPitchRadians, pitch, dt, armHalfLife)
-      : pitch;
-  const radiusTarget =
-    configuration.kind === "first-person" ? 0 : zoom + speedDistance;
-  const orbitRadius = history
-    ? smooth(history.orbitRadiusMeters, radiusTarget, dt, armHalfLife)
-    : radiusTarget;
-  const orientation = reference
-    .clone()
-    .multiply(orbitQuaternion(orbitYaw, orbitPitch));
-  const arm = new Vector3(0, 0, orbitRadius).applyQuaternion(orientation);
+  // The established follow camera inherits translation, then damps the arm in
+  // world space. Damping angles instead changes both the path and the response.
+  let radiusTarget = configuration.kind === "first-person" ? 0 : zoom + speedDistance;
+  if (configuration.kind === "third-person" && configuration.values.effects.speedDistance.enabled) {
+    const effect = configuration.values.effects.speedDistance;
+    const target = zoom + MathUtils.clamp(subject.speedMetersPerSecond / effect.fullEffectSpeedMetersPerSecond, 0, 1) * effect.maximumOffsetMeters;
+    const previous = history?.nominalDistanceMeters ?? target;
+    radiusTarget = smooth(previous, target, dt, target > previous ? effect.extendHalfLifeSeconds : effect.retractHalfLifeSeconds);
+  }
+  const desiredOrientation = reference.clone().multiply(orbitQuaternion(yaw, pitch));
+  const arm = new Vector3(0, 0, radiusTarget).applyQuaternion(desiredOrientation);
+  if (history && configuration.kind !== "first-person") {
+    const previous = history.armWorldMetersXYZ
+      ? new Vector3(...history.armWorldMetersXYZ)
+      : new Vector3(0, 0, history.orbitRadiusMeters).applyQuaternion(reference.clone().multiply(orbitQuaternion(history.orbitYawRadians, history.orbitPitchRadians)));
+    arm.copy(previous.lerp(arm, halfLifeAlpha(dt, values.position.armHalfLifeSeconds)));
+  }
+  const localArm = arm.clone().applyQuaternion(reference.clone().invert());
+  const orbitRadius = arm.length();
+  let orbitYaw = orbitRadius > 1e-12 ? Math.atan2(localArm.x, localArm.z) : yaw;
+  let orbitPitch = orbitRadius > 1e-12 ? Math.asin(MathUtils.clamp(localArm.y / orbitRadius, -1, 1)) : pitch;
+  // Select an equivalent measured arm frame using committed orientation. The
+  // commanded pitch can cross a pole before a damped Cartesian arm reaches it.
+  const alternateYaw=orbitYaw+Math.PI,alternatePitch=Math.PI-orbitPitch;
+  const continuity=history?new Quaternion(...history.horizonQuaternionWorldXYZW):desiredOrientation;
+  const direct=reference.clone().multiply(orbitQuaternion(orbitYaw,orbitPitch));
+  const alternate=reference.clone().multiply(orbitQuaternion(alternateYaw,alternatePitch));
+  if(values.orientation.pitchLimitsRadians.kind==='unbounded'&&alternate.angleTo(continuity)<direct.angleTo(continuity)){
+    orbitYaw=alternateYaw;orbitPitch=alternatePitch;
+  }
+  orbitYaw += Math.round(((history?.orbitYawRadians??yaw)-orbitYaw)/(2*Math.PI))*2*Math.PI;
+  orbitPitch += Math.round(((history?.orbitPitchRadians??pitch)-orbitPitch)/(2*Math.PI))*2*Math.PI;
+  const orientation = configuration.kind === "first-person" ? desiredOrientation : reference.clone().multiply(orbitQuaternion(orbitYaw, orbitPitch));
+  const referenceUp=new Vector3(0,1,0).applyQuaternion(reference);
+  if(configuration.kind!=='first-person'){
+    const previousReferenceUp=history?.referenceUpWorldXYZ??input.headingHistory?.referenceUpWorldXYZ;
+    const previousUp=previousReferenceUp?new Vector3(...previousReferenceUp):new Vector3(0,1,0);
+    referenceUp.copy(previousUp.lerp(referenceUp,halfLifeAlpha(dt,configuration.values.orientation.upHalfLifeSeconds))).normalize();
+    if(configuration.values.orientation.upHalfLifeSeconds>0&&arm.lengthSq()>1e-12)
+      orientation.setFromRotationMatrix(new Matrix4().lookAt(pivot.clone().add(arm),pivot,referenceUp));
+  }
   const nominalAim = orientation.toArray();
   if (preserving)
     orientation.multiply(new Quaternion(...opening!.framingQuaternionXYZW));
@@ -290,7 +309,11 @@ export function evaluateStrategy<K extends CameraKind>(
     upWorldXYZ: new Vector3(0, 1, 0).applyQuaternion(orientation).toArray(),
     pivotWorldMetersXYZ: pivot.toArray(),
     ...(configuration.kind !== "first-person" && orbitRadius > 1e-6 ? {composition: {
-      referenceQuaternionWorldXYZW: reference.toArray(),
+      // Collision must use the same horizon as the nominal pose; using the raw
+      // subject frame here would undo up smoothing whenever the arm contracts.
+      referenceQuaternionWorldXYZW: configuration.values.orientation.upHalfLifeSeconds > 0
+        ? new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), referenceUp).toArray()
+        : reference.toArray(),
       nominalAimQuaternionWorldXYZW: nominalAim,
       relativeAimQuaternionXYZW: preserving ? opening!.framingQuaternionXYZW : new Quaternion().toArray(),
     }} : {}),
@@ -302,7 +325,7 @@ export function evaluateStrategy<K extends CameraKind>(
     ...(visibility !== "safety-only"
       ? { visibilityTargetWorldMetersXYZ: anchor.toArray() }
       : {}),
-    nominalDistanceMeters: zoom + speedDistance,
+    nominalDistanceMeters: radiusTarget,
   };
   if (
     ![
@@ -324,6 +347,8 @@ export function evaluateStrategy<K extends CameraKind>(
       viewId: configuration.viewId,
       translationWorldMetersXYZ: translation.toArray(),
       anchorRelativeMetersXYZ: relativeAnchor.toArray(),
+      armWorldMetersXYZ: arm.toArray(),
+      nominalDistanceMeters: radiusTarget,
       orbitYawRadians: orbitYaw,
       orbitPitchRadians: orbitPitch,
       orbitRadiusMeters: orbitRadius,
@@ -333,6 +358,7 @@ export function evaluateStrategy<K extends CameraKind>(
       headingRadians: heading,
       headingQuaternionWorldXYZW: subject.semanticQuaternionWorldXYZW,
       horizonQuaternionWorldXYZW: orientation.toArray(),
+      referenceUpWorldXYZ:referenceUp.toArray(),
     },
   };
 }

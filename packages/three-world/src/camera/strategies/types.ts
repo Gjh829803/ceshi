@@ -39,7 +39,10 @@ export interface CameraStrategyHistory<K extends CameraKind = CameraKind> {
   readonly viewId: string;
   readonly translationWorldMetersXYZ: CameraVector3;
   readonly anchorRelativeMetersXYZ: CameraVector3;
-  /** Unwrapped angles and radius in the declared reference frame. */
+  /** Last committed Cartesian arm; fixed collision corrections feed the next follow step. */
+  readonly armWorldMetersXYZ?: CameraVector3;
+  readonly nominalDistanceMeters?: number;
+  /** Measured arm angles and radius in the declared reference frame. */
   readonly orbitYawRadians: number;
   readonly orbitPitchRadians: number;
   readonly orbitRadiusMeters: number;
@@ -49,6 +52,7 @@ export interface CameraStrategyHistory<K extends CameraKind = CameraKind> {
   readonly headingRadians: number;
   readonly headingQuaternionWorldXYZW?: CameraQuaternion | undefined;
   readonly horizonQuaternionWorldXYZW: CameraQuaternion;
+  readonly referenceUpWorldXYZ?: CameraVector3;
 }
 export interface CameraOpeningReference {
   readonly viewId: string;
@@ -66,6 +70,7 @@ export interface CameraStrategyInput<K extends CameraKind> {
   readonly headingHistory?: CameraStrategyHistory | undefined;
   readonly opening?: CameraOpeningReference | undefined;
   readonly deltaSeconds: number;
+  readonly previousVerticalFovDegrees?: number | undefined;
 }
 export interface CameraStrategyResult<K extends CameraKind> {
   readonly proposal: CameraProposal;

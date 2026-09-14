@@ -1,4 +1,3 @@
-import { composeCameraAtPosition } from "./composition";
 import {
   MathUtils,
   Matrix4,
@@ -78,7 +77,7 @@ function interpolate(
       alpha,
     ),
   };
-  return composition ? composeCameraAtPosition(result, result.positionWorldMetersXYZ) : result;
+  return result;
 }
 /** Fixed controller advances transition time; this function only samples it. Constrain afterwards. */
 export function blendCameraProposals(

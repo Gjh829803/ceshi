@@ -800,11 +800,13 @@ or explicitly adopts the first authored pose when no opening is present. Its
 world position, look-at/up and FOV remain canonical configuration data. Near/far
 are explicit lens fields. Both third-person framing modes use the declared
 `position.anchor` and `anchorOffset`; `preserve-opening` derives initial orbit
-angles and distance from that anchor while retaining the authored pose. Use a body
-anchor preset for humanoids; the generic preserve-opening default is origin.
-`look-at` uses the declared initial distance and angles. Position/arm smoothing,
-zoom, safe collision retraction and recovery are separate channels. Near-subject
-fading is controlled by `subjectFade` and affects only the world render transaction. Angles use radians, lengths use meters, and half-lives use
+angles and distance from that anchor while retaining the authored pose. Use the native posture
+anchor presets for humanoids; the generic preserve-opening default is origin.
+`look-at` uses the declared initial distance and angles. The follow arm uses the
+source Cartesian response; safe contraction is immediate and radial recovery has
+its own timing. Configuration semantics and native calibration are described in
+[SDK configuration](src/config/README.md). Near-subject fading is opt-in through
+`subjectFade` and affects only the world render transaction. Angles use radians, lengths use meters, and half-lives use
 seconds. `orientation.recenter` is an explicit behavior; it never follows an asset
 name. Zero-time lifecycle changes and cuts clear incompatible path history.
 

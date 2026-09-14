@@ -1,61 +1,37 @@
 # Camera collision
 
-Provider-neutral camera safety and recovery. This package owns no scene, physics
-world, clock, input or camera object.
+Provider-neutral geometry and radial recovery. This package owns no scene,
+physics world, clock, input or camera object. Three-world is the sole camera writer.
 
-`CameraCollisionSolver` takes a sphere-query adapter. `solve(request, timing)`
-resolves the pivot, projects the safe arm and commits retraction/recovery and
-contact state. An optional eye sweep constrains actual orbit travel. All geometry
-is in world-space metres; time is seconds. Adapters preserve native filtering and
-return unpadded contact distances. A positive probe radius sweeps a sphere; radius
-zero requests a real ray with the same target exclusions.
+`CameraCollisionSolver.solve(request, timing)` resolves the pivot and safe arm,
+then commits the radial recovery state. Contraction is immediate. Recovery has
+its own half-life, clear hold, deadband and optional speed limit. The actual
+applied eye and arm length are committed together. `resetWhenClear:false` keeps
+recovery history across unobstructed frames; native vehicle presets use this
+policy to avoid popping at slope edges.
 
-Contact separation accounts for float32 query precision: even zero authored
-clearance needs a small coordinate-scaled margin at pivot, arm and trajectory
-contacts. A touching sweep origin is separated before checking the remaining
-trajectory; contact must not disable obstacle checks. Final eye spheres are checked
-again because cast distances are approximate. Every separation is bounded and
-re-queried; this does not suppress real obstructions or change follow damping.
-An unresolved pivot retains an already clear committed eye. A measured penetrating trajectory origin may use an independently validated hard
-exit. An unresolved origin without sufficient contact data, or an unresolved final
-eye, restores the solve transaction with the existing no-safe-pose error;
-projection remains stateless.
+An optional `sweepFrom` checks travel for a free arm. An obstructed arm prioritizes
+its radial correction, matching the source camera. The solver does not filter
+orbit input or introduce an eye-space angular catch-up controller. A penetrating
+pivot uses bounded normal/depth separation; an unresolved pivot may retain a
+previous clear eye. Invalid queries or failed solves restore the transaction.
 
-Optional `retractionHalfLifeSeconds` and `maximumRetractionMetersPerSecond` control
-collision transitions in `solve`; omitted values retain immediate correction. A finite
-retraction speed must be positive. Contraction uses the configured half-life; angular
-catch-up after a constraint uses only its speed cap, while radial recovery keeps its
-separate timing. With no collision history, free orbit bypasses this limiter. Actual
-recovery persists until the eye catches the proposal, including during continuing
-orbit input. A desired trajectory faster than the cap can delay that catch-up.
-Intermediate eyes must pass sphere, focus-arm and trajectory checks. A direct chord
-may use an inward waypoint on the previous clear arm when rounding a corner.
-A blocked recovery route also uses a bounded inward step to avoid sticking on a
-corner. A newly penetrating previous eye, or a proven newly obstructed committed
-arm, permits a validated hard escape over smoothing limits. Moving the focus behind
-a static wall does not permit crossing that wall: retain a reachable eye and report
-occlusion. Actual applied eye and arm length
-are committed together. Zero-time cuts remain immediate.
+`project(request)` applies spatial constraints without reading or advancing
+recovery state. It never feeds the previous displayed pose back into fixed history.
+Each World controller owns a solver and resets incompatible subject/view history.
 
-`project(request)` performs the same spatial checks without reading or writing
-recovery state. Display callers supply snapshot-derived fallback positions, never
-the previous displayed camera. Exact captures use the committed fixed pose.
+Adapters return unpadded world-space metres. Positive radius requests a sphere
+sweep; radius zero requests a real ray with the same subject exclusions. The SDK
+chooses framing policy: a humanoid may retain an unobstructed eye when actual
+capsule visibility permits ignoring an arm obstruction; an occupied eye is never
+ignored. `preserveArmDirection` keeps the orbit direction when the pivot moves.
 
-Three-world owns framing and subject visibility. A visibility callback may ignore
-an arm obstruction only if the eye is clear; eye penetration still forces safety. The SDK does not install that callback for
-ordinary interactive preserve-framing views: solid arm obstructions still retract.
-When `visibilityTarget` is supplied, solve and project also cast a zero-radius ray
-from the final safe eye to that actual target. An endpoint support-surface hit is
-accepted; an intervening hit or occupied origin reports `visibility.status` as
-`occluded`, its measured distance and identity, and `limited: true`. This result
-keeps the safe pose and does not search for another view or prove that none exists.
-The optional target requires the adapter's real zero-radius ray implementation;
-ordinary sphere-only requests remain unchanged. Visibility query failure rolls
-back the same solve transaction. Project exposes sample diagnostics without
-committing fixed recovery state.
-Ordinary and Humanoid policies choose recovery parameters independently. Each
-controller owns a separate solver and resets it on incompatible actor/mode/start
-transitions. Failed solves restore the prior transaction state.
+Optional `visibilityTarget` measures a ray from the solved eye to the subject.
+It reports clear/occluded, distance and collider identity without searching for
+another viewpoint. An endpoint support hit is accepted. Visibility query failure
+rolls back the same solve transaction; display diagnostics do not replace fixed
+state. This measurement is not proof that every part of a character is visible.
 
-The solver uses `CameraHardDecolliderV1` internally for temporal recovery.
-World camera controllers consume the solver directly.
+`CameraHardDecolliderV1` is the internal radial recovery implementation. The
+behavior reference for the current restoration is recorded in the
+[camera restoration review](../../docs/reviews/2026-09-14-camera-behavior-restoration.md).

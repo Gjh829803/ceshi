@@ -1,5 +1,7 @@
+import baseline from '../camera/fixtures/main-native-trajectories.json';
+import {createHumanoidCameraDocument} from '../config/camera';
 import { CameraCollisionSolver } from '@worldkit/camera-collision';
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from 'three';
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { createMountedFixture } from './mounted-test-fixture';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorld } from '../world';
@@ -74,3 +76,28 @@ describe('Humanoid opening facing', () => {
     } finally {prepared.dispose();}
   });
 });
+
+// Captured from the real pre-refactor runtime, not regenerated from this solver.
+it.each(baseline.cases)('matches main native camera trajectory: $scene / $action',async({scene,action,samples})=>{
+ const boxes:EnvironmentDefinition['boxes'][number][]=[{id:'ground',position:[0,-.5,0],size:[180,1,180]}];
+ if(scene==='wall'||scene==='corner')boxes.push({id:'wall-x',position:[1,2,0],size:[.2,4,18]});
+ if(scene==='corner')boxes.push({id:'wall-z',position:[0,2,1],size:[18,4,.2]});
+ if(scene==='corridor')for(const x of [-1.5,1.5])boxes.push({id:'wall-'+x,position:[x,2,0],size:[.2,4,18]});
+ const world=await createWorld({camera:new PerspectiveCamera(58,1000/700,.08,200),navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes},character:{instanceId:'person',object:new Group()},vehicles:[]}});
+ try{
+  humanoidHost(world.humanoid!).prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI});
+  world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});
+  // Episode prepare performs one empty fixed step before accepting input.
+  world.step({},1);
+  const checkpoints=new Map(samples.map(sample=>[sample.tick,sample]));
+  for(let tick=0;tick<baseline.steps;tick++){
+   const yaw=action==='orbit'?(tick<60?0:tick<240?1:tick<420?-1:0):action==='walk-turn'?(tick>=120&&tick<240?.6:0):0;
+   const pitch=action==='pitch'?(tick>=60&&tick<180?.4:tick>=240&&tick<360?-.4:0):0;
+   world.step({humanoid:{...emptyInput(),forward:action==='walk-turn'&&tick<360?1:0},cameraYawRatio:yaw,cameraPitchRatio:pitch},1);
+   const expected=checkpoints.get(tick);if(!expected)continue;
+   expect(world.camera.position.distanceTo(new Vector3(...expected.position)),`eye at ${tick}`).toBeLessThan(2e-5);
+   expect(world.camera.quaternion.angleTo(new Quaternion(...expected.quaternion)),`orientation at ${tick}`).toBeLessThan(2e-7);
+   expect(new Vector3(...world.getEntityState('person').positionWorldMetersXYZ).distanceTo(new Vector3(...expected.actor)),`actor at ${tick}`).toBeLessThan(2e-5);
+  }
+ }finally{world.dispose();}
+},20000);

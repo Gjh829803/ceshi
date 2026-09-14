@@ -11,7 +11,7 @@ function resolvePreset(subjectId:string,preset:CameraPreset){
   views:{[preset.kind]:{kind:preset.kind}},presets:{selected:preset},
   binding:{targetEntityId:subjectId,subjectOverrides:{[subjectId]:{views:{[preset.kind]:{presetId:'selected'}}}}}});
  return resolveCameraConfiguration(document,{subjectId,subjectGeneration:0,subjectKind:'vehicle',
-  availableAnchors:['eye','seat'],headingAvailable:true,body:{minimumHeightMeters:0,maximumHeightMeters:2}});
+  availableAnchors:['eye','seat','follow-pivot','shoulder-eye'],headingAvailable:true,body:{minimumHeightMeters:0,maximumHeightMeters:2}});
 }
 
 it('resolves all maintained vehicle views from content presets without spec camera scalars',()=>{
@@ -23,8 +23,7 @@ it('resolves all maintained vehicle views from content presets without spec came
    const resolved=resolvePreset(spec.id,preset);
    expect(resolved.kind).toBe(kind);
    if(kind==='third-person'){
-    expect(resolved.values.constraints.recovery).toEqual({halfLifeSeconds:.18,
-     speedLimit:{kind:'limited',maximumSpeedMetersPerSecond:6},clearHoldSeconds:.12,releaseDeadbandMeters:.015});
+    expect(resolved.values.constraints.recovery).toEqual({halfLifeSeconds:.18, speedLimit:{kind:'limited',maximumSpeedMetersPerSecond:6},clearHoldSeconds:.12,releaseDeadbandMeters:.015});
     expect(resolved.fields['constraints.recovery.halfLifeSeconds']?.source).toBe('subject-preset');
    }
   }

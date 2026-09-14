@@ -1,7 +1,8 @@
+import {cameraReferenceRotation} from './heading';
 import { Matrix4, Quaternion, Vector3 } from "three";
 import type { ResolvedCameraConfiguration } from "../../config/camera/index";
 import { cameraConfigurationError } from "../../config/camera/validation";
-import { cameraPositionAnchor, type CameraSubjectFacts } from "../subject";
+import { subjectAnchor, cameraPositionAnchor, type CameraSubjectFacts } from "../subject";
 import { evaluateStrategy, orbitQuaternion } from "./evaluation";
 import type {
   CameraOpeningReference,
@@ -27,15 +28,17 @@ export function createOpeningReference(
       new Vector3(...(opening.upWorldXYZ ?? [0, 1, 0])),
     ),
   );
-  const reference =
-    configuration.values.orientation.referenceFrame === "subject-up"
-      ? new Quaternion(...(subject.semanticQuaternionWorldXYZW ?? [0, 0, 0, 1]))
-      : new Quaternion();
+  const reference = cameraReferenceRotation(subject,configuration.values.orientation.referenceFrame,undefined,configuration.values.orientation.inheritSubjectYaw);
   const localRotation = reference.clone().invert().multiply(rotation);
-  const arm = position
-    .clone()
-    .sub(cameraPositionAnchor(subject, configuration.values.position))
-    .applyQuaternion(reference.invert());
+  let orbitYaw: number | undefined;
+  if(configuration.values.position.anchorOffset.space==='orbit'){
+    const delta=position.clone().sub(subjectAnchor(subject,configuration.values.position.anchor)).applyQuaternion(reference.clone().invert());
+    const x=configuration.values.position.anchorOffset.offsetMetersXYZ[0],horizontal=Math.hypot(delta.x,delta.z);
+    if(horizontal<Math.abs(x))throw new Error('CAMERA_OPENING_DIRECTION_INVALID');
+    orbitYaw=Math.atan2(delta.x,delta.z)-Math.atan2(x,Math.sqrt(Math.max(0,horizontal*horizontal-x*x)));
+  }
+  const arm = position.clone().sub(cameraPositionAnchor(subject,configuration.values.position,undefined,
+    orbitYaw===undefined?undefined:{yawRadians:orbitYaw,referenceQuaternionWorldXYZW:reference.toArray()})).applyQuaternion(reference.clone().invert());
   const distance = arm.length();
   const direction =
     distance > 1e-12

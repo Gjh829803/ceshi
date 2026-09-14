@@ -27,9 +27,33 @@ retained speed-FOV offset to the new enabled envelope; orbit history is preserve
 opening pose relative to the declared `position.anchor` and `anchorOffset`.
 The generic preserve-opening default is `origin`; body presets explicitly supply
 a body anchor. Only initial distance, pitch and FOV are owned by the opening.
-`constraints.retraction` controls safe inward movement; `recovery` controls return.
-Safety can override either speed limit if no safe intermediate pose exists.
-`subjectFade` controls render-only third-person/shoulder fading between its start
+Contraction is immediate, matching the source camera; `constraints.recovery`
+controls return. The experimental `constraints.retraction` fields are removed;
+explicit copies of those fields in development documents must be removed when
+migrating to this version. Original source bytes and historical runs remain intact.
+`position.armHalfLifeSeconds` damps the Cartesian arm. When speed-distance is
+active, its extend/retract response filters the combined requested distance;
+explicit zoom smoothing is applied before that response. Native presets set zoom
+smoothing to zero, retaining the source response.
+
+`anchorOffset.space:'orbit'` follows the view yaw in its declared reference.
+`subject-heading` uses only the subject's continuous heading and retains world up;
+`subject-up` inherits its full orientation. `inheritSubjectYaw:false` leaves yaw
+under world orbit control while retaining the other subject axes. For following
+views, `upHalfLifeSeconds` filters reference up and preserves that history across
+cuts. Native aircraft shoulder presets use `subject-heading`; spacecraft chase
+uses full subject up with independent yaw.
+
+Native `follow-pivot` and `shoulder-eye` anchors distinguish posture framing from
+first-person eye position. Display posture uses the same fixed frame pair as the
+camera. An opted-in `orientation.recenter.pitch.targetSource:'subject'` consumes
+a native posture preference, falling back to `targetRadians` if unavailable;
+it does not switch views or introduce a general state selector.
+
+`input.orbitPitchRateRadiansPerSecond` overrides the shared orbit rate for ratio
+pitch input only; native values retain 1.2 rad/s yaw and 1 rad/s pitch. Explicit
+view selection resets its calibrated orbit rather than restoring dormant input.
+`subjectFade` is disabled by default and controls render-only third-person/shoulder fading between its start
 and end distances; first-person uses its separate body-clipping behavior.
 
 Install the full document using `world.setCameraFollow({configuration})`. Select

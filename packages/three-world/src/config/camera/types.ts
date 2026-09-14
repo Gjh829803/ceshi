@@ -2,7 +2,7 @@
 export type CameraVector3 = readonly [number, number, number];
 export type CameraKind = "third-person" | "first-person" | "shoulder";
 export type CameraAnchor =
-  | { readonly kind: "origin" | "eye" | "seat" }
+  | { readonly kind: "origin" | "eye" | "seat" | "follow-pivot" | "shoulder-eye" }
   | { readonly kind: "body"; readonly heightRatio: number }
   | {
       readonly kind: "subject-local";
@@ -33,7 +33,7 @@ export interface CameraLens {
 export interface CameraPosition {
   readonly anchor: CameraAnchor;
   readonly anchorOffset: {
-    readonly space: "world" | "heading" | "subject";
+    readonly space: "world" | "heading" | "subject" | "orbit";
     readonly offsetMetersXYZ: CameraVector3;
   };
   readonly subjectTranslationHalfLifeSeconds: number;
@@ -44,7 +44,8 @@ export interface CameraOrientation {
   readonly initialPitchRadians: number;
   readonly pitchLimitsRadians: CameraAngleLimits;
   readonly yawLimitsRadians: CameraAngleLimits;
-  readonly referenceFrame: "world-up" | "subject-up";
+  readonly inheritSubjectYaw: boolean;
+  readonly referenceFrame: "world-up" | "subject-up" | "subject-heading";
   readonly recenter: {
     readonly enabled: boolean;
     readonly delaySeconds: number;
@@ -52,6 +53,7 @@ export interface CameraOrientation {
     readonly yawHalfLifeSeconds: number;
     readonly pitch?: {
       readonly targetRadians: number;
+      readonly targetSource?: "configured" | "subject";
       readonly halfLifeSeconds: number;
     };
   };
@@ -62,10 +64,6 @@ export interface CameraConstraints {
     readonly radiusMeters: number;
     readonly armClearanceMeters: number;
     readonly pivotClearanceMeters: number;
-  };
-  readonly retraction: {
-    readonly halfLifeSeconds: number;
-    readonly speedLimit: CameraSpeedLimit;
   };
   readonly recovery: {
     readonly halfLifeSeconds: number;
@@ -94,6 +92,7 @@ interface CameraCommonValues {
   readonly constraints: CameraConstraints;
 }
 export interface CameraThirdPersonValues extends CameraCommonValues {
+  readonly orientation: CameraOrientation & { readonly upHalfLifeSeconds:number };
   readonly framing: { readonly kind: "look-at" | "preserve-opening" };
   readonly subjectFade: {
     readonly enabled: boolean;
@@ -195,6 +194,7 @@ export interface CameraDocument {
   readonly activation?: "on-input" | "immediate";
   readonly input?: {
     readonly orbitRateRadiansPerSecond?: number;
+    readonly orbitPitchRateRadiansPerSecond?: number;
     readonly cycleViewIds?: readonly string[];
   };
   readonly transition?: { readonly durationSeconds?: number };
@@ -204,7 +204,7 @@ export interface CameraSubjectContext {
   readonly subjectId: string;
   readonly subjectGeneration: number;
   readonly subjectKind: string;
-  readonly availableAnchors: readonly ("eye" | "seat")[];
+  readonly availableAnchors: readonly ("eye" | "seat" | "follow-pivot" | "shoulder-eye")[];
   readonly body?: {
     readonly minimumHeightMeters: number;
     readonly maximumHeightMeters: number;
@@ -242,6 +242,7 @@ interface CameraResolvedCommon {
   readonly mountTarget: "actor" | "vehicle";
   readonly input: {
     readonly orbitRateRadiansPerSecond: number;
+    readonly orbitPitchRateRadiansPerSecond?: number;
     readonly cycleViewIds: readonly string[];
   };
   readonly transition: { readonly durationSeconds: number };

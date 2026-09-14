@@ -25,6 +25,10 @@ export interface CameraSubjectFacts {
     readonly maximumHeightMeters: number;
   };
   readonly eyeWorldMetersXYZ?: CameraVector3;
+  readonly followPivotWorldMetersXYZ?: CameraVector3;
+  readonly shoulderEyeWorldMetersXYZ?: CameraVector3;
+  /** Optional native posture preference, used only by an opted-in recenter profile. */
+  readonly preferredOrbitPitchRadians?: number;
   readonly seatWorldMetersXYZ?: CameraVector3;
 }
 
@@ -36,9 +40,13 @@ export function subjectAnchor(
   switch (anchor.kind) {
     case "origin":
       return origin;
+    case "follow-pivot":
+    case "shoulder-eye":
     case "eye":
     case "seat": {
       const point =
+        anchor.kind === "follow-pivot" ? subject.followPivotWorldMetersXYZ :
+        anchor.kind === "shoulder-eye" ? subject.shoulderEyeWorldMetersXYZ :
         anchor.kind === "eye"
           ? subject.eyeWorldMetersXYZ
           : subject.seatWorldMetersXYZ;
@@ -82,10 +90,13 @@ export function anchorOffset(
   subject: CameraSubjectFacts,
   offset: CameraPosition["anchorOffset"],
   heading: number,
+  orbit?: {readonly yawRadians:number;readonly referenceQuaternionWorldXYZW:CameraQuaternion},
 ): Vector3 {
   const value = new Vector3(...offset.offsetMetersXYZ);
   if (offset.space === "heading")
     value.applyAxisAngle(new Vector3(0, 1, 0), heading);
+  if (offset.space === "orbit")
+    value.applyAxisAngle(new Vector3(0,1,0),orbit?.yawRadians??heading).applyQuaternion(new Quaternion(...(orbit?.referenceQuaternionWorldXYZW??[0,0,0,1])));
   if (offset.space === "subject")
     value.applyQuaternion(
       new Quaternion(...subject.geometryQuaternionWorldXYZW),
@@ -94,8 +105,8 @@ export function anchorOffset(
 }
 
 /** One unsmoothed anchor for opening measurement, strategies and display samples. */
-export function cameraPositionAnchor(subject: CameraSubjectFacts, position: CameraPosition, fallbackHeading?: number): Vector3 {
+export function cameraPositionAnchor(subject: CameraSubjectFacts, position: CameraPosition, fallbackHeading?: number, orbit?: {readonly yawRadians:number;readonly referenceQuaternionWorldXYZW:CameraQuaternion}): Vector3 {
   return subjectAnchor(subject, position.anchor).add(
-    anchorOffset(subject, position.anchorOffset, subject.continuousHeadingSeedRadians !== undefined ? fallbackHeading ?? subject.continuousHeadingSeedRadians : subjectHeading(subject) ?? fallbackHeading ?? 0),
+    anchorOffset(subject, position.anchorOffset, subject.continuousHeadingSeedRadians !== undefined ? fallbackHeading ?? subject.continuousHeadingSeedRadians : subjectHeading(subject) ?? fallbackHeading ?? 0,orbit),
   );
 }

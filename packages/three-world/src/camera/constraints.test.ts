@@ -152,7 +152,7 @@ it("clears cut sweeps while continuous movement intersects a real wall between l
   }));
   const a = { ...proposal, positionWorldMetersXYZ: [-2, 0, 4] as const };
   const b = { ...proposal, positionWorldMetersXYZ: [2, 0, 4] as const };
-  const continuous = constraints.solve(b, configuration, subject, {
+  const continuous = constraints.solve(b, configuration, {...subject,kind:"humanoid"}, {
     simulationTick: 1,
     deltaSeconds: 0,
     aspect: 1,
@@ -160,7 +160,7 @@ it("clears cut sweeps while continuous movement intersects a real wall between l
     previous: a,
   });
   expect(continuous.proposal.positionWorldMetersXYZ[0]).toBeLessThan(0);
-  const cut = constraints.solve(b, configuration, subject, {
+  const cut = constraints.solve(b, configuration, {...subject,kind:"humanoid"}, {
     simulationTick: 1,
     deltaSeconds: 0,
     aspect: 1,
@@ -247,13 +247,16 @@ it.each([false, true])("keeps pivot composition after a wall stops an orbit swee
     const hit = new Ray(origin,end.clone().sub(origin).normalize()).intersectBox(box,new Vector3());
     return hit && origin.distanceTo(hit)<length ? {distanceMeters:origin.distanceTo(hit),colliderEntityId:'wall'} : {distanceMeters:length};
   }}));
-  const corrected = constraints.solve(desired, config as any, subject, {simulationTick:1,deltaSeconds:1/60,aspect:1,cut:false,previous}).proposal;
-  expect(corrected.positionWorldMetersXYZ[0]).toBeLessThan(0);
+  const corrected = constraints.solve(desired, config as any, {...subject,kind:"humanoid"}, {simulationTick:1,deltaSeconds:1/60,aspect:1,cut:false,previous}).proposal;
+  if(preserving)expect(corrected.positionWorldMetersXYZ).toEqual(desired.positionWorldMetersXYZ);
+  else expect(corrected.positionWorldMetersXYZ[0]).toBeLessThan(0);
   const bearing = (pose: typeof desired) => new Vector3(...pose.pivotWorldMetersXYZ).sub(new Vector3(...pose.positionWorldMetersXYZ)).normalize().applyQuaternion(new Quaternion(...pose.quaternionWorldXYZW).invert());
-  expect(bearing(corrected).distanceTo(bearing(desired))).toBeLessThan(1e-8);
+  if(preserving)expect(new Quaternion(...corrected.quaternionWorldXYZW).angleTo(new Quaternion(...desired.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  else expect(bearing(corrected).distanceTo(bearing(desired))).toBeLessThan(1e-8);
   const before = constraints.capture();
-  const projected = constraints.project(corrected, config as any, subject, 1, corrected);
-  expect(bearing(projected).distanceTo(bearing(desired))).toBeLessThan(1e-8);
+  const projected = constraints.project(corrected, config as any, {...subject,kind:"humanoid"}, 1, corrected);
+  if(preserving)expect(new Quaternion(...projected.quaternionWorldXYZW).angleTo(new Quaternion(...desired.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  else expect(bearing(projected).distanceTo(bearing(desired))).toBeLessThan(1e-8);
   expect(constraints.capture()).toEqual(before);
 });
 

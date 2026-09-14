@@ -1,3 +1,4 @@
+import {sameCameraReference,cameraReferenceRotation} from './strategies/heading';
 import {failure} from '../control-support';
 import { Euler, MathUtils, Quaternion, Vector3 } from "three";
 import type { ResolvedCameraConfiguration } from "../config/camera/index";
@@ -22,9 +23,7 @@ export function cameraReference(
   subject: CameraSubjectFacts,
   configuration: ResolvedCameraConfiguration,
 ): Quaternion {
-  return configuration.values.orientation.referenceFrame === "subject-up"
-    ? new Quaternion(...(subject.semanticQuaternionWorldXYZW ?? [0, 0, 0, 1]))
-    : new Quaternion();
+  return cameraReferenceRotation(subject,configuration.values.orientation.referenceFrame,undefined,configuration.values.orientation.inheritSubjectYaw);
 }
 /** Preserve the unwrapped angle branch when expressing a direction in a new reference. */
 export function rebaseCameraIntent(
@@ -43,8 +42,8 @@ export function rebaseCameraIntent(
   };
   const oldFrame = oldConfiguration.values.orientation.referenceFrame;
   const newFrame = configuration.values.orientation.referenceFrame;
-  if (relocate && oldFrame === newFrame) {
-    if (newFrame === "subject-up")
+  if (relocate && sameCameraReference(oldConfiguration.values.orientation,configuration.values.orientation)) {
+    if (newFrame !== "world-up" && configuration.values.orientation.inheritSubjectYaw)
       return admit(intent);
     const a = subjectHeading(previous),
       b = subjectHeading(next);
@@ -103,7 +102,7 @@ export function relocateCameraProposal(
   pose: import("./strategies/types").CameraProposal,
   previous: CameraSubjectFacts,
   next: CameraSubjectFacts,
-  referenceFrame: "world-up" | "subject-up",
+  referenceFrame: "world-up" | "subject-up" | "subject-heading",
   rotate = true,
   previousAnchor: readonly [number, number, number] = previous.positionWorldMetersXYZ,
   nextAnchor: readonly [number, number, number] = next.positionWorldMetersXYZ,

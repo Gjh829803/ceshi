@@ -324,7 +324,7 @@ it('fades only followed geometry for a close world view and restores shared mate
  const person=new THREE.Mesh(geometry,material),other=new THREE.Mesh(geometry,material);other.position.x=4;
  try{
   world.addCharacter({id:'person',object:person,body:{heightMeters:1.8,radiusMeters:.3}});world.addEntity({id:'other',object:other,role:'decoration'});world.setControlledEntity('person');
-  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:.7},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}}}});
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{subjectFade:{enabled:true},position:{distanceMeters:.7},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}}}});
   engine(world).withPresentation(()=>{
    expect(person.material).not.toBe(material);expect(person.material.opacity).toBeGreaterThan(0);expect(person.material.opacity).toBeLessThan(1);
    expect(person.material.onBeforeCompile).toBe(material.onBeforeCompile);expect(person.material.customProgramCacheKey).toBe(material.customProgramCacheKey);
@@ -390,7 +390,7 @@ it('notifies render observers after restoring subject presentation without anoth
  const geometry=new THREE.BoxGeometry(.6,1.8,.4),material=new THREE.MeshBasicMaterial(),person=new THREE.Mesh(geometry,material);
  try{
   world.addCharacter({id:'person',object:person,body:{heightMeters:1.8,radiusMeters:.3}});
-  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:.7},constraints:{collision:{enabled:false}}}}}}});
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{subjectFade:{enabled:true},position:{distanceMeters:.7},constraints:{collision:{enabled:false}}}}}}});
   const order:string[]=[];
   Object.defineProperty(engine(world),'renderer',{value:{render(){expect(person.material).not.toBe(material);order.push('source');},dispose(){}}});
   const publicWorld:World=world;

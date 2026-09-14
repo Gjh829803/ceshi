@@ -39,6 +39,7 @@ export interface CameraFrameIdentity {
 export interface CameraFixedFrame extends CameraProposal, CameraFrameIdentity {
  /** Physical sample associated with this commit, for read-only display anchor correction. */
  readonly subject?:CameraSubjectFacts;
+ readonly orbitYawRadians?:number;
  readonly subjectAnchorWorldMetersXYZ?:readonly [number,number,number];
 }
 
@@ -107,6 +108,7 @@ export interface ViewState {
   readonly intent: CameraIntent;
 }
 export interface ControllerState {
+  readonly initialVerticalFovDegrees?: number | undefined;
   readonly mode: "authored" | "follow-pending" | "follow";
   readonly document?: CameraDocument | undefined;
   readonly hash?: string | undefined;

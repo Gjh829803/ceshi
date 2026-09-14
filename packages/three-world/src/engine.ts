@@ -259,7 +259,7 @@ export class WorldEngine {
     const document=parseCameraDocument(options.configuration);
     const selected=document.views[document.defaultViewId];
     const adopt=!previous.document&&selected?.kind==='third-person'&&!selected.opening&&(document.activation!=='immediate'||immediateOpeningNeedsAdoption(document,this.cameraSubjects.sample(document.binding),this.camera));
-    this.cameraController.install(document,this.cameraFrame(),adopt?{authoredPose:authoredCameraProposal(this.camera)}:{});
+    this.cameraController.install(document,this.cameraFrame(),{initialVerticalFovDegrees:this.camera.fov,...(adopt?{authoredPose:authoredCameraProposal(this.camera)}:{})});
     this.cameraSubjects.adopt(this.inspectCamera().document!.binding);this.cameraBasis=undefined;this.writeCamera();this.inputRouter.releasePointerLock();
   }
   setCameraView(viewId:string,cut=false):void{this.cameraMutation();if(this.camera instanceof THREE.PerspectiveCamera)validateCameraParent(this.camera);this.cameraController.setView(viewId,this.cameraFrame(),{cut});this.cameraBasis=undefined;this.writeCamera();this.inputRouter.releasePointerLock();}

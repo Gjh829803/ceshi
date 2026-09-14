@@ -25,6 +25,8 @@ export const anchorField: CameraFieldSchema = {
     branch("origin"),
     branch("eye"),
     branch("seat"),
+    branch("follow-pivot"),
+    branch("shoulder-eye"),
     branch("body", {
       heightRatio: number("ratio", { minimum: 0, maximum: 1 }),
     }),
@@ -34,7 +36,7 @@ export const anchorField: CameraFieldSchema = {
 export const positionFields = {
   anchor: anchorField,
   anchorOffset: object({
-    space: choice("world", "heading", "subject"),
+    space: choice("world", "heading", "subject", "orbit"),
     offsetMetersXYZ: vector,
   }),
   subjectTranslationHalfLifeSeconds: nonnegative("seconds"),
@@ -45,7 +47,8 @@ export const orientationFields = {
   initialPitchRadians: number("radians"),
   pitchLimitsRadians: angleLimits,
   yawLimitsRadians: angleLimits,
-  referenceFrame: choice("world-up", "subject-up"),
+  inheritSubjectYaw: boolean,
+  referenceFrame: choice("world-up", "subject-up", "subject-heading"),
   recenter: object({
     enabled: boolean,
     delaySeconds: nonnegative("seconds"),
@@ -54,6 +57,7 @@ export const orientationFields = {
     pitch: object(
       {
         targetRadians: number("radians"),
+        targetSource: choice("configured", "subject"),
         halfLifeSeconds: nonnegative("seconds"),
       },
       ["targetRadians", "halfLifeSeconds"],
@@ -66,10 +70,6 @@ export const constraintFields = {
     radiusMeters: positive("meters"),
     armClearanceMeters: nonnegative("meters"),
     pivotClearanceMeters: nonnegative("meters"),
-  }),
-  retraction: object({
-    halfLifeSeconds: nonnegative("seconds"),
-    speedLimit,
   }),
   recovery: object({
     halfLifeSeconds: nonnegative("seconds"),

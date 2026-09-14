@@ -27,6 +27,7 @@ const common = {
 };
 const following = {
   ...common,
+  orientation: object({...orientationFields,upHalfLifeSeconds:nonnegative("seconds")}),
   subjectFade: object({
     enabled: {type: "boolean"},
     startDistanceMeters: nonnegative("meters"),
@@ -160,6 +161,7 @@ export const CAMERA_DOCUMENT_SCHEMA: CameraFieldSchema = {
       activation: choice("on-input", "immediate"),
       input: object({
         orbitRateRadiansPerSecond: nonnegative("radians/second"),
+        orbitPitchRateRadiansPerSecond: nonnegative("radians/second"),
         cycleViewIds: { type: "array", items: id, uniqueItems: true },
       }),
       transition: object({ durationSeconds: nonnegative("seconds") }),

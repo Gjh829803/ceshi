@@ -149,7 +149,7 @@ it("replaces inherited zoom and off-axis projection modifiers with the complete 
   );
 });
 
-it("keeps a stationary pivot at its requested bearing between unequal orbit distances", () => {
+it("interpolates source eye and orientation independently between fixed samples", () => {
   const composition = {nominalAimQuaternionWorldXYZW:[0,0,0,1] as const,relativeAimQuaternionXYZW: [0,0,0,1] as const, referenceQuaternionWorldXYZW: [0,0,0,1] as const};
   const previous = {...frame, positionWorldMetersXYZ:[0,0,8] as const, pivotWorldMetersXYZ:[0,0,0] as const, composition};
   const current = {...previous, simulationTick:2, positionWorldMetersXYZ:[2,0,0] as const,
@@ -157,8 +157,8 @@ it("keeps a stationary pivot at its requested bearing between unequal orbit dist
     quaternionWorldXYZW:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI/2).toArray()};
   for (const alpha of [.1,.25,.5,.75,.9]) {
     const pose = sampleCameraPresentation(previous,current,{epoch:1,previousTick:1,currentTick:2,alpha,cut:false});
-    const local = new Vector3(...pose.pivotWorldMetersXYZ).sub(new Vector3(...pose.positionWorldMetersXYZ)).normalize().applyQuaternion(new Quaternion(...pose.quaternionWorldXYZW).invert());
-    expect(local.distanceTo(new Vector3(0,0,-1))).toBeLessThan(1e-8);
+    expect(new Vector3(...pose.positionWorldMetersXYZ).distanceTo(new Vector3(2*alpha,0,8*(1-alpha)))).toBeLessThan(1e-8);
+    expect(new Quaternion(...pose.quaternionWorldXYZW).angleTo(new Quaternion(...previous.quaternionWorldXYZW).slerp(new Quaternion(...current.quaternionWorldXYZW),alpha))).toBeLessThan(1e-7);
   }
 });
 

@@ -263,7 +263,7 @@ it("interrupts blend from latest fixed result; first-person cuts and same-view d
   expect(c.inspect().transition).toMatchObject({ reason: "first-person-cut" });
   expect(c.inspect().current?.positionWorldMetersXYZ).toEqual([0, 1.6, 0]);
 });
-it("initializes dormant preserve-opening at install and restores cached intent", () => {
+it("initializes dormant preserve-opening at install and restores its calibrated opening", () => {
   const f = fixture();
   const d = structuredClone(document({ activation: "immediate" })) as any;
   d.views.saved = {
@@ -292,7 +292,7 @@ it("initializes dormant preserve-opening at install and restores cached intent",
   const intent = f.controller.inspect().intent;
   f.controller.setView("eye", frame(2));
   f.controller.setView("saved", frame(2), { cut: true });
-  expect(f.controller.inspect().intent).toEqual(intent);
+  expect(f.controller.inspect().intent).toMatchObject({...intent,yawRadians:0,secondsSinceOrbit:0});
 });
 it("treats target generations explicitly and removal releases follow", () => {
   const f = fixture();
@@ -1095,4 +1095,23 @@ it('refreshes diagnostic-only inspection samples without recopying static metada
     expect(cloned.mock.calls.filter(([value])=>{const metadata=inspectionCloneMetadata(value);return metadata.document||metadata.configuration;})).toHaveLength(0);
     c.setCollisionDiagnosticsEnabled(false);expect(c.inspect().collisionQueries).toBeUndefined();
   }finally{cloned.mockRestore();c.dispose();}
+});
+
+it('restores default view switching to a fresh orbit instead of dormant input',()=>{
+ const {controller}=fixture();controller.install(document({activation:'immediate'}),frame());
+ step(controller,1,{orbitDeltaRadiansXY:[.7,.2]});
+ controller.setView('other',frame(1));controller.setView('orbit',frame(1));
+ expect(controller.inspect().intent?.yawRadians).toBeCloseTo(0,10);
+ expect(controller.inspect().intent?.pitchRadians).toBeCloseTo(0,10);
+ expect(controller.inspect().transition.kind).toBe('none');
+});
+
+it('derives movement from orbit intent without a second pre-physics collision solve',()=>{
+ const geometry=vi.fn(()=>({probe:(a:readonly [number,number,number],b:readonly [number,number,number])=>({distanceMeters:new Vector3(...a).distanceTo(new Vector3(...b))})}));
+ const controller=new CameraController({sampleSubject:()=>initial,geometry});
+ controller.install(document({activation:'immediate'}),frame());geometry.mockClear();
+ const basis=controller.prepareInput({orbitDeltaRadiansXY:[.4,0]},1/60,frame(1));
+ expect(geometry).not.toHaveBeenCalled();
+ expect(new Vector3(0,0,-1).applyQuaternion(new Quaternion(...basis.quaternionWorldXYZW)).x).toBeCloseTo(-Math.sin(.4),10);
+ controller.evaluateAndCommit(frame(1));expect(geometry).toHaveBeenCalledTimes(1);
 });

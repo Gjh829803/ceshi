@@ -1,5 +1,7 @@
+import {cameraReferenceRotation} from './strategies/heading';
+import { Vector3 } from "three";
 import { captureCameraComposition, composeCameraAtPosition } from "./composition";
-import {subjectAnchor} from './subject';
+import {subjectAnchor,cameraPositionAnchor} from './subject';
 import {
   CameraCollisionSolver,
   type CameraCollisionProbe,
@@ -21,7 +23,7 @@ export type CameraGeometryProvider = (context: {
   readonly subject: CameraSubjectFacts;
   readonly lens: CameraLens;
   readonly aspect: number;
-}) => { readonly probe: CameraCollisionProbe };
+}) => { readonly probe: CameraCollisionProbe; readonly isSubjectVisible?: (eye: CameraVector3) => boolean };
 export type CameraConstraintResult =
   | { readonly status: "disabled" }
   | {
@@ -62,6 +64,7 @@ export type CameraCollisionQuerySamples = Partial<Record<CameraCollisionProbeSam
 const MAX_CAPTURED_PROBES = 256;
 export class CameraConstraints {
   private probe: CameraCollisionProbe | undefined;
+  private isSubjectVisible: ((eye: CameraVector3) => boolean) | undefined;
   private captureEnabled = false;
   private sampleId = 0;
   private samples: CameraCollisionQuerySamples = {};
@@ -112,18 +115,27 @@ export class CameraConstraints {
     sweep: boolean,
   ): CameraCollisionRequest {
     const collision = configuration.values.constraints.collision;
+    const preserving=configuration.kind==='third-person'&&configuration.values.framing.kind==='preserve-opening';
+    const target=preserving&&subject.body
+      ? subjectAnchor(subject,{kind:'body',heightRatio:.65}).add(new Vector3(...proposal.pivotWorldMetersXYZ).sub(cameraPositionAnchor(subject,configuration.values.position))).toArray()
+      : proposal.pivotWorldMetersXYZ;
     return {
-      target: proposal.pivotWorldMetersXYZ,
+      target,
       ...(proposal.visibility === "require-line-of-sight" && proposal.visibilityTargetWorldMetersXYZ
         ? {visibilityTarget: proposal.visibilityTargetWorldMetersXYZ} : {}),
       eye: proposal.positionWorldMetersXYZ,
       current:
         current?.positionWorldMetersXYZ ?? proposal.positionWorldMetersXYZ,
       radius: collision.radiusMeters,
-      pivotOrigin: subject.body?subjectAnchor(subject,{kind:'body',heightRatio:.5}).toArray():subject.positionWorldMetersXYZ,
+      ...(subject.kind === 'humanoid' || configuration.kind === 'shoulder' ? {
+        pivotOrigin: preserving&&subject.body?subjectAnchor(subject,{kind:'body',heightRatio:.655}).toArray():subjectAnchor(subject,configuration.values.position.anchor).toArray(),
+        preserveArmDirection: true,
+      } : {}),
+      ...(subject.kind === 'humanoid' && configuration.kind === 'third-person' && proposal.visibility === 'preserve-framing' && this.isSubjectVisible
+        ? {canIgnoreArmObstruction: this.isSubjectVisible} : {}),
       armClearance: collision.armClearanceMeters,
       pivotClearance: collision.pivotClearanceMeters,
-      ...(sweep && current
+      ...(sweep && current && !preserving && (subject.kind === 'humanoid' || configuration.kind === 'shoulder')
         ? { sweepFrom: current.positionWorldMetersXYZ }
         : {}),
     };
@@ -138,11 +150,13 @@ export class CameraConstraints {
       throw failure("CAMERA_VIEWPORT_INVALID");
     if (this.probe) throw failure("CAMERA_TRANSACTION_REENTRY");
     try {
-      this.probe = this.geometry({
+      const geometry = this.geometry({
         subject,
         lens: proposal.lens,
         aspect,
-      }).probe;
+      });
+      this.probe = geometry.probe;
+      this.isSubjectVisible = geometry.isSubjectVisible;
       return run();
     } catch (error) {
       throw failure(
@@ -152,11 +166,19 @@ export class CameraConstraints {
       );
     } finally {
       this.probe = undefined;
+      this.isSubjectVisible = undefined;
     }
   }
   private measured(result:CameraCollisionSolution):CameraConstraintResult {
     return {status:'measured',phase:result.phase,limited:result.limited,safeDistanceMeters:result.safeDistance,effectiveDistanceMeters:result.effectiveDistance,
       ...(result.entityId?{colliderEntityId:result.entityId}:{}),...(result.visibility?{visibility:result.visibility}:{})};
+  }
+  private retarget(proposal: CameraProposal, target: CameraVector3, configuration: ResolvedCameraConfiguration): CameraProposal {
+    if(configuration.kind==="third-person"&&configuration.values.framing.kind==="preserve-opening")return proposal;
+    const shift=new Vector3(...target).sub(new Vector3(...proposal.pivotWorldMetersXYZ));
+    return {...proposal,pivotWorldMetersXYZ:target,
+      positionWorldMetersXYZ:new Vector3(...proposal.positionWorldMetersXYZ).add(shift).toArray(),
+      lookAtWorldMetersXYZ:new Vector3(...proposal.lookAtWorldMetersXYZ).add(shift).toArray()};
   }
   private corrected(
     proposal: CameraProposal,
@@ -164,9 +186,13 @@ export class CameraConstraints {
     configuration: ResolvedCameraConfiguration,
     subject: CameraSubjectFacts,
   ): CameraProposal {
+    if(configuration.kind==='third-person'&&configuration.values.framing.kind==='preserve-opening'){
+      const shift=new Vector3(...position).sub(new Vector3(...proposal.positionWorldMetersXYZ));
+      return {...proposal,positionWorldMetersXYZ:position,lookAtWorldMetersXYZ:new Vector3(...proposal.lookAtWorldMetersXYZ).add(shift).toArray()};
+    }
     const { composition: _composition, ...sightPose } = proposal;
     const intended = configuration.kind === "first-person" ? sightPose : captureCameraComposition(proposal,
-      configuration.values.orientation.referenceFrame === "subject-up" ? subject.semanticQuaternionWorldXYZW ?? [0,0,0,1] : [0,0,0,1]);
+      cameraReferenceRotation(subject,configuration.values.orientation.referenceFrame,undefined,configuration.values.orientation.inheritSubjectYaw).toArray());
     // Do not perturb an unchanged authored endpoint (including a vertical pole).
     if (position.every((value, index) => value === proposal.positionWorldMetersXYZ[index])) return intended;
     return composeCameraAtPosition(intended, position);
@@ -201,9 +227,6 @@ export class CameraConstraints {
             !step.cut,
           ),
           {
-            retractionHalfLifeSeconds: configuration.values.constraints.retraction.halfLifeSeconds,
-            maximumRetractionMetersPerSecond: configuration.values.constraints.retraction.speedLimit.kind === "unlimited"
-              ? "unlimited" : configuration.values.constraints.retraction.speedLimit.maximumSpeedMetersPerSecond,
             authorityTick: step.simulationTick,
             deltaSeconds: step.deltaSeconds,
             clearHoldSeconds: recovery.clearHoldSeconds,
@@ -213,10 +236,11 @@ export class CameraConstraints {
                 ? "unlimited"
                 : recovery.speedLimit.maximumSpeedMetersPerSecond,
             releaseDeadbandMeters: recovery.releaseDeadbandMeters,
+            resetWhenClear: configuration.kind === "third-person" && ((subject.kind !== "humanoid" && subject.kind !== "vehicle") || configuration.values.framing.kind === "preserve-opening"),
           },
         );
         return {
-          proposal: this.corrected(proposal, result.position, configuration, subject),
+          proposal: this.corrected(this.retarget(proposal,result.target,configuration), result.position, configuration, subject),
           diagnostics: {...this.measured(result),simulationTick:step.simulationTick},
         };
       });
@@ -252,7 +276,7 @@ export class CameraConstraints {
     if (!configuration.values.constraints.collision.enabled) return {...proposal,constraintDiagnostics:{status:'disabled'}};
     return this.withGeometry(subject, proposal, aspect, () => {
       const result=this.solver.project(this.request(proposal,configuration,subject,current,false));
-      return {...this.corrected(proposal,result.position,configuration,subject),constraintDiagnostics:this.measured(result)};
+      return {...this.corrected(this.retarget(proposal,result.target,configuration),result.position,configuration,subject),constraintDiagnostics:this.measured(result)};
     });
     });
   }

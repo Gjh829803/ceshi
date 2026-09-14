@@ -1,3 +1,4 @@
+import {sameCameraReference} from './strategies/heading';
 import { Quaternion, Vector3 } from "three";
 import {
   resolveCameraConfiguration,
@@ -58,6 +59,8 @@ export function resolve(
     availableAnchors: [
       ...(subject.eyeWorldMetersXYZ ? ["eye" as const] : []),
       ...(subject.seatWorldMetersXYZ ? ["seat" as const] : []),
+      ...(subject.followPivotWorldMetersXYZ ? ["follow-pivot" as const] : []),
+      ...(subject.shoulderEyeWorldMetersXYZ ? ["shoulder-eye" as const] : []),
     ],
     ...(subject.body ? { body: subject.body } : {}),
     headingAvailable: subject.semanticQuaternionWorldXYZW !== undefined,
@@ -108,7 +111,7 @@ export function openingReferences(
 export function sameOpeningBasis(a: ResolvedCameraConfiguration, b: ResolvedCameraConfiguration): boolean {
   return equal(a.values.position.anchor, b.values.position.anchor) &&
     equal(a.values.position.anchorOffset, b.values.position.anchorOffset) &&
-    a.values.orientation.referenceFrame === b.values.orientation.referenceFrame;
+    sameCameraReference(a.values.orientation,b.values.orientation);
 }
 /** Position-only resolution does not admit dormant eye/seat capabilities. */
 export function sameDeclaredOpeningAnchor(a: CameraDocument, b: CameraDocument, viewId: string, subject: CameraSubjectFacts): boolean {
@@ -151,8 +154,7 @@ export function needsHistoryReset(
   return (
     !equal(a.values.position.anchor, b.values.position.anchor) ||
     !equal(a.values.position.anchorOffset, b.values.position.anchorOffset) ||
-    a.values.orientation.referenceFrame !==
-      b.values.orientation.referenceFrame ||
+    !sameCameraReference(a.values.orientation,b.values.orientation) ||
     !equal(a.values.constraints.collision, b.values.constraints.collision) ||
     ("framing" in a.values &&
       "framing" in b.values &&

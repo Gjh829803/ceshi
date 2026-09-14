@@ -21,6 +21,7 @@ const common = {
     },
     yawLimitsRadians: { kind: "unbounded" },
     referenceFrame: "world-up",
+    inheritSubjectYaw:true,
     recenter: {
       enabled: true,
       delaySeconds: 1.5,
@@ -33,11 +34,7 @@ const common = {
       enabled: true,
       radiusMeters: 0.2,
       armClearanceMeters: 0.05,
-      pivotClearanceMeters: 0.05,
-    },
-    retraction: {
-      halfLifeSeconds: 0.08,
-      speedLimit: {kind: "limited", maximumSpeedMetersPerSecond: 12},
+      pivotClearanceMeters: 0.02,
     },
     recovery: {
       halfLifeSeconds: 0.24,
@@ -57,8 +54,9 @@ const common = {
 } as const;
 export const CAMERA_THIRD_PERSON_DEFAULTS: CameraThirdPersonValues = {
   ...common,
+  orientation: {...common.orientation,upHalfLifeSeconds:0},
   framing: { kind: "look-at" },
-  subjectFade: {enabled: true, startDistanceMeters: 1, endDistanceMeters: 0.45},
+  subjectFade: {enabled: false, startDistanceMeters: 1, endDistanceMeters: 0.45},
   position: { ...common.position, distanceMeters: 8.8 },
   zoom: {
     range: {
@@ -82,7 +80,7 @@ export const CAMERA_THIRD_PERSON_DEFAULTS: CameraThirdPersonValues = {
 };
 export const CAMERA_FIRST_PERSON_DEFAULTS: CameraFirstPersonValues = {
   ...common,
-  constraints: {...common.constraints, retraction: {halfLifeSeconds: 0, speedLimit: {kind: "unlimited"}}, recovery: {...common.constraints.recovery, speedLimit: {kind: "unlimited"}}},
+  constraints: {...common.constraints, recovery: {...common.constraints.recovery, speedLimit: {kind: "unlimited"}}},
   position: { ...common.position, anchor: { kind: "eye" } },
   orientation: {
     ...common.orientation,
@@ -112,7 +110,7 @@ export const CAMERA_DOCUMENT_DEFAULTS = {
   activation: "on-input",
   mountTarget: "vehicle",
   input: { orbitRateRadiansPerSecond: 2, cycleViewIds: [] },
-  transition: { durationSeconds: 0.25 },
+  transition: { durationSeconds: 0 },
 } as const;
 export const CAMERA_STRATEGY_DEFAULTS = {
   "third-person": CAMERA_THIRD_PERSON_DEFAULTS,
