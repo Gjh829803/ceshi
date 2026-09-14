@@ -22,7 +22,7 @@ const pool:EnvironmentDefinition={...flat,boxes:[{id:'bottom',position:[0,-20,0]
 function fixture(id:string,map=flat,yaw=0){const q=new EnvironmentQueries(structuredClone(map)),v=createVehicle({...SPECS.find(s=>s.id===id)!,spawn:[0,.2,0],yaw});let time=0;return {q,v,run:(frames:number,input:Partial<Input>={})=>{for(let n=0;n<frames;n++){stepVehicle(v,{...emptyInput(),...input},1/60,time,q);q.stepPhysics(1/60);time+=1/60;}}};}
 function cameraSubject(v:ReturnType<typeof createVehicle>):CameraSubjectFacts {
  const rotation=v.rotation.clone().normalize(),seat=new Vector3(...v.spec.seat).applyQuaternion(rotation).add(v.position);
- return {id:v.spec.id,generation:1,kind:'vehicle',positionWorldMetersXYZ:v.position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI)).toArray(),speedMetersPerSecond:v.velocity.length(),body:{minimumHeightMeters:v.spec.envelope.offset[1]-v.spec.envelope.halfExtents[1],maximumHeightMeters:v.spec.envelope.offset[1]+v.spec.envelope.halfExtents[1]},seatWorldMetersXYZ:seat.toArray(),eyeWorldMetersXYZ:seat.clone().add(new Vector3(0,.72,.08).applyQuaternion(rotation)).toArray(),...(v.motion.aircraft?{continuousHeadingSeedRadians:v.yaw+Math.PI}:{})};
+ return {id:v.spec.id,generation:1,kind:'vehicle',positionWorldMetersXYZ:v.position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI)).toArray(),speedMetersPerSecond:v.velocity.length(),body:{minimumHeightMeters:v.spec.envelope.offset[1]-v.spec.envelope.halfExtents[1],maximumHeightMeters:v.spec.envelope.offset[1]+v.spec.envelope.halfExtents[1]},seatWorldMetersXYZ:seat.toArray(),shoulderEyeWorldMetersXYZ:seat.clone().add(new Vector3(0,.72,0).applyQuaternion(rotation)).toArray(),eyeWorldMetersXYZ:seat.clone().add(new Vector3(0,.72,.08).applyQuaternion(rotation)).toArray(),...(v.motion.aircraft?{continuousHeadingSeedRadians:v.yaw+Math.PI}:{})};
 }
 function cameraController(v:ReturnType<typeof createVehicle>,q:EnvironmentQueries){
  const filter=q.cameraFilter(new Set([v.spec.id]));
@@ -174,9 +174,9 @@ it('aircraft third and shoulder views remain continuous through a complete loop 
  const frame=(simulationTick:number)=>({lifecycleGeneration:0,simulationTick,aspect:1});
  try{
   f.v.position.y=40;f.v.velocity.z=25;
-  // This regression explicitly requests an upright orbit in both named views.
-  // Shoulder supports subject-up too; that configuration intentionally follows a loop.
-  controller.install(parseCameraDocument({kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',activation:'immediate',binding:{targetEntityId:f.v.spec.id},presets:cameraPresets,views:{'third-person':{kind:'third-person',presetId:'plane.third-person'},shoulder:{kind:'shoulder',presetId:'plane.shoulder',overrides:{orientation:{referenceFrame:'world-up'}}}}}),frame(0));
+  // The calibrated third-person orbit uses world yaw; the upright shoulder
+  // combines continuous aircraft heading with a bounded local seat yaw.
+  controller.install(parseCameraDocument({kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',activation:'immediate',binding:{targetEntityId:f.v.spec.id},presets:cameraPresets,views:{'third-person':{kind:'third-person',presetId:'plane.third-person'},shoulder:{kind:'shoulder',presetId:'plane.shoulder'}}}),frame(0));
   let tick=0;
   for(const view of ['third-person','shoulder']){controller.setView(view,frame(tick));let prior:Vector3|undefined;
    for(let deg=0;deg<=360;deg++){
@@ -184,7 +184,7 @@ it('aircraft third and shoulder views remain continuous through a complete loop 
     controller.prepareInput({},1/60,frame(++tick));controller.evaluateAndCommit(frame(tick));
     const pose=controller.inspect().current!,direction=new Vector3(0,0,-1).applyQuaternion(new Quaternion(...pose.quaternionWorldXYZW));
     if(prior)expect(direction.angleTo(prior)).toBeLessThan(.12);prior=direction;
-    const yaw=controller.inspect().intent!.yawRadians-Math.PI;expect(Math.abs(Math.atan2(Math.sin(yaw),Math.cos(yaw)))).toBeLessThan(.01);
+    const yaw=controller.inspect().intent!.yawRadians-(view==='third-person'?Math.PI:0);expect(Math.abs(Math.atan2(Math.sin(yaw),Math.cos(yaw)))).toBeLessThan(.01);
     expect(new Vector3(1,0,0).applyQuaternion(new Quaternion(...pose.quaternionWorldXYZW)).y).toBeCloseTo(0,8);
    }
   }
