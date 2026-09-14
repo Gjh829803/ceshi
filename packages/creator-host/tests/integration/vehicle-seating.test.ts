@@ -32,7 +32,11 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
   const runtime=world.humanoid!;world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});
   world.setCameraView('first-person');const initialCamera=world.inspectCamera().document!;
   world.setCameraFollow({configuration:{...initialCamera,views:{...initialCamera.views,'first-person':{kind:'first-person',overrides:{position:{subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0}}}}}});
-  world.step({},1);const onFootEye=new Vector3();expect(character.eyePosition(onFootEye)).toBe(true);expect(world.camera.position.distanceTo(onFootEye)).toBeLessThan(.002);world.setCameraView('third-person');
+  world.step({},1);
+  // On foot the established camera uses a stable capsule eye, not animated head bob.
+  const actor=runtime.simulation.controlledActor;
+  const onFootEye=actor.player.position.clone().add(new Vector3(0,actor.controller.capsuleHeight-.12,0));
+  expect(world.camera.position.distanceTo(onFootEye)).toBeLessThan(.002);world.setCameraView('third-person');
   for(const [i,spec] of specs.entries()){
    prepareCourse(runtime.simulation,getMap('grand-prix'),'gp-straight',spec.id);
    expect(runtime.enter(spec.id)).toBe(true);world.step({},60);

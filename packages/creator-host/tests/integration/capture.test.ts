@@ -288,7 +288,7 @@ it('previews the current SDK shoulder through MCP without resetting paused ticks
   const inherited=await page.evaluate(()=>{
    const world=(window as any).currentPreviewWorld;
    world.useAuthoredCamera();world.camera.fov=43;world.camera.updateProjectionMatrix();
-   const edit=world.beginCameraEdit(),document={...world.inspectCamera().document,activation:'on-input',defaultViewId:'third-person',views:{...world.inspectCamera().document.views,'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},lens:{nearMeters:world.camera.near,farMeters:world.camera.far}}}}};
+   const edit=world.beginCameraEdit(),document={...world.inspectCamera().document,activation:'on-input',defaultViewId:'third-person',views:{...world.inspectCamera().document.views,'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},zoom:{range:{kind:'unbounded'}},lens:{nearMeters:world.camera.near,farMeters:world.camera.far}}}}};
    const position=world.camera.position.clone(),direction=world.camera.getWorldDirection(position.clone());
    const draft=edit.createOpeningDraft(document,{viewId:'third-person',opening:{positionWorldMetersXYZ:position.toArray(),lookAtWorldMetersXYZ:position.clone().add(direction).toArray(),fovDegrees:43}});
    edit.applyDraft(draft,world.inspectCamera().configurationRevision);edit.dispose();

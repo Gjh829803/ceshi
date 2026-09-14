@@ -108,3 +108,21 @@ it('checks visibility at the solved eye and rolls back temporal state when that 
  expect(()=>solver.solve(visible,timing(1))).toThrow('VISIBILITY_QUERY_FAILURE');expect(solver.captureTransactionState()).toEqual(before);
  expect(()=>solver.project(visible)).toThrow('VISIBILITY_QUERY_FAILURE');expect(solver.captureTransactionState()).toEqual(before);
 });
+
+it('rolls back when a swept contact cannot be separated into a safe sphere', () => {
+  const probe: CameraCollisionProbe = (from, to) => {
+    if (length(from, to) === 0 && from[0] > -1.1 && from[0] < -1)
+      return {distanceMeters:0, colliderEntityId:'corner', startedOverlapping:true};
+    if (from[0] === -2 && to[0] === 2)
+      return {distanceMeters:1, colliderEntityId:'wall', normalWorldXYZ:[-1,0,0]};
+    return {distanceMeters:length(from,to)};
+  };
+  const solver = new CameraCollisionSolver(probe);
+  const before = solver.captureTransactionState();
+  const moving: CameraCollisionRequest = {target:[2,2,0], eye:[2,1,0],
+    current:[-2,1,0], sweepFrom:[-2,1,0], radius:.2};
+  expect(() => solver.solve(moving, timing(1))).toThrow('CAMERA_COLLISION_NO_SAFE_POSE');
+  expect(solver.captureTransactionState()).toEqual(before);
+  expect(() => solver.project(moving)).toThrow('CAMERA_COLLISION_NO_SAFE_POSE');
+  expect(solver.captureTransactionState()).toEqual(before);
+});

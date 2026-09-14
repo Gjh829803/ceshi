@@ -73,7 +73,8 @@ world.setCaptureTargets(['player']);const presentation=world.createPresentation(
       await page.keyboard.press('f');
       await expect.poll(async()=>{const h=(await read()).snapshot.humanoid;return h.mountedInstanceId===(mounted?'bike':null)&&h.transition.remainingSeconds===0;},{timeout:10000}).toBe(true);
       const switched=(await read()).snapshot.camera;
-      if(framing==='target'){expect(switched.desiredYawRadians).toBeCloseTo(dragged.desiredYawRadians,5);expect(switched.desiredPitchRadians).toBeCloseTo(dragged.desiredPitchRadians,5);expect(switched.desiredArmDistanceMeters).toBe(dragged.desiredArmDistanceMeters);}
+      // Native mount handoff restores the selected subject's calibrated orbit.
+      if(framing==='target'){expect(switched.desiredYawRadians).toBeCloseTo(0,5);expect(switched.desiredPitchRadians).toBeCloseTo(.35,5);expect(switched.desiredArmDistanceMeters).toBe(8);}
       expect((await read()).fov).toBeCloseTo(46,10);
     }
     const mounted=(await read()).snapshot.camera;
