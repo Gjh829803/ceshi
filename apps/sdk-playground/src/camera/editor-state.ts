@@ -308,6 +308,13 @@ export class CameraEditorState {
       this.snapshot.inspection = this.world.inspectCamera();
     });
   }
+  resumeAutomatic() {
+    this.attempt(() => {
+      if (!this.session) throw Error("请重新绑定预览");
+      this.snapshot.inspection = this.session.resumeViewSelection();
+      this.revision = this.snapshot.inspection.configurationRevision;
+    });
+  }
   commit() {
     this.attempt(() => {
       if (!this.session) throw Error("请重新绑定预览");

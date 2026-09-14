@@ -80,7 +80,7 @@ export const ACTION_GOAL_SCHEMA = object({
   ] },
   timeoutSeconds: { type: 'number', minimum: 0.1, maximum: 25 },
 }, ['id', 'trigger', 'intent', 'completion', 'timeoutSeconds']);
-export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraViewId:{type:'string',minLength:1},humanoid:object({
+export const EPISODE_START_SCHEMA = object({ positionWorldMetersXYZ: vec3, facingYawRadians: { type: 'number' },cameraViewId:{type:'string',minLength:1},cameraViewSelection:{const:'automatic'},humanoid:object({
     vehicleInstanceId:{type:'string',minLength:1},mounted:{type:'boolean'},
     velocityWorldMetersPerSecondXYZ:vec3,pitchRadians:{type:'number'},rollRadians:{type:'number'},throttle:{type:'number',minimum:0,maximum:1},launched:{type:'boolean'},
   },[]) },['positionWorldMetersXYZ','facingYawRadians']);
@@ -109,6 +109,7 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
   const starts = plan.segments.map(s => s.start.positionWorldMetersXYZ.join(','));
   if (new Set(starts).size !== starts.length) throw new Error('EPISODE_PLAN_DISTINCT_STARTS_REQUIRED');
   for (const segment of plan.segments) {
+    if(segment.start.cameraViewSelection!==undefined&&segment.start.cameraViewId!==undefined)throw new Error('EPISODE_CAMERA_FIELDS_CONFLICT');
     const goals = segment.actionGoals ?? [];
     if (new Set(goals.map(g => g.id)).size !== goals.length) throw new Error('EPISODE_ACTION_GOAL_ID_DUPLICATED');
     goals.forEach((goal, index) => {
@@ -124,7 +125,7 @@ export function validateEpisodePlan(value: unknown, options: { worldBuildHash: s
   }
   return structuredClone(plan);
 }
-type CameraDeclaration=Pick<EpisodeCapabilities['camera'],'views'|'defaultViewId'>;
+type CameraDeclaration=Pick<EpisodeCapabilities['camera'],'views'|'defaultViewId'|'automaticViewSelection'>;
 /** Explicit import boundary. Returns new canonical data; never rewrites a frozen plan or receipt. */
 export function importEpisodePlan(value:unknown,camera:CameraDeclaration,options:{worldBuildHash:string;requireSix?:boolean}):EpisodePlan {
  const plan=structuredClone(value) as any;
@@ -155,6 +156,7 @@ export function importEpisodePlan(value:unknown,camera:CameraDeclaration,options
 }
 export function validateEpisodePlanViews(plan:EpisodePlan,camera:CameraDeclaration):void {
  for(const segment of plan.segments){
+  if(segment.start.cameraViewSelection==='automatic'&&camera.automaticViewSelection!==true)throw new Error('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
   const ids=[segment.start.cameraViewId,...(segment.actionGoals??[]).flatMap(goal=>goal.intent.kind==='view'?[goal.intent.viewId]:[])];
   for(const id of ids)if(id!==undefined&&!camera.views.some(view=>view.viewId===id))throw new Error('EPISODE_CAMERA_VIEW_UNDECLARED');
  }

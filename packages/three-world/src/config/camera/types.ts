@@ -175,10 +175,20 @@ export interface CameraSubjectViewOverride {
     CameraThirdPersonValues | CameraFirstPersonValues | CameraShoulderValues
   >;
 }
+/** Optional gameplay selection; camera pose remains owned by the existing strategies. */
+export interface CameraViewSelectionRule {
+  readonly id: string;
+  readonly when: { readonly state: "swimming" };
+  readonly viewId: string;
+  readonly priority?: number;
+  readonly enterDelaySeconds?: number;
+  readonly exitDelaySeconds?: number;
+}
 export interface CameraDocument {
   readonly kind: "world-camera";
   readonly schemaVersion: 1;
   readonly defaultViewId: string;
+  readonly viewSelection?: { readonly rules: readonly CameraViewSelectionRule[] };
   readonly views: Readonly<Record<string, CameraViewConfiguration>>;
   readonly binding: {
     readonly targetEntityId: string;

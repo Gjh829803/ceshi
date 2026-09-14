@@ -300,7 +300,7 @@ it("keeps pole correction continuous across numerical contact separations", () =
   expect(new Quaternion(...a.quaternionWorldXYZW).angleTo(new Quaternion(...b.quaternionWorldXYZW))).toBeLessThan(1e-4);
 });
 
-it("predicts input without advancing recovery and falls back locally before an unresolved pre-physics contact", () => {
+it("projects without advancing recovery and rolls back failed fixed queries", () => {
   let fail = false;
   const constraints = new CameraConstraints(()=>({probe:(a,b)=>{
     if(fail) return {distanceMeters:0,startedOverlapping:true,colliderEntityId:'solid'};
@@ -310,11 +310,11 @@ it("predicts input without advancing recovery and falls back locally before an u
   const before=constraints.capture();
   const step={simulationTick:2,deltaSeconds:1/60,aspect:1,cut:false,previous:fixed};
   for(let i=0;i<3;i++) {
-    expect(constraints.predict(proposal,configuration,subject,step).positionWorldMetersXYZ).toEqual(proposal.positionWorldMetersXYZ);
+    expect(constraints.project(proposal,configuration,subject,1,fixed,2).positionWorldMetersXYZ).toEqual(proposal.positionWorldMetersXYZ);
     expect(constraints.capture()).toEqual(before);
   }
   fail=true;
-  expect(constraints.predict(proposal,configuration,subject,step)).toEqual(fixed);
+  expect(()=>constraints.project(proposal,configuration,subject,1,fixed,2)).toThrow();
   expect(constraints.capture()).toEqual(before);
   expect(()=>constraints.solve(proposal,configuration,subject,step)).toThrow();
   expect(constraints.capture()).toEqual(before);
@@ -346,7 +346,7 @@ it('keeps a preserve-framing eye on the visible side of a solid wall even when t
  expect(constraints.project(desired,configuration,subject,1,result).positionWorldMetersXYZ[2]).toBeLessThan(2);
 });
 
-it('records bounded existing queries with separate prediction and presentation identities',()=>{
+it('records bounded existing queries with separate fixed and presentation identities',()=>{
   const calls:{from:readonly [number,number,number];to:readonly [number,number,number];radius:number;hit:{distanceMeters:number}}[]=[];
   const constraints=new CameraConstraints(()=>({probe:(from,to,radius)=>{const hit={distanceMeters:new Vector3(...from).distanceTo(new Vector3(...to))};calls.push(structuredClone({from,to,radius,hit}));return hit;}}));
   const step={simulationTick:7,aspect:1,deltaSeconds:1/60,cut:true};
@@ -354,9 +354,8 @@ it('records bounded existing queries with separate prediction and presentation i
   expect(constraints.inspectQueries()).toBeUndefined();constraints.setDiagnosticsEnabled(true);
   constraints.solve(proposal,configuration,subject,step);expect(calls).toEqual(baseline);
   const fixed=constraints.inspectQueries()!.fixed!;expect(fixed).toMatchObject({source:'fixed',simulationTick:7,droppedProbes:0});expect(fixed.probes).toEqual(calls);
-  const state=constraints.capture();constraints.predict(proposal,configuration,subject,{...step,simulationTick:8,cut:false});expect(constraints.capture()).toEqual(state);
-  expect(constraints.inspectQueries()!.fixed).toEqual(fixed);expect(constraints.inspectQueries()!.prediction).toMatchObject({source:'prediction',simulationTick:8});
-  constraints.project(proposal,configuration,subject,1,proposal,7);
+  const state=constraints.capture();
+  constraints.project(proposal,configuration,subject,1,proposal,7);expect(constraints.capture()).toEqual(state);
   expect(constraints.inspectQueries()!.presentation).toMatchObject({source:'presentation',simulationTick:7});expect(constraints.inspectQueries()!.fixed).toEqual(fixed);
   const count=calls.length,inspection=constraints.inspectQueries()!;
   (inspection.fixed!.probes as unknown[]).length=0;

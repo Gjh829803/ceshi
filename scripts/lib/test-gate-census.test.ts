@@ -203,3 +203,23 @@ describe("test gate configuration", () => {
     });
   });
 });
+
+// These consumers exposed regressions outside camera-named test files in #246–248.
+it("includes cross-package camera consumers in the runnable maintenance suite", async () => {
+  expect(packageJson.scripts["test:camera"]).toBe("vitest run --config scripts/testing/camera.vitest.config.ts");
+  vi.doUnmock("vitest/node");
+  vi.resetModules();
+  const {discoverVitestTestFilesV1: discover} = await import("./test-gate-census");
+  const files = await discover({repositoryRoot:fileURLToPath(new URL("../..", import.meta.url)), configPath:"scripts/testing/camera.vitest.config.ts"});
+  expect(files).toEqual(expect.arrayContaining([
+    "packages/three-world/src/physics-box.test.ts",
+    "packages/three-world/src/humanoid-runtime/vehicle-regressions.test.ts",
+    "apps/sdk-playground/src/camera/project-state.test.ts",
+    "packages/creator-host/tests/integration/capture.test.ts",
+    "packages/creator-host/tests/integration/vehicle-camera.test.ts",
+    "packages/creator-host/tests/integration/vehicle-seating.test.ts",
+    "packages/episode-pipeline/tests/integration/adapter.test.ts",
+    "packages/episode-pipeline/tests/cli/mcp.test.ts",
+    "packages/three-world/src/humanoid-runtime/humanoid-camera-opening.test.ts",
+  ]));
+});

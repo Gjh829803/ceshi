@@ -5,6 +5,21 @@ import type { CameraDocument } from '../config/camera/index';
 function document(distance = 4): CameraDocument { return { kind: 'world-camera', schemaVersion: 1, defaultViewId: 'third', binding: { targetEntityId: 'actor' }, activation: 'immediate', input: { cycleViewIds: ['third', 'shoulder'] }, views: { third: { kind: 'third-person', overrides: { position: { distanceMeters: distance }, orientation: { recenter: { enabled: false } } } }, shoulder: { kind: 'shoulder' } } }; }
 async function fixture() { const world = await createWorld({ navigation: false }); world.addCharacter({ id: 'actor', object: new THREE.Group(), body: { heightMeters: 1.8, radiusMeters: .3 }, eyePositionLocalMetersXYZ: [0, 1.6, 0] }); world.setControlledEntity('actor'); world.setCameraFollow({ configuration: document() }); world.step({}, 0); return world; }
 describe('World camera editing sessions', () => {
+    it('resumes automatic selection without losing the original cancel checkpoint', async () => {
+        const world = await fixture();
+        try {
+            const original = {...document(), viewSelection: {rules: []}};
+            world.setCameraFollow({configuration: original});
+            const before = world.inspectCamera(), edit = world.beginCameraEdit();
+            edit.applyDraft({...document(6), viewSelection: {rules: []}}, before.configurationRevision);
+            expect(world.inspectCamera().viewSelection?.suspendedBy).toBe('editing');
+            edit.resumeViewSelection();
+            expect(world.inspectCamera().viewSelection?.suspendedBy).toBeUndefined();
+            edit.cancel();
+            expect(world.inspectCamera().document).toEqual(original);
+            expect(world.inspectCamera().intent).toEqual(before.intent);
+        } finally { world.dispose(); }
+    });
     it('rejects cancel after an external configuration and reports its current revision', async () => {
         const world = await fixture();
         try {

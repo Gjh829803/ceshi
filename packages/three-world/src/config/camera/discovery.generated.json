@@ -5,13 +5,13 @@
     "config/camera/behavior-fields.ts": "da2cd000c7c8d3d3591b4e74540dcf667ddcf3ff094d6a094639b499799daeca",
     "config/camera/defaults.ts": "f60352526d744ec7e2cc3173281c6d883c291380013d62246b1ff768db811bf9",
     "config/camera/field-primitives.ts": "e976a58d2e84f9c4986f10b7f431a50b7a0fbd823187f81a44a0ad4c4fe6c737",
-    "config/camera/fields.ts": "e3b59e2d554d0c63d6719e704e46431f7c8ef4fe07a296bcc5aaacb6adb3bc7c",
+    "config/camera/fields.ts": "5a25e625e8b0db0707a0e7b0eb86828f6fef5106fa5d2861b0c561ce8bbf5855",
     "config/camera/humanoid.ts": "9d13277448bfdb63622dca1b4692f434c9f40b10886b0925789f4074c2f15d8f",
     "config/camera/index.ts": "cc16fb803240d8b3f0ca660f0ad56edb6051dec2e519e3b760436cc8d41cb1a3",
-    "config/camera/resolve.ts": "c77cffa1cea8fa87b2e47989f015b9e07668b4482eac5aa6a08f6ceb09f4a6e9",
+    "config/camera/resolve.ts": "ec35eaaf291b0deff6e9d77be9f1d5cf0b9014d500931dfa119fc537f5cde338",
     "config/camera/serialization.ts": "ee8638e736b32e472be5f9aa2eda0722eb00ee77b9efaf52158c6d77a1c43f84",
     "config/camera/validation.ts": "4e5f828ff7f6c05357a881f656bf6c30128811c3f0b67f665b5912427ed59bc1",
-    "config/camera/validator.generated.ts": "b0fe33b28cf72ee808f6e03233413a732a7c8ee8d2221b57d904e8a33bcb3ef5",
+    "config/camera/validator.generated.ts": "8773e69061de9c9aa6ca200255d49f2c0860ba22d2511e7e0c8b1d0f144e8794",
     "control-support.ts": "57e0b6190cc281a71dec3f5b92531ae7e38a58c10614e3cb15dd5b9fed3f5008"
   },
   "schema": {
@@ -27,6 +27,66 @@
       "defaultViewId": {
         "type": "string",
         "minLength": 1
+      },
+      "viewSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "when": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "swimming"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                },
+                "viewId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "priority": {
+                  "type": "integer",
+                  "$comment": "unit:priority"
+                },
+                "enterDelaySeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "$comment": "unit:seconds"
+                },
+                "exitDelaySeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "$comment": "unit:seconds"
+                }
+              },
+              "required": [
+                "id",
+                "when",
+                "viewId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "rules"
+        ]
       },
       "views": {
         "type": "object",

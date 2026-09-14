@@ -1,12 +1,12 @@
 import * as T from 'three';
-import type {CameraCollisionProbeSample} from '@worldkit/three';
+import type {CameraCollisionProbeSample,CameraCollisionQuerySamples} from '@worldkit/three';
 export type CameraProbeSample=CameraCollisionProbeSample;
 
-/** Select the pose used by the caller's render phase. Prediction is input
- * preparation and is never drawn. An empty presentation sample is authoritative
+/** Select the pose used by the caller's render phase.
+ * An empty presentation sample is authoritative
  * (for example first person), so do not revive fixed probes.
  */
-export function selectDisplayCameraProbeSample(samples:{presentation?:CameraProbeSample;fixed?:CameraProbeSample;prediction?:CameraProbeSample}|undefined,source:'fixed'|'presentation'):CameraProbeSample|undefined {
+export function selectDisplayCameraProbeSample(samples:CameraCollisionQuerySamples|undefined,source:'fixed'|'presentation'):CameraProbeSample|undefined {
   return source==='fixed'?samples?.fixed:samples?.presentation??samples?.fixed;
 }
 

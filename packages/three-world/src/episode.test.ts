@@ -54,7 +54,7 @@ describe('Episode local Rapier start probes', () => {
  });
 });
 
-async function fixture(parentedCamera = false,custom=false,npcNavigation=false,authored=false,native=false,tilted=false) {
+async function fixture(parentedCamera = false,custom=false,npcNavigation=false,authored=false,native=false,tilted=false,water=false) {
  const windowTarget = new EventTarget();const documentTarget=Object.assign(new EventTarget(),{defaultView:windowTarget,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(windowTarget,{document:documentTarget});vi.stubGlobal('window',windowTarget);
  const frames:FrameRequestCallback[]=[];vi.stubGlobal('requestAnimationFrame',(fn:FrameRequestCallback)=>{frames.push(fn);return frames.length;});vi.stubGlobal('cancelAnimationFrame',vi.fn());
  const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:documentTarget,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:vi.fn(()=> 'data:image/png;base64,dGVzdA==')});
@@ -62,7 +62,7 @@ async function fixture(parentedCamera = false,custom=false,npcNavigation=false,a
  const renderer={shadowMap:{enabled:false,type:THREE.PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:THREE.Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(value:number)=>{ratio=value;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as THREE.WebGLRenderer;
  const camera=new THREE.PerspectiveCamera(50,4/3,.1,500),scene=new THREE.Scene();camera.position.set(3,3,6);camera.lookAt(0,1,0);
  const nativeActor=root();
- const world=await createWorld({scene,camera,renderer,navigation:npcNavigation,assetDefinitions:{},...(native?{humanoid:{map:{id:'authored-episode',name:'Authored episode',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},character:{instanceId:'player',object:nativeActor},vehicles:[]}}:{})});
+ const world=await createWorld({scene,camera,renderer,navigation:npcNavigation,assetDefinitions:{},...(native?{humanoid:{map:{id:'authored-episode',name:'Authored episode',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:water?[{id:'pool',min:[-5,-10,-5],max:[5,2,5],surface:2}]:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},character:{instanceId:'player',object:nativeActor},vehicles:[]}}:{})});
  if(!native)world.addEntity({id:'floor',object:plane(),role:'terrain'});
  const actor=native?nativeActor:root();if(!native)actor.rotation.set(tilted?.2:0,.3,tilted?.1:0);
  if(parentedCamera){actor.add(camera);camera.position.set(3,3,6);camera.lookAt(0,1,0);}
@@ -273,4 +273,47 @@ it('preserves the complete authored relative pose when ordinary start placement 
   expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(eye.sub(initialPosition).applyQuaternion(delta).add(new THREE.Vector3(...probe.resolvedPositionWorldMetersXYZ)))).toBeLessThan(1e-7);
   expect(camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(rotation.premultiply(delta))).toBeLessThan(1e-7);
  }finally{world.dispose();}
+});
+
+
+it('keeps Episode explicit views pinned and opts into the same native swimming selection',async()=>{
+ const {world,port}=await fixture(false,false,false,false,true,false,true);
+ try{
+  world.stop();
+  const document=world.inspectCamera().document!;
+  world.setCameraFollow({configuration:{...document,activation:'immediate',viewSelection:{rules:[{id:'swim',when:{state:'swimming'},viewId:'water'}]},views:{...document.views,water:{kind:'third-person',overrides:{position:{distanceMeters:4},constraints:{collision:{enabled:false}}}}}}});
+  const edit=world.beginCameraEdit();edit.commitBaseline(world.inspectCamera().configurationRevision);edit.dispose();
+  const start={positionWorldMetersXYZ:[0,0,0] as const,facingYawRadians:0};
+  await port.prepareSegment({...start,cameraViewId:'third-person'},{widthPixels:640,heightPixels:360});
+  await port.advance({},12);expect(world.snapshot().camera.viewId).toBe('third-person');
+  expect(world.inspectCamera().viewSelection?.suspendedBy).toBe('episode');
+  port.release();expect(world.inspectCamera().viewSelection?.suspendedBy).toBeUndefined();
+  await port.prepareSegment({...start,cameraViewSelection:'automatic'},{widthPixels:640,heightPixels:360});
+  await port.advance({},12);expect(world.snapshot().camera.viewId).toBe('water');
+  expect(world.snapshot().camera.viewSelection?.source).toBe('rule');
+  expect(()=>world.resumeCameraViewSelection()).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+  expect(await port.execute({type:'camera.set-view',viewId:'third-person'})).toMatchObject({status:'applied'});
+  await port.advance({},2);expect(world.snapshot().camera.viewId).toBe('third-person');
+  const pinned=world.inspectCamera();
+  port.release();
+  expect(world.inspectCamera().current).toEqual(pinned.current);
+  expect(world.inspectCamera().cameraCommitRevision).toBe(pinned.cameraCommitRevision);
+  world.step({},1);expect(world.snapshot().camera.viewId).toBe('water');
+  await expect(port.prepareSegment({...start,cameraViewSelection:'automatic',cameraViewId:'water'},{widthPixels:640,heightPixels:360})).rejects.toThrow('EPISODE_CAMERA_FIELDS_CONFLICT');
+ }finally{port.release();world.dispose();}
+});
+
+it.each([0,1/60,1/30,.1])('prepares automatic swimming with a blend and %s seconds enter delay',async enterDelaySeconds=>{
+ const {world,port}=await fixture(false,false,false,false,true,false,true);
+ try{
+  world.stop();
+  const document=world.inspectCamera().document!;
+  world.setCameraFollow({configuration:{...document,activation:'immediate',transition:{durationSeconds:.25},viewSelection:{rules:[{id:'swim',when:{state:'swimming'},viewId:'water',enterDelaySeconds}]},views:{...document.views,water:{kind:'third-person',overrides:{position:{distanceMeters:4},constraints:{collision:{enabled:false}}}}}}});
+  const edit=world.beginCameraEdit();edit.commitBaseline(world.inspectCamera().configurationRevision);edit.dispose();
+  const prepared=await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0,cameraViewSelection:'automatic'},{widthPixels:640,heightPixels:360});
+  expect(prepared.errors).toEqual([]);
+  expect(prepared.camera.transition.kind).toBe('none');
+  await port.advance({},12);
+  expect(world.snapshot().camera).toMatchObject({viewId:'water',viewSelection:{source:'rule'}});
+ }finally{port.release();world.dispose();}
 });

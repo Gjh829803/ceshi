@@ -52,3 +52,21 @@ it('exposes changed schema after trusted maintenance regeneration',async()=>{
  await writeFile(path.join(root,'sdk/three-world/src/config/camera-discovery-fixture.ts'),'export const description="Changed imported value";');
  expect((await discover()).cameraConfiguration).toMatchObject({status:'unavailable',reason:'source-mismatch'});
 },20000);
+
+
+it('routes production Agents to preset inheritance and explicit state-selection guidance', async () => {
+ const root=await mkdtemp(path.join(os.tmpdir(),'camera-customization-'));
+ const service=new ThreeCreatorTools(root,'three-sdk');services.push(service);
+ const environment=await executeThreeCreatorTool(service,'creator_describe_environment',{}) as any;
+ const request=environment.cameraAuthoring.authoring;
+ const result=await executeThreeCreatorTool(service,request.tool,request.arguments) as any;
+ expect(result.sdkGuide).toContain('### Defaults and custom views');
+ expect(result.sdkGuide).toContain('createHumanoidCameraDocument');
+ expect(result.sdkGuide).toContain('cameraPresetSnapshots');
+ expect(result.sdkGuide).toContain('same kind does not inherit');
+ expect(result.sdkGuide).toContain('does not automatically select it');
+ expect(result.sdkGuide).toContain('resumeCameraViewSelection');
+ const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'getting-started',sections:['contracts']}) as any;
+ expect(schema.sdkContracts).toContain('resumeCameraViewSelection');
+ expect(schema.cameraConfiguration.schema.properties.viewSelection.properties.rules.items.properties.when.properties.state.enum).toEqual(['swimming']);
+});

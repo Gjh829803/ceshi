@@ -234,6 +234,12 @@ export function validateCameraDocumentData(
   for (const [index, id] of (document.input?.cycleViewIds ?? []).entries())
     if (!Object.hasOwn(document.views, id))
       fail(`/input/cycleViewIds/${index}`, "unknown view");
+  const ruleIds = new Set<string>();
+  for (const [index, rule] of (document.viewSelection?.rules ?? []).entries()) {
+    if (ruleIds.has(rule.id)) fail(`/viewSelection/rules/${index}/id`, "duplicate rule id");
+    ruleIds.add(rule.id);
+    if (!Object.hasOwn(document.views, rule.viewId)) fail(`/viewSelection/rules/${index}/viewId`, "unknown view");
+  }
   const presetReference = (
     id: string | undefined,
     kind: CameraKind,

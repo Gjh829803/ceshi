@@ -391,13 +391,22 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  beforeAll(async()=>{const world=await fixture();world.dispose();});
- it('uses the Episode lease, frame metadata and fixed solver for mounted recordings',async()=>{
+ it.each([false,true])('uses the Episode lease, frame metadata and fixed solver for mounted recordings, automatic=%s',async automatic=>{
   const win=new EventTarget(),doc=Object.assign(new EventTarget(),{defaultView:win,activeElement:null,body:{},documentElement:{},hidden:false});Object.assign(win,{document:doc});vi.stubGlobal('window',win);vi.stubGlobal('requestAnimationFrame',vi.fn(()=>1));vi.stubGlobal('cancelAnimationFrame',vi.fn());
   const canvas=Object.assign(new EventTarget(),{width:800,height:600,ownerDocument:doc,getAttribute:()=>null,removeAttribute:()=>{},setAttribute:()=>{},style:{getPropertyValue:()=>'',getPropertyPriority:()=>'',setProperty:()=>{},removeProperty:()=>{}},toDataURL:()=> 'data:image/png;base64,dGVzdA=='});let ratio=1;const size=new Vector2(800,600);
   const renderer={shadowMap:{enabled:false,type:PCFShadowMap,needsUpdate:false},domElement:canvas,render:vi.fn(),getSize:(out:Vector2)=>out.copy(size),getPixelRatio:()=>ratio,setPixelRatio:(r:number)=>{ratio=r;},setSize:(x:number,y:number)=>{size.set(x,y);canvas.width=x*ratio;canvas.height=y*ratio;}} as unknown as WebGLRenderer;
-  const world=await fixture(renderer);try{await world.start();const port=(win as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__.episode!;
+  const world=await fixture(renderer);try{
+   if(automatic)world.setCameraFollow({configuration:{...createHumanoidCameraDocument('player'),viewSelection:{rules:[]}}});
+   await world.start();const port=(win as unknown as {__WORLDKIT_EVAL__:WorldObservation}).__WORLDKIT_EVAL__.episode!;
    const start={positionWorldMetersXYZ:[-20,.03,-20] as const,facingYawRadians:Math.PI,cameraViewId:'shoulder',humanoid:{vehicleInstanceId:'car-1',mounted:true,velocityWorldMetersPerSecondXYZ:[0,0,4] as const}};
-   expect(port.capabilities().humanoid?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);await port.prepareSegment(start,{widthPixels:640,heightPixels:360});
+   expect(port.capabilities().humanoid?.vehicles).toHaveLength(2);expect(port.probeStart(start).isValid).toBe(true);
+   const {cameraViewId,...automaticStart}=start;
+   await port.prepareSegment(automatic?{...automaticStart,cameraViewSelection:'automatic'}:start,{widthPixels:640,heightPixels:360});
+   if(automatic){
+    expect(await port.execute({type:'camera.set-view',viewId:'missing'})).toMatchObject({status:'rejected'});
+    expect(world.inspectCamera().viewSelection?.suspendedBy).toBeUndefined();
+    expect(await port.execute({type:'camera.set-view',viewId:cameraViewId})).toMatchObject({status:'applied'});
+   }
    const runtime=world.humanoid!,ownedSnapshot=world.snapshot();
    for(const mutate of [()=>runtime.enter('car-1'),()=>runtime.exit(),()=>runtime.command({type:'humanoid.set-input',input:emptyInput()}),()=>runtime.command({type:'humanoid.perform-action',request:{requestId:'external-roll',action:'roll'}}),()=>runtime.setInput(emptyInput()),()=>runtime.clearInput(),()=>runtime.prepareCharacter([0,.03,0]),()=>runtime.prepare('car-1',map.spawns[0]!),()=>runtime.approach('car-1'),()=>runtime.switchMap(map),()=>runtime.applyProfile({}),()=>runtime.advance({},1/60),()=>runtime.reset(),()=>runtime.prepareEpisodeStart(start),()=>runtime.useAuthoredCamera(),()=>world.setCameraView('first-person')]){
     expect(mutate).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(world.snapshot()).toEqual(ownedSnapshot);
@@ -409,8 +418,10 @@ describe('SDK humanoid runtime',()=>{
    const frame=port.advance({humanoid:{...emptyInput(),forward:1}},60);expect(frame.entities.find(e=>e.id==='car-1')!.positionWorldMetersXYZ[2]).toBeGreaterThan(-16);expect(port.frame('image/png').snapshot.camera.viewKind).toBe('shoulder');expect(canvas.width).toBe(640);
    port.advance({humanoid:{...emptyInput(),brake:true}},120);
    expect(await port.execute({type:'vehicle.exit'})).toMatchObject({status:'applied'});port.advance({},120);
+   expect(world.snapshot().camera.viewId).toBe('shoulder');
    expect(await port.execute({type:'vehicle.enter',instanceId:'car-1'})).toMatchObject({status:'applied'});port.advance({},120);
-   expect(world.snapshot().humanoid?.mountedInstanceId).toBe('car-1');port.release();
+   expect(world.snapshot().humanoid?.mountedInstanceId).toBe('car-1');
+   expect(world.snapshot().camera.viewId).toBe('shoulder');port.release();
    world.humanoid!.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);
    await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI},{widthPixels:640,heightPixels:360});world.humanoid!.simulation.controlledActor.controller.setAvailableClips(new Set(['roll']),[]);port.advance({},30);
    const ticks=world.simulationTick;

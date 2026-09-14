@@ -70,16 +70,33 @@ or typecheck alone is insufficient.
 
 ## 5. Select evidence for affected inputs
 
-Use the focused reproducer first. For integrated runtime changes, the standard
-Three closure is:
+Use the focused reproducer first. For camera maintenance, run the shared suite:
 
 ```sh
-pnpm exec vitest run packages/three-world scripts/three-creator scripts/three-episode
-node --test scripts/three-episode/*.test.mjs scripts/cloud/three-episode-scheduling.test.mjs scripts/lib/cloud-production-run.test.mjs
+pnpm test:camera
+```
+
+Its membership lives in `scripts/lib/test-gate-manifest.ts` (`suites: ["camera"]`).
+It includes SDK strategies/configuration, real physics contact and native subjects,
+content calibration, Playground editing, Creator discovery/capture, and Episode
+consumers. Add camera-related consumer tests there even when their filename does
+not contain "camera". The command reuses CI's serial fork isolation and runs the
+existing tests; it does not add a production Agent step or replace full CI.
+It is an explicit maintenance selection, not automatic dependency analysis.
+
+For broader runtime changes, use the repository's current package-aware gates:
+
+```sh
+pnpm test
+pnpm test:independent
 pnpm typecheck
-pnpm test:census
 pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime
 ```
+
+`pnpm test` includes workspace boundaries, test census, contract tests and
+resource-heavy tests. Add `pnpm build:editor` when changing Playground consumers.
+Do not select the removed `scripts/three-creator` or `scripts/three-episode`
+paths: Creator and Episode tests live under their owning `packages/` directories.
 
 Add Creator cloud contract tests when its launcher/delivery inputs change, and
 real browser/visual checks for affected capture or interaction claims. Keep cloud

@@ -16,6 +16,26 @@ const create = () =>
     importedFileSha256: "a".repeat(64),
   });
 describe("camera document editor", () => {
+  it("keeps the pre-edit document available to cancel after resuming automatic selection", () => {
+    const state=create(), original=document();
+    let current=original, revision=0;
+    const inspect=()=>({document:current,configurationRevision:revision}) as CameraInspection;
+    const beginCameraEdit=vi.fn(()=>{
+      const checkpoint=current;
+      return {
+        applyDraft(next:typeof current){current=next;revision++;return inspect();},
+        resumeViewSelection:()=>inspect(),
+        cancel(){current=checkpoint;revision++;},
+        dispose:vi.fn(),
+      } as unknown as CameraEditSession;
+    });
+    state.bind({beginCameraEdit,inspectCamera:inspect,setCameraView:vi.fn()});
+    state.field({kind:"view"},"third-person","lens.verticalFovDegrees","61");
+    state.apply();state.resumeAutomatic();state.cancel();
+    expect(current).toEqual(original);
+    expect(state.snapshot.draft).toEqual(original);
+    expect(beginCameraEdit).toHaveBeenCalledTimes(1);
+  });
   it("edits preset scope without replacing project override", () => {
     const state = create(),
       viewId = "third-person",

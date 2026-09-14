@@ -9,7 +9,7 @@ import {prepareEpisodeSource,loadEpisodeSource} from '../../src/source/source.js
 import {openEpisodeBrowser} from '../../src/capture/browser.js';
 import {installEpisodePresentation} from '../../src/reporting/presentation.js';
 const sha=(v:Buffer)=>createHash('sha256').update(v).digest('hex');
-it('preserves the delivered runtime and hides dynamic UI for capture',async()=>{
+it.each([false,true])('preserves the delivered runtime and hides dynamic UI for capture, automatic camera=%s',async(automatic)=>{
  const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'episode-adapter-')));
  try{
   const author=path.join(root,'author');await mkdir(author);
@@ -19,7 +19,7 @@ const scene=new THREE.Scene();scene.background=new THREE.Color('#193148');const 
 const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('#world')});renderer.setSize(320,180);
 const world=await createWorld({scene,camera,renderer,navigation:false,assetDefinitions:{}});
 const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,80,20,20),new THREE.MeshBasicMaterial({color:'#73664e'}));floor.rotation.x=-Math.PI/2;world.addEntity({id:'floor',object:floor,role:'terrain'});
-const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5,1.8,.5),new THREE.MeshBasicMaterial({color:'#00ccff'}));mesh.position.y=.9;actor.add(mesh);world.addCharacter({id:'traveler',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('traveler');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'traveler'},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:.045},lens:{nearMeters:.1,farMeters:300},constraints:{visibility:'require-line-of-sight'}}}}}});await world.start();`);
+const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5,1.8,.5),new THREE.MeshBasicMaterial({color:'#00ccff'}));mesh.position.y=.9;actor.add(mesh);world.addCharacter({id:'traveler',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('traveler');world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,defaultViewId:'third-person',binding:{targetEntityId:'traveler'},activation:'on-input',views:{'third-person':{kind:'third-person',overrides:{framing:{kind:'preserve-opening'},position:{subjectTranslationHalfLifeSeconds:.045},lens:{nearMeters:.1,farMeters:300},constraints:{visibility:'require-line-of-sight'}}}}}});${automatic?"const cameraDocument=world.inspectCamera().document;world.setCameraFollow({configuration:{...cameraDocument,viewSelection:{rules:[{id:'swim',when:{state:'swimming'},viewId:'third-person'}]}}});":''}await world.start();`);
   const compiler=new ThreeCompiler(author,'three-sdk'),candidate=await compiler.prepare();
   await mkdir(path.join(candidate.root,'captures'));
   const image=await sharp({create:{width:2,height:2,channels:3,background:'#193148'}}).png().toBuffer();
@@ -42,8 +42,9 @@ const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5
     const late=document.createElement('div');late.textContent='late notification';document.body.append(late);
     return ['world','hud','ui-canvas'].map(id=>getComputedStyle(document.getElementById(id)!).visibility).concat(getComputedStyle(late).visibility);
    });expect(visibility).toEqual(['visible','hidden','hidden','hidden']);
-   const start={positionWorldMetersXYZ:[5,0,0] as [number,number,number],facingYawRadians:.7};
+   const start={positionWorldMetersXYZ:[5,0,0] as [number,number,number],facingYawRadians:.7,...(automatic?{cameraViewSelection:'automatic' as const}:{})};
    const prepared=await session.prepareSegment(start,{widthPixels:320,heightPixels:180});expect(prepared.isRunning).toBe(false);
+   if(automatic){expect(prepared.camera.viewSelection?.source).toBe('default');expect(prepared.camera.viewSelection?.unavailableRules).toEqual([{ruleId:'swim',reason:'state-unavailable'}]);}
    const next=await session.advance({moveZRatio:-1},3);expect(next.simulationTick-prepared.simulationTick).toBe(3);
    const frame=await session.frame('image/png');expect(frame.captureSurface).toBe('world-renderer-canvas');expect(session.errors).toEqual([]);
    const screenshot=await session.page.screenshot();const pixels=await sharp(screenshot).removeAlpha().raw().toBuffer();let red=0;

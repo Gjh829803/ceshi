@@ -6,6 +6,8 @@ import {failure} from '../control-support';
 /** Maintainer-only camera transaction. Draft creation never applies or seals it. */
 export interface CameraEditSession {
   applyDraft(document:CameraDocument, expectedConfigurationRevision:number):CameraInspection;
+  /** Release the draft's selection hold while retaining its cancel checkpoint. */
+  resumeViewSelection():CameraInspection;
   commitBaseline(expectedConfigurationRevision:number):CameraInspection;
   createOpeningDraft(document:CameraDocument, options:{readonly viewId:string; readonly opening?:CameraOpeningConfiguration}):CameraDocument;
   cancel():void;
@@ -16,6 +18,7 @@ export interface CameraEditSession {
 export function createCameraEditSession(controller:CameraController, host:{
   readonly check:(mutation:boolean)=>void;
   readonly apply:(document:CameraDocument)=>void;
+  readonly resume:()=>void;
   readonly undo:(document:CameraDocument)=>void;
   readonly commit:()=>void;
   readonly changed:()=>void;
@@ -27,6 +30,7 @@ export function createCameraEditSession(controller:CameraController, host:{
   let revision=checkpoint.inspection.configurationRevision;
   let commitRevision=checkpoint.inspection.cameraCommitRevision;
   let closed=false;
+  let releaseSelection:(()=>void)|undefined;
   // A later draft must not disguise input that occurred between earlier drafts.
   let precise=true;
   const conflict=()=>({
@@ -50,12 +54,24 @@ export function createCameraEditSession(controller:CameraController, host:{
     commitRevision=inspection.cameraCommitRevision;
     return inspection;
   };
-  const close=()=>{closed=true;checkpoint=undefined;baseline=undefined;};
+  const close=()=>{if(closed)return;releaseSelection?.();releaseSelection=undefined;closed=true;checkpoint=undefined;baseline=undefined;};
   return Object.freeze({
     applyDraft(document:CameraDocument, expectedConfigurationRevision:number){
       check(expectedConfigurationRevision);
       const unchanged=controller.inspect().cameraCommitRevision===commitRevision;
-      host.apply(document);
+      const previousHold=releaseSelection;
+      releaseSelection??=controller.suspendViewSelection('editing');
+      try{host.apply(document);}catch(error){if(!previousHold){releaseSelection();releaseSelection=undefined;}throw error;}
+      precise=precise&&unchanged;
+      return adopted();
+    },
+    resumeViewSelection(){
+      check();
+      const unchanged=controller.inspect().cameraCommitRevision===commitRevision;
+      const held=releaseSelection!==undefined;
+      releaseSelection?.();releaseSelection=undefined;
+      try{host.resume();}
+      catch(error){if(held)releaseSelection=controller.suspendViewSelection('editing');throw error;}
       precise=precise&&unchanged;
       return adopted();
     },

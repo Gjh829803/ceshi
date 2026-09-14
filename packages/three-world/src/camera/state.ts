@@ -1,3 +1,4 @@
+import type {CameraViewSelectionMemory,CameraViewSelectionInspection} from "./view-selection";
 import type {
   CameraProposal,
   CameraIntent,
@@ -108,6 +109,8 @@ export interface ViewState {
   readonly intent: CameraIntent;
 }
 export interface ControllerState {
+  readonly selectionMemory?:CameraViewSelectionMemory|undefined;
+  readonly viewSelection?:CameraViewSelectionInspection|undefined;
   readonly initialVerticalFovDegrees?: number | undefined;
   readonly mode: "authored" | "follow-pending" | "follow";
   readonly document?: CameraDocument | undefined;
@@ -139,6 +142,7 @@ export interface ControllerState {
   readonly operations: ReadonlySet<string>;
 }
 export interface CameraInspection {
+  readonly viewSelection?:CameraViewSelectionInspection|undefined;
   readonly collisionQueries?: CameraCollisionQuerySamples | undefined;
   readonly mode: ControllerState["mode"];
   readonly document?: CameraDocument | undefined;
@@ -173,6 +177,7 @@ export interface SavedState {
   readonly solver: ReturnType<CameraConstraints["capture"]>;
 }
 export interface PreparedInput {
+  readonly selectionCut?:boolean;
   readonly state: ControllerState;
   readonly frame: CameraControllerFrame;
   readonly deltaSeconds: number;

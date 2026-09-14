@@ -64,12 +64,16 @@ export function assertEpisodeCameraCapabilities(value:EpisodeCapabilities):void 
 }
 export function assertEpisodeCameraStart(start:EpisodeStart,capabilities:EpisodeCapabilities):void {
  assertEpisodeCameraCapabilities(capabilities);
+ if(start.cameraViewSelection!==undefined&&(start.cameraViewSelection!=='automatic'||start.cameraViewId!==undefined))throw new Error('EPISODE_CAMERA_FIELDS_CONFLICT');
+ if(start.cameraViewSelection==='automatic'&&!capabilities.camera.automaticViewSelection)throw new Error('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
  if(start.cameraViewId!==undefined&&!capabilities.camera.views.some(v=>v.viewId===start.cameraViewId))throw new Error('EPISODE_CAMERA_VIEW_UNDECLARED');
 }
 export function assertEpisodeCameraPrepared(start:EpisodeStart,capabilities:EpisodeCapabilities,snapshot:WorldSnapshot):void {
  assertEpisodeCameraStart(start,capabilities);
- const expected=start.cameraViewId??(capabilities.camera.baselineMode==='authored'?null:capabilities.camera.defaultViewId),camera=snapshot?.camera;
+ const automatic=start.cameraViewSelection==='automatic',camera=snapshot?.camera;
+ const expected=automatic?camera?.viewId:start.cameraViewId??(capabilities.camera.baselineMode==='authored'?null:capabilities.camera.defaultViewId);
  const kind=expected===null?null:capabilities.camera.views.find(v=>v.viewId===expected)?.kind;
+ if(automatic&&(!camera?.viewSelection||camera.viewSelection.source==='manual'||camera.viewSelection.suspendedBy||!capabilities.camera.views.some(view=>view.viewId===expected)))throw new Error('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
  if(!cameraStateShape(camera)||camera.viewId!==expected||camera.viewKind!==kind||camera.transition?.kind!=='none'||camera.documentHash!==capabilities.camera.documentHash||!Number.isSafeInteger(camera.configurationRevision)||!Number.isSafeInteger(camera.cameraCommitRevision)||(expected===null?camera.mode!=='authored':camera.mode!=='follow'||!camera.resolvedSubjectId||!Number.isSafeInteger(camera.subjectGeneration)))throw new Error('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
 }
 

@@ -1,7 +1,7 @@
 import {Quaternion,Vector3} from 'three';
 import {subjectHeading, type CameraSubjectFacts} from '../subject';
 import type {CameraStrategyHistory} from './types';
-/** Pure evaluation from the last committed pose; prediction and display never integrate state. */
+/** Pure evaluation from the last committed pose; input preparation and display never integrate state. */
 export function cameraSubjectHeading(subject:CameraSubjectFacts, history?:CameraStrategyHistory):number|undefined {
   if(subject.continuousHeadingSeedRadians === undefined) return subjectHeading(subject);
   const rotation = subject.semanticQuaternionWorldXYZW;

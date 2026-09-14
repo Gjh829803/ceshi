@@ -275,6 +275,7 @@ export interface WorldDescription {
  readonly actions:readonly {readonly id:string;readonly description:string;readonly inputSchema:ObjectSchema;readonly writes:readonly WriteClaim[];readonly isAvailable:boolean;readonly unavailableReason?:RuntimeError}[];
 }
 export interface CameraState {
+ readonly viewSelection?:import('./camera/state').CameraInspection['viewSelection'];
  readonly viewId:string|null;
  readonly viewKind:import('./config/camera/index').CameraViewConfiguration['kind']|null;
  readonly documentHash:string|null;
@@ -414,6 +415,7 @@ export interface World {
  /** Install the complete camera document; explicit preserve-opening framing can adopt the first authored view. */
  setCameraFollow(options:CameraFollowOptions):void;
  setCameraView(viewId:string):void;
+ resumeCameraViewSelection():void;
  inspectCamera():import('./camera/state').CameraInspection;
  /** Collect bounded samples from actual camera collision queries; disabled by default. */
  setCameraCollisionDiagnosticsEnabled(enabled:boolean):void;

@@ -2,6 +2,8 @@ import type { CommandReceipt, OperationStatus, Vec3, WorldInput, WorldSnapshot }
 
 /** Host-only production protocol, installed automatically on the live observer. */
 export interface EpisodeStart {
+ /** Explicit opt-in to gameplay view rules; exclusive with cameraViewId. */
+ readonly cameraViewSelection?:'automatic';
  readonly cameraViewId?:string;
  readonly humanoid?: {
   readonly vehicleInstanceId?:string; readonly mounted?:boolean;
@@ -42,6 +44,7 @@ export interface EpisodeCapabilities {
   readonly defaultViewId:string|null;
   readonly current:import('./contracts').CameraState;
   readonly segmentInitialization:'relative-authored-pose';
+  readonly automaticViewSelection?:boolean;
  };
  readonly maximumStartAlignmentMeters: number;
  readonly worldBounds: { readonly minimumWorldMetersXYZ: Vec3; readonly maximumWorldMetersXYZ: Vec3 };

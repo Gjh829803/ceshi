@@ -336,6 +336,15 @@ export function CameraPanel({
             })}
         </details>
       ))}
+      {s.inspection?.viewSelection && <div aria-label="相机视角选择">
+        <p>视角来源：{{default:"默认",rule:"状态规则",manual:"手动选择",retained:"保留可用视角"}[s.inspection.viewSelection.source]}
+          {s.inspection.viewSelection.ruleId && ` · ${s.inspection.viewSelection.ruleId}`}
+          {s.inspection.viewSelection.suspendedBy && ` · ${s.inspection.viewSelection.suspendedBy === "editing" ? "编辑草稿中" : "录制控制中"}`}
+        </p>
+        {s.inspection.viewSelection.pending && <p>等待切换：{s.inspection.viewSelection.pending.viewId}</p>}
+        {s.inspection.viewSelection.unavailableRules.map(rule=><p key={rule.ruleId}>{rule.ruleId}：{rule.reason === "state-unavailable" ? "主体未提供该状态" : "视角暂不适用于当前主体"}</p>)}
+        <Button variant="secondary" onClick={()=>state.resumeAutomatic()}>恢复自动选择</Button>
+      </div>}
       <h4>预览与相机基线</h4>
       <div className="camera-document-actions">
         <Button variant="secondary" onClick={binding.rebind}>

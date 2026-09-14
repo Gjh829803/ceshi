@@ -1,3 +1,4 @@
+import {selectCameraView} from "./view-selection";
 import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
 import {cameraDisplayAnchor, cameraDisplaySubject} from './display-anchor';
@@ -37,7 +38,7 @@ import {
   validateCameraProposal,
 } from "./presentation";
 import type { CameraFixedFrame, PresentationSampleContext } from "./state";
-import { cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
+import { cameraSubjectCapabilities, cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
 import { orbitQuaternion, prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
 import { evaluateFirstPerson } from "./strategies/first-person";
 import type {
@@ -115,6 +116,7 @@ export class CameraController {
   private pending: PreparedInput | undefined;
   private busy = false;
   private disposed = false;
+  private readonly selectionHolds=new Map<symbol,"editing"|"episode">();
   private failureState: CameraInspection["failure"];
   constructor(private readonly bindings: CameraControllerBindings) {
     this.constraints = new CameraConstraints(bindings.geometry);
@@ -176,6 +178,7 @@ export class CameraController {
       !Number.isSafeInteger(subject.generation) ||
       subject.generation < 0 ||
       !Number.isFinite(subject.speedMetersPerSecond) ||
+      (subject.states?.swimming!==undefined&&typeof subject.states.swimming!=="boolean") ||
       (subject.continuousHeadingSeedRadians !== undefined && !Number.isFinite(subject.continuousHeadingSeedRadians)) ||
       (subject.preferredOrbitPitchRadians !== undefined && !Number.isFinite(subject.preferredOrbitPitchRadians)) ||
       vectors.some(
@@ -649,7 +652,8 @@ export class CameraController {
             }
           : previous.transition,
       };
-      this.commitCandidate(candidate, frame, 0, reset, changedSubject ? undefined : previous.history);
+      const selectionMemory=document.viewSelection ? (changedSubject?{}:previous.hash===hash?previous.selectionMemory:previous.selectionMemory?.manualViewId?{manualViewId:previous.selectionMemory.manualViewId}:{}) : undefined;
+      this.commitCandidate({...candidate,selectionMemory,viewSelection:undefined}, frame, 0, reset, changedSubject ? undefined : previous.history);
     });
   }
   /** Activating a pending view rebases its held desired opening once.
@@ -677,92 +681,82 @@ export class CameraController {
     const views = new Map(old.views).set(resolved.viewId, {configuration: resolved, subject, intent});
     return {...old, resolved, openings, history, intent, views, mode: "follow"};
   }
-  setView(
-    viewId: string,
-    frame: CameraControllerFrame,
-    options: { readonly cut?: boolean } = {},
-  ): void {
+  private viewCandidate(old:ControllerState,viewId:string,subject:CameraSubjectFacts,options:{cut?:boolean;automatic?:boolean}={}):ControllerState {
+    if(!old.document||!old.resolved||!old.subject)throw failure("CAMERA_FOLLOW_REQUIRED");
+    if(!sameCameraSubject(subject,old.subject))throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
+    const activated=old.resolved.viewId===viewId?this.activatePendingFollow(old,subject):old;
+    const resolved=resolve(old.document,viewId,subject,activated.openings.get(viewId));
+    const cached=activated.views.get(viewId);
+    let intent=initialIntent(resolved,subject,activated.openings.get(viewId));
+    if(subject.continuousHeadingSeedRadians!==undefined&&resolved.values.orientation.referenceFrame==='world-up'&&!activated.openings.has(viewId))
+      intent=clampCameraIntent({...intent,yawRadians:cameraSubjectHeading(subject,old.history)??intent.yawRadians},resolved);
+    if(options.automatic&&old.intent){
+      // Gameplay changes framing without steering the player. In particular, a
+      // backwards-moving subject may face opposite the player's orbit heading.
+      const rebased=this.rebaseIntent(old.intent,old.subject,subject,old.resolved,resolved,false);
+      intent=clampCameraIntent({...intent,yawRadians:rebased.yawRadians,secondsSinceOrbit:old.intent.secondsSinceOrbit},resolved);
+    }
+    const firstPerson=old.resolved.kind==='first-person'||resolved.kind==='first-person';
+    const incompatible=!sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
+    const duration=firstPerson||options.cut||incompatible?0:resolved.transition.durationSeconds;
+    const transition:CameraTransition=duration>0&&old.current
+      ?{kind:'blend',source:old.current,sourceSubject:old.subject,targetViewId:viewId,elapsedSeconds:0,durationSeconds:duration,configuredDurationSeconds:resolved.transition.durationSeconds,effectiveDurationSeconds:duration}
+      :{kind:'none',configuredDurationSeconds:resolved.transition.durationSeconds,effectiveDurationSeconds:0,...(firstPerson?{reason:'first-person-cut' as const}:options.cut?{reason:'requested-cut' as const}:{})};
+    return {...activated,
+      ...(old.document.viewSelection&&!options.automatic?{selectionMemory:{manualViewId:viewId},viewSelection:{source:'manual' as const,viewId,unavailableRules:[]}}:{}),
+      resolved,subject,intent,history:undefined,mode:'follow',transition,
+      adaptations:cached&&!equal(cached.intent,intent)?[...old.adaptations,{viewId,old:cached.intent,next:intent,reason:'view-reactivation-adaptation'}]:old.adaptations};
+  }
+  setView(viewId:string,frame:CameraControllerFrame,options:{readonly cut?:boolean}={}):void {
     this.admit(frame);
-    if (this.state.resolved?.viewId === viewId && this.state.mode === "follow")
+    if(this.state.resolved?.viewId===viewId&&this.state.mode==='follow'){
+      if(this.state.document?.viewSelection)this.transaction(()=>this.commitCandidate({...this.state,selectionMemory:{manualViewId:viewId},viewSelection:{source:'manual',viewId,unavailableRules:[]}},frame,0,false));
       return;
-    this.transaction(() => {
-      const old = this.state;
-      if (!old.document || !old.resolved || !old.subject)
-        throw failure("CAMERA_FOLLOW_REQUIRED");
-      const subject = this.sample(old.document, frame);
-      if (!sameCameraSubject(subject, old.subject))
-        throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
-      const activated = old.resolved.viewId === viewId ? this.activatePendingFollow(old, subject) : old;
-      const resolved = resolve(
-        old.document,
-        viewId,
-        subject,
-        activated.openings.get(viewId),
-      );
-      const cached = activated.views.get(viewId);
-      let intent = initialIntent(resolved, subject, activated.openings.get(viewId));
-      if(subject.continuousHeadingSeedRadians !== undefined && resolved.values.orientation.referenceFrame === 'world-up' && !activated.openings.has(viewId))
-        intent = clampCameraIntent({...intent, yawRadians: cameraSubjectHeading(subject, old.history) ?? intent.yawRadians}, resolved);
-      // Each explicit selection starts from the calibrated view opening.
-      const firstPerson =
-        old.resolved.kind === "first-person" ||
-        resolved.kind === "first-person";
-      const incompatible =
-        !sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
-      const duration =
-        firstPerson || options.cut || incompatible
-          ? 0
-          : resolved.transition.durationSeconds;
-      const transition: CameraTransition =
-        duration > 0 && old.current
-          ? {
-              kind: "blend",
-              source: old.current,
-              sourceSubject: old.subject,
-              targetViewId: viewId,
-              elapsedSeconds: 0,
-              durationSeconds: duration,
-              configuredDurationSeconds: resolved.transition.durationSeconds,
-              effectiveDurationSeconds: duration,
-            }
-          : {
-              kind: "none",
-              configuredDurationSeconds: resolved.transition.durationSeconds,
-              effectiveDurationSeconds: 0,
-              ...(firstPerson
-                ? { reason: "first-person-cut" as const }
-                : options.cut
-                  ? { reason: "requested-cut" as const }
-                  : {}),
-            };
-      this.commitCandidate(
-        {
-          ...activated,
-          resolved,
-          subject,
-          intent,
-          history: undefined,
-          mode: "follow",
-          adaptations:
-            cached && !equal(cached.intent, intent)
-              ? [
-                  ...old.adaptations,
-                  {
-                    viewId,
-                    old: cached.intent,
-                    next: intent,
-                    reason: "view-reactivation-adaptation",
-                  },
-                ]
-              : old.adaptations,
-          transition,
-        },
-        frame,
-        0,
-        duration === 0,
-        old.history,
-      );
+    }
+    this.transaction(()=>{
+      if(!this.state.document)throw failure('CAMERA_FOLLOW_REQUIRED');
+      const old=this.state,candidate=this.viewCandidate(old,viewId,this.sample(old.document!,frame),options);
+      this.commitCandidate(candidate,frame,0,candidate.transition.kind==='none',old.history);
     });
+  }
+  private selectionHoldsHas(owner:'editing'|'episode'):boolean{return [...this.selectionHolds.values()].includes(owner);}
+  /** Scoped authority suspends selection only, never the camera's simulation. */
+  suspendViewSelection(owner:'editing'|'episode'):()=>void {
+    this.admit();
+    const token=Symbol(owner);this.selectionHolds.set(token,owner);this.inspectionCache=undefined;
+    return ()=>{this.selectionHolds.delete(token);this.inspectionCache=undefined;};
+  }
+  /** Host cleanup revokes its temporary choice without sampling or changing the camera pose. */
+  clearManualViewSelection():void {
+    const old=this.state;
+    if(!old.selectionMemory?.manualViewId)return;
+    this.state={...old,selectionMemory:{},viewSelection:old.resolved
+      ?{source:'retained',viewId:old.resolved.viewId,unavailableRules:[]}:undefined};
+  }
+  resumeViewSelection(frame:CameraControllerFrame,cut=false):void {
+    this.admit(frame);
+    if(!this.state.document||this.state.mode==='authored')throw failure('CAMERA_FOLLOW_REQUIRED');
+    if(!this.state.document.viewSelection)return;
+    this.transaction(()=>{
+      const old={...this.state,selectionMemory:{},viewSelection:undefined};
+      const selected=this.selectionCandidate(old,this.sample(old.document!,frame),0);
+      const candidate=cut?{...selected.state,transition:none()}:selected.state;
+      this.commitCandidate(candidate,frame,0,cut||selected.cut,this.state.history);
+    });
+  }
+  private selectionCandidate(old:ControllerState,subject:CameraSubjectFacts,deltaSeconds:number):{state:ControllerState;cut:boolean} {
+    const document=old.document;
+    if(!document?.viewSelection||old.mode!=='follow'||this.selectionHolds.size)return {state:old,cut:false};
+    const selected=selectCameraView({rules:document.viewSelection.rules,defaultViewId:document.defaultViewId,
+      currentViewId:old.resolved!.viewId,states:subject.states,memory:old.selectionMemory??{},deltaSeconds,
+      available:viewId=>{
+        if(viewId===old.resolved!.viewId&&old.subject&&equal(cameraSubjectCapabilities(subject),cameraSubjectCapabilities(old.subject)))return true;
+        try{resolve(document,viewId,subject,old.openings.get(viewId));return true;}
+        catch(error){if(error&&typeof error==='object'&&'code' in error&&error.code==='CAMERA_CONFIGURATION_INVALID')return false;throw error;}
+      }});
+    const changed=selected.viewId!==old.resolved!.viewId;
+    const candidate=changed?this.viewCandidate(old,selected.viewId,subject,{automatic:true}):old;
+    return {state:{...candidate,selectionMemory:selected.memory,viewSelection:selected.inspection},cut:changed&&candidate.transition.kind==='none'};
   }
   prepareInput(
     input: CameraControllerInput,
@@ -770,7 +764,7 @@ export class CameraController {
     frame: CameraControllerFrame,
   ): CameraControlBasis {
     this.admit(frame);
-    const old = this.state;
+    let old = this.state;
     if (!old.resolved || !old.document || !old.intent || !old.subject)
       throw failure("CAMERA_FOLLOW_REQUIRED");
     return this.transaction(() => {
@@ -794,7 +788,9 @@ export class CameraController {
         delta[1] +
         ratio[1] * (old.resolved!.input.orbitPitchRateRadiansPerSecond ?? old.resolved!.input.orbitRateRadiansPerSecond) * deltaSeconds;
       const active = !!input.movement || yaw !== 0 || pitch !== 0 || (input.zoomDeltaMeters ?? 0) !== 0;
-      const activated = active ? this.activatePendingFollow(old, subject) : old;
+      const selected=this.selectionCandidate(active?this.activatePendingFollow(old,subject):old,subject,deltaSeconds);
+      old=selected.state;
+      const activated = old;
       const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
       const seed = activated.intent!;
       const intent = prepareCameraIntent({
@@ -831,7 +827,7 @@ export class CameraController {
         resolvedSubjectId: subject.id,
         subjectGeneration: subject.generation,
       };
-      this.pending = { state, frame: clone(frame), deltaSeconds, basis };
+      this.pending = { state, frame: clone(frame), deltaSeconds, basis, selectionCut:selected.cut };
       return immutable(clone(basis));
     });
   }
@@ -859,14 +855,7 @@ export class CameraController {
         if (lifecycle?.kind === "applied") this.constraints.reset();
         if (!sameCameraSubject(subject, candidate.subject!))
           throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
-        const capabilities = (value: CameraSubjectFacts) => ({
-          kind: value.kind,
-          body: value.body,
-          eye: !!value.eyeWorldMetersXYZ,
-          seat: !!value.seatWorldMetersXYZ,
-          heading: !!value.semanticQuaternionWorldXYZW,
-        });
-        if (!equal(capabilities(candidate.subject!), capabilities(subject))) {
+        if (!equal(cameraSubjectCapabilities(candidate.subject!), cameraSubjectCapabilities(subject))) {
           const resolved = resolve(
             candidate.document!,
             candidate.resolved!.viewId,
@@ -885,7 +874,7 @@ export class CameraController {
           candidate,
           frame,
           pending.deltaSeconds,
-          lifecycle?.kind === "applied" && lifecycle.continuity === "cut",
+          pending.selectionCut || lifecycle?.kind === "applied" && lifecycle.continuity === "cut",
           lifecycle?.kind === "applied" ? undefined : this.state.history,
         );
         return clone(this.state.current!);
@@ -921,6 +910,17 @@ export class CameraController {
     const actual = this.sample(old.document, frame);
     if (!sameCameraSubject(actual, event.subject))
       throw failure("CAMERA_LIFECYCLE_IDENTITY_MISMATCH");
+    const resetSelection=!!old.document.viewSelection&&event.kind==="retarget"&&old.mode==="follow"&&!this.selectionHoldsHas("episode");
+    let viewId=resetSelection?old.document.defaultViewId:old.resolved.viewId;
+    if(resetSelection&&viewId!==old.resolved.viewId){
+      try{resolve(old.document,viewId,event.subject,old.openings.get(viewId));}
+      catch(error){
+        if(!error||typeof error!=="object"||!("code" in error)||error.code!=="CAMERA_CONFIGURATION_INVALID")throw error;
+        // A default unavailable on this subject must not invalidate a legal active view.
+        resolve(old.document,old.resolved.viewId,event.subject,old.openings.get(old.resolved.viewId));
+        viewId=old.resolved.viewId;
+      }
+    }
     const openings = new Map(old.openings),
       views = new Map(old.views),
       adaptations: {
@@ -934,7 +934,7 @@ export class CameraController {
       // Dormant views retain intent/reference only. Capability admission belongs to
       // activation; a vehicle without eye must not invalidate an inactive eye view.
       const resolved =
-        id === old.resolved.viewId
+        id === viewId
           ? resolve(old.document, id, event.subject, openings.get(id))
           : cached.configuration;
       const beforeRelocation =
@@ -997,11 +997,11 @@ export class CameraController {
     }
     const resolved = resolve(
       old.document,
-      old.resolved.viewId,
+      viewId,
       event.subject,
-      openings.get(old.resolved.viewId),
+      openings.get(viewId),
     );
-    const intent = resolved.kind === "third-person" && resolved.values.framing.kind === "preserve-opening" ? this.rebaseIntent(
+    const intent = viewId===old.resolved.viewId && resolved.kind === "third-person" && resolved.values.framing.kind === "preserve-opening" ? this.rebaseIntent(
       old.intent!,
       relocate ? event.previousSubject : old.subject,
       event.subject,
@@ -1018,6 +1018,7 @@ export class CameraController {
       reason: "lifecycle-cut",
     };
     if (
+      viewId===old.resolved.viewId &&
       !relocate &&
       !incompatible &&
       old.transition.kind === "blend" &&
@@ -1039,6 +1040,7 @@ export class CameraController {
       continuity: relocate || transition.kind === "none" ? "cut" : "continuous",
       state: {
         ...old,
+        ...(resetSelection?{selectionMemory:{},viewSelection:{source:viewId===old.document.defaultViewId?"default" as const:"retained" as const,viewId,unavailableRules:[]}}:{}),
         subject: event.subject,
         pendingPose:
           old.mode === "follow-pending" && old.pendingPose
@@ -1103,6 +1105,7 @@ export class CameraController {
       previous: current,
       diagnostics: undefined,
       mode: "authored",
+      selectionMemory:undefined,viewSelection:undefined,
       subject: undefined,
       resolved: undefined,
       intent: undefined,
@@ -1154,6 +1157,7 @@ export class CameraController {
     if(this.inspectionCache?.diagnosticsRevision===this.constraints.diagnosticsRevision&&this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
     const value=immutable({
       ...clone({
+        ...(s.document?.viewSelection&&s.mode!=="authored"?{viewSelection:{...(s.viewSelection??{source:s.selectionMemory?.manualViewId?"manual" as const:"default" as const,viewId:s.resolved?.viewId??s.document.defaultViewId,unavailableRules:[]}),...(this.selectionHolds.size?{suspendedBy:this.selectionHoldsHas("episode")?"episode" as const:"editing" as const}:{})}}:{}),
         collisionQueries: this.constraints.inspectQueries(),
         mode: s.mode,
         documentHash: s.hash,
@@ -1353,6 +1357,7 @@ export class CameraController {
       });
       this.constraints.reset();
       this.failureState = undefined;
+      for(const [token,owner] of this.selectionHolds)if(owner==="editing")this.selectionHolds.delete(token);
       this.checkpoints = new WeakMap();
       return;
     }
@@ -1384,6 +1389,8 @@ export class CameraController {
       this.commitCandidate(
         {
           ...s,
+          selectionMemory:undefined,
+          viewSelection:undefined,
           initialReferenceIdentity:this.referenceIdentity(s.document!,subject,frame),
           openings: s.initialOpenings,
           views,
@@ -1407,6 +1414,7 @@ export class CameraController {
         true,
       );
       this.failureState = undefined;
+      for(const [token,owner] of this.selectionHolds)if(owner==="editing")this.selectionHolds.delete(token);
       this.checkpoints = new WeakMap();
     });
   }

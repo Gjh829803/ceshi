@@ -37,12 +37,58 @@ for the selected SDK's `cameraConfiguration` schema/field metadata and
 `cameraSourceContracts`; source-edited projects may report stale generated metadata
 as unavailable while retaining their current declarations.
 
+### Defaults and custom views
+
+Use `createHumanoidCameraDocument(actualHumanInstanceId)` as the starting document
+when keeping the SDK's native human calibration. For registered creatures, obtain
+`cameraPresetSnapshots` from `assets_describe`, embed the selected snapshots in
+`document.presets`, and bind them to the actual subject instance IDs. Ordinary
+Mesh/Group subjects need compatible anchors; a human preset is not a universal
+fallback. Author imports do not allow preset-content.
+
+Customize only the needed fields in a view's `overrides`, or in
+`binding.subjectOverrides[instanceId].views[viewId].overrides` for one subject.
+Omitted fields inherit, from lowest to highest priority: SDK defaults, view preset,
+subject preset, view overrides, subject overrides. Generic SDK defaults are not the
+same as the team's selected content calibration. Preserve the rest of the document:
+`setCameraFollow({configuration})` installs a complete document, not a partial patch.
+
+For a new named view, explicitly reference an embedded preset with the matching
+`kind`; the same kind does not inherit another view's settings. Subject bindings
+are also keyed by the new view ID. Reuse the preset and add only the desired
+parameter overrides rather than copying all resolved values into a new preset.
+Existing views and their defaults remain available through `setCameraView(viewId)`.
+
+Declaring a view named `swimming` does not automatically select it. To opt in,
+reference that named view from `viewSelection.rules`:
+```json
+{"viewSelection":{"rules":[{"id":"in-water","when":{"state":"swimming"},"viewId":"swimming"}]}}
+```
+The view must already exist and reference a compatible preset. Currently `swimming`
+is a measured native-human state; ordinary Mesh subjects may not provide it.
+Unconfigured projects keep the existing camera behavior, including native swimming
+eye/follow-point adjustments. No matching rule uses `defaultViewId`; unavailable
+state/anchors are reported locally while retaining a legal view.
+
+Rules use descending `priority` (default 0), then document order. Optional
+`enterDelaySeconds`/`exitDelaySeconds` (default 0) filter brief state changes.
+Delays apply only while the current view's required anchors remain available.
+The SDK evaluates committed state once per fixed step; do not write a second rule
+loop. `setCameraView` and view-cycle input hold a manual choice until
+`resumeCameraViewSelection()` or subject/reset invalidation. Orbit/zoom still work.
+Automatic switches retain the player's orbit heading in the destination reference
+frame, within its angle limits, while applying that view's framing. Explicit view
+selection keeps its calibrated opening.
+Inspect `observation.camera.viewSelection` for the chosen rule, pending switch or
+unavailable reason. Applied edit drafts suspend rules until resumed or released. Authored
+camera mode is never taken over.
+
+### Opening and lifecycle
+
 For an authored opening, configure a third-person view with `opening` and
 `framing.kind:'preserve-opening'`. `activation:'on-input'` preserves it until
 input activates following. Configure recentering, damping, zoom and transitions
-in that view's overrides. The document resolver supplies defaults and reports field
-provenance. Embed any referenced preset snapshots in `document.presets`; author
-imports do not allow preset-content. The nonhuman binding example includes the
+in that view's overrides. The nonhuman binding example includes the
 relative JSON import and minimal document; adapt its target to your actor.
 
 Ordinary `addCharacter` supports optional `eyePositionLocalMetersXYZ`; first-person

@@ -49,6 +49,18 @@ world.addCharacter({id:'actor',object:actor,body:{heightMeters:1.8,radiusMeters:
 afterAll(async()=>{await rm(root,{recursive:true,force:true});});
 
 describe('Three Episode planner MCP boundary',()=>{
+ it('rejects unsupported automatic selection before writing a plan and accepts a corrected plan',async()=>{
+  const outputRoot=output(),service=await EpisodePlannerTools.create({sourceManifest,outputRoot});
+  try{
+   const automatic=plan();automatic.segments[0]!.start={...automatic.segments[0]!.start,cameraViewSelection:'automatic'};
+   const result=await service.execute('episode_submit_plan',{plan:automatic});
+   expect(result.isError).toBe(true);expect(JSON.stringify(result)).toContain('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
+   await expect(readFile(path.join(outputRoot,'plan.json'))).rejects.toMatchObject({code:'ENOENT'});
+   expect((await service.execute('episode_submit_plan',{plan:plan()})).isError).not.toBe(true);
+   const evidence=JSON.parse(await readFile(path.join(outputRoot,'planner-tool-evidence.json'),'utf8'));
+   expect(evidence.submissionCount).toBe(1);
+  }finally{await service.close();}
+ });
  it('accepts the same full vehicle start for probing and plan submission',()=>{
   const schema=EPISODE_TOOLS.find(tool=>tool.name==='episode_probe')!.inputSchema;
   const check=new Ajv({strict:false}).compile(schema);

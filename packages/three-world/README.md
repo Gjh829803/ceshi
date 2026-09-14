@@ -825,6 +825,8 @@ explicitly changes reset configuration. `createOpeningDraft()` performs SDK-owne
 current-to-initial reference conversion, with subject/generation checks. Saving
 project JSON does not implicitly commit a World baseline. Session cancellation
 restores configuration only while its ownership and reference checks remain valid.
+`session.resumeViewSelection()` releases an applied draft's automatic-selection
+hold while retaining that session's original cancellation checkpoint.
 
 Episode port version 2 declares sealed baseline view IDs and selects named views
 through `cameraViewId` or `camera.set-view`. Prepare cuts to the requested start;
@@ -1638,14 +1640,24 @@ clearance and NPC routing where relevant. A readable overview or a successful
 reset does not prove the edge is safe. Keep these checks inside normal authoring
 and reuse the original case inputs.
 
+### Camera view selection
+
+`CameraDocument.viewSelection` optionally selects declared views from native state.
+`world.setCameraView(id)` holds a manual choice;
+`world.resumeCameraViewSelection()` returns to automatic selection.
+`world.inspectCamera().viewSelection` reports the source, pending choice and skipped
+rules. Selection uses the existing fixed-step controller, never another camera loop.
+For preset inheritance, rule fields, supported states and authoring behavior, use the
+[production camera guidance](../creator-host/docs/agent/programming.md#defaults-and-custom-views).
+
 ### Camera query diagnostics
 
 `world.setCameraCollisionDiagnosticsEnabled(true)` records the shared camera's
 existing queries; `world.inspectCamera().collisionQueries` exposes detached,
-immutable `fixed`, `prediction` and `presentation` samples. Each sample identifies
+immutable `fixed` and `presentation` samples. Each sample identifies
 its batch sequence, simulation tick and source, with actual sweep endpoints,
 radii and returned hit data. Recording is off by default and does not add physics
-queries. Up to 256 probes are retained per batch; `droppedProbes` reports overflow.
+queries. Input preparation does not run a separate collision prediction batch. Up to 256 probes are retained per batch; `droppedProbes` reports overflow.
 Disabling capture clears samples. Check ownership and sample timing before drawing
 queries; authored cameras do not run follow collision. These are observations,
 not physics colliders or a reason to advance simulation.

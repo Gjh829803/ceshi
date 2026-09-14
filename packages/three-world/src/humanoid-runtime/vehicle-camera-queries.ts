@@ -76,7 +76,7 @@ export class VehicleCameraQueries {
  constructor(private readonly vehicles:readonly {instanceId:string;object:Object3D}[]){}
  private release(geometry:Geometry):void{for(const p of [...geometry.parts,...geometry.volumes])p.shape.dispose();}
  dispose():void{for(const geometry of this.cache.values())this.release(geometry);this.cache.clear();this.frames=[];this.refinedActorIds.clear();this.refinementSequence++;}
- /** Publish fresh broad-phase bounds for this fixed, prediction or display sample. */
+ /** Publish fresh broad-phase bounds for this fixed or display sample. */
  sync(fallbackBounds:ReadonlyMap<string,Box3>=new Map()):void {
   this.frames=[];this.refinedActorIds.clear();this.refinementSequence++;
   const liveMeshes=new Set<Object3D>(),sample={};

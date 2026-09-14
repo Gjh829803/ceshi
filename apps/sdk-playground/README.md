@@ -55,8 +55,7 @@ not added physics bodies. The world observer draws after the SDK restores its
 display transaction and shows committed subjects without gameplay body clipping
 or fade. The camera model follows the actual displayed camera pose and uses the
 presentation sample from `world.inspectCamera().collisionQueries`, falling back
-to fixed only before a presentation sample exists. Input-prediction samples are
-never drawn. The live monitor copies the actual interpolated gameplay frame;
+to fixed only before a presentation sample exists. The live monitor copies the actual interpolated gameplay frame;
 the observer's committed subject poses may differ by up to one fixed tick.
 Each sample carries its source,
 simulation tick and sequence; first-person views without sweeps show no stale probe. Source captures

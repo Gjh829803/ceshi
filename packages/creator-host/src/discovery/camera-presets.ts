@@ -53,6 +53,6 @@ export function cameraPresetSnapshots(references: unknown, workspaceRuntime: boo
     compatibility: workspaceRuntime ? 'unverified-workspace-runtime' : 'content-calibration',
     presets: Object.fromEntries(snapshots),
     sources: Object.fromEntries(sources),
-    binding: 'Embed these snapshots in CameraDocument.presets and reference their preset IDs from the intended binding.subjectOverrides views. They are content calibration, not the current camera state; resolve and inspect the actual subject with the selected SDK.',
+    binding: 'Embed these snapshots in CameraDocument.presets and reference their preset IDs from views or the intended binding.subjectOverrides views. Customize through overrides; the programming guide describes inheritance and custom view selection. They are content calibration, not the current camera state; resolve and inspect the actual subject with the selected SDK.',
   };
 }

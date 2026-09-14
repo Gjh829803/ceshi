@@ -108,6 +108,11 @@ export const CAMERA_DOCUMENT_SCHEMA: CameraFieldSchema = {
       kind: { const: "world-camera" },
       schemaVersion: { const: 1 },
       defaultViewId: id,
+      viewSelection: object({rules:{type:"array",items:object({
+        id, when:object({state:choice("swimming")},["state"]), viewId:id,
+        priority:{...number("priority"),type:"integer"},
+        enterDelaySeconds:nonnegative("seconds"), exitDelaySeconds:nonnegative("seconds"),
+      },["id","when","viewId"])}},["rules"]),
       views: {
         ...record({
           oneOf: kinds.map((kind) =>

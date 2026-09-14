@@ -4,12 +4,12 @@ import {createCameraProbes,selectDisplayCameraProbeSample,type CameraProbeSample
 
 const sample=(source:CameraProbeSample['source'],sampleId:number,probes:CameraProbeSample['probes']=[]):CameraProbeSample=>({source,sampleId,simulationTick:12,probes,droppedProbes:0});
 
-it('selects presentation then committed fixed queries without drawing prediction or reviving empty probes',()=>{
-  const fixed=sample('fixed',1),prediction=sample('prediction',2),presentation=sample('presentation',3);
-  expect(selectDisplayCameraProbeSample({fixed,prediction,presentation},'presentation')).toBe(presentation);
-  expect(selectDisplayCameraProbeSample({fixed,prediction,presentation},'fixed')).toBe(fixed);
-  expect(selectDisplayCameraProbeSample({fixed,prediction},'presentation')).toBe(fixed);
-  expect(selectDisplayCameraProbeSample({prediction},'fixed')).toBeUndefined();
+it('selects presentation then committed fixed queries without reviving empty probes',()=>{
+  const fixed=sample('fixed',1),presentation=sample('presentation',3);
+  expect(selectDisplayCameraProbeSample({fixed,presentation},'presentation')).toBe(presentation);
+  expect(selectDisplayCameraProbeSample({fixed,presentation},'fixed')).toBe(fixed);
+  expect(selectDisplayCameraProbeSample({fixed},'presentation')).toBe(fixed);
+  expect(selectDisplayCameraProbeSample({},'fixed')).toBeUndefined();
   expect(selectDisplayCameraProbeSample(undefined,'fixed')).toBeUndefined();
 });
 

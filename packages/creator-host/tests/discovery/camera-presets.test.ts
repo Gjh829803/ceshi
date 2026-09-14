@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {expect,it} from 'vitest';
 import {Group} from 'three';
-import {createWorld,createHumanoidCameraDocument} from '@worldkit/three';
+import {createWorld,createHumanoidCameraDocument,parseCameraDocument} from '@worldkit/three';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {cameraPresetSnapshots} from '../../src/discovery/camera-presets';
 import catalog from '../../../../assets/three-creator/asset-catalog.json';
@@ -18,6 +18,20 @@ it('exposes selected creature snapshots that bind to the actual mounted runtime'
   world.setCameraFollow({configuration:document});world.step({},0);
   expect(world.inspectCamera().resolved?.values.position).toHaveProperty('distanceMeters',8);
   expect(world.inspectCamera().resolved?.fields['position.distanceMeters']?.source).toBe('subject-preset');
+  const baseline=structuredClone(world.inspectCamera().resolved!.values);
+  const snapshots=structuredClone(selected.presets);
+  const presetId=Object.keys(selected.presets).find(id=>selected.presets[id]!.kind==='third-person')!;
+  world.setCameraFollow({configuration:parseCameraDocument({...document,views:{...document.views,
+   'close-ride':{kind:'third-person',presetId,overrides:{position:{distanceMeters:6}}},
+  }})});
+  world.setCameraView('close-ride');world.step({},0);
+  const customized=world.inspectCamera().resolved!;
+  expect(customized.values).toEqual({...baseline,position:{...baseline.position,distanceMeters:6}});
+  expect(customized.fields['position.distanceMeters']?.source).toBe('project-view');
+  expect(customized.fields['orientation.initialPitchRadians']?.source).toBe('view-preset');
+  world.setCameraView('third-person');
+  expect(world.inspectCamera().resolved!.values).toEqual(baseline);
+  expect(selected.presets).toEqual(snapshots);
   expect(selected).not.toHaveProperty('kind');expect(asset.vehicle!.spec).not.toHaveProperty('camera');
   await service.materializeRuntime();expect((await service.describeAsset(asset.id)).cameraPresetSnapshots).toMatchObject({compatibility:'unverified-workspace-runtime'});
  }finally{world.dispose();await service.close();await rm(root,{recursive:true,force:true});}

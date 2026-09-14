@@ -17,6 +17,8 @@ export interface CameraSubjectFacts {
   /** Optional measured semantic orientation: local -Z forward, +Y up. */
   readonly semanticQuaternionWorldXYZW?: CameraQuaternion;
   readonly speedMetersPerSecond: number;
+  /** Native committed gameplay facts. Omission means unavailable, never false. */
+  readonly states?: { readonly swimming?: boolean };
   /** Aircraft yaw fact used only to seed continuous world-up twist after a cut. */
   readonly continuousHeadingSeedRadians?: number;
   /** Local, already metre-valued body height range; not multiplied by model scale. */
@@ -30,6 +32,13 @@ export interface CameraSubjectFacts {
   /** Optional native posture preference, used only by an opted-in recenter profile. */
   readonly preferredOrbitPitchRadians?: number;
   readonly seatWorldMetersXYZ?: CameraVector3;
+}
+
+/** Capabilities that affect strategy admission; pose/state changes are sampled separately. */
+export function cameraSubjectCapabilities(subject:CameraSubjectFacts) {
+  return {kind:subject.kind,body:subject.body,eye:!!subject.eyeWorldMetersXYZ,
+    seat:!!subject.seatWorldMetersXYZ,followPivot:!!subject.followPivotWorldMetersXYZ,
+    shoulderEye:!!subject.shoulderEyeWorldMetersXYZ,heading:!!subject.semanticQuaternionWorldXYZW};
 }
 
 export function subjectAnchor(

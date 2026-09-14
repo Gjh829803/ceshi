@@ -21,6 +21,7 @@
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:contract:coverage": "vitest run --coverage --config vitest.contract.config.ts --coverage.reporter=text --coverage.reporter=json-summary",
     "test:resource-heavy": "vitest run --config vitest.resource-heavy.config.ts",
+    "test:camera": "vitest run --config scripts/testing/camera.vitest.config.ts",
     "test:focused": "vitest run",
     "test:watch": "vitest",
     "verify:workspace-boundaries": "pnpm verify:three-workspace && tsx scripts/testing/verify-workspace-boundaries.ts",

@@ -11,7 +11,7 @@ Playground imports complete documents from its own `config/camera.json`,
 copies are project snapshots. Editing a library preset does not silently change
 an exported project. Selecting a dragon variant explicitly replaces that subject's
 preset references in the current document, preserves project overrides and marks
-the resulting document unsaved. Task9's editor must save the exact active document.
+the resulting document unsaved. The editor saves the exact active document.
 
 The one-time repository tool `scripts/migrations/export-camera-calibration.ts`
 exports from preserved legacy source fixtures, through `camera-configuration.ts`.
@@ -25,12 +25,13 @@ use `worldkit.asset-profile.v2.<id>`. Existing `worldkit.humanoid.profile.<id>` 
 remain untouched; explicit `migrateLegacyAssetProfile` exports controls/envelopes
 and preserves original bytes and inactive camera data for separate migration.
 
-Native on-foot opening pitch .35 and body ratio .655, near .08, vehicle ranges,
-shoulder full-effect speeds, and per-view lens values are explicit configuration.
-Old swimming/driver-eye fallbacks, orbit-relative lateral offsets, collision
-padding/bypass and doubled damping require visual retuning. First-person collision
-is intentionally enabled and roll inheritance disabled. No screenshot equivalence
-or performance improvement is claimed by the numerical migration.
+Current camera behavior combines these saved values with the SDK's calibrated
+strategies and native subject anchors. Native swimming and driver-eye fallbacks,
+orbit-relative shoulder offsets, and view-specific collision and roll behavior
+are retained. The native humanoid baseline disables first-person collision and
+roll inheritance; vehicle views retain their own settings. The historical
+migration report describes the original conversion, not current runtime behavior
+or visual acceptance.
 
 The `pr240-camera-migration-20260914` snapshots apply the later vehicle recovery
 calibration to third-person views: 0.12 seconds clear hold, 0.18 seconds half-life,
@@ -39,10 +40,9 @@ their 12 m/s recovery limit and zero deadband. Other views keep their own tuning
 The historical exporter and migration report still describe the original conversion;
 rerunning that one-time exporter does not preserve subsequent content calibration.
 
-The seven additional aircraft subjects have explicit presets and the glider uses
-its 16 m aircraft framing. Paraglider third-person framing uses 9.5 m distance,
-2.1 m origin offset and 0.25 rad pitch; wingsuit uses 7.5 m, 1 m and 0.2 rad.
-These are the fully airborne values from the previous wearable framing, now stable
-named presets. Spreading, seating and canopy animation no longer interpolate camera
-configuration implicitly. Projects can author additional named views and select
-them explicitly; no automatic wearable state selection is declared or implemented.
+The seven additional aircraft subjects have explicit presets. Wearable views use
+the native subject's dynamic follow pivot and preferred recenter pitch where their
+configuration requests them; those measured anchors are not frozen preset values.
+Project customization and optional state-based view selection follow the
+[Agent camera guide](../../../creator-host/docs/agent/programming.md#defaults-and-custom-views).
+Automatic wearable view selection is not currently implemented.

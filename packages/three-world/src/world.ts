@@ -33,6 +33,12 @@ type Tween = {command:API.PropertyCommand;from:API.Vec3;to:API.Vec3;elapsed:numb
 type Activity = {operationId:string;steps:{commandIndex:number;status:'queued'|'running'|'succeeded'|'failed'|'cancelled';error?:API.RuntimeError}[];parameters:string[];actorSteps:Map<string,number>;followTargets:Map<string,string>};
 type Queued = {prepared:Prepared;commandId:string;operationId:string;resolve:(receipt:API.CommandReceipt)=>void};
 export type WorldOptions = EngineOptions & {assetDefinitions?:Readonly<Record<string,AssetDefinition>>;shadows?:Partial<API.ShadowSettings>};
+interface EpisodeLease {
+ state:'preparing'|'prepared';
+ readonly restoreViewport:()=>void;
+ releaseCameraSelection:()=>void;
+ ownsManualCameraView:boolean;
+}
 const vec=(value:unknown):API.Vec3=>{if(!Array.isArray(value)||value.length!==3||!value.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=100000))throw failure('COMMAND_VECTOR_INVALID');return value as unknown as API.Vec3;};
 const tuple=(value:THREE.Vector3):API.Vec3=>[value.x,value.y,value.z];
 const commandFields:Record<API.PrimitiveCommand['type'],readonly string[]>={
@@ -71,7 +77,7 @@ export class ThreeWorld implements API.World {
  private presentation:ThreePresentation|undefined;private readonly changes=new Set<()=>void>();private changeQueued=false;
  private captureTargets:readonly SelectedCaptureTarget[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;private startGeneration=0;
  private activeWriter:string|undefined;private observer:API.WorldObservation|undefined;
- private episodeLease:{state:'preparing'|'prepared';restoreViewport:()=>void}|undefined;
+ private episodeLease:EpisodeLease|undefined;
  private constructor(private readonly engine:WorldEngine,assets:WorldAssets,shadows:Readonly<API.ShadowSettings>){
   this.shadowSettings=shadows;
   engine.cameraSubjects.generation=id=>this.entries.get(id)?.generation;engine.cameraSubjects.lifecycle=()=>this.epoch;
@@ -197,6 +203,7 @@ export class ThreeWorld implements API.World {
   }
  setCameraCollisionDiagnosticsEnabled(enabled:boolean):void{this.alive();this.engine.setCameraCollisionDiagnosticsEnabled(enabled);}
  inspectCamera(){return this.engine.inspectCamera();}
+ resumeCameraViewSelection():void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.resumeCameraViewSelection();}
  setCameraView(viewId:string):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraView(viewId);}
  useAuthoredCamera():THREE.Camera{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.engine.useAuthoredCamera();}
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
@@ -444,7 +451,7 @@ export class ThreeWorld implements API.World {
  private enginePhysics(options:API.EntityOptions){return options.physics?{...options.physics,shape:options.physics.shape==='mesh'?'trimesh' as const:options.physics.shape??'trimesh' as const}:{kind:'fixed' as const};}
  private within(object:THREE.Object3D,root:THREE.Object3D):boolean{for(let current:THREE.Object3D|null=object;current;current=current.parent)if(current===root)return true;return false;}
  execute(command:API.WorldCommand,options:API.ExecutionOptions={}):Promise<API.CommandReceipt>{if(this.episodeLease)return Promise.resolve({status:'rejected',commandId:options.commandId??`world-command-${++this.nextCommand}`,worldRevision:this.revision,error:failure('EPISODE_CAPTURE_OWNS_CLOCK')});return isHumanoidCommand(command)?this.executePlayer(command,options):this.executePlan([command],options);}
- private executePlayer(command:HumanoidCommand,options:API.ExecutionOptions,lease?:{state:'preparing'|'prepared';restoreViewport:()=>void}):Promise<API.CommandReceipt>{
+ private executePlayer(command:HumanoidCommand,options:API.ExecutionOptions,lease?:EpisodeLease):Promise<API.CommandReceipt>{
   const commandId=options.commandId??`world-command-${++this.nextCommand}`,body=JSON.stringify(command),previous=this.requests.get(commandId);
   if((this.episodeLease&&this.episodeLease!==lease)||(lease&&this.episodeLease!==lease))return Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('EPISODE_CAPTURE_OWNS_CLOCK')});
   if(previous)return previous.body===body?previous.promise:Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:failure('COMMAND_ID_CONFLICT')});
@@ -460,7 +467,7 @@ export class ThreeWorld implements API.World {
   }catch(error){return {status:'rejected',commandId,worldRevision:this.revision,error:runtimeError(error)};}});
   this.requests.set(commandId,{body,promise});return promise;
  }
- private executePlan(commands:readonly API.WorldCommand[],options:API.ExecutionOptions={},lease?:{state:'preparing'|'prepared';restoreViewport:()=>void}):Promise<API.CommandReceipt>{
+ private executePlan(commands:readonly API.WorldCommand[],options:API.ExecutionOptions={},lease?:EpisodeLease):Promise<API.CommandReceipt>{
   const commandId=options.commandId??`world-command-${++this.nextCommand}`;
   let body:string;try{body=JSON.stringify(commands.map(command=>Object.fromEntries(Object.entries(command).sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>[key,key==='arguments'&&value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b))):value]))));}
   catch(error){return Promise.resolve({status:'rejected',commandId,worldRevision:this.revision,error:runtimeError(error)});}
@@ -781,7 +788,7 @@ export class ThreeWorld implements API.World {
  private episodePort():EpisodeRuntimePort{
   const world=this;
   const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
-  const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');if('cameraPerspective' in start||start.humanoid&&'cameraMode' in start.humanoid)throw failure('EPISODE_LEGACY_CAMERA_IMPORT_REQUIRED');if(start.cameraViewId!==undefined&&(typeof start.cameraViewId!=='string'||!start.cameraViewId))throw failure('EPISODE_START_CAMERA_INVALID');};
+  const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');if(start.cameraViewSelection!==undefined&&(start.cameraViewSelection!=='automatic'||start.cameraViewId!==undefined))throw failure('EPISODE_CAMERA_FIELDS_CONFLICT');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');if('cameraPerspective' in start||start.humanoid&&'cameraMode' in start.humanoid)throw failure('EPISODE_LEGACY_CAMERA_IMPORT_REQUIRED');if(start.cameraViewId!==undefined&&(typeof start.cameraViewId!=='string'||!start.cameraViewId))throw failure('EPISODE_START_CAMERA_INVALID');};
   const adapter=()=>world.movements.get(controlled().movementId)?.episode;
   const probe=(start:EpisodeStart)=>{
    if(world.engine.controlledHumanoid)return world.engine.controlledHumanoid.probeEpisodeStart(start);
@@ -793,7 +800,7 @@ export class ThreeWorld implements API.World {
    const host=world.humanoid?humanoidHost(world.humanoid):undefined;
    if(host&&!host.isDisposed())host.clearInput();
    for(const operationId of world.humanoidActivities.keys())world.operations.cancel(operationId);
-   world.episodeLease=undefined;if(host&&!host.isDisposed())host.setEpisodeOwned(false);world.engine.stop();lease.restoreViewport();};
+   world.episodeLease=undefined;lease.releaseCameraSelection();if(lease.ownsManualCameraView)world.engine.cameraController.clearManualViewSelection();if(host&&!host.isDisposed())host.setEpisodeOwned(false);world.engine.stop();lease.restoreViewport();};
   return {schemaVersion:2,
    capabilities(){const entry=controlled(),settings=world.engine.physics.characterSettings(entry.id),bounds=new THREE.Box3();
     if(world.humanoid){bounds.min.set(...world.humanoid.environment.map.bounds.min);bounds.max.set(...world.humanoid.environment.map.bounds.max);}
@@ -804,7 +811,7 @@ export class ThreeWorld implements API.World {
     if(bounds.isEmpty())bounds.expandByPoint(worldPose(entry.object).position);
     return {...(world.engine.controlledHumanoid?{humanoid:world.engine.controlledHumanoid.episodeCapabilities()}:{}),schemaVersion:2,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
     movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,episodeInput:world.engine.controlledHumanoid?'humanoid':entry.movementId==='ground'?'ground':adapter()?'custom':'unsupported',startSupport:adapter()?.startSupport??'ground',walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
-    camera:(()=>{const baseline=world.engine.episodeCameraBaseline();return {mode:world.cameraMode,baselineMode:baseline.mode,documentHash:baseline.documentHash??null,views:Object.entries(baseline.document?.views??{}).map(([viewId,view])=>({viewId,kind:view.kind})),defaultViewId:baseline.document?.defaultViewId??null,current:world.engine.cameraSnapshot(),segmentInitialization:'relative-authored-pose' as const};})(),maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
+    camera:(()=>{const baseline=world.engine.episodeCameraBaseline();return {mode:world.cameraMode,baselineMode:baseline.mode,documentHash:baseline.documentHash??null,views:Object.entries(baseline.document?.views??{}).map(([viewId,view])=>({viewId,kind:view.kind})),defaultViewId:baseline.document?.defaultViewId??null,current:world.engine.cameraSnapshot(),segmentInitialization:'relative-authored-pose' as const,automaticViewSelection:baseline.mode!=='authored'&&!!baseline.document?.viewSelection};})(),maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
    probeStart(start){validateStart(start);return probe(start);},
    async prepareSegment(start,viewport){
     world.alive();validateStart(start);
@@ -812,11 +819,12 @@ export class ThreeWorld implements API.World {
     if(world.episodeLease?.state==='preparing')throw failure('EPISODE_PREPARATION_IN_PROGRESS');
     release();const renderer=world.renderer;if(!renderer)throw failure('EPISODE_RENDERER_REQUIRED');
     const size=renderer.getSize(new THREE.Vector2()),pixelRatio=renderer.getPixelRatio(),camera=world.camera.clone();
-    const lease:{state:'preparing'|'prepared';restoreViewport:()=>void}={state:'preparing',restoreViewport:()=>{
+    const lease:EpisodeLease={state:'preparing',ownsManualCameraView:false,releaseCameraSelection:()=>{},restoreViewport:()=>{
      renderer.setPixelRatio(pixelRatio);renderer.setSize(size.x,size.y,false);
      if(world.camera instanceof THREE.PerspectiveCamera&&camera instanceof THREE.PerspectiveCamera){world.camera.aspect=camera.aspect;world.camera.updateProjectionMatrix();}
      else if(world.camera instanceof THREE.OrthographicCamera&&camera instanceof THREE.OrthographicCamera){world.camera.left=camera.left;world.camera.right=camera.right;world.camera.top=camera.top;world.camera.bottom=camera.bottom;world.camera.updateProjectionMatrix();}
     }};
+    lease.releaseCameraSelection=world.engine.cameraController.suspendViewSelection('episode');
     world.episodeLease=lease;if(world.humanoid)humanoidHost(world.humanoid).setEpisodeOwned(true);world.engine.stop();
     try{
      await world.resetState();if(world.disposed||world.episodeLease!==lease)throw failure('EPISODE_PREPARATION_CANCELLED');
@@ -824,14 +832,16 @@ export class ThreeWorld implements API.World {
      if(!startProbe.isValid)throw failure(startProbe.diagnostics[0]!.code,startProbe.diagnostics[0]!.message,'content',startProbe.diagnostics[0]!.entityIds);
      renderer.setPixelRatio(1);world.engine.resize(viewport.widthPixels,viewport.heightPixels);
      const baseline=world.engine.episodeCameraBaseline();
+     if(start.cameraViewSelection==='automatic'&&(baseline.mode==='authored'||!baseline.document?.viewSelection))throw failure('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
      const viewId=start.cameraViewId??(baseline.mode==='authored'?undefined:baseline.document?.defaultViewId);
      if(viewId!==undefined&&!baseline.document?.views[viewId])throw failure('EPISODE_CAMERA_VIEW_UNDECLARED');
      world.engine.prepareEpisodeCamera(viewId,()=>{
       if(world.engine.controlledHumanoid)humanoidHost(world.engine.controlledHumanoid).prepareEpisodeStart({...start,positionWorldMetersXYZ:startProbe.resolvedPositionWorldMetersXYZ});else world.engine.prepareEpisodeStart(startProbe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
      });
+     if(start.cameraViewSelection==='automatic'){lease.releaseCameraSelection();world.engine.resumeCameraViewSelection(true);}
      world.engine.step({},1);world.engine.render();
      if(world.snapshot().errors.length)throw failure('EPISODE_PREPARATION_RUNTIME_ERROR');
-     const prepared=world.snapshot();if(viewId!==undefined&&(prepared.camera.viewId!==viewId||prepared.camera.transition.kind==='blend'))throw failure('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
+     const prepared=world.snapshot();if(viewId!==undefined&&((start.cameraViewSelection!=='automatic'&&prepared.camera.viewId!==viewId)||prepared.camera.transition.kind==='blend'))throw failure('EPISODE_CAMERA_PREPARED_STATE_MISMATCH');
      lease.state='prepared';return prepared;
     }catch(error){if(world.episodeLease===lease)release();throw error;}
    },
@@ -848,10 +858,15 @@ export class ThreeWorld implements API.World {
     if(command?.type==='actor.move-to'||command?.type==='actor.follow'||command?.type==='actor.stop')return world.executePlan([command],{},world.episodeLease);
     if(command?.type==='camera.set-view'){
      const commandId=`episode-command-${++world.nextCommand}`;
+     let releaseSelection:(()=>void)|undefined;
      try{
+      const lease=world.episodeLease!;
+      releaseSelection=world.engine.cameraController.suspendViewSelection('episode');
       world.engine.setCameraView(command.viewId);
+      lease.releaseCameraSelection();lease.releaseCameraSelection=releaseSelection;releaseSelection=undefined;
+      lease.ownsManualCameraView=true;
       world.touch();return Promise.resolve({status:'applied',commandId,worldRevision:world.revision,result:{kind:'camera-view',camera:world.engine.cameraSnapshot()}});
-     }catch(error){return Promise.resolve({status:'rejected',commandId,worldRevision:world.revision,error:runtimeError(error)});}
+     }catch(error){releaseSelection?.();return Promise.resolve({status:'rejected',commandId,worldRevision:world.revision,error:runtimeError(error)});}
     }
     if(!command||!['humanoid.perform-action','humanoid.set-input','vehicle.enter','vehicle.exit'].includes(command.type))return Promise.resolve({status:'rejected',commandId:`episode-command-${++world.nextCommand}`,worldRevision:world.revision,error:failure('EPISODE_COMMAND_UNSUPPORTED')});
     return world.executePlayer(command,{},world.episodeLease);
@@ -878,7 +893,7 @@ export class ThreeWorld implements API.World {
  render():void{this.engine.render();}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
-  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireHumanoidActivities();
+  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
   this.operations.cancelAll();
   this.presentation?.dispose();this.changes.clear();this.restoreRendererShadows?.();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}

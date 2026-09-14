@@ -50,7 +50,7 @@ export interface CameraConstraintStep {
 /** One bounded recording of queries that the camera solver actually executed. */
 export interface CameraCollisionProbeSample {
   readonly sampleId: number;
-  readonly source: 'fixed' | 'prediction' | 'presentation';
+  readonly source: 'fixed' | 'presentation';
   readonly simulationTick: number;
   readonly probes: readonly {
     readonly from: CameraVector3;
@@ -202,9 +202,8 @@ export class CameraConstraints {
     configuration: ResolvedCameraConfiguration,
     subject: CameraSubjectFacts,
     step: CameraConstraintStep,
-    source: CameraCollisionProbeSample['source'] = 'fixed',
   ): { proposal: CameraProposal; diagnostics: CameraConstraintDiagnostics } {
-    return this.recordQueries(source, step.simulationTick, () => {
+    return this.recordQueries('fixed', step.simulationTick, () => {
     if (!configuration.values.constraints.collision.enabled)
       return {
         proposal,
@@ -249,19 +248,6 @@ export class CameraConstraints {
       throw error;
     }
     });
-  }
-  /** Pre-physics input prediction shares the solver without committing recovery
-   * time. An unsolved pre-movement pose must not prevent movement out of it;
-   * keep the last committed sight and let the actual fixed commit diagnose it. */
-  predict(proposal: CameraProposal, configuration: ResolvedCameraConfiguration, subject: CameraSubjectFacts, step: CameraConstraintStep): CameraProposal {
-    const before = this.capture();
-    try {
-      return this.solve(proposal, configuration, subject, step, 'prediction').proposal;
-    } catch {
-      return step.previous ?? proposal;
-    } finally {
-      this.restore(before);
-    }
   }
   project(
     proposal: CameraProposal,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importEpisodePlan, assertPreSeedanceProfile, canonicalHash, PRE_SEEDANCE_PROFILE, segmentRecipeHash, validateEpisodePlan, type EpisodePlan } from '../../src/contracts.js';
+import { importEpisodePlan, assertPreSeedanceProfile, canonicalHash, PRE_SEEDANCE_PROFILE, segmentRecipeHash, validateEpisodePlan, validateEpisodePlanViews, type EpisodePlan } from '../../src/contracts.js';
 
 const hash = 'a'.repeat(64);
 const plan = (): EpisodePlan => ({ kind: 'worldkit-three-episode-plan', schemaVersion: 2, worldBuildHash: hash,
@@ -84,4 +84,25 @@ it('imports legacy camera selections only through declared views without changin
  expect(converted.segments[0]!.start.cameraViewId).toBe('over-shoulder');expect(converted.segments[1]!.start.cameraViewId).toBe('explore');expect(canonicalHash(legacy)).toBe(before);
  expect(()=>importEpisodePlan(legacy,{...declaration,defaultViewId:'over-shoulder'},{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_VIEW_AMBIGUOUS');
  legacy.segments[0].start.cameraViewId='aim';expect(()=>importEpisodePlan(legacy,declaration,{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_FIELDS_CONFLICT');
+});
+
+
+it('accepts automatic view selection only as an explicit alternative to a fixed view',()=>{
+ const value=plan() as any;value.segments[0].start.cameraViewSelection='automatic';
+ expect(validateEpisodePlan(value,{worldBuildHash:hash}).segments[0]!.start.cameraViewSelection).toBe('automatic');
+ value.segments[0].start.cameraViewId='default';
+ expect(()=>validateEpisodePlan(value,{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_FIELDS_CONFLICT');
+});
+
+it.each([false,undefined,true])('validates automatic plans against the declared capability: %s',automaticViewSelection=>{
+ const value=plan();value.segments[0]!.start={...value.segments[0]!.start,cameraViewSelection:'automatic'};
+ const camera={views:[{viewId:'default',kind:'third-person' as const}],defaultViewId:'default',...(automaticViewSelection===undefined?{}:{automaticViewSelection})};
+ if(automaticViewSelection){
+  expect(()=>validateEpisodePlanViews(value,camera)).not.toThrow();
+  expect(importEpisodePlan(value,camera,{worldBuildHash:hash})).toEqual(value);
+ }else{
+  expect(()=>validateEpisodePlanViews(value,camera)).toThrow('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
+  expect(()=>importEpisodePlan(value,camera,{worldBuildHash:hash})).toThrow('EPISODE_CAMERA_SELECTION_UNSUPPORTED');
+ }
+ expect(()=>validateEpisodePlanViews(plan(),camera)).not.toThrow();
 });

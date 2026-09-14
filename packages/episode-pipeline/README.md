@@ -22,6 +22,15 @@ Tests mirror those domains under `tests/`, with reusable fixtures in
 Configuration and prompts remain in `config/`. Public package exports and root
 production commands retain their names and arguments.
 
+## Camera selection
+
+Segment starts pin their explicit `cameraViewId` or the managed baseline default.
+When capabilities report `camera.automaticViewSelection`, a start can instead set
+`cameraViewSelection:'automatic'` to record the world's configured state-driven views.
+The two fields are mutually exclusive. The SDK owns this selection and clock; the
+pipeline does not duplicate gameplay rules. Authoring details remain in the
+[shared production camera guidance](../creator-host/docs/agent/programming.md#defaults-and-custom-views).
+
 ## Source and runtime
 
 ```sh
