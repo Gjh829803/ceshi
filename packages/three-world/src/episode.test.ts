@@ -77,6 +77,17 @@ async function fixture(parentedCamera = false,custom=false,npcNavigation=false,a
  return {world,actor,camera,renderer,canvas,frames,observer,port:observer.episode!};
 }
 describe('Episode observer ownership and relative opening',()=>{
+ it('rejects an absolute orbit cut during a native Episode lease and permits it after release',async()=>{
+  const {world,port}=await fixture(false,false,false,false,true);
+  try{
+   await port.prepareSegment({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+   const before=world.snapshot(),camera=world.inspectCamera();
+   expect(()=>world.setCameraOrbit({yawRadians:.4})).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');
+   expect(world.snapshot()).toEqual(before);expect(world.inspectCamera()).toEqual(camera);
+   port.release();world.setCameraOrbit({yawRadians:.4});
+   expect(world.inspectCamera().intent!.yawRadians).toBe(.4);expect(world.simulationTick).toBe(before.simulationTick);
+  }finally{world.dispose();}
+ });
  it('dispatches NPC navigation through the existing command owner and invalidates a released lease',async()=>{
   const {world,port}=await fixture(false,false,true);try{
    await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});

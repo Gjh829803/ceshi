@@ -6,10 +6,45 @@ import type {World} from './contracts';
 import {createHumanoidCameraDocument,type CameraDocument} from './config/camera/index';
 import {createMountedFixture} from './humanoid-runtime/mounted-test-fixture';
 import {WorldPresentationContext} from './camera/presentation-context';
+import type {CameraOrbitOptions,World as PublicWorld} from './index';
 const map={id:'camera-integration',name:'Camera',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]} as const;
 async function fixture(){return createWorld({navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});}
 function document(targetEntityId='person'):CameraDocument{return {kind:'world-camera',schemaVersion:1,defaultViewId:'third',binding:{targetEntityId},activation:'immediate',input:{cycleViewIds:['third','first','shoulder']},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:4},orientation:{recenter:{enabled:false}}}},first:{kind:'first-person'},shoulder:{kind:'shoulder'}}};}
 const engine=(world:ThreeWorld)=>(world as unknown as {engine:WorldEngine}).engine;
+
+it.each(['third','shoulder','first'])('applies public absolute %s orbit at the same physics tick and cuts displayed history',async view=>{
+ const world=await fixture();try{
+  world.setCameraFollow({configuration:document()});world.step({},0);world.setCameraView(view);
+  const api:PublicWorld=world,before=world.inspectCamera(),actor=world.getEntityState('person'),tick=world.simulationTick;
+  const options:CameraOrbitOptions={yawRadians:.7,pitchRadians:.2,...(view==='first'?{}:{distanceMeters:view==='shoulder'?2.5:5})};
+  api.setCameraOrbit(options);
+  const after=world.inspectCamera();
+  expect(world.simulationTick).toBe(tick);expect(world.getEntityState('person')).toEqual(actor);
+  expect(after.intent).toMatchObject(options);expect(after.document).toEqual(before.document);
+  expect(after.configurationRevision).toBe(before.configurationRevision);expect(after.current).toEqual(after.previous);
+  for(const alpha of [0,.5,1])engine(world).withPresentation(()=>{
+   expect(world.camera.getWorldPosition(new THREE.Vector3()).distanceTo(new THREE.Vector3(...after.current!.positionWorldMetersXYZ))).toBeLessThan(1e-7);
+   expect(world.camera.getWorldQuaternion(new THREE.Quaternion()).angleTo(new THREE.Quaternion(...after.current!.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  },alpha);
+  expect(world.inspectCamera()).toEqual(after);
+ }finally{world.dispose();}
+});
+
+it('uses real camera collision for an absolute orbit cut without moving the actor',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{
+  map:{...map,boxes:[...map.boxes,{id:'orbit-wall',position:[0,2,3],size:[10,4,.3]}]},
+  character:{instanceId:'person',object:new THREE.Group()},vehicles:[],
+ }});
+ try{
+  world.setCameraFollow({configuration:document()});world.step({},0);
+  const before=world.getEntityState('person'),tick=world.simulationTick;
+  world.setCameraOrbit({yawRadians:0,pitchRadians:.2,distanceMeters:8});
+  const camera=world.inspectCamera();expect(camera.intent!.distanceMeters).toBe(8);
+  expect(camera.diagnostics).toMatchObject({status:'measured',limited:true,colliderEntityId:'orbit-wall'});
+  expect(new THREE.Vector3(...camera.current!.positionWorldMetersXYZ).distanceTo(new THREE.Vector3(...camera.current!.pivotWorldMetersXYZ))).toBeLessThan(3);
+  expect(world.getEntityState('person')).toEqual(before);expect(world.simulationTick).toBe(tick);
+ }finally{world.dispose();}
+});
 
 it.each(['ordinary','humanoid'] as const)('moves the %s character along an off-axis opening view on first input and after reset',async kind=>{
  const world=kind==='humanoid'?await fixture():await createWorld({navigation:false});
@@ -66,8 +101,8 @@ describe('single World camera integration',()=>{
  });
  it('rejects fixed and display reentry before mutating the committed configuration',async()=>{
   const world=await fixture();try{world.setCameraFollow({configuration:document()});
-   const before=world.inspectCamera();const release=world.onUpdate(()=>{expect(()=>world.setCameraFollow({configuration:document()})).toThrow('CAMERA_TRANSACTION_REENTRY');});world.step({});release();
-   engine(world).withPresentation(()=>{expect(()=>world.setCameraView('first')).toThrow('CAMERA_TRANSACTION_REENTRY');expect(()=>world.step({})).toThrow();});
+   const before=world.inspectCamera();const release=world.onUpdate(()=>{expect(()=>world.setCameraFollow({configuration:document()})).toThrow('CAMERA_TRANSACTION_REENTRY');expect(()=>world.setCameraOrbit({yawRadians:.4})).toThrow('CAMERA_TRANSACTION_REENTRY');});world.step({});release();
+   engine(world).withPresentation(()=>{expect(()=>world.setCameraView('first')).toThrow('CAMERA_TRANSACTION_REENTRY');expect(()=>world.setCameraOrbit({yawRadians:.4})).toThrow('CAMERA_TRANSACTION_REENTRY');expect(()=>world.step({})).toThrow();});
    expect(world.inspectCamera().configurationRevision).toBe(before.configurationRevision);
   }finally{world.dispose();}
  });

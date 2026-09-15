@@ -82,8 +82,10 @@ it('routes production Agents to preset inheritance, view selection and authored 
  expect(guide).toContain('stop authored camera writes and call `world.setCameraFollow({configuration})`');
  const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'getting-started',sections:['contracts']}) as any;
  expect(schema.sdkContracts).toContain('resumeCameraViewSelection');
- for(const member of ['useAuthoredCamera','cameraMode','onUpdate'])expect(schema.sdkContracts).toContain(member);
+ for(const member of ['useAuthoredCamera','cameraMode','onUpdate','setCameraOrbit','CameraOrbitOptions'])expect(schema.sdkContracts).toContain(member);
  const nonhuman=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'nonhuman-subject',sections:['contracts']}) as any;
- for(const member of ['useAuthoredCamera','cameraMode','onUpdate','setCameraFollow'])expect(nonhuman.sdkContracts).toContain(member);
+ for(const member of ['useAuthoredCamera','cameraMode','onUpdate','setCameraFollow','setCameraOrbit','CameraOrbitOptions'])expect(nonhuman.sdkContracts).toContain(member);
+ const humanoid=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'humanoid',sections:['contracts']}) as any;
+ for(const member of ['setCameraOrbit','CameraOrbitOptions'])expect(humanoid.sdkContracts).toContain(member);
  expect(schema.cameraConfiguration.schema.properties.viewSelection.properties.rules.items.properties.when.properties.state.enum).toEqual(['swimming']);
 });

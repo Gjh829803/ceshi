@@ -18,6 +18,41 @@ changes to the scene entry reload the world. A production build includes the
 verified asset catalog closure and can be served as static files. No CDN runtime
 imports or external model fetches are needed.
 
+## Local diagnostics and reproduction
+
+The read-only browser tool `inspect_camera` (also `window.playground.inspectCamera()`)
+returns compact committed camera poses, orbit, relative roll, collision and errors.
+It does not render or enable probe capture. Existing query evidence names its
+fixed/presentation source, stale tick and dropped probes; missing samples and
+undefined pole roll are explicit. This is committed state, not a saved display frame.
+
+Development builds also expose these WebMCP tools through `window.playground.debug`:
+
+| Tool | Purpose |
+| --- | --- |
+| `inspect_debug_controls` | Read character/camera state, declared views and actual action eligibility. |
+| `set_debug_simulation` | Pause or resume the existing SDK clock. |
+| `step_debug_simulation` | Advance 1–120 fixed ticks with movement, camera input and optional first-tick crouch/prone/cancel actions. Leaves paused. |
+| `set_debug_character_pose` | Place the controlled on-foot character with clearance validation; resets its local motion/action state. Heading 0 faces −Z. Leaves paused. |
+| `set_debug_camera` | Set absolute follow orbit intent, explicitly enter authored eye/lookAt mode, or restore a declared follow view. Leaves paused. |
+| `execute_debug_vehicle_action` | Request normal vehicle entry/exit; proximity and other SDK rules still apply. |
+
+For example, call `set_debug_character_pose` with
+`{positionWorldMetersXYZ: [-294.6, 0.03, -208.4], facingYawRadians: 0}`, then
+`set_debug_camera` with `{mode: "orbit", yawRadians: 0, pitchRadians: 0.2}`.
+Use `step_debug_simulation` with `{frames: 30, input: {moveXRatio: 1, cameraYawRatio: 1}}`
+to exercise movement and orbit together. Read `inspect_camera` for the resulting
+safe camera position. Follow orbit preserves the camera document and uses SDK
+collision resolution; the requested intent may differ from the applied pose.
+Orbit placement starts with a cut, so it is not a restoration of smoothing history.
+Authored mode deliberately releases follow; restore its original default view first.
+For semantic character actions, reuse `perform_character_action` with a stable
+request ID and `get_character_operation` to inspect completion. Semantic actions
+preserve pause state and need stepping/resume to progress.
+Tools return applied/rejected status and actual state; unsupported actions are not
+forced. The existing `window.playground.reset()` restores the scene baseline.
+These controls do not provide arbitrary checkpoints or recent-input replay.
+
 ## Display previews
 
 The **性能** panel stays open during gameplay until its button is toggled again.

@@ -95,6 +95,12 @@ export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMoveme
 export interface CameraFollowOptions {
  readonly configuration:import('./config/camera/index').CameraDocument;
 }
+/** Absolute orbit intent in the active view's reference frame; at least one field is required. */
+export interface CameraOrbitOptions {
+ readonly yawRadians?:number;
+ readonly pitchRadians?:number;
+ readonly distanceMeters?:number;
+}
 export type CaptureTargetRepresentative =
  | {readonly kind:'object';readonly object:THREE.Object3D}
  | {readonly kind:'instance';readonly object:THREE.InstancedMesh;readonly instanceIndex:number};
@@ -413,6 +419,8 @@ export interface World {
  /** Install the complete camera document; explicit preserve-opening framing can adopt the first authored view. */
  setCameraFollow(options:CameraFollowOptions):void;
  setCameraView(viewId:string):void;
+ /** Immediately re-solve active follow geometry as a cut; preserves omitted intent, document, baseline and simulation. */
+ setCameraOrbit(options:CameraOrbitOptions):void;
  resumeCameraViewSelection():void;
  inspectCamera():import('./camera/state').CameraInspection;
  /** Opt-in bounded CPU samples; disabled by default and independent of simulation. */

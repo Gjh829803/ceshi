@@ -270,6 +270,12 @@ export class WorldEngine {
   }
   resumeCameraViewSelection(cut=false):void{this.cameraMutation();this.cameraController.resumeViewSelection(this.cameraFrame(),cut);this.cameraBasis=undefined;this.writeCamera();}
   setCameraView(viewId:string,cut=false):void{this.cameraMutation();if(this.camera instanceof THREE.PerspectiveCamera)validateCameraParent(this.camera);this.cameraController.setView(viewId,this.cameraFrame(),{cut});this.cameraBasis=undefined;this.writeCamera();this.inputRouter.releasePointerLock();}
+  setCameraOrbit(options:import('./contracts').CameraOrbitOptions):void {
+    this.cameraMutation();
+    if(this.camera instanceof THREE.PerspectiveCamera)validateCameraParent(this.camera);
+    this.cameraController.setOrbit(options,this.cameraFrame());
+    this.cameraBasis=undefined;this.writeCamera();
+  }
   bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
   focusInput():void {this.inputRouter.focus();}
   onRender(callback:()=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}

@@ -605,6 +605,13 @@ humanoid actors. Author the opening pose/projection, then declare
 `framing:{kind:'preserve-opening'}` with `activation:'on-input'` to retain it until
 meaningful input. The document's `binding.targetEntityId` is independent of controls.
 Declare named views in `document.views` and select them with `world.setCameraView(viewId)`.
+For an already active follow view, `world.setCameraOrbit({yawRadians, pitchRadians, distanceMeters})`
+sets absolute orbit intent in that view's reference frame; provide at least one field and omitted
+fields retain their current intent. This immediately cuts to freshly constrained camera geometry,
+rebuilding camera follow/recovery history without advancing simulation or changing the document,
+reset baseline, subject or physics. It is not a recording-checkpoint restore. Unknown/nonfinite or
+out-of-range values, pending/authored views and Episode ownership are rejected; first-person views
+accept yaw/pitch but reject distance. Collision may shorten the resulting eye distance.
 Ordinary first-person subjects supply `eyePositionLocalMetersXYZ` at registration;
 complete humanoids use stable capsule eye positions on foot and prefer their
 animation-bound eye while mounted, with a seat-relative fallback. Inspect

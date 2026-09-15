@@ -206,6 +206,7 @@ export class ThreeWorld implements API.World {
  inspectCamera(){return this.engine.inspectCamera();}
  resumeCameraViewSelection():void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.resumeCameraViewSelection();}
  setCameraView(viewId:string):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraView(viewId);}
+ setCameraOrbit(options:API.CameraOrbitOptions):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraOrbit(options);}
  useAuthoredCamera():THREE.Camera{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.engine.useAuthoredCamera();}
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}

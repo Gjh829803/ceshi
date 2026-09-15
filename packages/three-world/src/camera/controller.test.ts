@@ -437,6 +437,71 @@ it("same view selection activates pending immediately", () => {
   c.setView("orbit", frame());
   expect(c.inspect().mode).toBe("follow");
 });
+it('sets absolute orbit intent as one zero-time cut without changing omitted intent or the reset baseline', () => {
+  const {controller:c}=fixture();
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{
+    position:{anchor:{kind:'origin'},distanceMeters:4,armHalfLifeSeconds:.8},
+    orientation:{initialPitchRadians:.1,recenter:{enabled:false}},zoom:{halfLifeSeconds:.8},
+  }}}}),frame());
+  c.commitBaseline();
+  step(c,1,{orbitDeltaRadiansXY:[.2,.1],zoomDeltaMeters:1});
+  const before=c.inspect(),baseline=c.episodeBaseline();
+  c.setOrbit({yawRadians:.7,pitchRadians:.4},frame(1));
+  const after=c.inspect();
+  expect(after.intent).toMatchObject({yawRadians:.7,pitchRadians:.4,distanceMeters:5,secondsSinceOrbit:0});
+  expect(new Vector3(...after.current!.positionWorldMetersXYZ).distanceTo(new Vector3(...after.current!.pivotWorldMetersXYZ))).toBeCloseTo(5,10);
+  expect(after.current).toEqual(after.previous);
+  expect(after.current!.simulationTick).toBe(before.current!.simulationTick);
+  expect(after.cameraCommitRevision).toBe(before.cameraCommitRevision+1);
+  expect(after.document).toEqual(before.document);expect(after.documentHash).toBe(before.documentHash);
+  expect(after.configurationRevision).toBe(before.configurationRevision);expect(c.episodeBaseline()).toEqual(baseline);
+  c.setOrbit({distanceMeters:3},frame(1));
+  expect(c.inspect().intent).toMatchObject({yawRadians:.7,pitchRadians:.4,distanceMeters:3});
+  c.reset(frame(0,2));
+  expect(c.inspect().intent).toMatchObject({pitchRadians:.1,distanceMeters:4});expect(c.inspect().intent!.yawRadians).toBeCloseTo(0,10);
+});
+it('rejects invalid orbit requests before altering intent, recovery or camera history', () => {
+  const {controller:c,fail}=fixture();
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{
+    orientation:{yawLimitsRadians:{kind:'bounded',minimumRadians:-1,maximumRadians:1},recenter:{enabled:false}},
+  }}}}),frame());step(c,1,{orbitDeltaRadiansXY:[.2,.1]});
+  for(const value of [null,[],{}, {yawRadians:.4,unknown:1},{yawRadians:NaN},{pitchRadians:Infinity},{distanceMeters:undefined},{[Symbol('yaw')]:.1}] ) {
+    const before=c.inspect();expect(()=>c.setOrbit(value as never,frame(1))).toThrow('CAMERA_ORBIT_INPUT_INVALID');expect(c.inspect()).toEqual(before);
+  }
+  for(const value of [{yawRadians:1.01},{pitchRadians:Math.PI},{yawRadians:.4,distanceMeters:-1},{distanceMeters:100}]) {
+    const before=c.inspect();expect(()=>c.setOrbit(value,frame(1))).toThrow('CAMERA_INTENT_OUT_OF_RANGE');expect(c.inspect()).toEqual(before);
+  }
+  const before=c.inspect();fail();
+  expect(()=>c.setOrbit({yawRadians:.4},frame(1))).toThrow(expect.objectContaining({code:'CAMERA_CONSTRAINT_EXECUTION_FAILED'}));
+  expect(c.inspect()).toEqual(before);
+});
+it('changes active preserved-opening orbit without adopting the debug pose into its framing or document', () => {
+  const {controller:c}=fixture();c.install(anchoredOpening('origin','immediate'),frame());c.commitBaseline();
+  const before=c.inspect(),baseline=c.episodeBaseline();
+  c.setOrbit({yawRadians:before.intent!.yawRadians+.4,pitchRadians:.3},frame());
+  const after=c.inspect();
+  expect(after.resolved).toEqual(before.resolved);expect(after.document).toEqual(before.document);
+  expect(after.documentHash).toBe(before.documentHash);expect(c.episodeBaseline()).toEqual(baseline);
+  expect(after.intent!.distanceMeters).toBe(before.intent!.distanceMeters);
+  expect(new Quaternion(...after.current!.quaternionWorldXYZW).angleTo(new Quaternion(...before.current!.quaternionWorldXYZW))).toBeGreaterThan(.1);
+});
+it('requires active follow authority and permits first-person angles without inventing a distance', () => {
+  const {controller:c}=fixture();
+  expect(()=>c.setOrbit({yawRadians:.2},frame())).toThrow(expect.objectContaining({code:'CAMERA_FOLLOW_REQUIRED'}));
+  c.install(document(),frame());
+  expect(()=>c.setOrbit({yawRadians:.2},frame())).toThrow(expect.objectContaining({code:'CAMERA_FOLLOW_REQUIRED'}));
+  c.setView('eye',frame());
+  const before=c.inspect();expect(()=>c.setOrbit({yawRadians:.2,distanceMeters:0},frame())).toThrow(expect.objectContaining({code:'CAMERA_ORBIT_DISTANCE_UNAVAILABLE'}));
+  expect(c.inspect()).toEqual(before);
+  c.setOrbit({yawRadians:.2,pitchRadians:.1},frame());
+  expect(c.inspect().intent).toMatchObject({yawRadians:.2,pitchRadians:.1,distanceMeters:0});
+  const release=c.suspendViewSelection('episode'),leased=c.inspect();
+  expect(()=>c.setOrbit({yawRadians:.4},frame())).toThrow('EPISODE_CAPTURE_OWNS_CLOCK');expect(c.inspect()).toEqual(leased);
+  release();c.setOrbit({yawRadians:.4},frame());
+  c.prepareInput({},1/60,frame(1));
+  expect(()=>c.setOrbit({yawRadians:.5},frame(1))).toThrow('CAMERA_TRANSACTION_REENTRY');
+  c.evaluateAndCommit(frame(1));expect(c.inspect().intent!.yawRadians).toBe(.4);
+});
 it("relocation rotates active and dormant views exactly once and reset uses sealed references", () => {
   const f = fixture();
   const d = structuredClone(document({ activation: "immediate" })) as any;

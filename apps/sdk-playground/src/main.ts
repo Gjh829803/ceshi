@@ -1,4 +1,6 @@
 import {CameraEditorState} from "./camera/editor-state";
+import {inspectPlaygroundCamera} from './diagnostics/camera-inspection';
+import {createPlaygroundDebugControls} from './diagnostics/debug-controls';
 import {createCameraFileClient} from "./camera/file-client";
 import {createCameraPreview} from "./camera/preview";
 import {selectDragonCameraVariant} from "./camera/project-state";
@@ -448,9 +450,12 @@ function visit(n: number) {
   syncTeleport();
 }
 function pause(value = !paused, showOverlay = true) {
-  paused = value;
   if (value) sdk.stop();
   else if (ready && !preparingRender && !panelOpen) void sdk.start();
+  updatePausePresentation(value, showOverlay);
+}
+function updatePausePresentation(value: boolean, showOverlay: boolean) {
+  paused = value;
   visuals.forEach(resetVehicleWheels);
   resetFPS(value ? "已暂停" : ready ? "采样中" : "加载中");
   clearInput();
@@ -1491,7 +1496,23 @@ shell.on("exportProfiles", () => {
 });
 // Small local command surface for repeatable player selections and state inspection.
 let cancelAircraftAction: (() => void) | undefined;
+const debugControls = import.meta.env.DEV ? createPlaygroundDebugControls({
+  getWorld: () => sdk,
+  isReady: () => ready && !pageLifetime.signal.aborted,
+  isPaused: () => paused,
+  setPaused: async value => {
+    if (!value && (preparingRender || panelOpen)) throw new Error('Close the editor panel and wait for scene preparation before resuming.');
+    if (value) sdk.stop();
+    else await sdk.start();
+    updatePausePresentation(value, false);
+  },
+  clearInput: () => { clearInput(); humanDemo = null; },
+  render: () => renderPausedState(),
+  setCameraOrbit: options => sdk.setCameraOrbit(options),
+}) : undefined;
 const labAPI = {
+  ...(debugControls ? { debug: debugControls } : {}),
+  inspectCamera:()=>inspectPlaygroundCamera(sdk),
   inspectAircraftActions: () => ({
     vehicleId: sim.controlledActor.vehicle?.motion.aircraft ? sim.controlledActor.vehicle.spec.id : null,
     actions: runtime.inspectAircraftActions(),
@@ -1625,6 +1646,16 @@ if (context?.registerTool) {
       const input={...emptyInput(),...request.input};runtime.setInput(input)();
       clearInput();pause(true,false);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
     });
+  for (const tool of debugControls?.tools ?? []) {
+    register(tool.name, tool.description, tool.inputSchema, tool.annotations.readOnlyHint, tool.execute);
+  }
+  register(
+    "inspect_camera",
+    "Read compact committed camera pose, orbit, relative roll, collision and existing query evidence. Does not render, enable sampling or change the world. Query evidence identifies fixed/presentation source and stale ticks.",
+    { type: "object", properties: {}, additionalProperties: false },
+    true,
+    () => labAPI.inspectCamera(),
+  );
   register(
     "inspect_playground",
     "Read current vehicle, location, speed and character state.",

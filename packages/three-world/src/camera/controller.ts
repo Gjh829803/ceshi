@@ -41,6 +41,7 @@ import {
   validateCameraProposal,
 } from "./presentation";
 import type { CameraFixedFrame, PresentationSampleContext } from "./state";
+import type { CameraOrbitOptions } from "../contracts";
 import { cameraSubjectCapabilities, cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
 import { prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
 import { evaluateFirstPerson } from "./strategies/first-person";
@@ -726,6 +727,38 @@ export class CameraController {
       if(!this.state.document)throw failure('CAMERA_FOLLOW_REQUIRED');
       const old=this.state,candidate=this.viewCandidate(old,viewId,this.sample(old.document!,frame),options);
       this.commitCandidate(candidate,frame,0,candidate.transition.kind==='none',old.history);
+    });
+  }
+  /** An explicit orbit cut rebuilds camera geometry/recovery, not the World or its reset baseline. */
+  setOrbit(options:CameraOrbitOptions,frame:CameraControllerFrame):void {
+    this.admit(frame);
+    if(this.selectionHoldsHas('episode'))throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
+    this.transaction(()=>{
+      const old=this.state;
+      if(old.mode!=='follow'||!old.document||!old.resolved||!old.intent||!old.subject)
+        throw failure('CAMERA_FOLLOW_REQUIRED','setCameraOrbit requires an active follow view.');
+      const allowed=['yawRadians','pitchRadians','distanceMeters'] as const;
+      if(!options||typeof options!=='object'||Array.isArray(options)||Reflect.ownKeys(options).length===0||
+        Reflect.ownKeys(options).some(key=>typeof key!=='string'||!allowed.includes(key as typeof allowed[number])))
+        throw failure('CAMERA_ORBIT_INPUT_INVALID');
+      const patch:Record<string,number>={};
+      for(const key of Reflect.ownKeys(options) as (keyof CameraOrbitOptions)[]){
+        const value=options[key];
+        if(typeof value!=='number'||!Number.isFinite(value))throw failure('CAMERA_ORBIT_INPUT_INVALID');
+        patch[key]=value;
+      }
+      if(old.resolved.kind==='first-person'&&Object.hasOwn(patch,'distanceMeters'))
+        throw failure('CAMERA_ORBIT_DISTANCE_UNAVAILABLE','First-person views do not have an orbit distance.');
+      const intent:CameraIntent={...old.intent,...patch,secondsSinceOrbit:0};
+      const clamped=clampCameraIntent(intent,old.resolved);
+      if(allowed.some(key=>clamped[key]!==intent[key]))throw failure('CAMERA_INTENT_OUT_OF_RANGE');
+      const subject=this.sample(old.document,frame);
+      if(!sameCameraSubject(subject,old.subject))throw failure('CAMERA_LIFECYCLE_EVENT_REQUIRED');
+      // Complete admission before discarding any geometry/recovery history. A
+      // failed solve restores the solver transaction and leaves state unchanged.
+      this.commitCandidate({...old,subject,intent,history:undefined,pendingPose:undefined,
+        transition:{kind:'none',configuredDurationSeconds:old.resolved.transition.durationSeconds,
+          effectiveDurationSeconds:0,reason:'requested-cut'}},frame,0,true,old.history);
     });
   }
   private selectionHoldsHas(owner:'editing'|'episode'):boolean{return [...this.selectionHolds.values()].includes(owner);}
