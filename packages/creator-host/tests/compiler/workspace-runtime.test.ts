@@ -21,6 +21,8 @@ it('materializes only runtime sources, compiles edits and packages the exact sou
   const sources=await service.compiler.sourceFiles();
   expect(sources.has('sdk/three-world/src/world.ts')).toBe(true);
   expect(sources.has('sdk/camera-collision/src/index.ts')).toBe(true);
+  expect(sources.has('sdk/three-world/src/config/camera/discovery.generated.json')).toBe(true);
+  expect([...sources.keys()].some(name=>name.includes('test-fixtures/')||name.endsWith('/main-native-trajectories.json'))).toBe(false);
   expect([...sources.keys()].some(name=>name.includes('.test.')||name.includes('apps/creator-cloud')||name.includes('auth.json'))).toBe(false);
   const first=await service.compiler.prepare();expect(first.runtimeSourceHash).toBe(result.runtimeSourceHash);
   const index=path.join(root,'sdk/three-world/src/index.ts');await writeFile(index,(await readFile(index,'utf8'))+'\nconsole.info("WORKSPACE_RUNTIME_EDIT");\n');

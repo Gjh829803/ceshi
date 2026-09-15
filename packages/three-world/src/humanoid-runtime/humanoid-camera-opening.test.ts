@@ -1,4 +1,4 @@
-import baseline from '../camera/fixtures/main-native-trajectories.json';
+import baseline from '../../test-fixtures/camera/main-native-trajectories.json';
 import {createHumanoidCameraDocument} from '../config/camera';
 import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Vector3 } from 'three';

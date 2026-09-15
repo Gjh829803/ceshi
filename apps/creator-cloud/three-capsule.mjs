@@ -87,7 +87,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   function tree(relative) {
     assert(lstatSync(path.join(repositoryRoot, relative)).isDirectory());
     for (const entry of readdirSync(path.join(repositoryRoot, relative), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (entry.name.startsWith('.') || DENIED.has(entry.name) || entry.name === 'AGENTS.md' || ['tests', 'scripts'].includes(entry.name) || entry.name.endsWith('.test.ts')) continue;
+      if (entry.name.startsWith('.') || DENIED.has(entry.name) || entry.name === 'AGENTS.md' || ['tests', 'test-fixtures', 'scripts'].includes(entry.name) || entry.name.endsWith('.test.ts')) continue;
       const child = `${relative}/${entry.name}`;
       assert(!entry.isSymbolicLink(), `Source symlink rejected: ${child}`);
       if (entry.isDirectory()) tree(child);
