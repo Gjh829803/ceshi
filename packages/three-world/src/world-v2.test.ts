@@ -1,11 +1,39 @@
 import * as THREE from 'three';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWorld, type ThreeWorld } from './world.js';
 import type { CommandReceipt, TaskScope } from './contracts.js';
 import {ActorResources,actorResources} from './actor-resources';
 
 const liveWorlds: ThreeWorld[] = [];
 afterEach(() => { for (const world of liveWorlds.splice(0)) world.dispose(); });
+
+it('reports realtime update CPU time without counting rendering, manual capture or advancing observation', async () => {
+  const world = await createWorld({navigation:false}); liveWorlds.push(world);
+  let next: FrameRequestCallback | undefined, clock = 0;
+  vi.stubGlobal('requestAnimationFrame', (callback:FrameRequestCallback) => { next = callback; return 1; });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  const timing = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  const samples:import('./engine').WorldFrameTiming[] = [];
+  world.onUpdate(() => { clock += 5; });
+  world.onRender(() => { clock += 7; });
+  const stopBroken = world.onFrameTiming(() => { throw Error('diagnostic failure'); });
+  const stop = world.onFrameTiming(sample => samples.push(sample));
+  try {
+    world.step({},1); world.render();
+    expect(samples).toHaveLength(0);
+    await world.start(); next!(1000); next!(1017);
+    expect(samples).toHaveLength(2);
+    expect(samples[0]!.cpuUpdateMilliseconds).toBe(0);
+    expect(samples[1]!.cpuUpdateMilliseconds).toBe(5);
+    expect(samples[1]!.source).toBe('realtime');
+    expect(Object.isFrozen(samples[1])).toBe(true);
+    const tick = world.snapshot().simulationTick;
+    world.snapshot(); expect(world.snapshot().simulationTick).toBe(tick);
+    stop(); stopBroken(); next!(1034);
+    expect(samples).toHaveLength(2);
+    world.stop();
+  } finally { world.stop(); timing.mockRestore(); vi.unstubAllGlobals(); }
+});
 
 it('acquires actor resources atomically and retains only persistent relationship resources',()=>{
  const resources=new ActorResources(),nav={},action={},other={};

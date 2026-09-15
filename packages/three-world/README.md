@@ -1669,3 +1669,11 @@ retains its actual displayed pose. Observers may draw an independent view here,
 but must not advance World or take ownership of the gameplay camera. An observer
 using committed subjects may differ from the gameplay interpolation by one fixed
 tick; a live gameplay monitor should copy the source render pixels instead.
+
+`world.onFrameTiming(callback)` optionally reports CPU update wall time for each
+successful realtime frame, with `source: 'realtime'`, `simulationTick`,
+`sampledAtMilliseconds` (monotonic performance clock) and `cpuUpdateMilliseconds`.
+The update includes all fixed steps in that frame; it excludes presentation,
+render submission, GPU work and observer callbacks. Timing runs only while
+subscribed; the returned function unsubscribes. Manual stepping and capture emit
+no samples. Callback failures are isolated from runtime execution.

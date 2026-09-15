@@ -441,7 +441,9 @@ export function mountShell(host: HTMLElement) {
                 side="right"
                 align="end"
                 sideOffset={12}
-                onEscapeKeyDown={(e) => e.stopPropagation()}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
               >
                 <Pacing/>
               </PopoverContent>

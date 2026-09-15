@@ -58,7 +58,8 @@ export function cameraDocumentPlugin(root: string): Plugin {
     name: 'playground-camera-document', enforce: 'pre',
     async load(id) {
       if (!id.endsWith('?camera-document')) return;
-      const file = id.slice(0, -'?camera-document'.length);
+      // Vite normalizes module IDs to slashes, while the registry uses native paths.
+      const file = path.resolve(id.slice(0, -'?camera-document'.length));
       if (!files.has(file)) throw new Error('CAMERA_IMPORT_UNKNOWN');
       await checkedPath(path.resolve(root), file);
       const bytes = await readFile(file);

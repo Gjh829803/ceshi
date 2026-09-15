@@ -1,10 +1,27 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState, useSyncExternalStore } from "react";
 import type { FrameRateReading } from "@worldkit/preset-content/fps";
+import { performanceDetails } from "./performance-details";
+
+function PerformanceDetails() {
+  const data = useSyncExternalStore(performanceDetails.subscribe, performanceDetails.getSnapshot);
+  useEffect(() => { performanceDetails.setEnabled(true); return () => performanceDetails.setEnabled(false); }, []);
+  const ms = (value: number | null | undefined) => value == null ? "—" : `${value.toFixed(2)} ms`;
+  const gpuLabel = data?.gpuStatus === 'unsupported' ? '不支持' : data?.gpuStatus === 'lost' ? '上下文丢失' : data?.gpuStatus === 'invalid' ? '样本无效' : data?.status === 'live' ? '等待结果' : '—';
+  return <div className="performance-details-values">
+    <div className="pace-row"><span>渲染分辨率</span><b>{data ? `${data.width} × ${data.height} px` : '—'}</b></div>
+    <div className="pace-row"><span>渲染像素比例</span><b>{data ? data.pixelRatio.toFixed(2) : '—'}</b></div>
+    <div className="pace-row" title="近 0.5 秒每个实时帧内所有固定更新的平均 CPU 耗时；不含显示插值与渲染"><span>CPU 更新</span><b>{ms(data?.cpuUpdate)}</b></div>
+    <div className="pace-row" title="近 0.5 秒主游戏画面 renderer.render 调用的平均 CPU 耗时；不是 GPU 耗时"><span>CPU 渲染提交</span><b>{ms(data?.cpuSubmit)}</b></div>
+    <div className="pace-row" title="最近一次有效的主游戏画面 GPU 异步计时；不包含屏幕呈现等待"><span>GPU</span><b>{data?.gpu != null ? ms(data.gpu) : gpuLabel}</b></div>
+    <div className="pace-caption">{data?.status === 'hidden' ? '后台 · 采样暂停' : data?.status === 'idle' ? '暂停或无实时帧' : data?.status === 'live' ? '实时采样 · 每 0.5 秒更新' : '采样中…'}</div>
+  </div>;
+}
 export function FramePacingView({
   reading,
 }: {
   reading: FrameRateReading | null;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const r = reading,
     canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -57,7 +74,13 @@ export function FramePacingView({
         aria-label="最近五秒回调间隔曲线，越高代表等待越久，图表上限100毫秒"
       />
       <div className="pace-caption">曲线 0–100 ms · 越低越均匀</div>
-      <div className="pace-note">屏幕实际呈现帧率：未测量</div>
+      <div className="pace-note" title="近 1 秒浏览器动画回调频率，每 0.5 秒更新；不代表屏幕实际呈现帧率">
+        FPS: {r ? r.fps.toFixed(0) : "—"}
+      </div>
+      <button className="performance-details-toggle" type="button" aria-expanded={detailsOpen} aria-controls="performanceDetails" onClick={() => setDetailsOpen(open => !open)}>
+        {detailsOpen ? '▾' : '▸'} 详细信息
+      </button>
+      {detailsOpen && <div id="performanceDetails"><PerformanceDetails/></div>}
     </section>
   );
 }

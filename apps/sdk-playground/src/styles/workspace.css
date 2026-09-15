@@ -600,6 +600,22 @@ kbd {
   padding-top: 6px;
   border-top: 1px solid var(--line);
 }
+.performance-details-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: #adc9bf;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.performance-details-toggle:focus-visible { outline: 1px solid #baf2db; outline-offset: 2px; }
+.performance-details-values .pace-row { gap: 12px; }
+.performance-details-values .pace-row b { white-space: nowrap; }
 .panel {
   background: #0c2932f2;
   border: 1px solid var(--line);

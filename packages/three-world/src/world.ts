@@ -210,6 +210,8 @@ export class ThreeWorld implements API.World {
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  /** Observes a completed render after presentation materials are restored; observers must not advance simulation. */
  onRender(callback:()=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
+ onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
  onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.updating.add(callback);return()=>{this.updating.delete(callback);};}
  onReset(callback:()=>void):()=>void{this.resets.add(callback);return()=>{this.resets.delete(callback);};}
  onDispose(callback:()=>void):()=>void{this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}

@@ -45,6 +45,9 @@ export type WorldOptions = {
   humanoid?:HumanoidRuntimeOptions;
 };
 export type CommandResult = { status: 'applied' | 'rejected'; revision: number; error?: { code: string; message: string } };
+/** CPU wall time spent advancing one realtime frame, including all fixed steps.
+ * Excludes presentation, rendering, GPU execution and observer callbacks. */
+export type WorldFrameTiming = Readonly<{source:'realtime';simulationTick:number;sampledAtMilliseconds:number;cpuUpdateMilliseconds:number}>;
 const position = (object: THREE.Object3D): THREE.Vector3 => worldPose(object).position;
 const tuple = (value: THREE.Vector3): Vec3 => [value.x, value.y, value.z];
 const finiteVec = (value: unknown, label: string): Vec3 => {
@@ -95,6 +98,7 @@ export class WorldEngine {
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
   private readonly inputRouter: WorldInputRouter;
   private readonly renders = new Set<() => void>();
+  private readonly frameTimings = new Set<(sample:WorldFrameTiming)=>void>();
   private controlled: string | undefined;
   private tick = 0;
   private revision = 0;
@@ -268,6 +272,7 @@ export class WorldEngine {
   bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
   focusInput():void {this.inputRouter.focus();}
   onRender(callback:()=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}
+  onFrameTiming(callback:(sample:WorldFrameTiming)=>void):()=>void {this.frameTimings.add(callback);return()=>{this.frameTimings.delete(callback);};}
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
   onAfterUpdate(callback:()=>void):()=>void {this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
   setDriveProvider(provider:NonNullable<WorldEngine['driveProvider']>):void {this.driveProvider=provider;}
@@ -709,7 +714,15 @@ export class WorldEngine {
     // can precede performance.now() sampled while that frame is being prepared.
     this.lastFrameTime = 0;
     const frame = (time: number) => { if (!this.running || this.disposed || generation !== this.frameGeneration) return; const elapsed = this.lastFrameTime ? Math.max(0, (time - this.lastFrameTime) / 1000) : 0; this.lastFrameTime = time;
-      try { this.advance(elapsed); this.render(Math.min(1,Math.max(0,this.accumulatorSeconds/this.fixedTimeStepSeconds))); } catch (error) { this.recordError('WORLD_FRAME_FAILED', error); this.stop(); return; }
+      const measured = this.frameTimings.size > 0;
+      const started = measured ? performance.now() : 0;
+      let updateFinished = 0;
+      try { this.advance(elapsed); updateFinished = measured ? performance.now() : 0; this.render(Math.min(1,Math.max(0,this.accumulatorSeconds/this.fixedTimeStepSeconds))); } catch (error) { this.recordError('WORLD_FRAME_FAILED', error); this.stop(); return; }
+      if(measured){
+        const sample:WorldFrameTiming=Object.freeze({source:'realtime',simulationTick:this.tick,sampledAtMilliseconds:updateFinished,cpuUpdateMilliseconds:updateFinished-started});
+        // Optional diagnostics cannot stop the simulation or prevent other observers.
+        for(const callback of this.frameTimings)try{callback(sample);}catch{/* observer failure stays local */}
+      }
       if (this.running && generation === this.frameGeneration) this.frameId = requestAnimationFrame(frame);
     };
     this.frameId = requestAnimationFrame(frame);
@@ -823,7 +836,7 @@ export class WorldEngine {
     this.failures.push({code,message:diagnostic.message,simulationTick:this.tick,...(entityId?{entityId}:{}),diagnostic});
   }
   dispose(): void {
-    if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.cameraSubjectVisibility.dispose(); this.keyboard.detach(); this.renders.clear();this.releaseViewport?.();
+    if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.cameraSubjectVisibility.dispose(); this.keyboard.detach(); this.renders.clear();this.frameTimings.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
     const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).runtimeActor?.animation;return binding?[binding]:[];}));

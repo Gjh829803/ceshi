@@ -12,6 +12,7 @@ import {updateSpaceExhaust} from '@worldkit/preset-content/space-model';
 import {mountSpacePanel} from './space-panel';
 import { createNpcPlayground } from "./npc-playground";
 import { mountShell } from "./shell";
+import { performanceDetails } from "./performance-details";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { DRAGON_VARIANTS, readDragonVariant } from '@worldkit/preset-content/dragon-variants';
 import { readMapHash, writeMapHash } from "./map-route";
@@ -160,6 +161,7 @@ const sdk = await createWorld({
     },
   },
 });
+performanceDetails.attach(renderer, sdk, scene, camera);
 let cameraProject = loadCameraProject(initialMap.id, dragonVariant.id);
 sdk.setCameraFollow({configuration:cameraProject.document});
 const cameraEditors=new Map<string,CameraEditorBinding>();
@@ -970,6 +972,7 @@ window.addEventListener(
     library.dispose();
     workbench.dispose();
     cancelAnimationFrame(pacingFrame);
+    performanceDetails.dispose();
     session.dispose();
     shell.dispose();
   },

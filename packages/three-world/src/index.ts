@@ -4,6 +4,7 @@ export {setObjectColor,type ObjectColorBinding} from './object-color.js';
 export {INTERACTION_SLOT_SCHEMA} from './interaction-contracts.js';
 export type * from './episode-contracts.js';
 export { ThreeWorld, createWorld, type WorldOptions } from './world.js';
+export type {WorldFrameTiming} from './engine.js';
 export { DEFAULT_SHADOW_SETTINGS, resolveShadowSettings } from './config/presentation.js';
 export { createHumanoidWorld, DEFAULT_HUMANOID_ASSET_ID, type HumanoidWorldOptions, type HumanoidAssetDefinition, type HumanoidResource } from './humanoid.js';
 export { Character as HumanoidCharacter } from './humanoid-runtime/character.js';

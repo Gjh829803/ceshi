@@ -20,6 +20,17 @@ imports or external model fetches are needed.
 
 ## Display previews
 
+The **性能** panel stays open during gameplay until its button is toggled again.
+Its FPS and interval graph measure browser animation callback cadence, not screen
+presentation. Expand **详细信息** for actual drawing-buffer resolution, renderer
+pixel ratio, mean CPU update and main-view render-submission times over each
+0.5-second reporting window, and the latest valid asynchronous GPU timer result.
+CPU update excludes display interpolation; CPU submission is not GPU time.
+Unsupported or invalid GPU timing is labeled explicitly. Details are sampled only
+while expanded; paused/background samples expire, and collapsing releases timing
+hooks and GPU queries. Auxiliary camera/offscreen renders are excluded from render
+timing. These diagnostics do not alter the SDK clock or recording.
+
 The viewport toolbar separates **画面** (material, clay, unlit, linear depth,
 type colors and camera-space geometry normals) from **显示检查**. Each mode has
 an always-visible purpose and usage explanation. The inspector shares one scope
