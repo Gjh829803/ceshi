@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "entry": "config/camera/index.ts",
   "sources": {
-    "config/camera/behavior-fields.ts": "da2cd000c7c8d3d3591b4e74540dcf667ddcf3ff094d6a094639b499799daeca",
-    "config/camera/defaults.ts": "f60352526d744ec7e2cc3173281c6d883c291380013d62246b1ff768db811bf9",
-    "config/camera/field-primitives.ts": "e976a58d2e84f9c4986f10b7f431a50b7a0fbd823187f81a44a0ad4c4fe6c737",
-    "config/camera/fields.ts": "5a25e625e8b0db0707a0e7b0eb86828f6fef5106fa5d2861b0c561ce8bbf5855",
+    "config/camera/behavior-fields.ts": "072e8c7a714199ab2cc1443d187bfcc463c6c4d93277d082db2d9b97f27af62f",
+    "config/camera/defaults.ts": "478bda2b5c90391c038d1c305754acdf92c842289f5dee25a7f79f8d72583b84",
+    "config/camera/field-primitives.ts": "ecc52619860e26865c1f25e0270b42c8acfa9a82fb1839ba5df60914e9f02780",
+    "config/camera/fields.ts": "68be6757bd5bf544858ea32fbdd576f360503ff844fb482b1a75ab63dccafb5e",
     "config/camera/humanoid.ts": "9d13277448bfdb63622dca1b4692f434c9f40b10886b0925789f4074c2f15d8f",
     "config/camera/index.ts": "cc16fb803240d8b3f0ca660f0ad56edb6051dec2e519e3b760436cc8d41cb1a3",
-    "config/camera/resolve.ts": "ec35eaaf291b0deff6e9d77be9f1d5cf0b9014d500931dfa119fc537f5cde338",
+    "config/camera/resolve.ts": "e317f25a1b1cbed4d852ec504099859eefe0447525e8696ded84a36e999c0520",
     "config/camera/serialization.ts": "ee8638e736b32e472be5f9aa2eda0722eb00ee77b9efaf52158c6d77a1c43f84",
-    "config/camera/validation.ts": "4e5f828ff7f6c05357a881f656bf6c30128811c3f0b67f665b5912427ed59bc1",
-    "config/camera/validator.generated.ts": "8773e69061de9c9aa6ca200255d49f2c0860ba22d2511e7e0c8b1d0f144e8794",
+    "config/camera/validation.ts": "3abb4c0a02707efcb3f3eacb9ac9306d0a2f326ccdad7d85d37f7c9494ec5129",
+    "config/camera/validator.generated.ts": "84cfb3d3615f86916db523f3afe837aa91058263c0834cbb9660fefe5272cdf5",
     "control-support.ts": "57e0b6190cc281a71dec3f5b92531ae7e38a58c10614e3cb15dd5b9fed3f5008"
   },
   "schema": {
@@ -460,6 +460,8 @@
             "additionalProperties": false,
             "properties": {
               "anchor": {
+                "title": "跟随锚点",
+                "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。",
                 "anyOf": [
                   {
                     "type": "object",
@@ -551,7 +553,9 @@
                       "heading",
                       "subject",
                       "orbit"
-                    ]
+                    ],
+                    "title": "偏移坐标空间",
+                    "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
                   },
                   "offsetMetersXYZ": {
                     "type": "array",
@@ -566,17 +570,23 @@
               "subjectTranslationHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "主体平移半衰期",
+                "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
               },
               "anchorHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "锚点偏移半衰期",
+                "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
               },
               "armHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "相机臂半衰期",
+                "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
               },
               "distanceMeters": {
                 "type": "number",
@@ -654,7 +664,9 @@
                 ]
               },
               "inheritSubjectYaw": {
-                "type": "boolean"
+                "type": "boolean",
+                "title": "继承主体水平转向",
+                "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
               },
               "referenceFrame": {
                 "type": "string",
@@ -662,7 +674,9 @@
                   "world-up",
                   "subject-up",
                   "subject-heading"
-                ]
+                ],
+                "title": "环绕参考坐标系",
+                "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
               },
               "recenter": {
                 "type": "object",
@@ -674,17 +688,61 @@
                   "delaySeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "回正等待时间",
+                    "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
                   },
                   "minimumSpeedMetersPerSecond": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters/second"
+                    "$comment": "unit:meters/second",
+                    "title": "回正最低速度",
+                    "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
                   },
                   "yawHalfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "水平回正半衰期",
+                    "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
+                  },
+                  "yawTarget": {
+                    "title": "水平回正目标",
+                    "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "subject-forward"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "movement-direction"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "world-forward"
+                          },
+                          "yawRadians": {
+                            "type": "number",
+                            "$comment": "unit:radians",
+                            "default": 0
+                          }
+                        }
+                      }
+                    ]
                   },
                   "pitch": {
                     "type": "object",
@@ -699,12 +757,16 @@
                         "enum": [
                           "configured",
                           "subject"
-                        ]
+                        ],
+                        "title": "俯仰回正目标来源",
+                        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
                       },
                       "halfLifeSeconds": {
                         "type": "number",
                         "minimum": 0,
-                        "$comment": "unit:seconds"
+                        "$comment": "unit:seconds",
+                        "title": "响应半衰期",
+                        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                       }
                     }
                   }
@@ -752,7 +814,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   },
                   "speedLimit": {
                     "anyOf": [
@@ -784,12 +848,16 @@
                   "clearHoldSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "清障后等待",
+                    "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
                   },
                   "releaseDeadbandMeters": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters"
+                    "$comment": "unit:meters",
+                    "title": "回伸距离死区",
+                    "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
                   }
                 }
               },
@@ -826,7 +894,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   }
                 }
               },
@@ -919,7 +989,9 @@
               "halfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "响应半衰期",
+                "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
               }
             }
           },
@@ -969,6 +1041,8 @@
             "additionalProperties": false,
             "properties": {
               "anchor": {
+                "title": "跟随锚点",
+                "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。",
                 "anyOf": [
                   {
                     "type": "object",
@@ -1060,7 +1134,9 @@
                       "heading",
                       "subject",
                       "orbit"
-                    ]
+                    ],
+                    "title": "偏移坐标空间",
+                    "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
                   },
                   "offsetMetersXYZ": {
                     "type": "array",
@@ -1075,17 +1151,23 @@
               "subjectTranslationHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "主体平移半衰期",
+                "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
               },
               "anchorHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "锚点偏移半衰期",
+                "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
               },
               "armHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "相机臂半衰期",
+                "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
               }
             }
           },
@@ -1158,7 +1240,9 @@
                 ]
               },
               "inheritSubjectYaw": {
-                "type": "boolean"
+                "type": "boolean",
+                "title": "继承主体水平转向",
+                "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
               },
               "referenceFrame": {
                 "type": "string",
@@ -1166,7 +1250,9 @@
                   "world-up",
                   "subject-up",
                   "subject-heading"
-                ]
+                ],
+                "title": "环绕参考坐标系",
+                "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
               },
               "recenter": {
                 "type": "object",
@@ -1178,17 +1264,61 @@
                   "delaySeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "回正等待时间",
+                    "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
                   },
                   "minimumSpeedMetersPerSecond": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters/second"
+                    "$comment": "unit:meters/second",
+                    "title": "回正最低速度",
+                    "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
                   },
                   "yawHalfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "水平回正半衰期",
+                    "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
+                  },
+                  "yawTarget": {
+                    "title": "水平回正目标",
+                    "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "subject-forward"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "movement-direction"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "world-forward"
+                          },
+                          "yawRadians": {
+                            "type": "number",
+                            "$comment": "unit:radians",
+                            "default": 0
+                          }
+                        }
+                      }
+                    ]
                   },
                   "pitch": {
                     "type": "object",
@@ -1203,12 +1333,16 @@
                         "enum": [
                           "configured",
                           "subject"
-                        ]
+                        ],
+                        "title": "俯仰回正目标来源",
+                        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
                       },
                       "halfLifeSeconds": {
                         "type": "number",
                         "minimum": 0,
-                        "$comment": "unit:seconds"
+                        "$comment": "unit:seconds",
+                        "title": "响应半衰期",
+                        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                       }
                     }
                   }
@@ -1257,7 +1391,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   },
                   "speedLimit": {
                     "anyOf": [
@@ -1289,12 +1425,16 @@
                   "clearHoldSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "清障后等待",
+                    "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
                   },
                   "releaseDeadbandMeters": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters"
+                    "$comment": "unit:meters",
+                    "title": "回伸距离死区",
+                    "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
                   }
                 }
               }
@@ -1324,7 +1464,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   }
                 }
               }
@@ -1363,6 +1505,8 @@
             "additionalProperties": false,
             "properties": {
               "anchor": {
+                "title": "跟随锚点",
+                "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。",
                 "anyOf": [
                   {
                     "type": "object",
@@ -1454,7 +1598,9 @@
                       "heading",
                       "subject",
                       "orbit"
-                    ]
+                    ],
+                    "title": "偏移坐标空间",
+                    "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
                   },
                   "offsetMetersXYZ": {
                     "type": "array",
@@ -1469,17 +1615,23 @@
               "subjectTranslationHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "主体平移半衰期",
+                "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
               },
               "anchorHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "锚点偏移半衰期",
+                "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
               },
               "armHalfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "相机臂半衰期",
+                "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
               },
               "distanceMeters": {
                 "type": "number",
@@ -1557,7 +1709,9 @@
                 ]
               },
               "inheritSubjectYaw": {
-                "type": "boolean"
+                "type": "boolean",
+                "title": "继承主体水平转向",
+                "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
               },
               "referenceFrame": {
                 "type": "string",
@@ -1565,7 +1719,9 @@
                   "world-up",
                   "subject-up",
                   "subject-heading"
-                ]
+                ],
+                "title": "环绕参考坐标系",
+                "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
               },
               "recenter": {
                 "type": "object",
@@ -1577,17 +1733,61 @@
                   "delaySeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "回正等待时间",
+                    "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
                   },
                   "minimumSpeedMetersPerSecond": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters/second"
+                    "$comment": "unit:meters/second",
+                    "title": "回正最低速度",
+                    "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
                   },
                   "yawHalfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "水平回正半衰期",
+                    "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
+                  },
+                  "yawTarget": {
+                    "title": "水平回正目标",
+                    "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "subject-forward"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "movement-direction"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "const": "world-forward"
+                          },
+                          "yawRadians": {
+                            "type": "number",
+                            "$comment": "unit:radians",
+                            "default": 0
+                          }
+                        }
+                      }
+                    ]
                   },
                   "pitch": {
                     "type": "object",
@@ -1602,12 +1802,16 @@
                         "enum": [
                           "configured",
                           "subject"
-                        ]
+                        ],
+                        "title": "俯仰回正目标来源",
+                        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
                       },
                       "halfLifeSeconds": {
                         "type": "number",
                         "minimum": 0,
-                        "$comment": "unit:seconds"
+                        "$comment": "unit:seconds",
+                        "title": "响应半衰期",
+                        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                       }
                     }
                   }
@@ -1655,7 +1859,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   },
                   "speedLimit": {
                     "anyOf": [
@@ -1687,12 +1893,16 @@
                   "clearHoldSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "清障后等待",
+                    "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
                   },
                   "releaseDeadbandMeters": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:meters"
+                    "$comment": "unit:meters",
+                    "title": "回伸距离死区",
+                    "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
                   }
                 }
               },
@@ -1729,7 +1939,9 @@
                   "halfLifeSeconds": {
                     "type": "number",
                     "minimum": 0,
-                    "$comment": "unit:seconds"
+                    "$comment": "unit:seconds",
+                    "title": "响应半衰期",
+                    "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
                   }
                 }
               },
@@ -1822,7 +2034,9 @@
               "halfLifeSeconds": {
                 "type": "number",
                 "minimum": 0,
-                "$comment": "unit:seconds"
+                "$comment": "unit:seconds",
+                "title": "响应半衰期",
+                "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
               }
             }
           }
@@ -1973,7 +2187,9 @@
               "positionMetersXYZ"
             ]
           }
-        ]
+        ],
+        "title": "跟随锚点",
+        "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -1988,7 +2204,9 @@
           "heading",
           "subject",
           "orbit"
-        ]
+        ],
+        "title": "偏移坐标空间",
+        "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2013,7 +2231,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "主体平移半衰期",
+        "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2025,7 +2245,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "锚点偏移半衰期",
+        "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2037,7 +2259,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "相机臂半衰期",
+        "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2158,7 +2382,9 @@
       "kind": "third-person",
       "path": "orientation.inheritSubjectYaw",
       "schema": {
-        "type": "boolean"
+        "type": "boolean",
+        "title": "继承主体水平转向",
+        "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2172,7 +2398,9 @@
           "world-up",
           "subject-up",
           "subject-heading"
-        ]
+        ],
+        "title": "环绕参考坐标系",
+        "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2183,7 +2411,7 @@
       "schema": {
         "type": "boolean"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2192,10 +2420,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "回正等待时间",
+        "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2204,10 +2434,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters/second"
+        "$comment": "unit:meters/second",
+        "title": "回正最低速度",
+        "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
       },
       "unit": "meters/second",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2216,10 +2448,66 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "水平回正半衰期",
+        "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "third-person",
+      "path": "orientation.recenter.yawTarget",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-forward"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "movement-direction"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "world-forward"
+              },
+              "yawRadians": {
+                "type": "number",
+                "$comment": "unit:radians",
+                "default": 0
+              }
+            },
+            "required": [
+              "kind",
+              "yawRadians"
+            ]
+          }
+        ],
+        "title": "水平回正目标",
+        "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。"
+      },
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2230,7 +2518,7 @@
         "$comment": "unit:radians"
       },
       "unit": "radians",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2241,9 +2529,11 @@
         "enum": [
           "configured",
           "subject"
-        ]
+        ],
+        "title": "俯仰回正目标来源",
+        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2252,10 +2542,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2321,7 +2613,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2373,7 +2667,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "清障后等待",
+        "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2385,7 +2681,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters"
+        "$comment": "unit:meters",
+        "title": "回伸距离死区",
+        "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
       },
       "unit": "meters",
       "applicability": "always",
@@ -2443,7 +2741,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2591,7 +2891,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2752,7 +3054,9 @@
               "positionMetersXYZ"
             ]
           }
-        ]
+        ],
+        "title": "跟随锚点",
+        "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2767,7 +3071,9 @@
           "heading",
           "subject",
           "orbit"
-        ]
+        ],
+        "title": "偏移坐标空间",
+        "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2792,7 +3098,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "主体平移半衰期",
+        "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2804,7 +3112,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "锚点偏移半衰期",
+        "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2816,7 +3126,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "相机臂半衰期",
+        "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -2925,7 +3237,9 @@
       "kind": "first-person",
       "path": "orientation.inheritSubjectYaw",
       "schema": {
-        "type": "boolean"
+        "type": "boolean",
+        "title": "继承主体水平转向",
+        "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2939,7 +3253,9 @@
           "world-up",
           "subject-up",
           "subject-heading"
-        ]
+        ],
+        "title": "环绕参考坐标系",
+        "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -2950,7 +3266,7 @@
       "schema": {
         "type": "boolean"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2959,10 +3275,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "回正等待时间",
+        "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2971,10 +3289,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters/second"
+        "$comment": "unit:meters/second",
+        "title": "回正最低速度",
+        "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
       },
       "unit": "meters/second",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2983,10 +3303,66 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "水平回正半衰期",
+        "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "first-person",
+      "path": "orientation.recenter.yawTarget",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-forward"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "movement-direction"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "world-forward"
+              },
+              "yawRadians": {
+                "type": "number",
+                "$comment": "unit:radians",
+                "default": 0
+              }
+            },
+            "required": [
+              "kind",
+              "yawRadians"
+            ]
+          }
+        ],
+        "title": "水平回正目标",
+        "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。"
+      },
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -2997,7 +3373,7 @@
         "$comment": "unit:radians"
       },
       "unit": "radians",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3008,9 +3384,11 @@
         "enum": [
           "configured",
           "subject"
-        ]
+        ],
+        "title": "俯仰回正目标来源",
+        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3019,10 +3397,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3089,7 +3469,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3141,7 +3523,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "清障后等待",
+        "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3153,7 +3537,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters"
+        "$comment": "unit:meters",
+        "title": "回伸距离死区",
+        "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
       },
       "unit": "meters",
       "applicability": "always",
@@ -3198,7 +3584,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3346,7 +3734,9 @@
               "positionMetersXYZ"
             ]
           }
-        ]
+        ],
+        "title": "跟随锚点",
+        "description": "指定环绕支点。eye/seat 等锚点需要主体实际提供；步行与骑乘的眼位由 SDK 主体适配器提供。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -3361,7 +3751,9 @@
           "heading",
           "subject",
           "orbit"
-        ]
+        ],
+        "title": "偏移坐标空间",
+        "description": "world 固定世界轴；heading 跟随主体水平朝向；subject 跟随完整主体姿态；orbit 跟随当前环绕方向。偏移始终以米计。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -3386,7 +3778,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "主体平移半衰期",
+        "description": "主体平移误差减半所需秒数。0 立即跟随；值越大跟随越慢，不改变环绕方向。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3398,7 +3792,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "锚点偏移半衰期",
+        "description": "相对主体的锚点偏移误差减半所需秒数，与主体整体平移的平滑分开。0 立即采用。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3410,7 +3806,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "相机臂半衰期",
+        "description": "笛卡尔相机臂误差减半所需秒数。0 立即响应；碰撞安全收近仍立即执行，回伸由 recovery 控制。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3531,7 +3929,9 @@
       "kind": "shoulder",
       "path": "orientation.inheritSubjectYaw",
       "schema": {
-        "type": "boolean"
+        "type": "boolean",
+        "title": "继承主体水平转向",
+        "description": "在 subject-up/subject-heading 中是否随主体转向；world-up 不受此开关影响。关闭回正与关闭转向继承是不同操作。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -3545,7 +3945,9 @@
           "world-up",
           "subject-up",
           "subject-heading"
-        ]
+        ],
+        "title": "环绕参考坐标系",
+        "description": "world-up 使用世界坐标；subject-up 跟随完整主体姿态；subject-heading 仅跟随主体航向并保持世界竖直。"
       },
       "applicability": "always",
       "visibility": "standard"
@@ -3556,7 +3958,7 @@
       "schema": {
         "type": "boolean"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3565,10 +3967,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "回正等待时间",
+        "description": "停止相机环绕输入后等待的秒数。移动和驾驶可以继续；恢复环绕输入会重新计时。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3577,10 +3981,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters/second"
+        "$comment": "unit:meters/second",
+        "title": "回正最低速度",
+        "description": "达到该速度才回正。movement-direction 使用水平速度；其他来源使用主体速度大小。"
       },
       "unit": "meters/second",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3589,10 +3995,66 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "水平回正半衰期",
+        "description": "朝向误差减半所需秒数，不是完全回正的总时长。0 立即回正，值越大响应越慢。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
+      "visibility": "standard"
+    },
+    {
+      "kind": "shoulder",
+      "path": "orientation.recenter.yawTarget",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "subject-forward"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "movement-direction"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "world-forward"
+              },
+              "yawRadians": {
+                "type": "number",
+                "$comment": "unit:radians",
+                "default": 0
+              }
+            },
+            "required": [
+              "kind",
+              "yawRadians"
+            ]
+          }
+        ],
+        "title": "水平回正目标",
+        "description": "subject-forward 跟随主体朝向（默认）；movement-direction 跟随水平运动方向，倒车时也跟随倒车方向，停车或仅垂直运动时保持环绕；world-forward 使用 yawRadians，0 面向世界 -Z，PI/2 面向 -X。后两者结合当前俯仰在参考坐标系内求解；若当前俯仰和角度限制无法达到目标方向，保持偏航。"
+      },
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3603,7 +4065,7 @@
         "$comment": "unit:radians"
       },
       "unit": "radians",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3614,9 +4076,11 @@
         "enum": [
           "configured",
           "subject"
-        ]
+        ],
+        "title": "俯仰回正目标来源",
+        "description": "configured 使用 targetRadians；subject 使用主体姿态偏好，主体未提供时回退到 targetRadians。"
       },
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3625,10 +4089,12 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
-      "applicability": "heading-required",
+      "applicability": "recenter-target-required",
       "visibility": "standard"
     },
     {
@@ -3694,7 +4160,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3746,7 +4214,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "清障后等待",
+        "description": "障碍消失后继续保持收近距离的时间，用于减少反复收缩和回伸。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3758,7 +4228,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:meters"
+        "$comment": "unit:meters",
+        "title": "回伸距离死区",
+        "description": "可用距离变化小于该值时保持收近距离，避免接触边界的小幅抖动。"
       },
       "unit": "meters",
       "applicability": "always",
@@ -3816,7 +4288,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",
@@ -3964,7 +4438,9 @@
       "schema": {
         "type": "number",
         "minimum": 0,
-        "$comment": "unit:seconds"
+        "$comment": "unit:seconds",
+        "title": "响应半衰期",
+        "description": "误差减半所需秒数。0 立即采用目标；它不是完成变化的总时长。"
       },
       "unit": "seconds",
       "applicability": "always",

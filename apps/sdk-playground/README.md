@@ -252,3 +252,15 @@ against `pnpm dev:editor --port 5196` for the actual save/HMR/reload/static rebu
 shared Workbench, invalid input, independent preview and source capture checks.
 The smoke temporarily changes the campus file and restores its exact bytes in
 `finally`; evidence is written to `output/playwright/camera-editor/`.
+
+
+## Camera quality checks
+
+The camera editor shares short field descriptions with Creator discovery. Its
+live inspection follows the existing render callback; opening the panel does not
+change camera ownership. **相机性能采样** enables bounded CPU timing for input,
+fixed camera evaluation and presentation. Probe time is included in those stages;
+this is not a display-FPS measurement. Disable sampling after diagnosis.
+
+Repeatable dense-scene routes and baseline comparison are documented in
+[the camera maintenance harness](scripts/camera-quality/README.md).

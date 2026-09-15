@@ -157,6 +157,7 @@ export class WorldEngine {
   get controlledEntityId(): string | undefined { return this.controlled; }
   get controlledHumanoid():HumanoidRuntime|undefined{return this.controlled&&this.humanoid?.hasActor(this.controlled)?this.humanoid:undefined;}
   get cameraMode(){return this.cameraController.inspect().mode;}
+  setCameraPerformanceDiagnosticsEnabled(enabled:boolean):void{this.assertLifecycleMutationAllowed();this.cameraController.setPerformanceDiagnosticsEnabled(enabled);}
   setCameraCollisionDiagnosticsEnabled(enabled:boolean):void{this.assertLifecycleMutationAllowed();this.cameraController.setCollisionDiagnosticsEnabled(enabled);}
   inspectCamera(){return this.cameraController.inspect();}
   beginCameraEdit(check:(mutation:boolean)=>void):CameraEditSession {

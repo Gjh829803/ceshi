@@ -27,6 +27,7 @@ const common = {
       delaySeconds: 1.5,
       minimumSpeedMetersPerSecond: 0.8,
       yawHalfLifeSeconds: Math.LN2 / 1.9,
+      yawTarget: {kind: "subject-forward"},
     },
   },
   constraints: {

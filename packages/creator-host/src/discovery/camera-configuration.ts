@@ -45,4 +45,4 @@ export async function cameraConfiguration(guidance:RuntimeGuidance) {
  }
  return {status:'available' as const,schema:artifact.schema,fields:artifact.fields,sourceInventory:artifact.sources};
 }
-export const CAMERA_CONTRACT_FILES=['config/camera/types.ts','config/camera/fields.ts','config/camera/serialization.ts','config/camera/humanoid.ts','config/camera/resolve.ts','camera/state.ts','camera/subject.ts','camera/view-selection.ts'] as const;
+export const CAMERA_CONTRACT_FILES=['config/camera/types.ts','config/camera/fields.ts','config/camera/serialization.ts','config/camera/humanoid.ts','config/camera/resolve.ts','camera/state.ts','camera/performance.ts','camera/subject.ts','camera/view-selection.ts'] as const;

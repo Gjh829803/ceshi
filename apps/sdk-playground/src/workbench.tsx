@@ -1,4 +1,5 @@
-import {CameraPanel,type CameraEditorBinding} from "./camera/panel";
+import {CameraPanel} from "./camera/panel";
+import type {CameraEditorBinding} from "./camera/binding";
 import { ModalHeader, ModalFooter } from "./components/modal-layout";
 import {
   Dialog,

@@ -17,6 +17,8 @@ export interface TestGateManifestEntryV1 {
 }
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
+  {path:"apps/sdk-playground/scripts/camera-quality/identity.test.ts",lane:"contract",suites:["camera"]},
+  {path:"apps/sdk-playground/scripts/camera-quality/report.test.ts",lane:"contract",suites:["camera"]},
   { path: "apps/sdk-playground/server/camera-config.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"], suites: ["camera"] },
   { path: "apps/sdk-playground/src/camera/editor-state.test.ts", lane: "contract", suites: ["camera"] },
   {path:"apps/sdk-playground/src/camera/project-state.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"], suites: ["camera"] },
@@ -89,7 +91,9 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/camera/constraints.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/three-world/src/camera/controller.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/three-world/src/camera/editing.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
+  {path:"packages/three-world/src/camera/performance.test.ts",lane:"contract",suites:["camera"]},
   { path: "packages/three-world/src/camera/presentation.test.ts", lane: "contract", suites: ["camera"] },
+  {path:"packages/three-world/src/camera/strategies/recenter.test.ts",lane:"contract",suites:["camera"]},
   { path: "packages/three-world/src/camera/strategies/strategies.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/three-world/src/camera/view-selection.test.ts", lane: "contract", suites:["camera"] },
   { path: "packages/three-world/src/capture-selection-integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

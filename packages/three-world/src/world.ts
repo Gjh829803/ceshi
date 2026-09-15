@@ -201,6 +201,7 @@ export class ThreeWorld implements API.World {
       if(epoch!==this.epoch||(target&&this.entries.get(target)?.generation!==generation))throw failure('CAMERA_EDIT_STALE');
     });
   }
+ setCameraPerformanceDiagnosticsEnabled(enabled:boolean):void{this.alive();this.engine.setCameraPerformanceDiagnosticsEnabled(enabled);}
  setCameraCollisionDiagnosticsEnabled(enabled:boolean):void{this.alive();this.engine.setCameraCollisionDiagnosticsEnabled(enabled);}
  inspectCamera(){return this.engine.inspectCamera();}
  resumeCameraViewSelection():void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.resumeCameraViewSelection();}

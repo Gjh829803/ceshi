@@ -1,7 +1,7 @@
 import { failure } from "../../control-support";
 import type { CameraJsonValue } from "./types";
 export function cameraConfigurationError(path: string, message: string): never {
-  throw failure("CAMERA_CONFIGURATION_INVALID", `${path || "/"}: ${message}`);
+  throw { ...failure("CAMERA_CONFIGURATION_INVALID", `${path || "/"}: ${message}`), fieldPath: path || "/" };
 }
 /** Reject values JSON.stringify would silently omit/coerce, including accessors. */
 export function assertCameraJson(

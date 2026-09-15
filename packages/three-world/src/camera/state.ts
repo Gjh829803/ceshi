@@ -142,6 +142,7 @@ export interface ControllerState {
   readonly operations: ReadonlySet<string>;
 }
 export interface CameraInspection {
+  readonly performance?: import("./performance").CameraPerformanceReading;
   readonly viewSelection?:CameraViewSelectionInspection|undefined;
   readonly collisionQueries?: CameraCollisionQuerySamples | undefined;
   readonly mode: ControllerState["mode"];

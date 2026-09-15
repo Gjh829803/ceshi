@@ -44,7 +44,7 @@ const actor=new THREE.Group();const mesh=new THREE.Mesh(new THREE.BoxGeometry(.5
    });expect(visibility).toEqual(['visible','hidden','hidden','hidden']);
    const start={positionWorldMetersXYZ:[5,0,0] as [number,number,number],facingYawRadians:.7,...(automatic?{cameraViewSelection:'automatic' as const}:{})};
    const prepared=await session.prepareSegment(start,{widthPixels:320,heightPixels:180});expect(prepared.isRunning).toBe(false);
-   if(automatic){expect(prepared.camera.viewSelection?.source).toBe('default');expect(prepared.camera.viewSelection?.unavailableRules).toEqual([{ruleId:'swim',reason:'state-unavailable'}]);}
+   if(automatic){expect(prepared.camera.viewSelection?.source).toBe('default');expect(prepared.camera.viewSelection?.unavailableRules).toEqual([{ruleId:'swim',viewId:'third-person',reason:'state-unavailable'}]);}
    const next=await session.advance({moveZRatio:-1},3);expect(next.simulationTick-prepared.simulationTick).toBe(3);
    const frame=await session.frame('image/png');expect(frame.captureSurface).toBe('world-renderer-canvas');expect(session.errors).toEqual([]);
    const screenshot=await session.page.screenshot();const pixels=await sharp(screenshot).removeAlpha().raw().toBuffer();let red=0;

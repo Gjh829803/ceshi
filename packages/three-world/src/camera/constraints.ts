@@ -1,3 +1,4 @@
+import type {CameraPerformance} from './performance';
 import {cameraReferenceRotation} from './strategies/heading';
 import { Vector3 } from "three";
 import { captureCameraComposition, composeCameraAtPosition } from "./composition";
@@ -23,7 +24,11 @@ export type CameraGeometryProvider = (context: {
   readonly subject: CameraSubjectFacts;
   readonly lens: CameraLens;
   readonly aspect: number;
-}) => { readonly probe: CameraCollisionProbe; readonly isSubjectVisible?: (eye: CameraVector3) => boolean };
+}) => {
+  readonly probe: CameraCollisionProbe;
+  /** Visibility queries must use the supplied probe to share accounting and diagnostics. */
+  readonly isSubjectVisible?: (eye: CameraVector3, probe: CameraCollisionProbe) => boolean;
+};
 export type CameraConstraintResult =
   | { readonly status: "disabled" }
   | {
@@ -64,7 +69,7 @@ export type CameraCollisionQuerySamples = Partial<Record<CameraCollisionProbeSam
 const MAX_CAPTURED_PROBES = 256;
 export class CameraConstraints {
   private probe: CameraCollisionProbe | undefined;
-  private isSubjectVisible: ((eye: CameraVector3) => boolean) | undefined;
+  private isSubjectVisible: ReturnType<CameraGeometryProvider>['isSubjectVisible'];
   private captureEnabled = false;
   private sampleId = 0;
   private samples: CameraCollisionQuerySamples = {};
@@ -87,17 +92,21 @@ export class CameraConstraints {
     try { return run(); }
     finally { this.samples = {...this.samples, [source]: sample}; this.activeSample = undefined; }
   }
-  private readonly solver = new CameraCollisionSolver((...args) => {
+  private readonly query: CameraCollisionProbe = (...args) => {
     if (!this.probe) throw failure("CAMERA_QUERY_UNAVAILABLE");
-    const hit = this.probe(...args);
+    const started = this.performance?.beginQuery();
+    let hit: ReturnType<CameraCollisionProbe>;
+    try { hit = this.probe(...args); } finally { this.performance?.endQuery(started); }
     const sample = this.activeSample;
     if (sample) {
       if (sample.probes.length < MAX_CAPTURED_PROBES) sample.probes.push(structuredClone({from: args[0], to: args[1], radius: args[2], hit}));
       else sample.droppedProbes++;
     }
     return hit;
-  });
-  constructor(private readonly geometry: CameraGeometryProvider) {}
+  };
+  private readonly solver = new CameraCollisionSolver(this.query);
+  private readonly subjectVisible = (eye: CameraVector3): boolean => this.isSubjectVisible!(eye, this.query);
+  constructor(private readonly geometry: CameraGeometryProvider, private readonly performance?: CameraPerformance) {}
   capture() {
     return this.solver.captureTransactionState();
   }
@@ -132,7 +141,7 @@ export class CameraConstraints {
         preserveArmDirection: true,
       } : {}),
       ...(subject.kind === 'humanoid' && configuration.kind === 'third-person' && proposal.visibility === 'preserve-framing' && this.isSubjectVisible
-        ? {canIgnoreArmObstruction: this.isSubjectVisible} : {}),
+        ? {canIgnoreArmObstruction: this.subjectVisible} : {}),
       armClearance: collision.armClearanceMeters,
       pivotClearance: collision.pivotClearanceMeters,
       ...(sweep && current && !preserving && (subject.kind === 'humanoid' || configuration.kind === 'shoulder')

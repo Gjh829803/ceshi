@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   parseCameraDocument,
+  resolveCameraConfiguration,
   serializeCameraDocument,
   type CameraEditSession,
   type CameraInspection,
 } from "@worldkit/three";
 import source from "../../config/camera.json";
-import { CameraEditorState } from "./editor-state";
+import { CameraEditorState, fieldProvenance } from "./editor-state";
 const document = () => parseCameraDocument(source);
 const create = () =>
   new CameraEditorState({
@@ -245,4 +246,13 @@ describe("camera document editor", () => {
     empty.undo();
     expect(empty.snapshot.documentInput).toBeUndefined();
   });
+});
+
+it('shows a union field effective value and mixed provenance from the actual resolver',()=>{
+ const configuration=resolveCameraConfiguration({kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',binding:{targetEntityId:'person',subjectOverrides:{person:{views:{orbit:{overrides:{orientation:{recenter:{yawTarget:{yawRadians:.7}}}}}}}}},views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'}},orientation:{recenter:{yawTarget:{kind:'world-forward',yawRadians:.2}}}}}}},
+   {subjectId:'person',subjectGeneration:1,subjectKind:'ordinary',availableAnchors:[],headingAvailable:false});
+ const field=fieldProvenance(configuration,'orientation.recenter.yawTarget')!;
+ expect(field.effective).toEqual({kind:'world-forward',yawRadians:.7});
+ expect(field.source).toBe('project-view / project-subject');
+ expect(fieldProvenance(configuration,'missing')).toBeUndefined();
 });

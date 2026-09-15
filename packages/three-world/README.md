@@ -606,9 +606,18 @@ humanoid actors. Author the opening pose/projection, then declare
 meaningful input. The document's `binding.targetEntityId` is independent of controls.
 Declare named views in `document.views` and select them with `world.setCameraView(viewId)`.
 Ordinary first-person subjects supply `eyePositionLocalMetersXYZ` at registration;
-complete humanoids supply the eye from their animation binding. Inspect
+complete humanoids use stable capsule eye positions on foot and prefer their
+animation-bound eye while mounted, with a seat-relative fallback. Inspect
 `world.inspectCamera()` for the active document, resolved configuration and committed
 camera state; movement profiles do not configure or report camera settings.
+Automatic selection reports unavailable rule view IDs and the original failure
+code, message and field path. The selected `viewId` identifies the actual fallback.
+For optional developer CPU measurements, call
+`world.setCameraPerformanceDiagnosticsEnabled(true)` and read
+`world.inspectCamera().performance`; disable it after measurement. Input, fixed
+camera evaluation and presentation each retain at most 240 samples. Probe time is
+included in stage time; it measures geometry-provider calls, not GPU time or every
+underlying physics query. Clock failures report unavailable without stopping play.
 The native `prepareEpisodeStart` helper only places physical subjects and rejects
 `cameraViewId`. Recording starts that select views use the World Episode port
 `prepareSegment(start, viewport)`, which owns reset, placement and camera initialization.
@@ -781,8 +790,11 @@ ordered list of declared IDs; an empty list disables keyboard cycling without
 blocking `world.setCameraView(viewId)`. Native defaults declare third-person,
 first-person and shoulder, with keyboard cycling disabled. Playground and examples
 that enable T do so in their project documents. Held repeats, pause and focused UI
-do not toggle. Selecting a view preserves each view's own input intent and uses the
-configured transition; interruption starts from the currently committed pose.
+do not toggle. Explicitly switching to another view restores its calibrated initial orbit;
+automatic state changes preserve the current orbit heading while adopting the new
+view's framing. Both use the configured transition, except first-person cuts;
+interruption starts from the currently committed pose. Selecting an already active
+following view retains its orbit and establishes a manual choice when rules exist.
 
 ### Authored opening and subject integration
 

@@ -182,7 +182,7 @@ export interface CameraFieldMetadata {
   readonly kind: CameraKind;
   readonly schema: CameraFieldSchema;
   readonly unit?: string;
-  readonly applicability: "always" | "look-at-only" | "heading-required";
+  readonly applicability: "always" | "look-at-only" | "recenter-target-required";
   readonly visibility: "standard" | "advanced";
 }
 export function isPreserveOpeningInactiveField(path: string): boolean {
@@ -217,7 +217,7 @@ export const CAMERA_FIELD_METADATA: readonly CameraFieldMetadata[] =
             kind === "third-person" && isPreserveOpeningInactiveField(path)
               ? "look-at-only"
               : path.startsWith("orientation.recenter.")
-                ? "heading-required"
+                ? "recenter-target-required"
                 : "always",
           visibility:
             path === "orientation.rollInheritanceRatio"

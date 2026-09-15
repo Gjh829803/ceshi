@@ -64,6 +64,7 @@ export function resolve(
     ],
     ...(subject.body ? { body: subject.body } : {}),
     headingAvailable: subject.semanticQuaternionWorldXYZW !== undefined,
+    velocityAvailable: subject.velocityWorldMetersPerSecondXYZ !== undefined,
     ...(distance === undefined ? {} : { openingDistanceMeters: distance }),
   });
 }

@@ -5,7 +5,7 @@ import {
   CAMERA_STRATEGY_DEFAULTS,
   serializeCameraDocument,
   type CameraFieldMetadata,
-  type CameraOpeningConfiguration,
+  type CameraInspection,
 } from "@worldkit/three";
 import { Button } from "../components/ui/button";
 import { Slider } from "../components/ui/slider";
@@ -14,20 +14,14 @@ import { ChoiceSelect, ChoiceOption } from "../components/choice-select";
 import {
   CameraEditorState,
   fieldInputKey,
+  fieldProvenance,
   readPath,
   scopeValues,
   type EditScope,
 } from "./editor-state";
-import type { CameraFileClient } from "./file-client";
-export interface CameraEditorBinding {
-  state: CameraEditorState;
-  client: CameraFileClient | null;
-  rebind(): void;
-  preview(host: HTMLElement): {
-    opening(): CameraOpeningConfiguration;
-    dispose(): void;
-  };
-}
+import type {CameraEditorBinding} from "./binding";
+import {CameraDiagnosticsPanel} from "./diagnostics-panel";
+
 const display = (v: unknown) =>
   v === undefined ? "继承" : typeof v === "string" ? v : JSON.stringify(v);
 function Field({
@@ -50,7 +44,36 @@ function Field({
   useEffect(() => {
     if (!focused.current) setText(value === undefined ? "" : display(value));
   }, [value]);
-  const options = field.schema.enum as string[] | undefined;
+  // Render discriminated choices when every required payload has a schema
+  // default. Other unions retain their lossless JSON editor.
+  const branches = field.schema.oneOf as {properties?: Record<string, Record<string, unknown>>}[] | undefined;
+  const choices = branches?.every(branch => typeof branch.properties?.kind?.const === 'string' &&
+    Object.entries(branch.properties).every(([key, value]) => key === 'kind' || value.type === 'number' && typeof value.default === 'number')) ? branches : undefined;
+  if (choices) {
+    let current: Record<string, unknown> | undefined;
+    try { current = text ? JSON.parse(text) : undefined; } catch { /* Show the invalid raw input below. */ }
+    if (!text || current && typeof current.kind === 'string' && choices.some(branch => branch.properties!.kind!.const === current.kind)) {
+      const selected = choices.find(branch => branch.properties!.kind!.const === current?.kind);
+      const change = (value: Record<string, unknown> | undefined) => { const next = value ? JSON.stringify(value) : ''; setText(next); onChange(next); };
+      return <>
+        <ChoiceSelect aria-label={`${field.path} 类型`} value={String(current?.kind ?? '__inherit')}
+          onValueChange={kind => {
+            if (kind === '__inherit') { change(undefined); return; }
+            const branch = choices.find(branch => branch.properties!.kind!.const === kind)!;
+            change(Object.fromEntries(Object.entries(branch.properties!).map(([key, value]) => [key, key === 'kind' ? kind : value.default])));
+          }}>
+          <ChoiceOption value="__inherit">继承</ChoiceOption>
+          {choices.map(branch => <ChoiceOption key={String(branch.properties!.kind!.const)} value={String(branch.properties!.kind!.const)}>{String(branch.properties!.kind!.const)}</ChoiceOption>)}
+        </ChoiceSelect>
+        {selected && Object.entries(selected.properties!).filter(([key]) => key !== 'kind').map(([key]) => <Input
+          key={key} type="number" step="any" aria-label={`${field.path}.${key}`}
+          value={typeof current?.[key] === 'number' ? current[key] : ''}
+          onFocus={onBegin} onBlur={onEnd}
+          onChange={event => change({...current!, [key]: event.target.value === '' ? null : Number(event.target.value)})} />)}
+      </>;
+    }
+  }
+  const options = field.schema.type === "boolean" ? ["true", "false"] : field.schema.enum as string[] | undefined;
   const minimum =
     field.schema.minimum ??
     (typeof field.schema.exclusiveMinimum === "number"
@@ -74,7 +97,7 @@ function Field({
       <ChoiceOption value="__inherit">继承</ChoiceOption>
       {options.map((v) => (
         <ChoiceOption key={v} value={v}>
-          {v}
+          {field.schema.type === "boolean" ? v === "true" ? "开启" : "关闭" : v}
         </ChoiceOption>
       ))}
     </ChoiceSelect>
@@ -132,6 +155,13 @@ export function CameraPanel({
 }) {
   const { state, client } = binding,
     s = useSyncExternalStore(state.subscribe, state.getSnapshot);
+  const [observed, setObserved] = useState<CameraInspection>();
+  useEffect(() => {
+    setObserved(binding.inspect?.());
+    return binding.subscribeInspection?.(next => setObserved(previous => previous?.resolved === next.resolved && previous?.mode === next.mode ? previous : next));
+  }, [binding]);
+  useEffect(() => { if (s.inspection) setObserved(s.inspection); }, [s.inspection]);
+  const inspection = observed ?? s.inspection;
   const [view, setView] = useState(s.draft.defaultViewId),
     [kind, setKind] = useState<EditScope["kind"]>("subject"),
     [subject, setSubject] = useState(subjectId),
@@ -162,7 +192,7 @@ export function CameraPanel({
         ? { kind, id: subject }
         : { kind, id: presetId ?? "" };
   const fields = CAMERA_FIELD_METADATA.filter((f) => f.kind === selected.kind);
-  const committed = s.inspection?.resolved,
+  const committed = inspection?.resolved,
     known = committed?.viewId === view && committed.subjectId === subject;
   const groups = [...new Set(fields.map((f) => f.path.split(".")[0]!))];
   const imported = async (file: File | undefined) => {
@@ -285,7 +315,7 @@ export function CameraPanel({
                 value =
                   s.invalidInputs[fieldInputKey(scope, view, field.path)] ??
                   configured,
-                provenance = known ? committed.fields[field.path] : undefined;
+                provenance = known ? fieldProvenance(committed, field.path) : undefined;
               const inherited = readPath(
                 CAMERA_STRATEGY_DEFAULTS[selected.kind],
                 field.path,
@@ -301,8 +331,9 @@ export function CameraPanel({
                   style={{ display: "grid", gap: 4, margin: "10px 0" }}
                 >
                   <span>
-                    {field.path} {field.unit ? `(${field.unit})` : ""}
+                    {typeof field.schema.title === "string" ? field.schema.title : field.path} {field.unit ? `(${field.unit})` : ""}
                   </span>
+                  {typeof field.schema.description === "string" && <small>{field.schema.description}</small>}
                   <Field
                     field={field}
                     value={value}
@@ -336,15 +367,6 @@ export function CameraPanel({
             })}
         </details>
       ))}
-      {s.inspection?.viewSelection && <div aria-label="相机视角选择">
-        <p>视角来源：{{default:"默认",rule:"状态规则",manual:"手动选择",retained:"保留可用视角"}[s.inspection.viewSelection.source]}
-          {s.inspection.viewSelection.ruleId && ` · ${s.inspection.viewSelection.ruleId}`}
-          {s.inspection.viewSelection.suspendedBy && ` · ${s.inspection.viewSelection.suspendedBy === "editing" ? "编辑草稿中" : "录制控制中"}`}
-        </p>
-        {s.inspection.viewSelection.pending && <p>等待切换：{s.inspection.viewSelection.pending.viewId}</p>}
-        {s.inspection.viewSelection.unavailableRules.map(rule=><p key={rule.ruleId}>{rule.ruleId}：{rule.reason === "state-unavailable" ? "主体未提供该状态" : "视角暂不适用于当前主体"}</p>)}
-        <Button variant="secondary" onClick={()=>state.resumeAutomatic()}>恢复自动选择</Button>
-      </div>}
       <h4>预览与相机基线</h4>
       <div className="camera-document-actions">
         <Button variant="secondary" onClick={binding.rebind}>
@@ -389,6 +411,7 @@ export function CameraPanel({
           </Button>
         </>
       )}
+      <CameraDiagnosticsPanel binding={binding} snapshotInspection={s.inspection} />
       <h4>项目文件</h4>
       <div className="camera-document-actions">
         <Button

@@ -1,4 +1,5 @@
-import {CameraPanel,type CameraEditorBinding} from "./camera/panel";
+import {CameraPanel} from "./camera/panel";
+import type {CameraEditorBinding} from "./camera/binding";
 import { Box, PersonStanding } from "lucide-react";
 import {MotionFamilyCatalog} from './motion-family-catalog';
 import { Hint } from "./components/hint";

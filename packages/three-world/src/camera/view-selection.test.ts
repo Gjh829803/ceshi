@@ -2,7 +2,7 @@ import {expect,it} from 'vitest';
 import {selectCameraView} from './view-selection';
 import type {CameraViewSelectionMemory} from './view-selection';
 const rules=[{id:'swim',when:{state:'swimming' as const},viewId:'water',enterDelaySeconds:.1,exitDelaySeconds:.1}];
-const run=(swimming:boolean|undefined,memory:CameraViewSelectionMemory={},current='default',dt=.05)=>selectCameraView({rules,defaultViewId:'default',currentViewId:current,states:swimming===undefined?undefined:{swimming},memory,deltaSeconds:dt,available:()=>true});
+const run=(swimming:boolean|undefined,memory:CameraViewSelectionMemory={},current='default',dt=.05)=>selectCameraView({rules,defaultViewId:'default',currentViewId:current,states:swimming===undefined?undefined:{swimming},memory,deltaSeconds:dt,available:()=>({available:true})});
 it('debounces state transitions without restarting an unchanged selection',()=>{
  let a=run(true);expect(a.viewId).toBe('default');
  a=run(true,a.memory);expect(a.viewId).toBe('water');expect(a.inspection.ruleId).toBe('swim');
@@ -18,14 +18,14 @@ it('pins manual choice until its owner clears it',()=>{
 it('uses priority then document order and reports unavailable rules locally',()=>{
  const base={defaultViewId:'default',currentViewId:'default',memory:{},deltaSeconds:0,states:{swimming:true}};
  const competing=[{...rules[0]!,enterDelaySeconds:0},{id:'priority',when:{state:'swimming' as const},viewId:'close',priority:2},{id:'tie',when:{state:'swimming' as const},viewId:'other',priority:2}];
- expect(selectCameraView({...base,rules:competing,available:()=>true}).viewId).toBe('close');
- const skipped=selectCameraView({...base,rules:competing,available:id=>id!=='close'});
- expect(skipped.viewId).toBe('other');expect(skipped.inspection.unavailableRules).toContainEqual({ruleId:'priority',reason:'view-unavailable'});
- expect(run(undefined).inspection.unavailableRules).toEqual([{ruleId:'swim',reason:'state-unavailable'}]);
+ expect(selectCameraView({...base,rules:competing,available:()=>({available:true})}).viewId).toBe('close');
+ const skipped=selectCameraView({...base,rules:competing,available:id=>({available:id!=='close'})});
+ expect(skipped.viewId).toBe('other');expect(skipped.inspection.unavailableRules).toContainEqual({ruleId:'priority',viewId:'close',reason:'view-unavailable'});
+ expect(run(undefined).inspection.unavailableRules).toEqual([{ruleId:'swim',viewId:'water',reason:'state-unavailable'}]);
 });
 it('retains a legal current view when the default is unavailable',()=>{
- const result=selectCameraView({rules,defaultViewId:'default',currentViewId:'close',states:{swimming:false},memory:{},deltaSeconds:0,available:id=>id==='close'});
- expect(result.viewId).toBe('close');expect(result.inspection.source).toBe('retained');
+ const result=selectCameraView({rules,defaultViewId:'default',currentViewId:'close',states:{swimming:false},memory:{},deltaSeconds:0,available:id=>({available:id==='close'})});
+ expect(result.viewId).toBe('close');expect(result.inspection.source).toBe('retained');expect(result.inspection.unavailableDefaultView).toEqual({viewId:'default'});
 });
 
 import {CameraController} from './controller';
@@ -78,7 +78,7 @@ it('suspends for an owner and does not take over authored cameras',()=>{
 });
 it('skips a rule requiring unavailable subject anchors without poisoning the current camera',()=>{
  const f=fixture({views:{default:{kind:'third-person',overrides:{constraints:{collision:{enabled:false}}}},water:{kind:'first-person'}}});try{
-  f.set({states:{swimming:true}});f.step();expect(f.controller.inspect().resolved!.viewId).toBe('default');expect(f.controller.inspect().viewSelection?.unavailableRules).toEqual([{ruleId:'swim',reason:'view-unavailable'}]);
+  f.set({states:{swimming:true}});f.step();expect(f.controller.inspect().resolved!.viewId).toBe('default');expect(f.controller.inspect().viewSelection?.unavailableRules).toEqual([{ruleId:'swim',viewId:'water',reason:'view-unavailable',failure:{code:'CAMERA_CONFIGURATION_INVALID',fieldPath:'/views/water/position/anchor',message:'/views/water/position/anchor: eye anchor unavailable on subject person'}}]);
  }finally{f.controller.dispose();}
 });
 it('validates rule references, IDs and delays before installation',()=>{
@@ -118,7 +118,7 @@ it('does not retain an unavailable automatic view for its exit delay',()=>{
   const {eyeWorldMetersXYZ:_,...withoutEye}=f.subject();f.replace(withoutEye);
   expect(()=>f.step()).not.toThrow();
   expect(f.controller.inspect().resolved!.viewId).toBe('default');
-  expect(f.controller.inspect().viewSelection?.unavailableRules).toEqual([{ruleId:'swim',reason:'view-unavailable'}]);
+  expect(f.controller.inspect().viewSelection?.unavailableRules).toEqual([{ruleId:'swim',viewId:'water',reason:'view-unavailable',failure:{code:'CAMERA_CONFIGURATION_INVALID',fieldPath:'/views/water/position/anchor',message:'/views/water/position/anchor: eye anchor unavailable on subject person'}}]);
  }finally{f.controller.dispose();}
 });
 

@@ -4,6 +4,7 @@ import {
   hashCameraDocument,
   type CameraDocument,
   type CameraInspection,
+  type ResolvedCameraConfiguration,
   type CameraEditSession,
   type CameraOpeningConfiguration,
   type ThreeWorld,
@@ -32,6 +33,21 @@ export const readPath = (value: unknown, path: string): unknown =>
           : undefined,
       value,
     );
+/** Union controls represent several scalar provenance entries. Preserve mixed
+ * sources instead of reporting an observed object as unknown. */
+export function fieldProvenance(configuration: ResolvedCameraConfiguration, path: string) {
+  const direct = configuration.fields[path];
+  if (direct) return direct;
+  const members = Object.entries(configuration.fields).filter(([key]) => key.startsWith(path + '.')).map(([,value]) => value);
+  if (!members.length) return undefined;
+  const inactive = [...new Set(members.flatMap(value => value.inactiveReason ? [value.inactiveReason] : []))];
+  return {
+    source: [...new Set(members.map(value => value.source))].join(' / '),
+    configured: readPath(configuration.values, path),
+    effective: members.every(value => value.effective !== undefined) ? readPath(configuration.values, path) : undefined,
+    inactiveReason: inactive.length ? inactive.join(' / ') : undefined,
+  };
+}
 function writePath(
   value: Record<string, unknown>,
   path: string,

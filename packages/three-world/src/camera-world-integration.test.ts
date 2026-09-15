@@ -402,3 +402,79 @@ it('notifies render observers after restoring subject presentation without anoth
   release();engine(world).render(1);expect(order).toEqual(['source','observer','source']);
  }finally{world.dispose();geometry.dispose();material.dispose();}
 });
+
+it('consumes measured movement direction through the public World and preserves it at rest',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});
+ let velocity:readonly [number,number,number]=[3,0,0];
+ try{
+  world.registerMovement({id:'camera-motion',version:1,description:'Independent world-space test motion',initialState:null,
+    update:()=>({state:null,applyGravity:false,velocityWorldMetersPerSecondXYZ:velocity})});
+  const object=new THREE.Group();object.position.y=3;
+  world.addCharacter({id:'actor',object,body:{heightMeters:1.8,radiusMeters:.3},movement:{kind:'custom',movementId:'camera-motion'}});
+  world.setControlledEntity('actor');
+  const configuration:CameraDocument={kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'follow',binding:{targetEntityId:'actor'},views:{follow:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'}},orientation:{recenter:{enabled:true,delaySeconds:0,minimumSpeedMetersPerSecond:.1,yawHalfLifeSeconds:0,yawTarget:{kind:'movement-direction'}}}}}}};
+  world.setCameraFollow({configuration});world.step({},3);
+  expect(world.inspectCamera().intent!.yawRadians).toBeCloseTo(-Math.PI/2,8);
+  expect(world.inspectCamera().current!.subject!.velocityWorldMetersPerSecondXYZ).toEqual([3,0,0]);
+  velocity=[0,3,0];world.step({},3);expect(world.inspectCamera().intent!.yawRadians).toBeCloseTo(-Math.PI/2,8);
+  velocity=[-3,0,0];world.step({},3);expect(world.inspectCamera().intent!.yawRadians).toBeCloseTo(Math.PI/2,8);
+  expect(world.snapshot().errors).toEqual([]);
+ }finally{world.dispose();}
+});
+
+it('includes native partial-occlusion rays in fixed and displayed camera probe measurements',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes:[...map.boxes,{id:'pole',position:[0,2,-2],size:[.1,4,.2]}]},character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});
+ try{
+  world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{position:{anchor:{kind:'body',heightRatio:.65},distanceMeters:8,armHalfLifeSeconds:0},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{visibility:'preserve-framing'}}}}}});
+  const {humanoidHost}=await import('./humanoid-runtime/host-access');
+  const host=humanoidHost(world.humanoid!),nativeGeometry=host.cameraGeometry.bind(host);
+  const radii:number[]=[];
+  const geometry=vi.spyOn(host,'cameraGeometry').mockImplementation(subject=>{
+   const native=nativeGeometry(subject);
+   return {...native,probe:(from,to,radius)=>{radii.push(radius);return native.probe(from,to,radius);}};
+  });
+  world.onDispose(()=>geometry.mockRestore());
+  world.setCameraCollisionDiagnosticsEnabled(true);world.setCameraPerformanceDiagnosticsEnabled(true);
+  world.step({});
+  const fixed=world.inspectCamera();
+  expect(radii.filter(radius=>radius===0).length).toBeGreaterThan(0);
+  expect(fixed.performance!.stages.fixed!.queryCount).toBe(radii.length);
+  expect(fixed.collisionQueries!.fixed!.probes).toHaveLength(radii.length);
+  radii.length=0;
+  const physics=world.humanoid!.environment.borrowPhysics().world;
+  const rays=vi.spyOn(physics,'castRayAndGetNormal');world.onDispose(()=>rays.mockRestore());
+  const capture=()=>[world.camera.position.toArray(),world.camera.quaternion.toArray()];
+  const pose=engine(world).withPresentation(capture,1);
+  const displayed=world.inspectCamera();
+  expect(rays).toHaveBeenCalled();
+  expect(radii.filter(radius=>radius===0)).toHaveLength(rays.mock.calls.length);
+  expect(displayed.performance!.stages.presentation!.queryCount).toBe(radii.length);
+  expect(displayed.collisionQueries!.presentation!.probes).toHaveLength(radii.length);
+  expect(displayed.current).toEqual(fixed.current);
+  world.setCameraPerformanceDiagnosticsEnabled(false);
+  expect(engine(world).withPresentation(capture,1)).toEqual(pose);
+  expect(world.inspectCamera().current).toEqual(fixed.current);
+ }finally{world.dispose();}
+});
+
+it('keeps an authored world bearing through a tilted ordinary subject in the World camera',async()=>{
+ const world=await createWorld({navigation:false,assetDefinitions:{}});
+ try{
+  const object=new THREE.Group();object.rotation.set(.6,.2,.7);
+  world.addEntity({id:'subject',object,role:'decoration'});
+  const configuration:CameraDocument={
+   kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'follow',binding:{targetEntityId:'subject'},
+   views:{follow:{kind:'third-person',overrides:{
+    position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},
+    orientation:{referenceFrame:'subject-up',initialPitchRadians:.2,recenter:{enabled:true,minimumSpeedMetersPerSecond:0,delaySeconds:0,yawHalfLifeSeconds:0,yawTarget:{kind:'world-forward',yawRadians:0}}},
+    constraints:{collision:{enabled:false}},
+   }}},
+  };
+  world.setCameraFollow({configuration});
+  world.step({},2);
+  const direction=()=>world.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+  expect(direction().distanceTo(new THREE.Vector3(0,0,-1))).toBeLessThan(1e-8);
+  expect(engine(world).withPresentation(direction,1).distanceTo(new THREE.Vector3(0,0,-1))).toBeLessThan(1e-8);
+  expect(world.snapshot().errors).toEqual([]);
+ }finally{world.dispose();}
+});
