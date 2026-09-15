@@ -7,6 +7,7 @@ import {ThreeCreatorTools} from '../../src/tools/tools';
 import {executeThreeCreatorTool} from '../../src/cli/mcp';
 import {openEpisodeBrowser} from '@worldkit/episode-pipeline/browser';
 import type {Page} from 'playwright';
+import {Quaternion,Vector3} from 'three';
 
 const services:ThreeCreatorTools[]=[],roots:string[]=[];
 async function fixture(){
@@ -124,6 +125,22 @@ it('runs a nonhuman subject with no humanoid assets, collides, resets and captur
   expect(moved.humanoid).toBeUndefined();
   await episode.release();await episode.prepareSegment(start,{widthPixels:640,heightPixels:360});
   expect((await episode.frame('image/png')).imageDataUrl).toBe(first.imageDataUrl);
+  await episode.release();
+  for(const cameraViewId of ['third-person','first-person']){
+   await episode.prepareSegment({...start,cameraViewId},{widthPixels:640,heightPixels:360});
+   for(const direction of [-1,1]){
+    const before=await episode.advance({},1),rotation=new Quaternion(...before.camera.orientationWorldQuaternionXYZW);
+    const origin=new Vector3(...before.entities.find(entity=>entity.id==='fox')!.positionWorldMetersXYZ);
+    const right=new Vector3(1,0,0).applyQuaternion(rotation).setY(0).normalize();
+    let last=before;
+    for(let sample=0;sample<18;sample++){
+     last=await episode.advance({moveXRatio:direction},10);
+     expect(new Quaternion(...last.camera.orientationWorldQuaternionXYZW).angleTo(rotation)).toBeLessThan(1e-6);
+    }
+    expect(new Vector3(...last.entities.find(entity=>entity.id==='fox')!.positionWorldMetersXYZ).sub(origin).dot(right)*direction).toBeGreaterThan(2);
+   }
+   await episode.release();
+  }
   expect(episode.errors).toEqual([]);
  }finally{await episode.close();}
 },30000);

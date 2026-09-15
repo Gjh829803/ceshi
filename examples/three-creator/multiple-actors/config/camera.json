@@ -1,34 +1,117 @@
 {
-  "kind": "world-camera",
-  "schemaVersion": 1,
-  "defaultViewId": "third-person",
+  "activation": "on-input",
   "binding": {
+    "subjectOverrides": {
+      "npc-left": {
+        "views": {
+          "third-person": {
+            "presetId": "humanoid.third-person"
+          }
+        }
+      },
+      "npc-right": {
+        "views": {
+          "third-person": {
+            "presetId": "humanoid.third-person"
+          }
+        }
+      },
+      "person": {
+        "views": {
+          "third-person": {
+            "presetId": "humanoid.third-person"
+          }
+        }
+      }
+    },
     "targetEntityId": "person"
   },
-  "activation": "on-input",
+  "defaultViewId": "third-person",
+  "kind": "world-camera",
+  "presets": {
+    "humanoid.third-person": {
+      "kind": "third-person",
+      "values": {
+        "constraints": {
+          "collision": {
+            "armClearanceMeters": 0.04,
+            "pivotClearanceMeters": 0.02
+          },
+          "recovery": {
+            "halfLifeSeconds": 0.13862943611198905,
+            "speedLimit": {
+              "kind": "unlimited"
+            }
+          }
+        },
+        "lens": {
+          "nearMeters": 0.08
+        },
+        "orientation": {
+          "initialPitchRadians": 0.35,
+          "pitchLimitsRadians": {
+            "kind": "bounded",
+            "maximumRadians": 1.1,
+            "minimumRadians": -1.4835298641951802
+          },
+          "recenter": {
+            "enabled": false
+          }
+        },
+        "position": {
+          "anchor": {
+            "kind": "follow-pivot"
+          },
+          "anchorHalfLifeSeconds": 0.09902102579427789,
+          "armHalfLifeSeconds": 0,
+          "distanceMeters": 8.8,
+          "subjectTranslationHalfLifeSeconds": 0
+        },
+        "zoom": {
+          "halfLifeSeconds": 0,
+          "range": {
+            "kind": "bounded",
+            "maximumDistanceMeters": 12,
+            "minimumDistanceMeters": 3.2
+          }
+        }
+      }
+    }
+  },
+  "schemaVersion": 1,
   "views": {
     "third-person": {
       "kind": "third-person",
       "opening": {
-        "positionWorldMetersXYZ": [
-          9,
-          7,
-          -12
-        ],
+        "fovDegrees": 55,
         "lookAtWorldMetersXYZ": [
           0,
           1,
           2
         ],
-        "fovDegrees": 55
+        "positionWorldMetersXYZ": [
+          9,
+          7,
+          -12
+        ]
       },
       "overrides": {
         "framing": {
           "kind": "preserve-opening"
         },
         "lens": {
-          "nearMeters": 0.05,
-          "farMeters": 150
+          "farMeters": 150,
+          "nearMeters": 0.05
+        },
+        "orientation": {
+          "pitchLimitsRadians": {
+            "kind": "unbounded"
+          }
+        },
+        "zoom": {
+          "range": {
+            "kind": "unbounded"
+          }
         }
       }
     }

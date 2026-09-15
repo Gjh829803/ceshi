@@ -142,7 +142,7 @@ async function captureSegment(options: CaptureSegmentsOptions, session: EpisodeC
       controller.holdWaypoint(actions.pendingTrigger);
       let decision: RouteDecision;
       if (actions.isActive) {
-        controller.pause(elapsedSeconds);
+        controller.pause(elapsedSeconds, frame.snapshot);
         const previous = trace.at(-1)!.decision;
         decision = { ...previous, mode: 'action', input: {}, positionWorldMetersXYZ: frame.snapshot.entities.find(e => e.id === frame.snapshot.controlledEntityId)!.positionWorldMetersXYZ };
       } else decision = await controller.step(frame.snapshot, inputBasis(frame), elapsedSeconds);

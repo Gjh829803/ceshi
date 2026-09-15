@@ -22,12 +22,12 @@ const capabilities: EpisodeCapabilities = { schemaVersion: 2, controlledEntityId
   camera: { baselineMode:'follow',documentHash:'fixture-camera',views:[{viewId:'explore',kind:'third-person'},{viewId:'aim',kind:'third-person'}],defaultViewId:'explore',current:{...cameraIdentity,mode:'follow',positionWorldMetersXYZ:[0,3,5],orientationWorldQuaternionXYZW:[0,0,0,1],desiredPositionWorldMetersXYZ:null,desiredYawRadians:0,desiredPitchRadians:0},mode: 'follow', segmentInitialization: 'relative-authored-pose' }, maximumStartAlignmentMeters: 0.75 };
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 function fakeSession(options: { shouldFail?: boolean } = {}) {
-  let yaw = 0, pitch = 0;
+  let yaw = 0, pitch = 0, viewId = 'explore';
   let velocity: Vec3 = [0, 0, 0];
   let tick = 1, position: Vec3 = [0, 0, 0], preparations = 0;
   const advances: number[] = [];
   const snapshot = (): WorldSnapshot => ({ schemaVersion: 2, worldRevision: 0, simulationTick: tick, simulationSeconds: tick / 60, controlledEntityId: 'actor', isRunning: false,
-    camera: { ...cameraIdentity,mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: yaw, desiredPitchRadians: pitch },
+    camera: { ...cameraIdentity,viewId,mode: 'follow', positionWorldMetersXYZ: [0, 3, 5], orientationWorldQuaternionXYZW: [0, 0, 0, 1], desiredPositionWorldMetersXYZ: [0, 3, 5], desiredYawRadians: yaw, desiredPitchRadians: pitch },
     entities: [{ id: 'actor', generation: 0, geometryVersion: 0, name: 'actor', tags: [], role: 'actor', appearancePrompt: '', positionWorldMetersXYZ: position, rotationLocalRadiansXYZ: [0, 0, 0], scaleLocalXYZ: [1, 1, 1], isVisibleLocal: true, isVisibleEffective: true, controlOwners: [], motion: { phase: 'grounded', isGrounded: true, velocityWorldMetersPerSecondXYZ: velocity, collisionEntityIds: [] } }],
     errors: options.shouldFail && tick > 30 ? [{ code: 'FIXTURE_RUNTIME_ERROR', message: 'fixture failure', phase: 'step', category: 'runtime', entityIds: ['actor'] }] : [] });
   const session: EpisodeCaptureSession = {
@@ -35,7 +35,7 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
     execute: async () => { throw new Error('fixture does not expose player actions'); },
     operation: async () => { throw new Error('fixture operation missing'); },
     probeStart: async start => ({ isValid: true, requestedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, resolvedPositionWorldMetersXYZ: start.positionWorldMetersXYZ, diagnostics: [] }),
-    prepareSegment: async start => { tick = 1; yaw = start.facingYawRadians; pitch = 0; velocity = [0,0,0]; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
+    prepareSegment: async start => { tick = 1; viewId = start.cameraViewId ?? 'explore'; yaw = start.facingYawRadians; pitch = viewId==='aim'?.8:0; velocity = [0,0,0]; position = start.positionWorldMetersXYZ; preparations += 1; return snapshot(); },
     advance: async (input: WorldInput, ticks: number) => {
       advances.push(ticks); tick += ticks;
       const speed = input.run ? 7 : 4;
@@ -49,7 +49,7 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
     frame: async mimeType => ({ captureSurface: 'world-renderer-canvas', imageDataUrl: `data:${mimeType};base64,${Buffer.from('fixture image bytes').toString('base64')}`, snapshot: snapshot(), camera: { projectionMatrix: matrix, viewMatrix: matrix, cameraToWorldMatrix: new Matrix4().makeRotationFromEuler(new Euler(-pitch, yaw, 0, 'YXZ')).toArray(), controlForwardWorldXYZ: [-Math.sin(yaw), 0, -Math.cos(yaw)] } } satisfies EpisodeFrame),
     release: vi.fn(async () => {}), close: vi.fn(async () => {}),
   };
-  return { session, advances, get preparations() { return preparations; } };
+  return { session, advances, selectView(id:string){viewId=id;yaw=0;pitch=id==='aim'?.8:0;return snapshot();},get preparations() { return preparations; } };
 }
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'three-episode-capture-test-')); tempRoots.push(root);
@@ -68,6 +68,26 @@ async function fixture() {
 }
 
 describe('Three episode deterministic production capture', () => {
+  it('observes chained view changes during paused action frames before resuming route look input',async()=>{
+    const setup=await fixture(),session=setup.fake.session,segment=setup.plan.segments[0]!;
+    segment.waypoints=[{positionWorldMetersXYZ:[-3,0,-3],gait:'walk'},{positionWorldMetersXYZ:[0,0,-500],gait:'walk'}];
+    segment.actionGoals=['aim','explore'].map(viewId=>({id:`view-${viewId}`,trigger:{waypointIndex:0,radiusMeters:.6},intent:{kind:'view',viewId},completion:{kind:'settled',holdSeconds:.2},timeoutSeconds:4}));
+    session.execute=async command=>{
+      if(command.type!=='camera.set-view')throw new Error('Unexpected fixture command');
+      const state=setup.fake.selectView(command.viewId);
+      return {status:'applied',commandId:command.viewId,worldRevision:0,result:{kind:'camera-view',camera:state.camera}};
+    };
+    const result=await runCaptureSegments({...setup.options,segmentIds:['segment-00']});
+    expect(result.status).toBe('completed');
+    const output=result.segments[0]!.outputRoot;
+    const timeline=JSON.parse(await readFile(path.join(output,'action-timeline.json'),'utf8')).actionTimeline;
+    expect(timeline.map((entry:{result:string})=>entry.result)).toEqual(['succeeded','succeeded']);
+    const trace=JSON.parse(await readFile(path.join(output,'trace.json'),'utf8'));
+    const resumed=trace.frames.find((frame:any)=>frame.snapshot.simulationTick>timeline[1].endTick+1&&frame.decision.mode==='travel');
+    expect(resumed.snapshot.camera.viewId).toBe('explore');
+    expect(resumed.decision.input.cameraYawRatio).toBeCloseTo(0,9);
+    expect(resumed.decision.input.cameraPitchRatio).toBeCloseTo(0,9);
+  });
   it('schedules exactly 1800 real simulation ticks into 720 unique sample times', () => {
     const samples = Array.from({ length: 721 }, (_, index) => frameSimulationTick(index, 1 / 60));
     expect(samples[0]).toBe(0); expect(samples[720]).toBe(1800);
@@ -238,6 +258,8 @@ it('rejects v1 capabilities before probing or preparing the frozen runtime',asyn
 });
 it('rejects a prepared named view mismatch before recording',async()=>{
  const setup=await fixture();setup.plan.segments[0]!.start={...setup.plan.segments[0]!.start,cameraViewId:'aim'};
+ const prepare=setup.fake.session.prepareSegment;
+ setup.fake.session.prepareSegment=(start,viewport)=>prepare({...start,cameraViewId:'explore'},viewport);
  const result=await runCaptureSegments({...setup.options,segmentIds:['segment-00']});
  expect(result.status).not.toBe('completed');expect(setup.encoded).toBe(0);
 });

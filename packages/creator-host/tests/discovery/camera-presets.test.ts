@@ -1,12 +1,45 @@
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {expect,it} from 'vitest';
 import {Group} from 'three';
-import {createWorld,createHumanoidCameraDocument,parseCameraDocument} from '@worldkit/three';
+import {createWorld,createHumanoidCameraDocument,parseCameraDocument,resolveCameraConfiguration} from '@worldkit/three';
+import {executeThreeCreatorTool} from '../../src/cli/mcp';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {cameraPresetSnapshots} from '../../src/discovery/camera-presets';
 import catalog from '../../../../assets/three-creator/asset-catalog.json';
+it('returns a complete human camera snapshot with on-foot calibration and an unrestricted authored opening',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'human-camera-example-')),service=new ThreeCreatorTools(root,'three-sdk');
+ try{
+  const example=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'getting-started'}) as {files:Record<string,string>};
+  const document=parseCameraDocument(JSON.parse(example.files['config/camera.json']!));
+  const native=createHumanoidCameraDocument(document.binding.targetEntityId);
+  expect(document.presets).toEqual(native.presets);
+  expect(document.binding).toEqual(native.binding);
+  expect(document.input).toEqual(native.input);
+  for(const view of ['first-person','shoulder'])expect(document.views[view]).toEqual(native.views[view]);
+  const context={subjectId:document.binding.targetEntityId,subjectGeneration:1,subjectKind:'humanoid',availableAnchors:['eye','follow-pivot','shoulder-eye'] as const,headingAvailable:true,openingDistanceMeters:28};
+  const human=resolveCameraConfiguration(document,context);
+  expect(human.values.orientation).toMatchObject({referenceFrame:'world-up',recenter:{enabled:false},pitchLimitsRadians:{kind:'unbounded'}});
+  expect(human.kind).toBe('third-person');
+  if(human.kind==='third-person')expect(human.values.zoom.range).toEqual({kind:'unbounded'});
+  expect(human.fields['orientation.recenter.enabled']?.source).toBe('subject-preset');
+  const vehicle=resolveCameraConfiguration(document,{...context,subjectId:'scooter',subjectKind:'vehicle'});
+  expect(vehicle.values.orientation.recenter.enabled).toBe(true);
+  const nonhuman=await executeThreeCreatorTool(service,'creator_get_examples',{topic:'nonhuman-subject'}) as {files:Record<string,string>};
+  const ordinary=parseCameraDocument(JSON.parse(nonhuman.files['config/camera.json']!));
+  expect(ordinary.presets).toBeUndefined();
+  expect(resolveCameraConfiguration(ordinary,{...context,subjectId:'actor',subjectKind:'ordinary'}).values.orientation).toMatchObject({referenceFrame:'world-up',recenter:{enabled:false}});
+ }finally{await service.close();await rm(root,{recursive:true,force:true});}
+});
+it('keeps native human calibration when the multiple-actor fixture follows any declared human',async()=>{
+ const document=parseCameraDocument(JSON.parse(await readFile('examples/three-creator/multiple-actors/config/camera.json','utf8')));
+ for(const subjectId of ['person','npc-left','npc-right']){
+  const resolved=resolveCameraConfiguration(document,{subjectId,subjectGeneration:1,subjectKind:'humanoid',availableAnchors:['eye','follow-pivot','shoulder-eye'],headingAvailable:true,openingDistanceMeters:28});
+  expect(resolved.values.orientation).toMatchObject({referenceFrame:'world-up',recenter:{enabled:false}});
+  expect(resolved.fields['orientation.recenter.enabled']?.source).toBe('subject-preset');
+ }
+});
 it('exposes selected creature snapshots that bind to the actual mounted runtime',async()=>{
  const root=await mkdtemp(path.join(os.tmpdir(),'camera-content-')),service=new ThreeCreatorTools(root,'three-sdk');
  const asset=catalog.assets.find(value=>value.id==='creature.horse')!;

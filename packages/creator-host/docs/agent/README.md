@@ -36,7 +36,7 @@ Check the final world with real input, state and images:
 - Play space: coherent scale, connections and activity space throughout the area.
 - Traversability: routes fit the subject; inaccessible areas and accidental edges are physically fenced. Collision proxies and invisible boundaries are not visible scene geometry.
 - Motion: coherent physical/action outcomes; existing NPCs move naturally.
-- Camera: authored opening pose/FOV survives first input; inspect relevant follow, view changes, subject switches and reset for jumps, clipping and obstruction.
+- Camera: authored opening pose/FOV survives first input; inspect relevant follow, view changes, subject switches and reset for jumps, clipping and obstruction. When dismounting is supported, hold left/right while walking and check for unintended continuous camera rotation.
 
 Deliver a runnable world with a complete current-source/current-episode real-input
 recording, final opening, full playable-area top-down and front/right/back sheets

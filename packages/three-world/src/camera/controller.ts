@@ -1,4 +1,5 @@
 import {CameraPerformance} from "./performance";
+import {cameraControlForward,cameraInputRotation,cameraInputYaw} from './control-basis';
 import {selectCameraView} from "./view-selection";
 import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
@@ -40,7 +41,7 @@ import {
 } from "./presentation";
 import type { CameraFixedFrame, PresentationSampleContext } from "./state";
 import { cameraSubjectCapabilities, cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
-import { orbitQuaternion, prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
+import { prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
 import { evaluateFirstPerson } from "./strategies/first-person";
 import type {
   CameraIntent,
@@ -698,6 +699,10 @@ export class CameraController {
       // backwards-moving subject may face opposite the player's orbit heading.
       const rebased=this.rebaseIntent(old.intent,old.subject,subject,old.resolved,resolved,false);
       intent=clampCameraIntent({...intent,yawRadians:rebased.yawRadians,secondsSinceOrbit:old.intent.secondsSinceOrbit},resolved);
+      if((old.resolved.kind==='third-person'&&old.resolved.values.framing.kind==='preserve-opening')||(resolved.kind==='third-person'&&resolved.values.framing.kind==='preserve-opening')){
+        const direction=new Vector3(...cameraControlForward(cameraInputRotation(old.resolved,old.subject,old.intent,old.openings.get(old.resolved.viewId),old.history).toArray()));
+        intent=clampCameraIntent({...intent,yawRadians:cameraInputYaw(direction,resolved,subject,intent,activated.openings.get(viewId),old.history)},resolved);
+      }
     }
     const firstPerson=old.resolved.kind==='first-person'||resolved.kind==='first-person';
     const incompatible=!sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
@@ -829,10 +834,8 @@ export class CameraController {
         };
         // Movement follows the player's orbit intent. Collision changes the eye,
         // never the movement heading, and is solved once after physics.
-        const relativeYaw=resolved.values.orientation.referenceFrame!=='world-up'&&resolved.values.orientation.inheritSubjectYaw;
-        const heading=relativeYaw?(cameraSubjectHeading(subject,old.history)??0):0;
         const basis: CameraControlBasis = {
-          quaternionWorldXYZW: orbitQuaternion(heading+intent.yawRadians,0).toArray(),
+          quaternionWorldXYZW: cameraInputRotation(resolved,subject,intent,openings.get(resolved.viewId),old.history).toArray(),
           viewId: old.resolved!.viewId,
           resolvedSubjectId: subject.id,
           subjectGeneration: subject.generation,

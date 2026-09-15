@@ -270,6 +270,9 @@ export function evaluateStrategy<K extends CameraKind>(
   // commanded pitch can cross a pole before a damped Cartesian arm reaches it.
   const alternateYaw=orbitYaw+Math.PI,alternatePitch=Math.PI-orbitPitch;
   const continuity=history?new Quaternion(...history.horizonQuaternionWorldXYZW):desiredOrientation;
+  // Compare orbit bases before framing; a rolled or off-axis opening is applied
+  // after this choice and must not select the opposite orbit branch at a pole.
+  if(preserving&&history)continuity.multiply(new Quaternion(...opening!.framingQuaternionXYZW).invert());
   const direct=reference.clone().multiply(orbitQuaternion(orbitYaw,orbitPitch));
   const alternate=reference.clone().multiply(orbitQuaternion(alternateYaw,alternatePitch));
   if(values.orientation.pitchLimitsRadians.kind==='unbounded'&&alternate.angleTo(continuity)<direct.angleTo(continuity)){
