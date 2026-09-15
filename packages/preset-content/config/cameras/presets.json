@@ -45,11 +45,16 @@
             "kind": "unlimited"
           }
         }
+      },
+      "subjectFade": {
+        "enabled": true,
+        "startDistanceMeters": 1.2,
+        "endDistanceMeters": 0.75
       }
     },
     "sourceIdentity": {
       "id": "calibration.person",
-      "version": "285246867"
+      "version": "humanoid-subject-fade-20260915"
     }
   },
   "person.first-person": {
@@ -148,11 +153,16 @@
           "maximumOffsetDegrees": 4,
           "halfLifeSeconds": 0.13862943611198905
         }
+      },
+      "subjectFade": {
+        "enabled": true,
+        "startDistanceMeters": 1.2,
+        "endDistanceMeters": 0.75
       }
     },
     "sourceIdentity": {
       "id": "calibration.person",
-      "version": "285246867"
+      "version": "humanoid-subject-fade-20260915"
     }
   },
   "rover.third-person": {

@@ -1,3 +1,4 @@
+import { cameraCompositionFrame } from "./composition";
 import {
   MathUtils,
   Matrix4,
@@ -40,8 +41,15 @@ function interpolate(
     relativeAimQuaternionXYZW: new Quaternion(...source.composition.relativeAimQuaternionXYZW).slerp(new Quaternion(...targetComposition.relativeAimQuaternionXYZW), alpha).toArray(),
     referenceQuaternionWorldXYZW: new Quaternion(...source.composition.referenceQuaternionWorldXYZW).slerp(new Quaternion(...targetComposition.referenceQuaternionWorldXYZW), alpha).toArray(),
   } : undefined;
+  const previousComposition = cameraCompositionFrame(source), currentComposition = cameraCompositionFrame(target);
+  const {collisionComposition: _currentCorrection, ...targetWithoutCorrection} = targetPose;
   const result: CameraProposal = {
-    ...targetPose,
+    ...targetWithoutCorrection,
+    ...(composition && previousComposition && currentComposition ? {collisionComposition: {
+      aimQuaternionWorldXYZW: new Quaternion(...previousComposition.aimQuaternionWorldXYZW).slerp(new Quaternion(...currentComposition.aimQuaternionWorldXYZW), alpha).toArray(),
+      referenceQuaternionWorldXYZW: composition.referenceQuaternionWorldXYZW,
+      horizonConfidence: MathUtils.lerp(previousComposition.horizonConfidence, currentComposition.horizonConfidence, alpha),
+    }} : {}),
     ...(composition ? { composition } : {}),
     positionWorldMetersXYZ: position.toArray(),
     quaternionWorldXYZW: orientation.toArray(),
@@ -206,6 +214,7 @@ export function validateCameraProposal(
       ...(proposal.composition?.relativeAimQuaternionXYZW ?? []),
       ...(proposal.composition?.referenceQuaternionWorldXYZW ?? []),
       ...(proposal.visibilityTargetWorldMetersXYZ ?? []),
+      ...(proposal.collisionComposition ? [...proposal.collisionComposition.aimQuaternionWorldXYZW, ...proposal.collisionComposition.referenceQuaternionWorldXYZW, proposal.collisionComposition.horizonConfidence] : []),
       proposal.nominalDistanceMeters,
       aspect,
       ...Object.values(lens),
@@ -213,6 +222,7 @@ export function validateCameraProposal(
     Math.abs(new Quaternion(...proposal.quaternionWorldXYZW).lengthSq() - 1) >
       1e-7 ||
     (proposal.composition !== undefined && [proposal.composition.nominalAimQuaternionWorldXYZW, proposal.composition.relativeAimQuaternionXYZW, proposal.composition.referenceQuaternionWorldXYZW].some(value => Math.abs(new Quaternion(...value).lengthSq() - 1) > 1e-7)) ||
+    (proposal.collisionComposition !== undefined && (proposal.collisionComposition.horizonConfidence < 0 || proposal.collisionComposition.horizonConfidence > 1 || [proposal.collisionComposition.aimQuaternionWorldXYZW, proposal.collisionComposition.referenceQuaternionWorldXYZW].some(value => Math.abs(new Quaternion(...value).lengthSq() - 1) > 1e-7))) ||
     aspect <= 0 ||
     lens.nearMeters <= 0 ||
     lens.farMeters <= lens.nearMeters ||

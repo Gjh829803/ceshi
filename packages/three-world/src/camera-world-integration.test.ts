@@ -3,7 +3,7 @@ import {describe,it,expect,vi} from 'vitest';
 import {createWorld,type ThreeWorld} from './world';
 import {WorldEngine} from './engine';
 import type {World} from './contracts';
-import type {CameraDocument} from './config/camera/index';
+import {createHumanoidCameraDocument,type CameraDocument} from './config/camera/index';
 import {createMountedFixture} from './humanoid-runtime/mounted-test-fixture';
 import {WorldPresentationContext} from './camera/presentation-context';
 const map={id:'camera-integration',name:'Camera',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]} as const;
@@ -369,6 +369,58 @@ it('fades only followed geometry for a close world view and restores shared mate
  }finally{world.dispose();geometry.dispose();material.dispose();}
 });
 
+it.each((['third-person','shoulder'] as const).flatMap(kind=>[.3,.95,1.5].map(distance=>({kind,distance}))))('uses native $kind near-body fading at $distance metres without changing logical state',async({kind,distance})=>{
+ const world=await fixture(),geometry=new THREE.BoxGeometry(.6,1.8,.4),material=new THREE.MeshBasicMaterial({opacity:.8});
+ const person=new THREE.Mesh(geometry,material),other=new THREE.Mesh(geometry,material);
+ world.humanoid!.options.character.object.add(person);world.scene.add(other);
+ try{
+  const native=createHumanoidCameraDocument('person',kind);
+  const configuration:CameraDocument={...native,views:{...native.views,[kind]:{kind,overrides:{position:{distanceMeters:distance},zoom:{range:{kind:'unbounded'}},constraints:{collision:{enabled:false}}}}}};
+  world.setCameraFollow({configuration});
+  const before=world.snapshot(),committed=world.inspectCamera();
+  for(const alpha of [0,.5,1])engine(world).withPresentation(()=>{
+   if(distance<=.75){expect(person.visible).toBe(false);expect(person.material).toBe(material);}
+   else if(distance<1.2){expect(person.visible).toBe(true);expect(person.material).not.toBe(material);expect(person.material.opacity).toBeCloseTo(.8*THREE.MathUtils.smoothstep(distance,.75,1.2),6);}
+   else{expect(person.visible).toBe(true);expect(person.material).toBe(material);}
+   expect(other.material).toBe(material);expect(material.opacity).toBe(.8);expect(other.visible).toBe(true);
+  },alpha);
+  expect(person.material).toBe(material);expect(person.visible).toBe(true);
+  engine(world).withPresentation(()=>{expect(person.material).toBe(material);expect(person.visible).toBe(true);},1,'object');
+  expect(world.snapshot()).toEqual(before);expect(world.inspectCamera()).toEqual(committed);
+ }finally{world.dispose();geometry.dispose();material.dispose();}
+});
+
+it.each(['third-person','shoulder'] as const)('honors an explicit project opt-out from native %s fading',async kind=>{
+ const world=await fixture(),geometry=new THREE.BoxGeometry(.6,1.8,.4),material=new THREE.MeshBasicMaterial(),person=new THREE.Mesh(geometry,material);
+ world.humanoid!.options.character.object.add(person);
+ try{
+  const native=createHumanoidCameraDocument('person',kind);
+  const configuration:CameraDocument={...native,views:{...native.views,[kind]:{kind,overrides:{subjectFade:{enabled:false},position:{distanceMeters:.3},zoom:{range:{kind:'unbounded'}},constraints:{collision:{enabled:false}}}}}};
+  world.setCameraFollow({configuration});
+  engine(world).withPresentation(()=>{expect(person.visible).toBe(true);expect(person.material).toBe(material);});
+ }finally{world.dispose();geometry.dispose();material.dispose();}
+});
+
+it('releases near-body fading on first person and mounting, then restores the on-foot policy on dismount and reset',async()=>{
+ const world=await createMountedFixture(),geometry=new THREE.BoxGeometry(.6,1.8,.4),material=new THREE.MeshBasicMaterial();
+ const person=new THREE.Mesh(geometry,material),horse=new THREE.Mesh(geometry,material);
+ world.humanoid!.options.character.object.add(person);world.humanoid!.options.vehicles[0]!.object.add(horse);
+ try{
+  const native=createHumanoidCameraDocument('person');
+  const configuration:CameraDocument={...native,views:{...native.views,'third-person':{kind:'third-person',overrides:{position:{distanceMeters:.95},zoom:{range:{kind:'unbounded'}},constraints:{collision:{enabled:false}}}}}};
+  world.setCameraFollow({configuration});world.step({},0);
+  const expectFaded=()=>{engine(world).withPresentation(()=>{expect(person.material).not.toBe(material);expect(horse.material).toBe(material);});expect(person.material).toBe(material);};
+  expectFaded();world.setCameraView('first-person');
+  engine(world).withPresentation(()=>{expect(person.material).toBe(material);expect(horse.material).toBe(material);});
+  world.setCameraView('third-person');expectFaded();
+  expect(world.humanoid!.enter('horse-1')).toBe(true);
+  expect(world.inspectCamera().current!.resolvedSubjectId).toBe('horse-1');
+  engine(world).withPresentation(()=>{expect(person.material).toBe(material);expect(horse.material).toBe(material);});
+  world.step({},90);expect(world.humanoid!.exit()).toBe(true);expectFaded();
+  await world.reset();expectFaded();expect(world.snapshot().errors).toEqual([]);
+ }finally{world.dispose();geometry.dispose();material.dispose();}
+});
+
 
 it('rejects unsafe speed FOV atomically and runs the admitted envelope at full speed',async()=>{
  const world=await fixture();try{
@@ -455,7 +507,10 @@ it('consumes measured movement direction through the public World and preserves 
 });
 
 it('includes native partial-occlusion rays in fixed and displayed camera probe measurements',async()=>{
- const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes:[...map.boxes,{id:'pole',position:[0,2,-2],size:[.1,4,.2]}]},character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});
+ // A short obstruction leaves the upper body visible after anticipatory
+ // framing. A full-height post now retracts in fixed solve and no longer
+ // requires a visibility ray at the final display pose.
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes:[...map.boxes,{id:'pole',position:[0,1.1,-2],size:[.1,.2,.2]}]},character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});
  try{
   world.setCameraFollow({configuration:{kind:'world-camera',schemaVersion:1,activation:'immediate',defaultViewId:'third',binding:{targetEntityId:'person'},views:{third:{kind:'third-person',overrides:{position:{anchor:{kind:'body',heightRatio:.65},distanceMeters:8,armHalfLifeSeconds:0},orientation:{initialPitchRadians:0,recenter:{enabled:false}},constraints:{visibility:'preserve-framing'}}}}}});
   const {humanoidHost}=await import('./humanoid-runtime/host-access');

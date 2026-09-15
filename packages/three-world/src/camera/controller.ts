@@ -1,4 +1,5 @@
 import {CameraPerformance} from "./performance";
+import {composeCameraAtPosition} from './composition';
 import {cameraControlForward,cameraInputRotation,cameraInputYaw} from './control-basis';
 import {selectCameraView} from "./view-selection";
 import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
@@ -1229,6 +1230,19 @@ export class CameraController {
         const correction=cameraDisplayAnchor(sampled,s.resolved,displayHeading,orbitYaw).sub(fixedAnchor);
         const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
         proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
+      }
+      // Linear eye interpolation and quaternion interpolation describe different
+      // arcs. For a settled look-at view, re-aim intermediate display samples at
+      // their interpolated pivot using the same reference horizon as collision.
+      // Authored framing, mixed-view blends and exact fixed endpoints keep their
+      // declared pose; observation still never advances the controller.
+      if (s.mode === 'follow' && s.transition.kind === 'none' && proposal.composition
+        && !context.cut && context.alpha > 0 && context.alpha < 1
+        && cameraFramesCompatible(s.previous, s.current)
+        && (s.resolved.kind === 'shoulder'
+          || (s.resolved.kind === 'third-person' && s.resolved.values.framing.kind === 'look-at'))) {
+        proposal = composeCameraAtPosition(proposal, proposal.positionWorldMetersXYZ,
+          proposal.collisionComposition);
       }
       this.busy = true;
       try {

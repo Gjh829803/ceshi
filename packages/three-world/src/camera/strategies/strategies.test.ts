@@ -1,5 +1,6 @@
-import { prepareCameraIntent } from "./evaluation";
+import { evaluateStrategy, halfLifeAlpha, prepareCameraIntent } from "./evaluation";
 import { composeCameraAtPosition } from "../composition";
+import { validateCameraProposal } from "../presentation";
 import { describe, expect, it } from "vitest";
 import { Quaternion, Vector3 } from "three";
 import {
@@ -1075,4 +1076,57 @@ it('retains the smoothed spacecraft horizon when collision shortens the arm', ()
   const corrected = composeCameraAtPosition(result.proposal, safeEye.toArray());
   expect(new Quaternion(...corrected.quaternionWorldXYZW)
     .angleTo(new Quaternion(...result.proposal.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  close(result.history.referenceUpWorldXYZ!,new Vector3(0,1,0).lerp(
+    new Vector3(0,1,0).applyQuaternion(new Quaternion(...banked.semanticQuaternionWorldXYZW)),
+    halfLifeAlpha(1/60,Math.LN2/5)).normalize().toArray());
+});
+
+it.each(['third-person','shoulder'] as const)('keeps %s up smoothing unit and deterministic through an inverted subject',kind=>{
+  const configuration=config({kind,overrides:{
+    position:{anchor:{kind:kind==='shoulder'?'eye':'origin'},distanceMeters:2,armHalfLifeSeconds:0},
+    orientation:{referenceFrame:'subject-up',inheritSubjectYaw:false,initialPitchRadians:0,
+      upHalfLifeSeconds:1/60,recenter:{enabled:false}},
+  }});
+  const intent=prepareCameraIntent({subject,configuration,deltaSeconds:0});
+  const initial=evaluateStrategy({subject,configuration,intent,deltaSeconds:0});
+  const saved=structuredClone(initial);
+  for(const offset of [-1e-15,0,1e-15]){
+    const inverted={...subject,semanticQuaternionWorldXYZW:offset===0
+      ? [0,0,1,0] as const
+      : new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI+offset).toArray()};
+    const targetUp=new Vector3(0,1,0).applyQuaternion(new Quaternion(...inverted.semanticQuaternionWorldXYZW));
+    const held=evaluateStrategy({subject:inverted,configuration,intent,history:initial.history,deltaSeconds:0});
+    close(held.history.referenceUpWorldXYZ!,initial.history.referenceUpWorldXYZ!);
+    let history=initial.history,remaining=Math.PI;
+    for(let tick=0;tick<24;tick++){
+      const result=evaluateStrategy({subject:inverted,configuration,intent,history,deltaSeconds:1/60});
+      const up=new Vector3(...result.history.referenceUpWorldXYZ!);
+      expect(up.length()).toBeCloseTo(1,12);
+      expect(new Quaternion(...result.proposal.quaternionWorldXYZW).length()).toBeCloseTo(1,12);
+      expect(()=>validateCameraProposal(result.proposal,1)).not.toThrow();
+      expect(up.dot(new Vector3(...history.referenceUpWorldXYZ!))).toBeGreaterThan(-1e-7);
+      expect(up.angleTo(targetUp)).toBeLessThanOrEqual(remaining+1e-7);
+      if(tick===0)expect(up.x).toBeLessThan(-.99);
+      remaining=up.angleTo(targetUp);history=result.history;
+    }
+    expect(remaining).toBeLessThan(1e-6);
+    const snapped=evaluateStrategy({subject:inverted,configuration,intent,history:initial.history,deltaSeconds:100});
+    close(snapped.history.referenceUpWorldXYZ!,targetUp.toArray());
+    // Dropping pose history is the strategy reset: no chosen arc leaks into it.
+    const reset=evaluateStrategy({subject:inverted,configuration,intent,deltaSeconds:0});
+    close(reset.history.referenceUpWorldXYZ!,initial.history.referenceUpWorldXYZ!);
+  }
+  // Outside numerical cancellation, retain the established normalized-lerp path.
+  // Antipodal directions themselves have no globally continuous unique arc.
+  for(const offset of [-.00142,-.00141,-1e-8,1e-8,.00141,.00142]){
+    const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI+offset);
+    const result=evaluateStrategy({subject:{...subject,semanticQuaternionWorldXYZW:rotation.toArray()},
+      configuration,intent,history:initial.history,deltaSeconds:1/60});
+    close(result.history.referenceUpWorldXYZ!,new Vector3(0,1,0).lerp(
+      new Vector3(0,1,0).applyQuaternion(rotation),.5).normalize().toArray());
+  }
+  expect(initial).toEqual(saved);
+  for(const invalid of [[0,0,0],[NaN,1,0],[0,Infinity,0]] as const)
+    expect(()=>evaluateStrategy({subject,configuration,intent,
+      history:{...initial.history,referenceUpWorldXYZ:invalid},deltaSeconds:1/60})).toThrow('CAMERA_REFERENCE_UP_INVALID');
 });

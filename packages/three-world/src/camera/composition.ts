@@ -1,7 +1,7 @@
 import { MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 import type { CameraVector3 } from "../config/camera/index";
 import type { CameraQuaternion } from "./subject";
-import type { CameraProposal } from "./strategies/types";
+import type { CameraCompositionFrame, CameraProposal } from "./strategies/types";
 
 const epsilon = 1e-12;
 const poleRegularization = 1e-3;
@@ -42,46 +42,91 @@ export function captureCameraComposition(
   };
 }
 
-/** Geometry owns the safe eye; the strategy owns immutable pivot/framing intent.
- * Ordinary corrections retain reference-up. At a pole or a reversed horizon,
- * prefer the transported source frame: strict world-up has no continuous yaw
- * there. A positive right component avoids both zero vectors and twist cuts. */
+/** Confidence belongs to geometric framing, not an accumulated rotation angle. */
+function horizonConfidence(nominal: Quaternion, back: Vector3, reference: Quaternion): number {
+  const up = new Vector3(0, 1, 0).applyQuaternion(reference);
+  const branch = new Vector3(0, 1, 0).applyQuaternion(nominal).dot(up);
+  return MathUtils.smoothstep(Math.abs(branch), 0, poleRegularization)
+    * MathUtils.smoothstep(up.cross(back).length(), 0, poleRegularization);
+}
+
+/** Capture the applied aim, excluding authored framing, at a fixed/display sample. */
+export function cameraCompositionFrame(proposal: CameraProposal): CameraCompositionFrame | undefined {
+  if (proposal.collisionComposition) return proposal.collisionComposition;
+  const composition = proposal.composition;
+  if (!composition) return undefined;
+  const back = new Vector3(...proposal.positionWorldMetersXYZ)
+    .sub(new Vector3(...proposal.pivotWorldMetersXYZ));
+  if (back.lengthSq() < epsilon) return undefined;
+  const aim = new Quaternion(...proposal.quaternionWorldXYZW)
+    .multiply(new Quaternion(...composition.relativeAimQuaternionXYZW).invert()).normalize();
+  return {
+    aimQuaternionWorldXYZW: aim.toArray(),
+    referenceQuaternionWorldXYZW: composition.referenceQuaternionWorldXYZW,
+    horizonConfidence: horizonConfidence(new Quaternion(...composition.nominalAimQuaternionWorldXYZW),
+      back.normalize(), new Quaternion(...composition.referenceQuaternionWorldXYZW)),
+  };
+}
+
+/** Geometry owns the safe eye; strategy owns pivot/framing intent. Near a pole
+ * transport the applied frame, never a fractional number of accumulated turns.
+ * When the horizon becomes better defined, consume that confidence increase to
+ * return to reference-up. Fixed history chooses the frame; display only samples it. */
 export function composeCameraAtPosition(
   proposal: CameraProposal,
   position: CameraVector3,
+  continuity?: CameraCompositionFrame,
 ): CameraProposal {
   const eye = new Vector3(...position);
+  let collisionComposition: CameraCompositionFrame | undefined;
   let orientation = new Quaternion(...proposal.quaternionWorldXYZW);
   const composition = proposal.composition;
   const back = eye.clone().sub(new Vector3(...proposal.pivotWorldMetersXYZ));
   if (composition && back.lengthSq() >= epsilon) {
     back.normalize();
     const nominal = new Quaternion(...composition.nominalAimQuaternionWorldXYZW);
-    const nominalBack = new Vector3(0, 0, 1).applyQuaternion(nominal);
-    const nominalRight = new Vector3(1, 0, 0).applyQuaternion(nominal);
-    // Antipodal directions have no unique shortest arc. Use the source right
-    // axis deterministically rather than relying on a global-axis fallback.
-    const transport = nominalBack.dot(back) < -1 + epsilon
-      ? new Quaternion().setFromAxisAngle(nominalRight, Math.PI)
-      : new Quaternion().setFromUnitVectors(nominalBack, back);
-    const transportedRight = nominalRight.applyQuaternion(transport).projectOnPlane(back).normalize();
-    const transportedUp = back.clone().cross(transportedRight);
-    const referenceUp = new Vector3(0, 1, 0)
-      .applyQuaternion(new Quaternion(...composition.referenceQuaternionWorldXYZW));
+    const reference = new Quaternion(...composition.referenceQuaternionWorldXYZW);
+    const confidence = horizonConfidence(nominal, back, reference);
+    const previous = continuity ?? cameraCompositionFrame(proposal);
+    const source = previous
+      ? reference.clone().multiply(new Quaternion(...previous.referenceQuaternionWorldXYZW).invert())
+        .multiply(new Quaternion(...previous.aimQuaternionWorldXYZW))
+      : nominal;
+    const sourceBack = new Vector3(0, 0, 1).applyQuaternion(source);
+    const sourceRight = new Vector3(1, 0, 0).applyQuaternion(source);
+    // The exact antipodal ray has no unique shortest arc. Keep the applied right
+    // axis as the deterministic half-turn axis instead of selecting a world axis.
+    const directionDot = sourceBack.dot(back);
+    const directionCross = sourceBack.clone().cross(back);
+    // Three's setFromUnitVectors uses a wider antipodal fallback that chooses a
+    // world axis. Use the same explicit frame-relative rule for this whole path.
+    const transport = directionDot < -1 + epsilon
+      ? new Quaternion().setFromAxisAngle(sourceRight, Math.PI)
+      : new Quaternion(directionCross.x, directionCross.y, directionCross.z, 1 + directionDot).normalize();
+    let right = sourceRight.applyQuaternion(transport).projectOnPlane(back).normalize();
+    const referenceUp = new Vector3(0, 1, 0).applyQuaternion(reference);
     const branch = new Vector3(0, 1, 0).applyQuaternion(nominal).dot(referenceUp);
-    const weight = Math.sign(branch) * MathUtils.smoothstep(Math.abs(branch), 0, poleRegularization);
-    const horizonRight = referenceUp.cross(back).multiplyScalar(weight);
-    const right = transportedRight.clone()
-      .multiplyScalar(Math.max(horizonRight.dot(transportedRight), poleRegularization))
-      .addScaledVector(transportedUp, horizonRight.dot(transportedUp))
-      .normalize();
-    orientation = frameQuaternion(right, back)
-      .multiply(new Quaternion(...composition.relativeAimQuaternionXYZW)).normalize();
+    const horizonRight = referenceUp.cross(back).multiplyScalar(Math.sign(branch));
+    if (confidence === 1) right = horizonRight.normalize();
+    else if (confidence > (previous?.horizonConfidence ?? 0)) {
+      const gain = (confidence - (previous?.horizonConfidence ?? 0))
+        / (1 - (previous?.horizonConfidence ?? 0));
+      horizonRight.normalize();
+      const angle = Math.atan2(back.dot(right.clone().cross(horizonRight)), right.dot(horizonRight));
+      right.applyAxisAngle(back, angle * gain).normalize();
+    }
+    const aim = frameQuaternion(right, back);
+    collisionComposition = {aimQuaternionWorldXYZW: aim.toArray(),
+      referenceQuaternionWorldXYZW: composition.referenceQuaternionWorldXYZW,
+      horizonConfidence: confidence};
+    orientation = aim.multiply(new Quaternion(...composition.relativeAimQuaternionXYZW)).normalize();
   }
   const lookDistance = new Vector3(...proposal.positionWorldMetersXYZ)
     .distanceTo(new Vector3(...proposal.lookAtWorldMetersXYZ));
+  const { collisionComposition: _previousComposition, ...pose } = proposal;
   return {
-    ...proposal,
+    ...pose,
+    ...(collisionComposition === undefined ? {} : { collisionComposition }),
     positionWorldMetersXYZ: position,
     quaternionWorldXYZW: orientation.toArray(),
     upWorldXYZ: new Vector3(0, 1, 0).applyQuaternion(orientation).toArray(),

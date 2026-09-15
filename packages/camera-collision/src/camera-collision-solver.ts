@@ -24,6 +24,12 @@ export interface CameraCollisionRequest {
   readonly armClearance?: number;
   readonly pivotClearance?: number;
   readonly canIgnoreArmObstruction?: (eye: Vec3) => boolean;
+  /** Native framing may retract before only a sliver of the subject remains.
+   * The ratio is geometric clearance, not temporal smoothing or a safety bypass. */
+  readonly subjectVisibilityClearance?: {
+    readonly marginMeters: number;
+    readonly measureRatio: (eye: Vec3, minimumClearanceMeters: number) => number;
+  };
   readonly sweepFrom?: Vec3;
 }
 export interface CameraCollisionTiming {
@@ -67,6 +73,7 @@ const distance = (a: Vec3,b: Vec3) => length(sub(a,b));
 const unit = (a: Vec3): Vec3 => { const n=length(a); return n>1e-12 ? [a[0]/n,a[1]/n,a[2]/n] : [0,0,0]; };
 const along = (a: Vec3,b: Vec3,d: number) => add(a,unit(sub(b,a)),d);
 const blocked = (hit: CameraCollisionProbeResult, arm: number) => !!hit.startedOverlapping || hit.colliderEntityId!==undefined || hit.distanceMeters<arm-1e-8;
+const MAX_SWEEP_SLIDES = 3;
 
 // Keep contact points representably outside float32 query surfaces. Authored
 // clearance remains a minimum; this numerical margin is shared by every path.
@@ -84,7 +91,8 @@ export class CameraCollisionSolver {
   private query(a: Vec3,b: Vec3,radius: number): CameraCollisionProbeResult {
     const hit=this.probe(a,b,radius);
     if(!Number.isFinite(hit.distanceMeters)||hit.distanceMeters<0||
-      (hit.normalWorldXYZ&&(!hit.normalWorldXYZ.every(Number.isFinite)||length(hit.normalWorldXYZ)<.5))) {
+      (hit.normalWorldXYZ&&(hit.normalWorldXYZ.length!==3||!hit.normalWorldXYZ.every(Number.isFinite)||
+        !Number.isFinite(length(hit.normalWorldXYZ))||length(hit.normalWorldXYZ)<.5))) {
       throw new Error('CAMERA_COLLISION_PROBE_INVALID');
     }
     return {...hit,distanceMeters:Math.min(distance(a,b),hit.distanceMeters)};
@@ -103,7 +111,7 @@ export class CameraCollisionSolver {
     }
     return {position,hit,overlapId,overlapHit};
   }
-  private geometry(input: CameraCollisionRequest) {
+  private geometry(input: CameraCollisionRequest, anticipateVisibility=false) {
     if(![...input.target,...input.eye,...input.current,...(input.pivotOrigin??[]),...(input.sweepFrom??[]),...(input.visibilityTarget??[]),input.radius,input.armClearance??.02,input.pivotClearance??.02].every(Number.isFinite)||input.radius<=0||(input.armClearance??0)<0||(input.pivotClearance??0)<0)throw new Error('CAMERA_COLLISION_INPUT_INVALID');
     let target=copy(input.target), eye=copy(input.eye);
     const clearance=input.pivotClearance??.02;
@@ -124,8 +132,48 @@ export class CameraCollisionSolver {
       const eyeBlocked=this.query(eye,eye,input.radius).startedOverlapping;
       if(!eyeBlocked&&input.canIgnoreArmObstruction(eye))obstructed=false;
     }
-    const safeDistance=obstructed?Math.max(0,hit.distanceMeters-separationDistance(along(target,eye,hit.distanceMeters),input.radius,input.armClearance??.02)):arm;
-    return {target,eye,hit,overlapId,arm,safeDistance,obstructed};
+    const hardDistance=Math.max(0,hit.distanceMeters-separationDistance(along(target,eye,hit.distanceMeters),input.radius,input.armClearance??.02));
+    let safeDistance=obstructed?hardDistance:arm;
+    let armBlocked=obstructed,constraintHit=hit;
+    const visibility=input.subjectVisibilityClearance;
+    if(visibility&&(!Number.isFinite(visibility.marginMeters)||visibility.marginMeters<=0))throw new Error('CAMERA_COLLISION_INPUT_INVALID');
+    if(anticipateVisibility&&visibility&&!hit.startedOverlapping&&visibility.marginMeters>input.radius){
+      // A wider arm detects approaching occlusion. An already occupied wide
+      // origin (for example a narrow corridor) is not an approaching boundary.
+      const soft=this.query(target,eye,input.radius+visibility.marginMeters);
+      if(!soft.startedOverlapping&&blocked(soft,arm)){
+        // Convert the expanded contact back along the arm, not by a fixed
+        // radial offset. A grazing wall can be metres along the arm despite
+        // only a small perpendicular clearance; treating those as equal
+        // creates a false, abruptly short framing target during orbit.
+        const direction=unit(sub(eye,target)),normal=soft.normalWorldXYZ&&unit(soft.normalWorldXYZ);
+        const incidence=normal?-(direction[0]*normal[0]+direction[1]*normal[1]+direction[2]*normal[2]):0;
+        const preferred=incidence>1e-8?Math.min(arm,Math.max(0,soft.distanceMeters+visibility.marginMeters/incidence-(input.armClearance??.02))):arm;
+        const ratio=visibility.measureRatio(eye,input.radius);
+        if(!Number.isFinite(ratio)||ratio<0||ratio>1)throw new Error('CAMERA_COLLISION_PROBE_INVALID');
+        const candidateDistance=preferred+(arm-preferred)*ratio;
+        if(candidateDistance<safeDistance){
+          const candidate=along(target,eye,candidateDistance);
+          // A soft preference can never keep an eye inside the occluder. Some
+          // disconnected free regions still require immediate hard retraction.
+          const occupied=this.query(candidate,candidate,input.radius).startedOverlapping;
+          safeDistance=occupied?hardDistance:candidateDistance;
+          armBlocked=armBlocked||!!occupied;
+          constraintHit=occupied?hit:soft;
+          obstructed=true;
+        }
+      }
+    }
+    return {target,eye,hit,constraintHit,overlapId,arm,safeDistance,obstructed,armBlocked};
+  }
+  private sweepSegment(input: CameraCollisionRequest, from: Vec3, eye: Vec3): {position:Vec3;hit?:CameraCollisionProbeResult} {
+    const hit=this.query(from,eye,input.radius);
+    if(!blocked(hit,distance(from,eye)))return {position:eye};
+    const contact=along(from,eye,Math.max(0,hit.distanceMeters-separationDistance(along(from,eye,hit.distanceMeters),input.radius,input.pivotClearance??.02)));
+    // Native cast TOI is approximate; keep the returned sphere outside the wall.
+    const final=this.separateOrigin(contact,input.radius,input.pivotClearance??.02,point=>this.query(point,point,input.radius));
+    if(final.hit.startedOverlapping)throw new Error('CAMERA_COLLISION_NO_SAFE_POSE');
+    return {position:final.position,hit};
   }
   private sweep(input: CameraCollisionRequest, eye: Vec3, armBlocked: boolean): {position:Vec3;hit?:CameraCollisionProbeResult} {
     if(!input.sweepFrom||armBlocked||distance(input.sweepFrom,eye)<=1e-5)return {position:eye};
@@ -134,13 +182,24 @@ export class CameraCollisionSolver {
     // still use the established immediate safe-arm escape.
     const origin=this.separateOrigin(input.sweepFrom,input.radius,input.pivotClearance??.02,point=>this.query(point,point,input.radius));
     if(origin.hit.startedOverlapping||(origin.overlapHit?.penetrationDepthMeters??0)>separationDistance(input.sweepFrom,input.radius,0))return {position:eye};
-    const from=origin.position,hit=this.query(from,eye,input.radius);
-    if(!blocked(hit,distance(from,eye)))return {position:eye};
-    const contact=along(from,eye,Math.max(0,hit.distanceMeters-separationDistance(along(from,eye,hit.distanceMeters),input.radius,input.pivotClearance??.02)));
-    // Native cast TOI is approximate; keep the returned sphere outside the wall.
-    const final=this.separateOrigin(contact,input.radius,input.pivotClearance??.02,point=>this.query(point,point,input.radius));
-    if(final.hit.startedOverlapping)throw new Error('CAMERA_COLLISION_NO_SAFE_POSE');
-    return {position:final.position,hit};
+    let result=this.sweepSegment(input,origin.position,eye);
+    let constraintHit=result.hit;
+    // Keep following along a wing or wall instead of pinning the eye to its
+    // first contact. Every tangent is another swept segment, never a jump to
+    // an otherwise visible endpoint. Radial obstruction still takes priority.
+    for(let attempt=0;attempt<MAX_SWEEP_SLIDES&&result.hit?.normalWorldXYZ;attempt++){
+      const normal=unit(result.hit.normalWorldXYZ),remaining=sub(eye,result.position);
+      const inward=remaining[0]*normal[0]+remaining[1]*normal[1]+remaining[2]*normal[2];
+      if(inward>=0)break;
+      const tangent=add(eye,normal,-inward);
+      if(distance(result.position,tangent)<=1e-5)break;
+      const next=this.sweepSegment(input,result.position,tangent);
+      if(this.query(next.position,next.position,input.radius).startedOverlapping)throw new Error('CAMERA_COLLISION_NO_SAFE_POSE');
+      if(distance(next.position,eye)>=distance(result.position,eye)-1e-8)break;
+      result=next;
+      constraintHit=next.hit??constraintHit;
+    }
+    return {position:result.position,...(constraintHit?{hit:constraintHit}:{})};
   }
   private solution(g: ReturnType<CameraCollisionSolver['geometry']>,position: Vec3,phase: CameraCollisionSolution['phase'],entityId?: string): CameraCollisionSolution {
     return {position:copy(position),target:copy(g.target),desiredPosition:copy(g.eye),safeDistance:g.safeDistance,
@@ -178,7 +237,7 @@ export class CameraCollisionSolver {
       return this.solution(g,input.current,'emergency-inside',g.hit.colliderEntityId??g.overlapId);
     }
     const eye=g.hit.startedOverlapping ? this.emergency(input,g.target,g.hit,input.current) : along(g.target,g.eye,g.safeDistance);
-    const swept=this.sweep(input,eye,g.obstructed);
+    const swept=this.sweep(input,eye,g.armBlocked);
     return this.solution(g,swept.position,g.overlapId?'emergency-inside':g.obstructed||swept.hit?'constrained':'clear',swept.hit?.colliderEntityId??(g.obstructed?g.hit.colliderEntityId:undefined));
   }
   /** Fixed-step solve. Query callbacks never receive or modify temporal state. */
@@ -188,7 +247,7 @@ export class CameraCollisionSolver {
     catch(error){this.temporal.restoreTransactionState(previous);throw error;}
   }
   private solveCommitted(input: CameraCollisionRequest,timing: CameraCollisionTiming): CameraCollisionSolution {
-    const g=this.geometry(input),previous=this.temporal.captureTransactionState();
+    const g=this.geometry(input,true),previous=this.temporal.captureTransactionState();
     if(g.hit.startedOverlapping&&!this.query(input.current,input.current,input.radius).startedOverlapping){
       // Retain an actually clear committed eye while no bounded pivot is available.
       return this.solution(g,input.current,'emergency-inside',g.hit.colliderEntityId??g.overlapId);
@@ -198,8 +257,8 @@ export class CameraCollisionSolver {
       g.safeDistance-previous.constrainedArmLengthMeters<(timing.releaseDeadbandMeters??0))g.safeDistance=previous.constrainedArmLengthMeters;
     const geometryHit: CameraGeometryHitV2|undefined=g.obstructed?{
       schemaVersion:2,travelDistanceMeters:g.safeDistance,travelFraction:g.arm===0?0:g.safeDistance/g.arm,
-      hitPointMetersXYZ:g.hit.hitPositionWorldMetersXYZ??g.target,hitNormalXYZ:g.hit.normalWorldXYZ??unit(sub(g.target,g.eye)),
-      ...(g.hit.colliderEntityId?{hitEntityId:g.hit.colliderEntityId}:{}),startedOverlapping:!!g.hit.startedOverlapping,
+      hitPointMetersXYZ:g.constraintHit.hitPositionWorldMetersXYZ??g.target,hitNormalXYZ:g.constraintHit.normalWorldXYZ??unit(sub(g.target,g.eye)),
+      ...(g.constraintHit.colliderEntityId?{hitEntityId:g.constraintHit.colliderEntityId}:{}),startedOverlapping:!!g.hit.startedOverlapping,
       penetrationDepthMeters:g.hit.penetrationDepthMeters??0,obstructionClass:'hard',
     }:undefined;
     const result=this.temporal.solve({ ...timing,desiredTargetPositionMetersXYZ:g.target,desiredPositionMetersXYZ:g.eye,
@@ -207,7 +266,7 @@ export class CameraCollisionSolver {
     let eye=result.positionMetersXYZ;
     g.target=result.resolvedTargetPositionMetersXYZ;
     if(g.hit.startedOverlapping)eye=this.emergency(input,g.target,g.hit,eye);
-    const swept=this.sweep(input,eye,g.obstructed);
+    const swept=this.sweep(input,eye,g.armBlocked);
     eye=swept.position;
     // A trajectory correction is part of this same commit, including its actual
     // safe arm length. Future recovery must not resume from the unswept proposal.

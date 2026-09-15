@@ -1,7 +1,7 @@
 import type {CameraPerformance} from './performance';
 import {cameraReferenceRotation} from './strategies/heading';
 import { Vector3 } from "three";
-import { captureCameraComposition, composeCameraAtPosition } from "./composition";
+import { cameraCompositionFrame, captureCameraComposition, composeCameraAtPosition } from "./composition";
 import {subjectAnchor,cameraPositionAnchor} from './subject';
 import {
   CameraCollisionSolver,
@@ -16,7 +16,7 @@ import type {
 } from "../config/camera/index";
 import { failure } from "../control-support";
 import type { CameraSubjectFacts } from "./subject";
-import type { CameraProposal } from "./strategies/types";
+import type { CameraCompositionFrame, CameraProposal } from "./strategies/types";
 
 /** Provider supplies target-specific exclusions and live world-space queries (sphere for positive radius, ray for zero).
  * Distances are unpadded; the kernel adds the configured clearance exactly once. */
@@ -28,6 +28,10 @@ export type CameraGeometryProvider = (context: {
   readonly probe: CameraCollisionProbe;
   /** Visibility queries must use the supplied probe to share accounting and diagnostics. */
   readonly isSubjectVisible?: (eye: CameraVector3, probe: CameraCollisionProbe) => boolean;
+  readonly subjectVisibilityClearance?: {
+    readonly marginMeters: number;
+    readonly measureRatio: (eye: CameraVector3, minimumClearanceMeters: number, probe: CameraCollisionProbe) => number;
+  };
 };
 export type CameraConstraintResult =
   | { readonly status: "disabled" }
@@ -70,6 +74,7 @@ const MAX_CAPTURED_PROBES = 256;
 export class CameraConstraints {
   private probe: CameraCollisionProbe | undefined;
   private isSubjectVisible: ReturnType<CameraGeometryProvider>['isSubjectVisible'];
+  private subjectVisibilityClearance: ReturnType<CameraGeometryProvider>['subjectVisibilityClearance'];
   private captureEnabled = false;
   private sampleId = 0;
   private samples: CameraCollisionQuerySamples = {};
@@ -106,6 +111,8 @@ export class CameraConstraints {
   };
   private readonly solver = new CameraCollisionSolver(this.query);
   private readonly subjectVisible = (eye: CameraVector3): boolean => this.isSubjectVisible!(eye, this.query);
+  private readonly visibilityClearanceRatio = (eye: CameraVector3, minimumClearanceMeters: number): number =>
+    this.subjectVisibilityClearance!.measureRatio(eye, minimumClearanceMeters, this.query);
   constructor(private readonly geometry: CameraGeometryProvider, private readonly performance?: CameraPerformance) {}
   capture() {
     return this.solver.captureTransactionState();
@@ -142,6 +149,8 @@ export class CameraConstraints {
       } : {}),
       ...(subject.kind === 'humanoid' && configuration.kind === 'third-person' && proposal.visibility === 'preserve-framing' && this.isSubjectVisible
         ? {canIgnoreArmObstruction: this.subjectVisible} : {}),
+      ...(subject.kind === 'humanoid' && configuration.kind === 'third-person' && proposal.visibility === 'preserve-framing' && !preserving && this.subjectVisibilityClearance
+        ? {subjectVisibilityClearance: {marginMeters:this.subjectVisibilityClearance.marginMeters,measureRatio:this.visibilityClearanceRatio}} : {}),
       armClearance: collision.armClearanceMeters,
       pivotClearance: collision.pivotClearanceMeters,
       ...(sweep && current && !preserving && (subject.kind === 'humanoid' || configuration.kind === 'shoulder')
@@ -166,6 +175,7 @@ export class CameraConstraints {
       });
       this.probe = geometry.probe;
       this.isSubjectVisible = geometry.isSubjectVisible;
+      this.subjectVisibilityClearance = geometry.subjectVisibilityClearance;
       return run();
     } catch (error) {
       throw failure(
@@ -176,6 +186,7 @@ export class CameraConstraints {
     } finally {
       this.probe = undefined;
       this.isSubjectVisible = undefined;
+      this.subjectVisibilityClearance = undefined;
     }
   }
   private measured(result:CameraCollisionSolution):CameraConstraintResult {
@@ -194,6 +205,7 @@ export class CameraConstraints {
     position: CameraVector3,
     configuration: ResolvedCameraConfiguration,
     subject: CameraSubjectFacts,
+    continuity?: CameraCompositionFrame,
   ): CameraProposal {
     if(configuration.kind==='third-person'&&configuration.values.framing.kind==='preserve-opening'){
       const shift=new Vector3(...position).sub(new Vector3(...proposal.positionWorldMetersXYZ));
@@ -204,7 +216,7 @@ export class CameraConstraints {
       cameraReferenceRotation(subject,configuration.values.orientation.referenceFrame,undefined,configuration.values.orientation.inheritSubjectYaw).toArray());
     // Do not perturb an unchanged authored endpoint (including a vertical pole).
     if (position.every((value, index) => value === proposal.positionWorldMetersXYZ[index])) return intended;
-    return composeCameraAtPosition(intended, position);
+    return composeCameraAtPosition(intended, position, continuity);
   }
   solve(
     proposal: CameraProposal,
@@ -248,7 +260,7 @@ export class CameraConstraints {
           },
         );
         return {
-          proposal: this.corrected(this.retarget(proposal,result.target,configuration), result.position, configuration, subject),
+          proposal: this.corrected(this.retarget(proposal,result.target,configuration), result.position, configuration, subject, step.cut || !step.previous ? undefined : cameraCompositionFrame(step.previous)),
           diagnostics: {...this.measured(result),simulationTick:step.simulationTick},
         };
       });
@@ -271,7 +283,7 @@ export class CameraConstraints {
     if (!configuration.values.constraints.collision.enabled) return {...proposal,constraintDiagnostics:{status:'disabled'}};
     return this.withGeometry(subject, proposal, aspect, () => {
       const result=this.solver.project(this.request(proposal,configuration,subject,current,false));
-      return {...this.corrected(this.retarget(proposal,result.target,configuration),result.position,configuration,subject),constraintDiagnostics:this.measured(result)};
+      return {...this.corrected(this.retarget(proposal,result.target,configuration),result.position,configuration,subject,proposal.collisionComposition ?? cameraCompositionFrame(current)),constraintDiagnostics:this.measured(result)};
     });
     });
   }

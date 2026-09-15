@@ -6,7 +6,7 @@
     "config/camera/defaults.ts": "478bda2b5c90391c038d1c305754acdf92c842289f5dee25a7f79f8d72583b84",
     "config/camera/field-primitives.ts": "ecc52619860e26865c1f25e0270b42c8acfa9a82fb1839ba5df60914e9f02780",
     "config/camera/fields.ts": "68be6757bd5bf544858ea32fbdd576f360503ff844fb482b1a75ab63dccafb5e",
-    "config/camera/humanoid.ts": "9d13277448bfdb63622dca1b4692f434c9f40b10886b0925789f4074c2f15d8f",
+    "config/camera/humanoid.ts": "eefc8ab10601fd559afe2b1182411c47624426ed7d5892b8d7bd8430640c8c6d",
     "config/camera/index.ts": "cc16fb803240d8b3f0ca660f0ad56edb6051dec2e519e3b760436cc8d41cb1a3",
     "config/camera/resolve.ts": "e317f25a1b1cbed4d852ec504099859eefe0447525e8696ded84a36e999c0520",
     "config/camera/serialization.ts": "ee8638e736b32e472be5f9aa2eda0722eb00ee77b9efaf52158c6d77a1c43f84",

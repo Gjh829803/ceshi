@@ -64,6 +64,30 @@ function smooth(
   return MathUtils.lerp(previous, target, halfLifeAlpha(dt, halfLife));
 }
 
+/** Retain normalized-lerp tuning; its antipodal zero has no defined direction. */
+function smoothReferenceUp(previous: Vector3, target: Vector3, alpha: number, previousFrame: Quaternion): Vector3 {
+  if (![...previous.toArray(), ...target.toArray()].every(Number.isFinite)
+    || previous.lengthSq() < 1e-12 || target.lengthSq() < 1e-12)
+    throw new Error('CAMERA_REFERENCE_UP_INVALID');
+  if (alpha === 0) return previous.normalize();
+  if (alpha === 1) return target.normalize();
+  const blended = previous.clone().lerp(target, alpha);
+  if (blended.lengthSq() > 16 * Number.EPSILON * Number.EPSILON) return blended.normalize();
+  // Only a machine-precision zero uses the committed frame to choose a half-turn.
+  // This keeps legal input finite; it does not promise global antipodal continuity.
+  if (!previousFrame.toArray().every(Number.isFinite) || previousFrame.lengthSq() < 1e-12)
+    throw new Error('CAMERA_REFERENCE_UP_INVALID');
+  previous.normalize();target.normalize();
+  previousFrame.normalize();
+  const axis = new Vector3(0,0,1).applyQuaternion(previousFrame).projectOnPlane(previous);
+  if (axis.lengthSq() < 1e-12)
+    axis.set(1,0,0).applyQuaternion(previousFrame).projectOnPlane(previous);
+  axis.normalize();
+  const residual = new Quaternion().setFromUnitVectors(previous.clone().negate(), target);
+  return previous.applyAxisAngle(axis, Math.PI * alpha)
+    .applyQuaternion(new Quaternion().slerp(residual, alpha)).normalize();
+}
+
 /** The only intent clock boundary: initialize, limit and recenter once before physics. */
 export function prepareCameraIntent<K extends CameraKind>(
   input: Omit<CameraStrategyInput<K>, "intent"> & {
@@ -285,7 +309,10 @@ export function evaluateStrategy<K extends CameraKind>(
   if(configuration.kind!=='first-person'){
     const previousReferenceUp=history?.referenceUpWorldXYZ??input.headingHistory?.referenceUpWorldXYZ;
     const previousUp=previousReferenceUp?new Vector3(...previousReferenceUp):new Vector3(0,1,0);
-    referenceUp.copy(previousUp.lerp(referenceUp,halfLifeAlpha(dt,configuration.values.orientation.upHalfLifeSeconds))).normalize();
+    const previousFrame = new Quaternion(...(history?.horizonQuaternionWorldXYZW
+      ?? input.headingHistory?.horizonQuaternionWorldXYZW ?? [0,0,0,1]));
+    referenceUp.copy(smoothReferenceUp(previousUp,referenceUp,
+      halfLifeAlpha(dt,configuration.values.orientation.upHalfLifeSeconds),previousFrame));
     if(configuration.values.orientation.upHalfLifeSeconds>0&&arm.lengthSq()>1e-12)
       orientation.setFromRotationMatrix(new Matrix4().lookAt(pivot.clone().add(arm),pivot,referenceUp));
   }

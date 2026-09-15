@@ -339,6 +339,98 @@ it("projects display without committing state or revisions", () => {
   expect(c.captureCheckpoint()).toEqual(checkpoint);
 });
 
+it('keeps walking orbit and display horizons level when a wing holds the eye across the orbit pivot', () => {
+  let subject={...initial,kind:'humanoid' as const};
+  // The wing crosses the torso, leaving head/feet visible from its two sides.
+  // Visibility permits the nominal arm; the eye sweep must stay below the wing.
+  const wing=new Box3(new Vector3(-10,1.2,-10),new Vector3(10,1.4,10));
+  const c=new CameraController({sampleSubject:()=>subject,geometry:()=>({probe:(from,to,radius)=>{
+    const a=new Vector3(...from),b=new Vector3(...to),length=a.distanceTo(b);
+    const box=wing.clone().expandByScalar(radius);
+    if(box.containsPoint(a))return {distanceMeters:0,startedOverlapping:true,colliderEntityId:'wing'};
+    const hit=length>0?new Ray(a,b.clone().sub(a).normalize()).intersectBox(box,new Vector3()):null;
+    return hit&&a.distanceTo(hit)<length?{distanceMeters:a.distanceTo(hit),colliderEntityId:'wing'}:{distanceMeters:length};
+  },isSubjectVisible:(eye,probe)=>[.2,1.75].some(height=>{
+    const point=new Vector3(...subject.positionWorldMetersXYZ).add(new Vector3(0,height,0));
+    return probe(eye,point.toArray(),0).distanceMeters>=new Vector3(...eye).distanceTo(point);
+  })})});
+  c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{
+    position:{anchor:{kind:'origin'},distanceMeters:8.8,armHalfLifeSeconds:0,subjectTranslationHalfLifeSeconds:0},
+    constraints:{visibility:'preserve-framing'},
+    orientation:{referenceFrame:'world-up',initialPitchRadians:.1,recenter:{enabled:false},pitchLimitsRadians:{kind:'bounded',minimumRadians:-1.4,maximumRadians:1.1}},
+  }}}}),frame());
+  let constrained=0,acrossPivot=0;
+  const level=(pose:{quaternionWorldXYZW:readonly [number,number,number,number]},tolerance=1e-7)=>{
+    const q=new Quaternion(...pose.quaternionWorldXYZW);
+    expect(Math.abs(new Vector3(1,0,0).applyQuaternion(q).y)).toBeLessThan(tolerance);
+    expect(new Vector3(0,1,0).applyQuaternion(q).y).toBeGreaterThan(0);
+  };
+  for(let tick=1;tick<=400;tick++) {
+    subject={...subject,positionWorldMetersXYZ:[Math.sin(tick*.03)*.5,0,Math.cos(tick*.02)*.5]};
+    step(c,tick,{orbitDeltaRadiansXY:[.02,tick<120?.01:0]});
+    const before=c.inspect();level(before.current!);
+    const pivot=new Vector3(...before.current!.pivotWorldMetersXYZ);
+    const actualArm=new Vector3(...before.current!.positionWorldMetersXYZ).sub(pivot).setY(0);
+    const nominalArm=new Vector3(...before.desired!.positionWorldMetersXYZ).sub(pivot).setY(0);
+    if(actualArm.dot(nominalArm)<0)acrossPivot++;
+    if(before.diagnostics?.status==='measured'&&before.diagnostics.limited)constrained++;
+    const checkpoint=c.captureCheckpoint();
+    for(const alpha of [0,.5,1])level(c.sampleProjection({epoch:1,previousTick:tick-1,currentTick:tick,alpha,cut:false},1.5)!);
+    expect(c.captureCheckpoint()).toEqual(checkpoint);
+  }
+  expect(constrained).toBeGreaterThan(100);
+  expect(acrossPivot).toBeGreaterThan(100);
+});
+
+it.each([1, -1, 2, 4])('returns from %s obstructed near-vertical orbit turns without stored roll or a clear-state jump', turns => {
+  let overlapping = false;
+  const c = new CameraController({sampleSubject: () => initial, geometry: () => ({probe: (from, to) => ({
+    distanceMeters: new Vector3(...from).distanceTo(new Vector3(...to)),
+    // Missing separation data is a permitted provider boundary. The solver
+    // retains its real, already committed safe eye; no camera pose is injected.
+    ...(overlapping && from[1] < 1 ? {distanceMeters: 0, startedOverlapping: true, colliderEntityId: 'enclosed-pivot'} : {}),
+  })})});
+  c.install(document({activation: 'immediate', views: {orbit: {kind: 'third-person', overrides: {
+    position: {anchor: {kind: 'origin'}, distanceMeters: 8.8, armHalfLifeSeconds: 0},
+    orientation: {initialPitchRadians: Math.PI / 2 - .0005, pitchLimitsRadians: {kind: 'unbounded'}, recenter: {enabled: false}},
+  }}}}), frame());
+  const start = c.inspect().current!, orientation = new Quaternion(...start.quaternionWorldXYZW);
+  overlapping = true;
+  let tick = 0;
+  for (; tick < Math.abs(turns) * 360; tick++) {
+    step(c, tick + 1, {orbitDeltaRadiansXY: [Math.sign(turns) * Math.PI / 180, 0]});
+    const fixed = c.inspect();
+    // A stationary safe eye keeps its actual frame while the blocked requested
+    // orbit changes. A fractional winding used to rotate this frame 270 degrees
+    // per nominal turn, leaving a 90-degree remainder after a complete circle.
+    expect(new Quaternion(...fixed.current!.quaternionWorldXYZW).angleTo(orientation)).toBeLessThan(1e-6);
+    expect(new Vector3(...fixed.current!.positionWorldMetersXYZ).distanceTo(new Vector3(...start.positionWorldMetersXYZ))).toBeLessThan(1e-10);
+    if (tick % 90 === 0) {
+      const checkpoint = c.captureCheckpoint();
+      for (const alpha of [0, .5, 1]) {
+        const display = c.sampleProjection({epoch: 1, previousTick: tick, currentTick: tick + 1, alpha, cut: false}, 1.5)!;
+        expect(new Quaternion(...display.quaternionWorldXYZW).angleTo(orientation)).toBeLessThan(1e-6);
+      }
+      expect(c.captureCheckpoint()).toEqual(checkpoint);
+    }
+  }
+  expect(c.inspect().intent!.yawRadians).toBeCloseTo(turns * 2 * Math.PI, 10);
+  overlapping = false;
+  step(c, ++tick);
+  const clear = c.inspect();
+  expect(new Vector3(...clear.current!.positionWorldMetersXYZ).distanceTo(new Vector3(...start.positionWorldMetersXYZ))).toBeLessThan(1e-10);
+  expect(new Quaternion(...clear.current!.quaternionWorldXYZW).angleTo(orientation)).toBeLessThan(1e-6);
+  expect(clear.current!.collisionComposition).toBeUndefined();
+  for (const alpha of [0, 1e-8, .5, 1 - 1e-8, 1]) {
+    const display = c.sampleProjection({epoch: 1, previousTick: tick - 1, currentTick: tick, alpha, cut: false}, 1.5)!;
+    expect(new Quaternion(...display.quaternionWorldXYZW).angleTo(orientation)).toBeLessThan(1e-6);
+  }
+  // Clear-space near-vertical orbit remains authored input, without temporal
+  // collision recovery or a second orientation filter.
+  step(c, ++tick, {orbitDeltaRadiansXY: [.2, 0]});
+  expect(new Quaternion(...c.inspect().current!.quaternionWorldXYZW).angleTo(new Quaternion(...c.inspect().desired!.quaternionWorldXYZW))).toBeLessThan(1e-7);
+});
+
 it("same view selection activates pending immediately", () => {
   const { controller: c } = fixture();
   c.install(document(), frame());

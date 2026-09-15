@@ -5,6 +5,7 @@ import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Quatern
 import { createMountedFixture } from './mounted-test-fixture';
 import { describe, expect, it, vi } from 'vitest';
 import { createWorld } from '../world';
+import { WorldEngine } from '../engine';
 import { humanoidHost } from './host-access';
 import { emptyInput } from './simulation';
 import type { EnvironmentDefinition } from './environment/types';
@@ -77,13 +78,30 @@ describe('Humanoid opening facing', () => {
   });
 });
 
-// Captured from the real pre-refactor runtime, not regenerated from this solver.
-it.each(baseline.cases)('matches main native camera trajectory: $scene / $action',async({scene,action,samples})=>{
+function trajectoryBoxes(scene: string): EnvironmentDefinition['boxes'] {
  const boxes:EnvironmentDefinition['boxes'][number][]=[{id:'ground',position:[0,-.5,0],size:[180,1,180]}];
  if(scene==='wall'||scene==='corner')boxes.push({id:'wall-x',position:[1,2,0],size:[.2,4,18]});
  if(scene==='corner')boxes.push({id:'wall-z',position:[0,2,1],size:[18,4,.2]});
  if(scene==='corridor')for(const x of [-1.5,1.5])boxes.push({id:'wall-'+x,position:[x,2,0],size:[.2,4,18]});
- const world=await createWorld({camera:new PerspectiveCamera(58,1000/700,.08,200),navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes},character:{instanceId:'person',object:new Group()},vehicles:[]}});
+ return boxes;
+}
+async function trajectoryWorld(scene: string) {
+ return createWorld({camera:new PerspectiveCamera(58,1000/700,.08,200),navigation:false,assetDefinitions:{},humanoid:{map:{...map,boxes:trajectoryBoxes(scene)},character:{instanceId:'person',object:new Group()},vehicles:[]}});
+}
+
+// Captured from the real pre-refactor runtime; these historical identities and
+// exact tolerances are unchanged. The new optional visibility measurement is a
+// deliberate native policy improvement. Its absence must retain the historical
+// provider contract; the default policy has separate physical/display checks below.
+// Open-space reference cases still exercise the unmodified default provider.
+const historicalTrajectoryCases=baseline.cases.map(value=>({...value,provider:value.scene==='open'?'default provider':'without anticipatory visibility provider'}));
+it.each(historicalTrajectoryCases)('matches main native camera trajectory ($provider): $scene / $action',async({scene,action,samples})=>{
+ const world=await trajectoryWorld(scene);
+ const host=humanoidHost(world.humanoid!),originalGeometry=host.cameraGeometry.bind(host);
+ const legacyProvider=scene==='open'?undefined:vi.spyOn(host,'cameraGeometry').mockImplementation(subject=>{
+  const {subjectVisibilityClearance:_anticipation,...geometry}=originalGeometry(subject);
+  return geometry;
+ });
  try{
   humanoidHost(world.humanoid!).prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI});
   world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});
@@ -99,5 +117,52 @@ it.each(baseline.cases)('matches main native camera trajectory: $scene / $action
    expect(world.camera.quaternion.angleTo(new Quaternion(...expected.quaternion)),`orientation at ${tick}`).toBeLessThan(2e-7);
    expect(new Vector3(...world.getEntityState('person').positionWorldMetersXYZ).distanceTo(new Vector3(...expected.actor)),`actor at ${tick}`).toBeLessThan(2e-5);
   }
+ }finally{legacyProvider?.mockRestore();world.dispose();}
+},20000);
+
+
+// Maxima measured over this same 480-step orbit without the optional provider,
+// not replacement golden positions. A 1 mm numerical allowance keeps the new
+// preference from introducing the former 3 m grazing-wall/corner contractions.
+it.each([
+ {scene:'wall',historicalMaximumStepMeters:1.2815814075484047},
+ {scene:'corner',historicalMaximumStepMeters:2.008566370878247},
+ {scene:'corridor',historicalMaximumStepMeters:.8941798521967055},
+])('keeps default anticipatory visibility safe and presentation read-only in a $scene orbit',async({scene,historicalMaximumStepMeters})=>{
+ const world=await trajectoryWorld(scene);
+ try{
+  const host=humanoidHost(world.humanoid!);
+  host.prepareEpisodeStart({positionWorldMetersXYZ:[0,.03,0],facingYawRadians:Math.PI});
+  const configuration=createHumanoidCameraDocument('person');
+  world.setCameraFollow({configuration});world.step({},1);
+  const engine=(world as unknown as {engine:WorldEngine}).engine;
+  let hiddenTicks=0,maximumHiddenTicks=0,constrainedTicks=0,maximumMovement=0;
+  let previous=world.camera.position.clone();
+  for(let tick=0;tick<baseline.steps;tick++){
+   const yaw=tick<60?0:tick<240?1:tick<420?-1:0;
+   world.step({cameraYawRatio:yaw},1);
+   const inspection=world.inspectCamera(),pose=inspection.current!,subject=engine.cameraSubjects.sample(configuration.binding)!;
+   const geometry=host.cameraGeometry(subject),radius=inspection.resolved!.values.constraints.collision.radiusMeters;
+   expect(geometry.subjectVisibilityClearance,'default native provider must exercise anticipation').toBeDefined();
+   expect(geometry.probe(pose.positionWorldMetersXYZ,pose.positionWorldMetersXYZ,radius).startedOverlapping,`fixed eye at ${tick}`).not.toBe(true);
+   expect(Math.abs(new Vector3(1,0,0).applyQuaternion(new Quaternion(...pose.quaternionWorldXYZW)).y),`fixed horizon at ${tick}`).toBeLessThan(1e-7);
+   hiddenTicks=geometry.isSubjectVisible!(pose.positionWorldMetersXYZ,geometry.probe)?0:hiddenTicks+1;
+   maximumHiddenTicks=Math.max(maximumHiddenTicks,hiddenTicks);
+   if(inspection.diagnostics?.status==='measured'&&inspection.diagnostics.limited)constrainedTicks++;
+   maximumMovement=Math.max(maximumMovement,world.camera.position.distanceTo(previous));
+   previous=world.camera.position.clone();
+   for(const alpha of tick%8===0?[0,.25,.5,.75,1]:[.5])engine.withPresentation(()=>{
+    const eye=world.camera.getWorldPosition(new Vector3()),orientation=world.camera.getWorldQuaternion(new Quaternion());
+    const displaySubject=engine.cameraSubjects.sample(configuration.binding,true)!,displayGeometry=host.cameraGeometry(displaySubject);
+    expect(displayGeometry.probe(eye.toArray(),eye.toArray(),radius).startedOverlapping,`display eye at ${tick}/${alpha}`).not.toBe(true);
+    expect(Math.abs(new Vector3(1,0,0).applyQuaternion(orientation).y),`display horizon at ${tick}/${alpha}`).toBeLessThan(1e-7);
+    if(alpha===1)expect(eye.distanceTo(new Vector3(...pose.positionWorldMetersXYZ)),'display must not apply anticipation twice').toBeLessThan(1e-6);
+   },alpha);
+   expect(world.inspectCamera()).toEqual(inspection);
+  }
+  expect(constrainedTicks,'the actual geometry must exercise camera constraints').toBeGreaterThan(0);
+  expect(maximumHiddenTicks,'anticipation must not leave the entire person behind a wall').toBeLessThan(15);
+  expect(maximumMovement,'anticipation must not increase the historical maximum orbit step beyond numerical tolerance').toBeLessThanOrEqual(historicalMaximumStepMeters+.001);
+  expect(world.snapshot().errors).toEqual([]);
  }finally{world.dispose();}
 },20000);

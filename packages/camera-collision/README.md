@@ -26,6 +26,16 @@ chooses framing policy: a humanoid may retain an unobstructed eye when actual
 capsule visibility permits ignoring an arm obstruction; an occupied eye is never
 ignored. `preserveArmDirection` keeps the orbit direction when the pivot moves.
 
+Optional `subjectVisibilityClearance` adds a fixed-step framing preference before
+the last visible part disappears. A wider arm probe activates measured subject
+sight-line clearance; an already overlapping wide origin does not penalize narrow
+spaces. The native adapter derives the margin from body width. Preferred eyes
+still undergo sphere occupancy and trajectory checks, and hard radial escape wins
+when necessary. `project()` does not apply this preference again to an already
+shortened pose. This reduces abrupt occlusion transitions; disconnected free
+regions can still require a hard cut. Views with sufficient subject visibility
+clearance and explicit authored opening framing retain their existing behavior.
+
 Optional `visibilityTarget` measures a ray from the solved eye to the subject.
 It reports clear/occluded, distance and collider identity without searching for
 another viewpoint. An endpoint support hit is accepted. Visibility query failure

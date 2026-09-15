@@ -1,6 +1,8 @@
 import { composeCameraAtPosition } from "./composition";
+import { CameraController } from "./controller";
 import { orbitQuaternion } from "./strategies/evaluation";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import { CameraConstraints } from './constraints';
 import { Group, PerspectiveCamera, Quaternion, Vector3 } from "three";
 import {
   applyCameraPresentation,
@@ -127,6 +129,7 @@ it("rejects a nonunit proposal quaternion before camera mutation", () => {
     ),
   ).toThrow(/INVALID/);
   expect(camera.position.toArray()).toEqual([0, 0, 0]);
+  expect(() => applyCameraPresentation(camera, {...frame,collisionComposition:{aimQuaternionWorldXYZW:[0,0,0,1],referenceQuaternionWorldXYZW:[0,0,0,1],horizonConfidence:NaN}},1)).toThrow(/INVALID/);
 });
 it("replaces inherited zoom and off-axis projection modifiers with the complete declared lens", () => {
   const camera = new PerspectiveCamera();
@@ -184,4 +187,62 @@ it("approaches corrected fixed endpoints continuously near a pole", () => {
     const endpoint=alpha<.5?previous:current;
     expect(new Quaternion(...pose.quaternionWorldXYZW).angleTo(new Quaternion(...endpoint.quaternionWorldXYZW))).toBeLessThan(1e-6);
   }
+});
+
+it.each(['third-person','shoulder'] as const)('keeps %s display frames level during simultaneous yaw and pitch input', kind => {
+  for(const collision of [true,false]) for(const roll of [0,.6]) {
+    const reference=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),roll);
+    const referenceUp=new Vector3(0,1,0).applyQuaternion(reference);
+    const subject={id:'person',generation:1,kind:'humanoid' as const,
+      positionWorldMetersXYZ:[0,0,0] as const,geometryQuaternionWorldXYZW:[0,0,0,1] as const,
+      semanticQuaternionWorldXYZW:reference.toArray(),geometryScaleXYZ:[1,1,1] as const,
+      speedMetersPerSecond:0,body:{minimumHeightMeters:0,maximumHeightMeters:1.68},
+      eyeWorldMetersXYZ:[0,1.6,0] as const,shoulderEyeWorldMetersXYZ:[0,1.5,0] as const};
+    const c=new CameraController({sampleSubject:()=>subject,geometry:()=>({probe:(a,b)=>({distanceMeters:new Vector3(...a).distanceTo(new Vector3(...b))})})});
+    const boundary=(simulationTick:number)=>({simulationTick,lifecycleGeneration:1,aspect:1.5});
+    c.install({kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',binding:{targetEntityId:'person'},activation:'immediate',views:{orbit:{kind,overrides:{
+      position:{anchor:{kind:kind==='third-person'?'origin':'eye'},distanceMeters:kind==='third-person'?8.8:2,armHalfLifeSeconds:0},
+      orientation:{referenceFrame:roll===0?'world-up':'subject-up',upHalfLifeSeconds:0,initialPitchRadians:.35,recenter:{enabled:false}},
+      constraints:{collision:{enabled:collision}},
+    }}}},boundary(0));
+    c.prepareInput({orbitDeltaRadiansXY:[1,.6]},1/60,boundary(1));c.evaluateAndCommit(boundary(1));
+    const checkpoint=c.captureCheckpoint(),fixed=c.inspect();
+    for(const alpha of [0,.25,.5,.75,1]) {
+      const p=c.sampleProjection({epoch:1,previousTick:0,currentTick:1,alpha,cut:false},1.5)!;
+      const q=new Quaternion(...p.quaternionWorldXYZW);
+      expect(Math.abs(new Vector3(1,0,0).applyQuaternion(q).dot(referenceUp))).toBeLessThan(1e-8);
+      expect(new Vector3(0,0,-1).applyQuaternion(q).distanceTo(new Vector3(...p.pivotWorldMetersXYZ).sub(new Vector3(...p.positionWorldMetersXYZ)).normalize())).toBeLessThan(1e-8);
+      if(alpha===0||alpha===1)expect(q.angleTo(new Quaternion(...(alpha===0?fixed.previous:fixed.current)!.quaternionWorldXYZW))).toBeLessThan(1e-7);
+    }
+    expect(c.captureCheckpoint()).toEqual(checkpoint);
+  }
+});
+
+it('keeps display continuous when the next fixed frame has recovered the horizon', () => {
+  const aim=orbitQuaternion(0,.3);
+  const nominal={...frame,pivotWorldMetersXYZ:[0,0,0] as const,lookAtWorldMetersXYZ:[0,0,0] as const,
+    positionWorldMetersXYZ:new Vector3(0,0,8).applyQuaternion(aim).toArray(),quaternionWorldXYZW:aim.toArray(),
+    composition:{nominalAimQuaternionWorldXYZW:aim.toArray(),relativeAimQuaternionXYZW:[0,0,0,1] as const,referenceQuaternionWorldXYZW:[0,0,0,1] as const}};
+  const previous=composeCameraAtPosition(nominal,[.004,8,.004]);
+  const current=composeCameraAtPosition(nominal,[.016,8,.004],previous.collisionComposition);
+  expect(previous.collisionComposition!.horizonConfidence).toBeLessThan(1);
+  expect(current.collisionComposition!.horizonConfidence).toBe(1);
+  const subject={id:'a',generation:1,kind:'actor' as const,positionWorldMetersXYZ:[0,0,0] as const,
+    geometryQuaternionWorldXYZW:[0,0,0,1] as const,geometryScaleXYZ:[1,1,1] as const,speedMetersPerSecond:0};
+  const c=new CameraController({sampleSubject:()=>subject,geometry:()=>({probe:(a,b)=>({distanceMeters:new Vector3(...a).distanceTo(new Vector3(...b))})})});
+  const solve=vi.spyOn(CameraConstraints.prototype,'solve')
+    .mockReturnValueOnce({proposal:previous,diagnostics:{status:'disabled',simulationTick:0}})
+    .mockReturnValueOnce({proposal:current,diagnostics:{status:'disabled',simulationTick:1}});
+  try {
+    const boundary=(simulationTick:number)=>({simulationTick,lifecycleGeneration:1,aspect:1.5});
+    c.install({kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',binding:{targetEntityId:'a'},activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'}},orientation:{recenter:{enabled:false}}}}}},boundary(0));
+    c.prepareInput({},1/60,boundary(1));c.evaluateAndCommit(boundary(1));
+  } finally {solve.mockRestore();}
+  const checkpoint=c.captureCheckpoint();
+  for(const alpha of [0,1e-8,1-1e-8,1]) {
+    const sampled=c.sampleProjection({epoch:1,previousTick:0,currentTick:1,alpha,cut:false},1.5)!;
+    const endpoint=alpha<.5?previous:current;
+    expect(new Quaternion(...sampled.quaternionWorldXYZW).angleTo(new Quaternion(...endpoint.quaternionWorldXYZW))).toBeLessThan(1e-6);
+  }
+  expect(c.captureCheckpoint()).toEqual(checkpoint);
 });

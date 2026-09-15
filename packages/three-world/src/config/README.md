@@ -62,8 +62,10 @@ it does not switch views or introduce a general state selector.
 pitch input only; native values retain 1.2 rad/s yaw and 1 rad/s pitch. Explicit
 switching to another view resets its calibrated orbit rather than restoring dormant
 input; selecting the already active following view retains the current orbit.
-`subjectFade` is disabled by default and controls render-only third-person/shoulder fading between its start
-and end distances; first-person uses its separate body-clipping behavior.
+`subjectFade` controls render-only third-person/shoulder fading between its start
+and end distances. Generic views disable it; native on-foot presets enable it below
+1.2 metres and fully hide the subject at 0.75 metres. Explicit project overrides can
+disable it. First-person uses its separate body-clipping behavior.
 
 Install the full document using `world.setCameraFollow({configuration})`. Select
 named views through `setCameraView` and inspect resolved sources, intent, committed

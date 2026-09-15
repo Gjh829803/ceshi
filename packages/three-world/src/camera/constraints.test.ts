@@ -1,5 +1,6 @@
 import { captureCameraComposition, composeCameraAtPosition } from "./composition";
 import { relocateCameraProposal } from "./lifecycle";
+import { blendCameraProposals } from "./presentation";
 import { orbitQuaternion } from "./strategies/evaluation";
 import { prepareCameraIntent } from "./strategies/evaluation";
 import { expect, it } from "vitest";
@@ -283,6 +284,36 @@ it("does not introduce horizon roll when collision moves an upright eye sideways
   const corrected = composeCameraAtPosition(pose,[3,3,8]);
   expect(Math.abs(new Vector3(1,0,0).applyQuaternion(new Quaternion(...corrected.quaternionWorldXYZW)).y)).toBeLessThan(1e-8);
 });
+it("keeps the horizon upright when a wing holds the safe eye across the orbit pivot", () => {
+  // Captured from the paused Playground failure: walking, pitch 1.1, wing occlusion.
+  const pivot = [-288.08612060546875, 1.1153020886421203, -201.79405212402344] as const;
+  const eye = [-288.05611245147185, 1.6704193345890137, -208.36016557367185] as const;
+  const aim = new Quaternion(0.5177449095708738, 0.11695997665721072, 0.07170877143459453, -0.844463394454214);
+  const pose = {...proposal, pivotWorldMetersXYZ:pivot,
+    positionWorldMetersXYZ:new Vector3(0,0,8.8).applyQuaternion(aim).add(new Vector3(...pivot)).toArray(),
+    quaternionWorldXYZW:aim.toArray(),lookAtWorldMetersXYZ:pivot,
+    composition:{nominalAimQuaternionWorldXYZW:aim.toArray(),relativeAimQuaternionXYZW:[0,0,0,1] as const,referenceQuaternionWorldXYZW:[0,0,0,1] as const}};
+  const corrected=composeCameraAtPosition(pose,eye);
+  const q=new Quaternion(...corrected.quaternionWorldXYZW);
+  expect(Math.abs(new Vector3(1,0,0).applyQuaternion(q).y)).toBeLessThan(1e-8);
+  expect(new Vector3(0,1,0).applyQuaternion(q).y).toBeGreaterThan(.99);
+  expect(new Vector3(0,0,-1).applyQuaternion(q).distanceTo(new Vector3(...pivot).sub(new Vector3(...eye)).normalize())).toBeLessThan(1e-8);
+});
+it.each([0, .6])("retains the declared horizon through a full obstructed orbit (reference roll %s)", roll => {
+  const reference=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),roll);
+  const referenceUp=new Vector3(0,1,0).applyQuaternion(reference);
+  for(const pitch of [-1.4,.35,1.1,2.2]) for(let index=0;index<72;index++) {
+    const aim=reference.clone().multiply(orbitQuaternion(index*Math.PI/36,pitch));
+    const pose={...proposal,quaternionWorldXYZW:aim.toArray(),
+      positionWorldMetersXYZ:new Vector3(0,0,8).applyQuaternion(aim).toArray(),
+      composition:{nominalAimQuaternionWorldXYZW:aim.toArray(),relativeAimQuaternionXYZW:[0,0,0,1] as const,referenceQuaternionWorldXYZW:reference.toArray()}};
+    const eye=new Vector3(.03,.55,-6.56).applyQuaternion(reference);
+    const result=composeCameraAtPosition(pose,eye.toArray());
+    const q=new Quaternion(...result.quaternionWorldXYZW);
+    expect(Math.abs(new Vector3(1,0,0).applyQuaternion(q).dot(referenceUp))).toBeLessThan(1e-8);
+    expect(new Vector3(0,1,0).applyQuaternion(q).dot(referenceUp)*Math.sign(Math.cos(pitch))).toBeGreaterThan(.99);
+  }
+});
 it("translates first-person sight without re-aiming, and keeps a zero-arm pose finite", () => {
   const {composition: _composition,...sight} = proposal;
   const corrected = composeCameraAtPosition(sight,[3,2,1]);
@@ -377,4 +408,137 @@ it('retains only the latest bounded sample when obstructed searches fail',()=>{
   expect(Object.keys(constraints.inspectQueries()!)).toEqual(['fixed']);
   expect(constraints.inspectQueries()!.fixed!.simulationTick).toBe(109);
   expect(sample.simulationTick).toBe(9);
+});
+
+function poleComposition(pitch: number) {
+  const aim = orbitQuaternion(0, pitch);
+  return {...proposal,
+    positionWorldMetersXYZ:new Vector3(0,0,8).applyQuaternion(aim).toArray(),
+    quaternionWorldXYZW:aim.toArray(),
+    composition:{nominalAimQuaternionWorldXYZW:aim.toArray(),relativeAimQuaternionXYZW:[0,0,0,1] as const,referenceQuaternionWorldXYZW:[0,0,0,1] as const}};
+}
+
+it.each([false, true])('rebases an applied pole frame with its held pose before display interpolation (rotate=%s)', rotate => {
+  const source = composeCameraAtPosition(poleComposition(.3), [.003, 8, .004]);
+  const before = structuredClone(source);
+  const rotation = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), .6)
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), .4));
+  const moved = {...subject, positionWorldMetersXYZ: [7, 2, -3] as const,
+    semanticQuaternionWorldXYZW: rotation.toArray()};
+  const relocated = relocateCameraProposal(source, subject, moved, 'subject-up', rotate);
+  const applied = rotate ? rotation : new Quaternion();
+  const expectedAim = applied.clone().multiply(new Quaternion(...source.collisionComposition!.aimQuaternionWorldXYZW));
+  expect(new Quaternion(...relocated.collisionComposition!.aimQuaternionWorldXYZW).angleTo(expectedAim)).toBeLessThan(1e-7);
+  expect(relocated.collisionComposition!.horizonConfidence).toBe(source.collisionComposition!.horizonConfidence);
+  // Interpolation pairs the applied frame with the new reference. Stale world
+  // quaternions used to become a visible pole roll here, even at a held pose.
+  const display = blendCameraProposals(relocated, relocated, .5);
+  const projected = composeCameraAtPosition(display, display.positionWorldMetersXYZ);
+  expect(new Quaternion(...projected.quaternionWorldXYZW).angleTo(new Quaternion(...relocated.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  expect(source).toEqual(before);
+});
+
+it.each([
+  {pitch:.3, z:-.004},
+  {pitch:1.1, z:-.004},
+  {pitch:Math.PI/2-.0005, z:-8},
+  {pitch:Math.PI/2+.0005, z:8},
+])('keeps a near-pole correction continuous across the signed-angle seam: %j', ({pitch,z}) => {
+  const pose=poleComposition(pitch);
+  for(const direction of [-1,1]) {
+    const first=composeCameraAtPosition(pose,[-direction*1e-9,8,z]);
+    const second=composeCameraAtPosition(pose,[direction*1e-9,8,z],first.collisionComposition);
+    // The former fractional atan2 blend turned this 2 nm separation into 180 degrees.
+    expect(new Quaternion(...first.quaternionWorldXYZW).angleTo(new Quaternion(...second.quaternionWorldXYZW))).toBeLessThan(1e-5);
+    const repeated=composeCameraAtPosition(second,second.positionWorldMetersXYZ);
+    expect(new Quaternion(...second.quaternionWorldXYZW).angleTo(new Quaternion(...repeated.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  }
+});
+
+it('transports a bounded applied frame through repeated near-pole orbits and restores the horizon outside',()=>{
+  const pose=poleComposition(.3);
+  let previous:ReturnType<typeof composeCameraAtPosition>|undefined;
+  for(let index=0;index<=1440;index++) {
+    const yaw=index*Math.PI/180;
+    const next=composeCameraAtPosition(pose,[.004*Math.sin(yaw),8,.004*Math.cos(yaw)],previous?.collisionComposition);
+    if(previous) expect(new Quaternion(...previous.quaternionWorldXYZW).angleTo(new Quaternion(...next.quaternionWorldXYZW))).toBeLessThan(.01);
+    previous=next;
+  }
+  expect(new Quaternion(...previous!.collisionComposition!.aimQuaternionWorldXYZW).length()).toBeCloseTo(1,12);
+  const clear=composeCameraAtPosition(pose,[.2,8,.4],previous!.collisionComposition);
+  expect(clear.collisionComposition!.horizonConfidence).toBe(1);
+  const fresh=composeCameraAtPosition(pose,[.2,8,.4]);
+  expect(new Quaternion(...clear.quaternionWorldXYZW).angleTo(new Quaternion(...fresh.quaternionWorldXYZW))).toBeLessThan(1e-7);
+  // Ordinary full orbits must not plant accumulated whole turns for later contact.
+  for(let index=0;index<=1440;index++) {
+    const yaw=index*Math.PI/180;
+    previous=composeCameraAtPosition(pose,[2*Math.sin(yaw),8,2*Math.cos(yaw)],previous?.collisionComposition);
+    expect(previous.collisionComposition!.horizonConfidence).toBe(1);
+  }
+  const afterClearOrbits=composeCameraAtPosition(pose,[.2,8,.4],previous!.collisionComposition);
+  expect(new Quaternion(...afterClearOrbits.quaternionWorldXYZW).angleTo(new Quaternion(...fresh.quaternionWorldXYZW))).toBeLessThan(1e-7);
+});
+
+it('keeps the nominal pole crossing continuous in both directions instead of moving the seam to the pole',()=>{
+  for(const direction of [-1,1]) {
+    let previous:ReturnType<typeof composeCameraAtPosition>|undefined;
+    for(let index=-1000;index<=1000;index++) {
+      const pose=poleComposition(Math.PI/2+direction*index*1e-6);
+      const next=composeCameraAtPosition(pose,[1e-9,8,-8],previous?.collisionComposition);
+      if(previous) expect(new Quaternion(...previous.quaternionWorldXYZW).angleTo(new Quaternion(...next.quaternionWorldXYZW))).toBeLessThan(.01);
+      previous=next;
+    }
+  }
+});
+
+it('uses the fixed collision branch for both authoritative and repeated presentation corrections',()=>{
+  const pose=poleComposition(.3);
+  const first=composeCameraAtPosition(pose,[-1e-9,8,-.004]);
+  const previous={...first,positionWorldMetersXYZ:[1e-9,8,-.004] as const};
+  // The pivot starts in solid geometry; the established emergency policy keeps
+  // the known safe eye. This exercises the same cross-pivot correction boundary.
+  const constraints=new CameraConstraints(()=>({probe:(from,to)=>({
+    distanceMeters:new Vector3(...from).distanceTo(new Vector3(...to)),
+    ...(from[1]<1?{distanceMeters:0,startedOverlapping:true,colliderEntityId:'ceiling'}:{}),
+  })}));
+  const fixed=constraints.solve(pose,configuration,subject,{simulationTick:1,deltaSeconds:1/60,aspect:1,cut:false,previous});
+  expect(fixed.proposal.positionWorldMetersXYZ).toEqual(previous.positionWorldMetersXYZ);
+  expect(new Quaternion(...first.quaternionWorldXYZW).angleTo(new Quaternion(...fixed.proposal.quaternionWorldXYZW))).toBeLessThan(1e-5);
+  const state=constraints.capture();
+  for(let index=0;index<3;index++) {
+    const display=constraints.project(pose,configuration,subject,1,previous,1);
+    expect(display.quaternionWorldXYZW).toEqual(fixed.proposal.quaternionWorldXYZW);
+    expect(display.collisionComposition).toEqual(fixed.proposal.collisionComposition);
+    expect(constraints.capture()).toEqual(state);
+  }
+});
+
+it('enters and leaves the pole neighborhood repeatedly without resetting onto the opposite twist branch',()=>{
+  const pose=poleComposition(.3);
+  let previous:ReturnType<typeof composeCameraAtPosition>|undefined;
+  for(let index=0;index<=1600;index++) {
+    const phase=index*Math.PI/200;
+    const radius=.01+.006*Math.cos(phase);
+    const yaw=Math.PI+.1*Math.sin(phase);
+    const next=composeCameraAtPosition(pose,[radius*Math.sin(yaw),8,radius*Math.cos(yaw)],previous?.collisionComposition);
+    if(previous) expect(new Quaternion(...previous.quaternionWorldXYZW).angleTo(new Quaternion(...next.quaternionWorldXYZW))).toBeLessThan(.08);
+    previous=next;
+  }
+});
+
+
+it('preserves the applied display frame when its fixed endpoint has already recovered the horizon',()=>{
+  const pose=poleComposition(.3);
+  const sample=composeCameraAtPosition(pose,[.004,8,.004]);
+  const current=composeCameraAtPosition(pose,[.016,8,.004],sample.collisionComposition);
+  expect(current.collisionComposition!.horizonConfidence).toBe(1);
+  // Projection contracts the requested display eye to its interpolated safe eye.
+  const requested={...sample,positionWorldMetersXYZ:[.008,16,.008] as const};
+  const constraints=new CameraConstraints(()=>({probe:(from,to)=>{
+    const distance=new Vector3(...from).distanceTo(new Vector3(...to));
+    return distance>1?{distanceMeters:distance/2,colliderEntityId:'ceiling'}:{distanceMeters:distance};
+  }}));
+  const display=constraints.project(requested,configuration,subject,1,current,1);
+  expect(display.collisionComposition!.horizonConfidence).toBeCloseTo(sample.collisionComposition!.horizonConfidence,10);
+  expect(new Quaternion(...sample.quaternionWorldXYZW).angleTo(new Quaternion(...display.quaternionWorldXYZW))).toBeLessThan(1e-7);
 });

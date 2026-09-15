@@ -8,6 +8,7 @@ import type { Simulation } from './simulation';
 import type { EnvironmentQueries } from './environment/queries';
 import { probeHumanoidCamera } from './camera-queries';
 import { VehicleCameraQueries } from './vehicle-camera-queries';
+import { measureSubjectVisibilityClearanceRatio } from './camera-visibility';
 import type { CameraCollisionProbe } from '@worldkit/camera-collision';
 
 /** Native camera requests forwarded to the World owner. */
@@ -75,7 +76,14 @@ export class HumanoidCameraGeometry {
    const hit={...raw,...(raw.colliderEntityId?{colliderEntityId:environment.colliderId(Number(raw.colliderEntityId))}:{})};
    return refined.startedOverlapping||refined.distanceMeters<hit.distanceMeters?refined:hit;
   };
-  return {probe,...(capsule?{isSubjectVisible:(eye:readonly [number,number,number],query:CameraCollisionProbe)=>{
+  const capsuleRadius=capsule?(capsule.shape as import('@dimforge/rapier3d-compat').Capsule).radius:0;
+  return {probe,...(capsule?{subjectVisibilityClearance:{
+   // Anticipate over one body width; the camera sphere defines minimum usable
+   // visibility clearance. The ordinary ring test remains the hard fallback.
+   marginMeters:capsuleRadius*2,
+   measureRatio:(eye:readonly [number,number,number],minimumClearanceMeters:number,query:CameraCollisionProbe)=>
+    measureSubjectVisibilityClearanceRatio(eye,{positionWorldMetersXYZ:subject.positionWorldMetersXYZ,heightMeters:subject.body!.maximumHeightMeters,radiusMeters:capsuleRadius},minimumClearanceMeters,capsuleRadius*2,query),
+  },isSubjectVisible:(eye:readonly [number,number,number],query:CameraCollisionProbe)=>{
    const height=subject.body!.maximumHeightMeters,radius=(capsule.shape as import('@dimforge/rapier3d-compat').Capsule).radius;
    const position=subject.positionWorldMetersXYZ;
    for(const ratio of [1,0,.5,.25,.75,.125,.875,.375,.625]){

@@ -6,6 +6,12 @@ import type {
 } from "../../config/camera/index";
 import type { CameraQuaternion, CameraSubjectFacts } from "../subject";
 
+/** Applied aim history; whole angle turns are not physical orientation state. */
+export interface CameraCompositionFrame {
+  readonly aimQuaternionWorldXYZW: CameraQuaternion;
+  readonly referenceQuaternionWorldXYZW: CameraQuaternion;
+  readonly horizonConfidence: number;
+}
 export interface CameraProposal {
   readonly positionWorldMetersXYZ: CameraVector3;
   readonly quaternionWorldXYZW: CameraQuaternion;
@@ -25,6 +31,8 @@ export interface CameraProposal {
     | "require-line-of-sight";
   readonly visibilityTargetWorldMetersXYZ?: CameraVector3;
   readonly nominalDistanceMeters: number;
+  /** Fixed collision sample continuity; display may derive but never commit it. */
+  readonly collisionComposition?: CameraCompositionFrame;
 }
 export interface CameraIntent {
   readonly yawRadians: number;

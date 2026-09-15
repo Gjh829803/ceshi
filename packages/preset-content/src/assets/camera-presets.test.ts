@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {parseCameraDocument,resolveCameraConfiguration,type CameraPreset} from '@worldkit/three';
+import {createHumanoidCameraDocument,parseCameraDocument,resolveCameraConfiguration,type CameraPreset} from '@worldkit/three';
 import presets from '../../config/cameras/presets.json';
 import variantPresets from '../../config/cameras/dragon-variants.json';
 import {SPECS} from '../config';
@@ -13,6 +13,16 @@ function resolvePreset(subjectId:string,preset:CameraPreset){
  return resolveCameraConfiguration(document,{subjectId,subjectGeneration:0,subjectKind:'vehicle',
   availableAnchors:['eye','seat','follow-pivot','shoulder-eye'],headingAvailable:true,body:{minimumHeightMeters:0,maximumHeightMeters:2}});
 }
+
+it('snapshots native on-foot fading without enabling it on vehicle presets',()=>{
+ const native=createHumanoidCameraDocument('person');
+ for(const kind of ['third-person','shoulder'] as const){
+  const content=resolvePreset('person',presets[`person.${kind}`] as CameraPreset);
+  expect(content.values).toMatchObject({subjectFade:{enabled:true,startDistanceMeters:1.2,endDistanceMeters:.75}});
+  expect(native.presets![`humanoid.${kind}`]!.values).toMatchObject({subjectFade:presets[`person.${kind}`].values.subjectFade});
+  for(const spec of SPECS)expect(resolvePreset(spec.id,(presets as Record<string,unknown>)[`${spec.id}.${kind}`] as CameraPreset).values).toMatchObject({subjectFade:{enabled:false}});
+ }
+});
 
 it('resolves all maintained vehicle views from content presets without spec camera scalars',()=>{
  for(const spec of SPECS){

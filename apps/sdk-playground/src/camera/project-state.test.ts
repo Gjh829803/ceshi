@@ -35,6 +35,18 @@ it.each(Object.keys(CAMERA_PROJECT_FILES))('binds every current vehicle to the s
   }
 });
 
+it.each(Object.keys(CAMERA_PROJECT_FILES))('uses the maintained on-foot fade snapshot and preserves project opt-outs in %s',configurationId=>{
+ const {savedDocument:document}=calibrationProject(configurationId,'D01');
+ const context={subjectId:'person',subjectGeneration:0,subjectKind:'actor',availableAnchors:['eye','seat','shoulder-eye','follow-pivot'] as const,headingAvailable:true,body:{minimumHeightMeters:0,maximumHeightMeters:1.68}};
+ for(const viewId of ['third-person','shoulder'] as const){
+  expect(document.presets![`person.${viewId}`]).toEqual(cameraPresets[`person.${viewId}`]);
+  expect(resolveCameraConfiguration(document,{...context,viewId}).values).toMatchObject({subjectFade:{enabled:true}});
+  const custom=parseCameraDocument({...document,views:{...document.views,[viewId]:{...document.views[viewId],overrides:{...document.views[viewId]!.overrides,subjectFade:{enabled:false}}}}});
+  const reloaded=createCameraProjectState(cameraConfigurationId(configurationId),custom,'D01');
+  expect(resolveCameraConfiguration(reloaded.document,{...context,viewId}).values).toMatchObject({subjectFade:{enabled:false}});
+ }
+});
+
 it('resolves source archetype pitch and creature-state anchor calibrations',()=>{const {savedDocument:document}=calibrationProject('campus','D01');const context={subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat','shoulder-eye','follow-pivot'] as const,headingAvailable:true};for(const subjectId of ['atv','jetski'])expect(resolveCameraConfiguration(document,{...context,subjectId,viewId:'first-person'}).values.orientation.initialPitchRadians).toBe(.34);for(const [subjectId,height] of [['horse',2.25],['carriage',2.05]] as const)expect(resolveCameraConfiguration(document,{...context,subjectId}).values.position.anchorOffset.offsetMetersXYZ[1]).toBeCloseTo(height);});
 
 it('makes scene distance and variant selection actual inspectable document edits',()=>{
