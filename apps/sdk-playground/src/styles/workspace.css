@@ -134,6 +134,17 @@ button:hover {
   font-size: 12px;
   white-space: nowrap;
 }
+.header-creator {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #12343b;
+  color: #c3dbd4;
+  text-decoration: none;
+}
+.header-creator:hover { background: #1b454b; color: #e6f2ed; }
+.header-creator:focus-visible { outline: 2px solid #baf2db; outline-offset: 2px; }
 .local-status {
   display: flex;
   align-items: center;

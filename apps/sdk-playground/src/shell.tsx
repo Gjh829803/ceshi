@@ -376,6 +376,15 @@ export function mountShell(host: HTMLElement) {
               "header-route",
               { title: "选择测试区域" },
             )}
+            <a
+              className="header-link header-creator"
+              href="https://world-test-platform.loopit.com.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="在新标签页打开 Creator界面"
+            >
+              Creator界面
+            </a>
             <div className="header-spacer" />
             {btn(
               "contributeButton",
