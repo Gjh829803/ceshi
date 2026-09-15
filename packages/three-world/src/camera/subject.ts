@@ -17,6 +17,8 @@ export interface CameraSubjectFacts {
   /** Optional measured semantic orientation: local -Z forward, +Y up. */
   readonly semanticQuaternionWorldXYZW?: CameraQuaternion;
   readonly speedMetersPerSecond: number;
+  /** Measured world velocity; absent means unavailable, not stationary. */
+  readonly velocityWorldMetersPerSecondXYZ?: CameraVector3;
   /** Native committed gameplay facts. Omission means unavailable, never false. */
   readonly states?: { readonly swimming?: boolean };
   /** Aircraft yaw fact used only to seed continuous world-up twist after a cut. */
@@ -38,7 +40,7 @@ export interface CameraSubjectFacts {
 export function cameraSubjectCapabilities(subject:CameraSubjectFacts) {
   return {kind:subject.kind,body:subject.body,eye:!!subject.eyeWorldMetersXYZ,
     seat:!!subject.seatWorldMetersXYZ,followPivot:!!subject.followPivotWorldMetersXYZ,
-    shoulderEye:!!subject.shoulderEyeWorldMetersXYZ,heading:!!subject.semanticQuaternionWorldXYZW};
+    shoulderEye:!!subject.shoulderEyeWorldMetersXYZ,heading:!!subject.semanticQuaternionWorldXYZW,velocity:!!subject.velocityWorldMetersPerSecondXYZ};
 }
 
 export function subjectAnchor(

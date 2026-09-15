@@ -40,6 +40,10 @@ export interface CameraPosition {
   readonly anchorHalfLifeSeconds: number;
   readonly armHalfLifeSeconds: number;
 }
+export type CameraRecenterYawTarget =
+  | { readonly kind: "subject-forward" }
+  | { readonly kind: "movement-direction" }
+  | { readonly kind: "world-forward"; readonly yawRadians: number };
 export interface CameraOrientation {
   readonly initialPitchRadians: number;
   readonly pitchLimitsRadians: CameraAngleLimits;
@@ -51,6 +55,7 @@ export interface CameraOrientation {
     readonly delaySeconds: number;
     readonly minimumSpeedMetersPerSecond: number;
     readonly yawHalfLifeSeconds: number;
+    readonly yawTarget?: CameraRecenterYawTarget;
     readonly pitch?: {
       readonly targetRadians: number;
       readonly targetSource?: "configured" | "subject";
@@ -220,6 +225,7 @@ export interface CameraSubjectContext {
     readonly maximumHeightMeters: number;
   };
   readonly headingAvailable: boolean;
+  readonly velocityAvailable?: boolean;
   /** Geometry fact computed by the binding adapter, never tuning. */
   readonly openingDistanceMeters?: number;
 }
@@ -241,7 +247,7 @@ export interface CameraFieldProvenance {
   readonly source: CameraFieldSource;
   readonly configured: CameraJsonValue;
   readonly effective?: CameraJsonValue;
-  readonly inactiveReason?: "preserve-opening" | "heading-unavailable";
+  readonly inactiveReason?: "preserve-opening" | "heading-unavailable" | "velocity-unavailable";
 }
 interface CameraResolvedCommon {
   readonly viewId: string;

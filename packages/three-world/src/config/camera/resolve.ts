@@ -374,13 +374,17 @@ export function resolveCameraConfiguration(
         fail("/subjectContext/body", "valid body bounds required");
     }
   }
-  if (!subjectContext.headingAvailable)
+  const recenterSource = values.orientation.recenter.yawTarget?.kind ?? "subject-forward";
+  const unavailableRecenterSource = recenterSource === "subject-forward" && !subjectContext.headingAvailable
+    ? "heading-unavailable" : recenterSource === "movement-direction" && !subjectContext.velocityAvailable
+      ? "velocity-unavailable" : undefined;
+  if (unavailableRecenterSource)
     for (const [path, field] of Object.entries(fields))
       if (path.startsWith("orientation.recenter."))
         fields[path] = {
           source: field.source,
           configured: field.configured,
-          inactiveReason: "heading-unavailable",
+          inactiveReason: unavailableRecenterSource,
         };
   if (preserve && "zoom" in values && values.zoom.range.kind === "bounded") {
     const distance = subjectContext.openingDistanceMeters;

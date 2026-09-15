@@ -22,9 +22,9 @@ export class WorldCameraSubjects {
   const entity=this.entity(binding.targetEntityId),generation=this.generation(binding.targetEntityId);if(!entity||generation===undefined)return;
   const object=entity.object;object.updateWorldMatrix(true,false);
   const rotation=object.getWorldQuaternion(new THREE.Quaternion()),scale=object.getWorldScale(new THREE.Vector3());
-  const velocity=this.velocity(binding.targetEntityId)??[0,0,0];
+  const velocity=this.velocity(binding.targetEntityId);
   const eye=entity.options.eyePositionLocalMetersXYZ;
-  return {id:binding.targetEntityId,generation,kind:'ordinary',positionWorldMetersXYZ:object.getWorldPosition(new THREE.Vector3()).toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:scale.toArray(),semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),entity.options.frontYawRadians??0)).toArray(),speedMetersPerSecond:Math.hypot(...velocity),...(eye?{eyeWorldMetersXYZ:new THREE.Vector3(...eye).applyMatrix4(object.matrixWorld).toArray()}:{}),...(entity.character?{body:{minimumHeightMeters:0,maximumHeightMeters:(entity.character.heightMeters??1.8)*Math.abs(scale.y)}}:{})};
+  return {id:binding.targetEntityId,generation,kind:'ordinary',positionWorldMetersXYZ:object.getWorldPosition(new THREE.Vector3()).toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:scale.toArray(),semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),entity.options.frontYawRadians??0)).toArray(),speedMetersPerSecond:velocity?Math.hypot(...velocity):0,...(velocity?{velocityWorldMetersPerSecondXYZ:velocity}:{}),...(eye?{eyeWorldMetersXYZ:new THREE.Vector3(...eye).applyMatrix4(object.matrixWorld).toArray()}:{}),...(entity.character?{body:{minimumHeightMeters:0,maximumHeightMeters:(entity.character.heightMeters??1.8)*Math.abs(scale.y)}}:{})};
  }
  private key(binding:CameraDocument['binding']):string{return `${this.relocation}:${this.humanoid?humanoidHost(this.humanoid).cameraOperation(binding):''}`;}
  relocated(ids:readonly string[]):void{if(this.previous&&ids.includes(this.previous.id))this.relocation++;}

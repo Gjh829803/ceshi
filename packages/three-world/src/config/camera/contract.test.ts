@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type CameraDocument,
   parseCameraDocument,
   resolveCameraConfiguration,
   serializeCameraDocument,
@@ -618,4 +619,17 @@ describe("speed FOV envelope", () => {
     const {opening: _, ...implicit} = input.views.main;
     expect(() => parseCameraDocument({...input, views: {main: implicit}})).not.toThrow();
   });
+});
+
+
+it('validates recenter source branches and exposes unavailable velocity without rejecting a usable view',()=>{
+ const document: CameraDocument={kind:'world-camera',schemaVersion:1,defaultViewId:'orbit',binding:{targetEntityId:'person'},views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'}},orientation:{recenter:{yawTarget:{kind:'movement-direction'}}}}}}};
+ const context={subjectId:'person',subjectGeneration:1,subjectKind:'ordinary',availableAnchors:[] as const,headingAvailable:false};
+ const resolved=resolveCameraConfiguration(document,context);
+ expect(resolved.fields['orientation.recenter.yawTarget.kind']?.inactiveReason).toBe('velocity-unavailable');
+ const world={...document,views:{orbit:{kind:'third-person' as const,overrides:{position:{anchor:{kind:'origin' as const}},orientation:{recenter:{yawTarget:{kind:'world-forward' as const,yawRadians:1}}}}}}};
+ expect(resolveCameraConfiguration(world,context).fields['orientation.recenter.yawTarget.kind']?.inactiveReason).toBeUndefined();
+ for(const target of [{kind:'velocity'},{kind:'world-forward'},{kind:'world-forward',yawRadians:Infinity},{kind:'subject-forward',yawRadians:1}]){
+  expect(()=>parseCameraDocument({...world,views:{orbit:{...world.views.orbit,overrides:{...world.views.orbit.overrides,orientation:{recenter:{yawTarget:target}}}}}})).toThrow();
+ }
 });

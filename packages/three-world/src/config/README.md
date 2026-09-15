@@ -36,6 +36,14 @@ active, its extend/retract response filters the combined requested distance;
 explicit zoom smoothing is applied before that response. Native presets set zoom
 smoothing to zero, retaining the source response.
 
+`orientation.recenter.yawTarget` selects subject-forward (default),
+movement-direction, or world-forward with an explicit `yawRadians`. Direction is
+converted from world space into the view's orbit reference. Movement uses measured
+horizontal velocity and holds the orbit while it is unavailable, vertical-only or
+below the configured minimum speed; reverse travel deliberately selects the reverse
+heading. Disabling recentering does not disable reference-frame yaw inheritance.
+The authoritative field descriptions are included in discovery and Playground.
+
 `anchorOffset.space:'orbit'` follows the view yaw in its declared reference.
 `subject-heading` uses only the subject's continuous heading and retains world up;
 `subject-up` inherits its full orientation. `inheritSubjectYaw:false` leaves yaw
@@ -52,7 +60,8 @@ it does not switch views or introduce a general state selector.
 
 `input.orbitPitchRateRadiansPerSecond` overrides the shared orbit rate for ratio
 pitch input only; native values retain 1.2 rad/s yaw and 1 rad/s pitch. Explicit
-view selection resets its calibrated orbit rather than restoring dormant input.
+switching to another view resets its calibrated orbit rather than restoring dormant
+input; selecting the already active following view retains the current orbit.
 `subjectFade` is disabled by default and controls render-only third-person/shoulder fading between its start
 and end distances; first-person uses its separate body-clipping behavior.
 

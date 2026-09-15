@@ -287,8 +287,6 @@ export interface CameraState {
  readonly subjectGeneration:number|null;
  readonly transition:Extract<import('./camera/state').CameraTransition,{kind:'none'}>|Omit<Extract<import('./camera/state').CameraTransition,{kind:'blend'}>,'source'|'sourceSubject'>;
 
- readonly headingFollow?:'fixed'|'vehicle';
- readonly headingTargetYawRadians?:number|null;
  readonly subjectEntityId?:string;
  readonly mode:'authored'|'follow-pending'|'follow';
  readonly framingMode?:'preserve-opening'|'target';
@@ -417,6 +415,8 @@ export interface World {
  setCameraView(viewId:string):void;
  resumeCameraViewSelection():void;
  inspectCamera():import('./camera/state').CameraInspection;
+ /** Opt-in bounded CPU samples; disabled by default and independent of simulation. */
+ setCameraPerformanceDiagnosticsEnabled(enabled:boolean):void;
  /** Collect bounded samples from actual camera collision queries; disabled by default. */
  setCameraCollisionDiagnosticsEnabled(enabled:boolean):void;
  /** Releases SDK following without disposing/replacing the camera. */

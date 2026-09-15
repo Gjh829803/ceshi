@@ -1,3 +1,4 @@
+import {CameraPerformance} from "./performance";
 import {selectCameraView} from "./view-selection";
 import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
@@ -110,6 +111,7 @@ export class CameraController {
     operations: new Set(),
   };
   private readonly constraints: CameraConstraints;
+  private readonly performance = new CameraPerformance();
   private checkpoints = new WeakMap<CameraCheckpoint, SavedState>();
   private readonly baselines = new WeakMap<CameraBaseline, SavedState>();
   private baseline: CameraBaseline | undefined;
@@ -119,7 +121,7 @@ export class CameraController {
   private readonly selectionHolds=new Map<symbol,"editing"|"episode">();
   private failureState: CameraInspection["failure"];
   constructor(private readonly bindings: CameraControllerBindings) {
-    this.constraints = new CameraConstraints(bindings.geometry);
+    this.constraints = new CameraConstraints(bindings.geometry,this.performance);
   }
   private admit(frame?: CameraControllerFrame, recovery = false): void {
     if (this.disposed) throw failure("WORLD_DISPOSED");
@@ -162,6 +164,7 @@ export class CameraController {
     const vectors = [
       subject.positionWorldMetersXYZ,
       subject.geometryScaleXYZ,
+      ...(subject.velocityWorldMetersPerSecondXYZ ? [subject.velocityWorldMetersPerSecondXYZ] : []),
       ...(subject.eyeWorldMetersXYZ ? [subject.eyeWorldMetersXYZ] : []),
       ...(subject.seatWorldMetersXYZ ? [subject.seatWorldMetersXYZ] : []),
       ...(subject.followPivotWorldMetersXYZ ? [subject.followPivotWorldMetersXYZ] : []),
@@ -750,9 +753,14 @@ export class CameraController {
     const selected=selectCameraView({rules:document.viewSelection.rules,defaultViewId:document.defaultViewId,
       currentViewId:old.resolved!.viewId,states:subject.states,memory:old.selectionMemory??{},deltaSeconds,
       available:viewId=>{
-        if(viewId===old.resolved!.viewId&&old.subject&&equal(cameraSubjectCapabilities(subject),cameraSubjectCapabilities(old.subject)))return true;
-        try{resolve(document,viewId,subject,old.openings.get(viewId));return true;}
-        catch(error){if(error&&typeof error==='object'&&'code' in error&&error.code==='CAMERA_CONFIGURATION_INVALID')return false;throw error;}
+        if(viewId===old.resolved!.viewId&&old.subject&&equal(cameraSubjectCapabilities(subject),cameraSubjectCapabilities(old.subject)))return {available:true};
+        try{resolve(document,viewId,subject,old.openings.get(viewId));return {available:true};}
+        catch(error){
+          if(!error||typeof error!=='object'||!('code' in error)||error.code!=='CAMERA_CONFIGURATION_INVALID')throw error;
+          const diagnostic=runtimeError(error,'camera');
+          return {available:false,failure:{code:diagnostic.code,message:diagnostic.message,
+            ...('fieldPath' in error&&typeof error.fieldPath==='string'?{fieldPath:error.fieldPath}:{})}};
+        }
       }});
     const changed=selected.viewId!==old.resolved!.viewId;
     const candidate=changed?this.viewCandidate(old,selected.viewId,subject,{automatic:true}):old;
@@ -763,73 +771,76 @@ export class CameraController {
     deltaSeconds: number,
     frame: CameraControllerFrame,
   ): CameraControlBasis {
-    this.admit(frame);
-    let old = this.state;
-    if (!old.resolved || !old.document || !old.intent || !old.subject)
-      throw failure("CAMERA_FOLLOW_REQUIRED");
-    return this.transaction(() => {
-      const subject = this.sample(old.document!, frame);
-      if (!sameCameraSubject(subject, old.subject!))
-        throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
-      const delta = input.orbitDeltaRadiansXY ?? [0, 0],
-        ratio = input.orbitRatioXY ?? [0, 0];
-      if (
-        ![...delta, ...ratio, input.zoomDeltaMeters ?? 0, deltaSeconds].every(
-          Number.isFinite,
-        ) ||
-        deltaSeconds < 0 ||
-        ratio.some((value) => Math.abs(value) > 1)
-      )
-        throw failure("CAMERA_INPUT_INVALID");
-      const yaw =
-        delta[0] +
-        ratio[0] * old.resolved!.input.orbitRateRadiansPerSecond * deltaSeconds;
-      const pitch =
-        delta[1] +
-        ratio[1] * (old.resolved!.input.orbitPitchRateRadiansPerSecond ?? old.resolved!.input.orbitRateRadiansPerSecond) * deltaSeconds;
-      const active = !!input.movement || yaw !== 0 || pitch !== 0 || (input.zoomDeltaMeters ?? 0) !== 0;
-      const selected=this.selectionCandidate(active?this.activatePendingFollow(old,subject):old,subject,deltaSeconds);
-      old=selected.state;
-      const activated = old;
-      const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
-      const seed = activated.intent!;
-      const intent = prepareCameraIntent({
-        subject,
-        configuration: resolved,
-        intent: {
-          ...seed,
-          yawRadians: seed.yawRadians + yaw,
-          pitchRadians: seed.pitchRadians + pitch,
-          distanceMeters: seed.distanceMeters + (input.zoomDeltaMeters ?? 0),
-          secondsSinceOrbit: yaw !== 0 || pitch !== 0 ? 0 : seed.secondsSinceOrbit,
-        },
-        history,
-        headingHistory: old.history,
-        opening: openings.get(resolved.viewId),
-        deltaSeconds,
+    const performanceSample = this.performance.begin("input", frame.simulationTick, this.state.configurationRevision, frame.lifecycleGeneration);
+    try {
+      this.admit(frame);
+      let old = this.state;
+      if (!old.resolved || !old.document || !old.intent || !old.subject)
+        throw failure("CAMERA_FOLLOW_REQUIRED");
+      return this.transaction(() => {
+        const subject = this.sample(old.document!, frame);
+        if (!sameCameraSubject(subject, old.subject!))
+          throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
+        const delta = input.orbitDeltaRadiansXY ?? [0, 0],
+          ratio = input.orbitRatioXY ?? [0, 0];
+        if (
+          ![...delta, ...ratio, input.zoomDeltaMeters ?? 0, deltaSeconds].every(
+            Number.isFinite,
+          ) ||
+          deltaSeconds < 0 ||
+          ratio.some((value) => Math.abs(value) > 1)
+        )
+          throw failure("CAMERA_INPUT_INVALID");
+        const yaw =
+          delta[0] +
+          ratio[0] * old.resolved!.input.orbitRateRadiansPerSecond * deltaSeconds;
+        const pitch =
+          delta[1] +
+          ratio[1] * (old.resolved!.input.orbitPitchRateRadiansPerSecond ?? old.resolved!.input.orbitRateRadiansPerSecond) * deltaSeconds;
+        const active = !!input.movement || yaw !== 0 || pitch !== 0 || (input.zoomDeltaMeters ?? 0) !== 0;
+        const selected=this.selectionCandidate(active?this.activatePendingFollow(old,subject):old,subject,deltaSeconds);
+        old=selected.state;
+        const activated = old;
+        const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
+        const seed = activated.intent!;
+        const intent = prepareCameraIntent({
+          subject,
+          configuration: resolved,
+          intent: {
+            ...seed,
+            yawRadians: seed.yawRadians + yaw,
+            pitchRadians: seed.pitchRadians + pitch,
+            distanceMeters: seed.distanceMeters + (input.zoomDeltaMeters ?? 0),
+            secondsSinceOrbit: yaw !== 0 || pitch !== 0 ? 0 : seed.secondsSinceOrbit,
+          },
+          history,
+          headingHistory: old.history,
+          opening: openings.get(resolved.viewId),
+          deltaSeconds,
+        });
+        const state: ControllerState = {
+          ...activated,
+          subject,
+          resolved,
+          openings,
+          history,
+          intent,
+          mode: active ? "follow" : old.mode,
+        };
+        // Movement follows the player's orbit intent. Collision changes the eye,
+        // never the movement heading, and is solved once after physics.
+        const relativeYaw=resolved.values.orientation.referenceFrame!=='world-up'&&resolved.values.orientation.inheritSubjectYaw;
+        const heading=relativeYaw?(cameraSubjectHeading(subject,old.history)??0):0;
+        const basis: CameraControlBasis = {
+          quaternionWorldXYZW: orbitQuaternion(heading+intent.yawRadians,0).toArray(),
+          viewId: old.resolved!.viewId,
+          resolvedSubjectId: subject.id,
+          subjectGeneration: subject.generation,
+        };
+        this.pending = { state, frame: clone(frame), deltaSeconds, basis, selectionCut:selected.cut };
+        return immutable(clone(basis));
       });
-      const state: ControllerState = {
-        ...activated,
-        subject,
-        resolved,
-        openings,
-        history,
-        intent,
-        mode: active ? "follow" : old.mode,
-      };
-      // Movement follows the player's orbit intent. Collision changes the eye,
-      // never the movement heading, and is solved once after physics.
-      const relativeYaw=resolved.values.orientation.referenceFrame!=='world-up'&&resolved.values.orientation.inheritSubjectYaw;
-      const heading=relativeYaw?(cameraSubjectHeading(subject,old.history)??0):0;
-      const basis: CameraControlBasis = {
-        quaternionWorldXYZW: orbitQuaternion(heading+intent.yawRadians,0).toArray(),
-        viewId: old.resolved!.viewId,
-        resolvedSubjectId: subject.id,
-        subjectGeneration: subject.generation,
-      };
-      this.pending = { state, frame: clone(frame), deltaSeconds, basis, selectionCut:selected.cut };
-      return immutable(clone(basis));
-    });
+    } finally { this.performance.end(performanceSample); }
   }
   /** World failure boundary only: discard uncommitted input, never committed state. */
   abortPreparedInput(): void {
@@ -840,52 +851,55 @@ export class CameraController {
     frame: CameraControllerFrame,
     event?: CameraLifecycleEvent,
   ): CameraFixedFrame {
-    if (this.disposed) throw failure("WORLD_DISPOSED");
-    const pending = this.pending;
-    if (!pending || !equal(pending.frame, frame))
-      throw failure("CAMERA_INPUT_CANDIDATE_REQUIRED");
-    this.pending = undefined;
+    const performanceSample = this.performance.begin("fixed", frame.simulationTick, this.state.configurationRevision, frame.lifecycleGeneration);
     try {
-      return this.transaction(() => {
-        const lifecycle = event
-          ? this.lifecycleCandidate(pending.state, event, frame)
-          : undefined;
-        let candidate = lifecycle?.state ?? pending.state;
-        const subject = this.sample(candidate.document!, frame);
-        if (lifecycle?.kind === "applied") this.constraints.reset();
-        if (!sameCameraSubject(subject, candidate.subject!))
-          throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
-        if (!equal(cameraSubjectCapabilities(candidate.subject!), cameraSubjectCapabilities(subject))) {
-          const resolved = resolve(
-            candidate.document!,
-            candidate.resolved!.viewId,
-            subject,
-            candidate.openings.get(candidate.resolved!.viewId),
+      if (this.disposed) throw failure("WORLD_DISPOSED");
+      const pending = this.pending;
+      if (!pending || !equal(pending.frame, frame))
+        throw failure("CAMERA_INPUT_CANDIDATE_REQUIRED");
+      this.pending = undefined;
+      try {
+        return this.transaction(() => {
+          const lifecycle = event
+            ? this.lifecycleCandidate(pending.state, event, frame)
+            : undefined;
+          let candidate = lifecycle?.state ?? pending.state;
+          const subject = this.sample(candidate.document!, frame);
+          if (lifecycle?.kind === "applied") this.constraints.reset();
+          if (!sameCameraSubject(subject, candidate.subject!))
+            throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
+          if (!equal(cameraSubjectCapabilities(candidate.subject!), cameraSubjectCapabilities(subject))) {
+            const resolved = resolve(
+              candidate.document!,
+              candidate.resolved!.viewId,
+              subject,
+              candidate.openings.get(candidate.resolved!.viewId),
+            );
+            candidate = {
+              ...candidate,
+              resolved,
+              history: undefined,
+              intent: clampCameraIntent(candidate.intent!, resolved),
+            };
+          }
+          candidate = { ...candidate, subject };
+          this.commitCandidate(
+            candidate,
+            frame,
+            pending.deltaSeconds,
+            pending.selectionCut || lifecycle?.kind === "applied" && lifecycle.continuity === "cut",
+            lifecycle?.kind === "applied" ? undefined : this.state.history,
           );
-          candidate = {
-            ...candidate,
-            resolved,
-            history: undefined,
-            intent: clampCameraIntent(candidate.intent!, resolved),
-          };
-        }
-        candidate = { ...candidate, subject };
-        this.commitCandidate(
-          candidate,
-          frame,
-          pending.deltaSeconds,
-          pending.selectionCut || lifecycle?.kind === "applied" && lifecycle.continuity === "cut",
-          lifecycle?.kind === "applied" ? undefined : this.state.history,
-        );
-        return clone(this.state.current!);
-      });
-    } catch (error) {
-      this.failureState = {
-        ...runtimeError(error, "camera"),
-        controlBasis: pending.basis,
-      };
-      throw this.failureState;
-    }
+          return clone(this.state.current!);
+        });
+      } catch (error) {
+        this.failureState = {
+          ...runtimeError(error, "camera"),
+          controlBasis: pending.basis,
+        };
+        throw this.failureState;
+      }
+    } finally { this.performance.end(performanceSample); }
   }
   private lifecycleCandidate(
     old: ControllerState,
@@ -1145,20 +1159,26 @@ export class CameraController {
       this.state = { ...this.state, current, previous: current };
     }
   }
+  setPerformanceDiagnosticsEnabled(enabled:boolean):void {
+    this.admit();
+    this.performance.setEnabled(enabled);
+  }
   setCollisionDiagnosticsEnabled(enabled:boolean):void {
     this.admit();
     this.constraints.setDiagnosticsEnabled(enabled);
   }
   private readonly inspectionDocuments=new WeakMap<CameraDocument,CameraDocument>();
   private readonly inspectionConfigurations=new WeakMap<ResolvedCameraConfiguration,ResolvedCameraConfiguration>();
-  private inspectionCache:{diagnosticsRevision:number;state:ControllerState;failure:CameraInspection["failure"];value:CameraInspection}|undefined;
+  private inspectionCache:{performanceRevision:number;diagnosticsRevision:number;state:ControllerState;failure:CameraInspection["failure"];value:CameraInspection}|undefined;
   inspect(): CameraInspection {
     const s = this.state;
-    if(this.inspectionCache?.diagnosticsRevision===this.constraints.diagnosticsRevision&&this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
+    if(this.inspectionCache?.performanceRevision===this.performance.revision&&this.inspectionCache?.diagnosticsRevision===this.constraints.diagnosticsRevision&&this.inspectionCache?.state===s&&this.inspectionCache.failure===this.failureState)return this.inspectionCache.value;
+    const performance = this.performance.inspect();
     const value=immutable({
       ...clone({
         ...(s.document?.viewSelection&&s.mode!=="authored"?{viewSelection:{...(s.viewSelection??{source:s.selectionMemory?.manualViewId?"manual" as const:"default" as const,viewId:s.resolved?.viewId??s.document.defaultViewId,unavailableRules:[]}),...(this.selectionHolds.size?{suspendedBy:this.selectionHoldsHas("episode")?"episode" as const:"editing" as const}:{})}}:{}),
         collisionQueries: this.constraints.inspectQueries(),
+        ...(performance?{performance}:{}),
         mode: s.mode,
         documentHash: s.hash,
         configurationRevision: s.configurationRevision,
@@ -1175,7 +1195,7 @@ export class CameraController {
       document:inspectionMetadata(s.document,this.inspectionDocuments),
       resolved:inspectionMetadata(s.resolved,this.inspectionConfigurations),
     });
-    this.inspectionCache={diagnosticsRevision:this.constraints.diagnosticsRevision,state:s,failure:this.failureState,value};
+    this.inspectionCache={performanceRevision:this.performance.revision,diagnosticsRevision:this.constraints.diagnosticsRevision,state:s,failure:this.failureState,value};
     return value;
   }
   sampleProjection(
@@ -1183,41 +1203,44 @@ export class CameraController {
     aspect: number,
     displaySubject?: CameraSubjectFacts,
   ): CameraProjectedProposal | undefined {
-    this.admit();
-    const s = this.state;
-    if (!s.current || !s.previous)
-      return s.authoredPose ? clone(s.authoredPose) : undefined;
-    if (!s.resolved || !s.subject) return clone(s.current);
-    let subject = displaySubject ?? s.subject;
-    if (!sameCameraSubject(subject, s.subject))
-      throw failure("CAMERA_PRESENTATION_IDENTITY_MISMATCH");
-    let proposal = sampleCameraPresentation(s.previous, s.current, context);
-    if(displaySubject&&s.previous.subjectAnchorWorldMetersXYZ&&s.current.subjectAnchorWorldMetersXYZ){
-      const alpha=context.cut||!cameraFramesCompatible(s.previous,s.current)?1:context.alpha;
-      const sampled=cameraDisplaySubject(s.previous.subject!,s.current.subject!,displaySubject,alpha);
-      subject=sampled;
-      const fixedAnchor=new Vector3(...s.previous.subjectAnchorWorldMetersXYZ).lerp(new Vector3(...s.current.subjectAnchorWorldMetersXYZ),alpha);
-      // Preserve PR 240's pure displayed-heading correction. Posture facts use
-      // the same pair of fixed samples, never the latest un-interpolated height.
-      const displayHeading=cameraSubjectHeading(sampled,s.history) ?? s.history?.headingRadians;
-      const orbitYaw=(s.previous.orbitYawRadians??s.intent!.yawRadians)+((s.current.orbitYawRadians??s.intent!.yawRadians)-(s.previous.orbitYawRadians??s.intent!.yawRadians))*alpha;
-      const correction=cameraDisplayAnchor(sampled,s.resolved,displayHeading,orbitYaw).sub(fixedAnchor);
-      const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
-      proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
-    }
-    this.busy = true;
+    const performanceSample = this.performance.begin("presentation", context.currentTick, this.state.configurationRevision, this.state.current?.lifecycleGeneration ?? 0);
     try {
-      return this.constraints.project(
-        proposal,
-        s.resolved,
-        subject,
-        aspect,
-        s.current,
-        context.currentTick,
-      );
-    } finally {
-      this.busy = false;
-    }
+      this.admit();
+      const s = this.state;
+      if (!s.current || !s.previous)
+        return s.authoredPose ? clone(s.authoredPose) : undefined;
+      if (!s.resolved || !s.subject) return clone(s.current);
+      let subject = displaySubject ?? s.subject;
+      if (!sameCameraSubject(subject, s.subject))
+        throw failure("CAMERA_PRESENTATION_IDENTITY_MISMATCH");
+      let proposal = sampleCameraPresentation(s.previous, s.current, context);
+      if(displaySubject&&s.previous.subjectAnchorWorldMetersXYZ&&s.current.subjectAnchorWorldMetersXYZ){
+        const alpha=context.cut||!cameraFramesCompatible(s.previous,s.current)?1:context.alpha;
+        const sampled=cameraDisplaySubject(s.previous.subject!,s.current.subject!,displaySubject,alpha);
+        subject=sampled;
+        const fixedAnchor=new Vector3(...s.previous.subjectAnchorWorldMetersXYZ).lerp(new Vector3(...s.current.subjectAnchorWorldMetersXYZ),alpha);
+        // Preserve PR 240's pure displayed-heading correction. Posture facts use
+        // the same pair of fixed samples, never the latest un-interpolated height.
+        const displayHeading=cameraSubjectHeading(sampled,s.history) ?? s.history?.headingRadians;
+        const orbitYaw=(s.previous.orbitYawRadians??s.intent!.yawRadians)+((s.current.orbitYawRadians??s.intent!.yawRadians)-(s.previous.orbitYawRadians??s.intent!.yawRadians))*alpha;
+        const correction=cameraDisplayAnchor(sampled,s.resolved,displayHeading,orbitYaw).sub(fixedAnchor);
+        const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
+        proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
+      }
+      this.busy = true;
+      try {
+        return this.constraints.project(
+          proposal,
+          s.resolved,
+          subject,
+          aspect,
+          s.current,
+          context.currentTick,
+        );
+      } finally {
+        this.busy = false;
+      }
+    } finally { this.performance.end(performanceSample); }
   }
   hasCheckpoint(checkpoint:CameraCheckpoint):boolean {return this.checkpoints.has(checkpoint);}
   captureCheckpoint(): CameraCheckpoint {
@@ -1429,6 +1452,7 @@ export class CameraController {
       views: new Map(),
       openings: new Map(),
     };
+    this.performance.setEnabled(false);
     this.disposed = true;
   }
 }

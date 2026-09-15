@@ -2,7 +2,7 @@ import {CameraEditorState} from "./camera/editor-state";
 import {createCameraFileClient} from "./camera/file-client";
 import {createCameraPreview} from "./camera/preview";
 import {selectDragonCameraVariant} from "./camera/project-state";
-import type {CameraEditorBinding} from "./camera/panel";
+import type {CameraEditorBinding} from "./camera/binding";
 /// <reference types="vite/client" />
 import type {AircraftActionRequest} from '@worldkit/three';
 import {loadCameraProject} from './camera-project';
@@ -171,7 +171,10 @@ function getCameraEditor():CameraEditorBinding {
  if(!binding){
   const state=new CameraEditorState(cameraProject),key=`worldkit.camera-draft.v1.${cameraProject.configurationId}`;
   try{const recovery=localStorage.getItem(key);if(recovery)state.recover(recovery);}catch{/* Recovery is optional. */}
-  binding={state,client:cameraFileClient,rebind:()=>state.bind(sdk),preview:host=>createCameraPreview(host,scene,camera)};
+  binding={state,client:cameraFileClient,inspect:()=>sdk.inspectCamera(),subscribeInspection:listener=>{
+    let last=0;
+    return sdk.onRender(()=>{const now=performance.now();if(now-last<250)return;last=now;listener(sdk.inspectCamera());});
+  },setPerformanceEnabled:enabled=>sdk.setCameraPerformanceDiagnosticsEnabled(enabled),rebind:()=>state.bind(sdk),preview:host=>createCameraPreview(host,scene,camera)};
   cameraEditors.set(cameraProject.configurationId,binding);
   state.subscribe(()=>{try{localStorage.setItem(key,state.recovery());}catch{/* A full browser store cannot block editing. */}});
  }

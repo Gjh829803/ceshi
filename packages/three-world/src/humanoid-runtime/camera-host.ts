@@ -8,6 +8,7 @@ import type { Simulation } from './simulation';
 import type { EnvironmentQueries } from './environment/queries';
 import { probeHumanoidCamera } from './camera-queries';
 import { VehicleCameraQueries } from './vehicle-camera-queries';
+import type { CameraCollisionProbe } from '@worldkit/camera-collision';
 
 /** Native camera requests forwarded to the World owner. */
 export interface HumanoidCameraRequests {
@@ -49,7 +50,7 @@ export function sampleHumanoidCameraSubject(simulation:Simulation,binding:Camera
  if(poseVehicle?.spec.mode==='tank')shoulderEye.set(0,4.35,-1.2).applyQuaternion(seatRotation!).add(seatPosition!);
  const wearable=vehicle?.motion.aircraft?.wearable;
  const followPivot=vehicle?wearable?position.clone().add(new THREE.Vector3(0,1+wearable.seated*1.1,0)):undefined:position.clone().add(new THREE.Vector3(0,actor!.controller.swimming?1.4:actor!.controller.capsuleHeight*.655,0));
- return {...(poseVehicle?.motion.aircraft&&!poseVehicle.motion.aircraft.wearable&&poseVehicle.motion.aircraft.subtype!=='balloon'?{continuousHeadingSeedRadians:poseVehicle.yaw+Math.PI}:{}),id,generation:gen,kind:vehicle?'vehicle':'humanoid',states:{swimming:!!actor&&!poseVehicle&&actor.controller.swimming},positionWorldMetersXYZ:position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI)).toArray(),...(wearable?{preferredOrbitPitchRadians:wearable.seated>.5?.25:.2}:{}),shoulderEyeWorldMetersXYZ:shoulderEye.toArray(),...(followPivot?{followPivotWorldMetersXYZ:followPivot.toArray()}:{}),speedMetersPerSecond:(poseVehicle?.velocity??actor!.player.velocity).length(),body,eyeWorldMetersXYZ:eyePoint.toArray(),...(seat?{seatWorldMetersXYZ:seat.toArray()}:{})};
+ return {...(poseVehicle?.motion.aircraft&&!poseVehicle.motion.aircraft.wearable&&poseVehicle.motion.aircraft.subtype!=='balloon'?{continuousHeadingSeedRadians:poseVehicle.yaw+Math.PI}:{}),id,generation:gen,kind:vehicle?'vehicle':'humanoid',states:{swimming:!!actor&&!poseVehicle&&actor.controller.swimming},positionWorldMetersXYZ:position.toArray(),geometryQuaternionWorldXYZW:rotation.toArray(),geometryScaleXYZ:[1,1,1],semanticQuaternionWorldXYZW:rotation.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI)).toArray(),...(wearable?{preferredOrbitPitchRadians:wearable.seated>.5?.25:.2}:{}),shoulderEyeWorldMetersXYZ:shoulderEye.toArray(),...(followPivot?{followPivotWorldMetersXYZ:followPivot.toArray()}:{}),speedMetersPerSecond:(poseVehicle?.velocity??actor!.player.velocity).length(),velocityWorldMetersPerSecondXYZ:(poseVehicle?.velocity??actor!.player.velocity).toArray(),body,eyeWorldMetersXYZ:eyePoint.toArray(),...(seat?{seatWorldMetersXYZ:seat.toArray()}:{})};
 }
 /** Native query policy and refined vehicle surfaces; returned distances contain no padding. */
 export class HumanoidCameraGeometry {
@@ -74,7 +75,7 @@ export class HumanoidCameraGeometry {
    const hit={...raw,...(raw.colliderEntityId?{colliderEntityId:environment.colliderId(Number(raw.colliderEntityId))}:{})};
    return refined.startedOverlapping||refined.distanceMeters<hit.distanceMeters?refined:hit;
   };
-  return {probe,...(capsule?{isSubjectVisible:(eye:readonly [number,number,number])=>{
+  return {probe,...(capsule?{isSubjectVisible:(eye:readonly [number,number,number],query:CameraCollisionProbe)=>{
    const height=subject.body!.maximumHeightMeters,radius=(capsule.shape as import('@dimforge/rapier3d-compat').Capsule).radius;
    const position=subject.positionWorldMetersXYZ;
    for(const ratio of [1,0,.5,.25,.75,.125,.875,.375,.625]){
@@ -84,7 +85,7 @@ export class HumanoidCameraGeometry {
     for(let sample=0;sample<9;sample++){
      const angle=(sample-1)*Math.PI/4,r=sample===0?0:ringRadius;
      const target:readonly [number,number,number]=[position[0]+Math.cos(angle)*r,position[1]+y,position[2]+Math.sin(angle)*r];
-     const travel=Math.hypot(...target.map((v,i)=>v-eye[i]!)),hit=probe(eye,target,0);
+     const travel=Math.hypot(...target.map((v,i)=>v-eye[i]!)),hit=query(eye,target,0);
      if(!hit.startedOverlapping&&hit.distanceMeters>=travel*.99999)return true;
     }
    }

@@ -13,6 +13,11 @@ it('discovers the camera document and ordinary eye capability from the actual SD
  const before=await discover();
  expect(before.cameraConfiguration.status).toBe('available');
  expect(before.cameraConfiguration.schema.properties.schemaVersion).toBeDefined();
+ const help=before.cameraConfiguration.fields.find((field:any)=>field.kind==='third-person'&&field.path==='orientation.recenter.yawTarget');
+ expect(help.schema.description).toContain('movement-direction');
+ expect(help.schema.oneOf.map((branch:any)=>branch.properties.kind.const)).toEqual(['subject-forward','movement-direction','world-forward']);
+ expect(before.cameraConfiguration.fields.find((field:any)=>field.kind==='third-person'&&field.path==='orientation.recenter.yawHalfLifeSeconds').schema.description).toContain('误差减半');
+ expect(before.sdkContracts).not.toContain('headingFollow');
  expect(before.sdkContracts).toContain('eyePositionLocalMetersXYZ');
  expect(before.sdkContracts).toContain('setCameraView');
  expect(before.cameraSourceContracts['config/camera/humanoid.ts']).toContain('createHumanoidCameraDocument');
@@ -54,7 +59,7 @@ it('exposes changed schema after trusted maintenance regeneration',async()=>{
 },20000);
 
 
-it('routes production Agents to preset inheritance and explicit state-selection guidance', async () => {
+it('routes production Agents to preset inheritance, view selection and authored camera control', async () => {
  const root=await mkdtemp(path.join(os.tmpdir(),'camera-customization-'));
  const service=new ThreeCreatorTools(root,'three-sdk');services.push(service);
  const environment=await executeThreeCreatorTool(service,'creator_describe_environment',{}) as any;
@@ -66,7 +71,16 @@ it('routes production Agents to preset inheritance and explicit state-selection 
  expect(result.sdkGuide).toContain('same kind does not inherit');
  expect(result.sdkGuide).toContain('does not automatically select it');
  expect(result.sdkGuide).toContain('resumeCameraViewSelection');
+ expect(result.sdkGuide).toContain('### Authored camera control');
+ expect(result.sdkGuide).toContain('world.useAuthoredCamera()');
+ expect(result.sdkGuide).toContain("world.cameraMode === 'authored'");
+ const guide=result.sdkGuide.replace(/\s+/g,' ');
+ expect(guide).toContain('following, recentering and camera collision are inactive');
+ expect(guide).toContain('stop authored camera writes and call `world.setCameraFollow({configuration})`');
  const schema=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'getting-started',sections:['contracts']}) as any;
  expect(schema.sdkContracts).toContain('resumeCameraViewSelection');
+ for(const member of ['useAuthoredCamera','cameraMode','onUpdate'])expect(schema.sdkContracts).toContain(member);
+ const nonhuman=await executeThreeCreatorTool(service,'creator_get_authoring_schema',{topic:'nonhuman-subject',sections:['contracts']}) as any;
+ for(const member of ['useAuthoredCamera','cameraMode','onUpdate','setCameraFollow'])expect(nonhuman.sdkContracts).toContain(member);
  expect(schema.cameraConfiguration.schema.properties.viewSelection.properties.rules.items.properties.when.properties.state.enum).toEqual(['swimming']);
 });

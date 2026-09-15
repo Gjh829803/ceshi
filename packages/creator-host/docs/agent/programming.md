@@ -81,13 +81,29 @@ frame, within its angle limits, while applying that view's framing. Explicit vie
 selection keeps its calibrated opening.
 Inspect `observation.camera.viewSelection` for the chosen rule, pending switch or
 unavailable reason. Applied edit drafts suspend rules until resumed or released. Authored
-camera mode is never taken over.
+camera mode is never taken over. Unavailable rules include the candidate view and
+original failure message/field path; use these to correct the binding or override.
+
+### Authored camera control
+
+For direct Three camera control, call `world.useAuthoredCamera()` outside World
+update/render callbacks. Update `world.camera` through `world.onUpdate` only while
+`world.cameraMode === 'authored'`. SDK following, recentering and camera collision
+are inactive in this mode; authored camera logic is responsible for those effects.
+To return control, stop authored camera writes and call
+`world.setCameraFollow({configuration})` with a complete document. Reuse the World
+clock and keep one camera writer. During Episode's exclusive capture lease,
+external ownership changes are rejected.
 
 ### Opening and lifecycle
 
 For an authored opening, configure a third-person view with `opening` and
 `framing.kind:'preserve-opening'`. `activation:'on-input'` preserves it until
-input activates following. Configure recentering, damping, zoom and transitions
+input activates following. The discovered field schema includes units and short
+behavior descriptions. Optional `orientation.recenter.yawTarget` chooses
+`subject-forward` (default), `movement-direction`, or `world-forward` with
+`yawRadians`. Movement direction follows horizontal travel, including reverse;
+insufficient motion holds the orbit. Configure recentering, damping, zoom and transitions
 in that view's overrides. The nonhuman binding example includes the
 relative JSON import and minimal document; adapt its target to your actor.
 

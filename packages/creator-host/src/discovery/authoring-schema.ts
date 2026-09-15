@@ -20,7 +20,7 @@ const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[
  programming: ['getKeyBindings','createPresentation','onUpdate','onReset','onDispose','start','stop','reset','dispose'],
  quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets'],
  boundaries: ['getEntityState','describe','snapshot'],
- 'nonhuman-subject': ['scene','camera','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','resumeCameraViewSelection','inspectCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
+ 'nonhuman-subject': ['scene','camera','cameraMode','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose'],

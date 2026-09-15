@@ -65,3 +65,6 @@ export const speedLimit: CameraFieldSchema = {
     }),
   ],
 };
+
+/** Short help is shared by discovery and the editor, not a second guide. */
+export const describe = (schema: CameraFieldSchema, title: string, description: string): CameraFieldSchema => ({...schema, title, description});

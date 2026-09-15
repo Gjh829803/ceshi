@@ -1,5 +1,12 @@
 # 相机状态交接 TODO
 
+> Historical checklist from before the camera migration. Current ownership and
+> extension contracts are in [the architecture](../three-sdk-architecture.md#相机控制权与交接);
+> completed restoration and selection work is recorded in
+> [behavior restoration](2026-09-14-camera-behavior-restoration.md) and
+> [view selection review](2026-09-14-camera-view-selection.md). Unchecked items below
+> retain their original historical status and are not a current defect inventory.
+
 更新日期：2026-09-12。面向 SDK、Creator 和 Episode 维护者。
 
 目标：梳理相机状态交接，避免修复一个画面症状后，遗漏同一操作链中的取景、碰撞或恢复问题。

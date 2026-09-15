@@ -1,4 +1,5 @@
 import {cameraReferenceRotation,cameraSubjectHeading} from "./heading";
+import {recenterYaw} from './recenter';
 import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from "three";
 import type {
   CameraAngleLimits,
@@ -107,27 +108,24 @@ export function prepareCameraIntent<K extends CameraKind>(
   const recenter = values.orientation.recenter;
   let yaw = intent.yawRadians;
   let pitch = intent.pitchRadians;
+  const recenterDelta = Math.max(0, Math.min(dt, elapsed - recenter.delaySeconds));
+  const recenteredPitch = recenter.enabled && recenter.pitch && elapsed > recenter.delaySeconds
+    ? smooth(pitch,recenter.pitch.targetSource==='subject' ? subject.preferredOrbitPitchRadians??recenter.pitch.targetRadians : recenter.pitch.targetRadians,recenterDelta,recenter.pitch.halfLifeSeconds)
+    : pitch;
+  const target = recenter.enabled ? recenterYaw(values.orientation, subject, measuredHeading, heading, yaw, limit(recenteredPitch,values.orientation.pitchLimitsRadians)) : undefined;
   if (
     recenter.enabled &&
-    measuredHeading !== undefined &&
-    subject.speedMetersPerSecond >= recenter.minimumSpeedMetersPerSecond &&
+    target !== undefined &&
+    target.speedMetersPerSecond >= recenter.minimumSpeedMetersPerSecond &&
     elapsed > recenter.delaySeconds
   ) {
     // Only integrate the part of this step after the delay expires.
-    const recenterDelta = Math.min(dt, elapsed - recenter.delaySeconds);
-    const targetYaw =
-      (values.orientation.referenceFrame !== "world-up" && values.orientation.inheritSubjectYaw) ? 0 : heading;
+    const targetYaw = target.yawRadians;
     yaw +=
       (recenterYawTarget(yaw, targetYaw, values.orientation.yawLimitsRadians) -
         yaw) *
       halfLifeAlpha(recenterDelta, recenter.yawHalfLifeSeconds);
-    if (recenter.pitch)
-      pitch = smooth(
-        pitch,
-        recenter.pitch.targetSource==='subject' ? subject.preferredOrbitPitchRadians??recenter.pitch.targetRadians : recenter.pitch.targetRadians,
-        recenterDelta,
-        recenter.pitch.halfLifeSeconds,
-      );
+    pitch = recenteredPitch;
   }
   yaw = limit(yaw, values.orientation.yawLimitsRadians);
   pitch = limit(pitch, values.orientation.pitchLimitsRadians);
