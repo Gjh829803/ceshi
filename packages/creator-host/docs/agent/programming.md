@@ -46,6 +46,10 @@ when keeping the SDK's native human calibration. For registered creatures, obtai
 Mesh/Group subjects need compatible anchors; a human preset is not a universal
 fallback. Author imports do not allow preset-content.
 
+The human `getting-started` example embeds this calibration in `config/camera.json`.
+Its binding target is the primary human instance ID; use the same ID in the world
+and its subject overrides.
+
 Customize only the needed fields in a view's `overrides`, or in
 `binding.subjectOverrides[instanceId].views[viewId].overrides` for one subject.
 Omitted fields inherit, from lowest to highest priority: SDK defaults, view preset,
@@ -58,6 +62,16 @@ For a new named view, explicitly reference an embedded preset with the matching
 are also keyed by the new view ID. Reuse the preset and add only the desired
 parameter overrides rather than copying all resolved values into a new preset.
 Existing views and their defaults remain available through `setCameraView(viewId)`.
+
+With `binding.mountTarget:'vehicle'`, the resolved subject is the vehicle while
+riding and the human after dismounting; shared view overrides still apply to both.
+Put vehicle-only settings in
+`binding.subjectOverrides[vehicleInstanceId].views[viewId].overrides`.
+For gradual vehicle heading follow, use `referenceFrame:'world-up'` with
+`recenter.enabled:true`. For camera-relative walking, retain the native human
+`world-up` and `recenter.enabled:false`. In a subject-relative frame,
+`inheritSubjectYaw:true` can make lateral walking continuously rotate both the
+person and camera; disabling recentering alone does not disable this inheritance.
 
 Declaring a view named `swimming` does not automatically select it. To opt in,
 reference that named view from `viewSelection.rules`:
@@ -99,8 +113,10 @@ external ownership changes are rejected.
 
 For an authored opening, configure a third-person view with `opening` and
 `framing.kind:'preserve-opening'`. `activation:'on-input'` preserves it until
-input activates following. The discovered field schema includes units and short
-behavior descriptions. Optional `orientation.recenter.yawTarget` chooses
+input activates following. The human example leaves third-person pitch/zoom limits
+unbounded to preserve reference compositions; any chosen bounds must include the
+intended opening. The discovered field schema includes units and short behavior
+descriptions. Optional `orientation.recenter.yawTarget` chooses
 `subject-forward` (default), `movement-direction`, or `world-forward` with
 `yawRadians`. Movement direction follows horizontal travel, including reverse;
 insufficient motion holds the orbit. Configure recentering, damping, zoom and transitions

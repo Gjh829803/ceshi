@@ -2,10 +2,15 @@ import {createHumanoidWorld, type HumanoidWorldOptions, parseCameraDocument, typ
 
 import cameraData from './config/camera.json';
 
+// This starter follows its primary human. Use the same instance ID in JSON and the world.
 // Supply the scene, canvas, map, chosen characterColor and initialMountId when the reference starts riding.
-declare const options: HumanoidWorldOptions;
+declare const options: Omit<HumanoidWorldOptions, 'characterId'>;
 declare const opening: CameraOpeningConfiguration;
-const world = await createHumanoidWorld({characterLoadOptions:{loadTextures:false},...options});
-world.setCameraFollow({configuration:parseCameraDocument({...cameraData,binding:{targetEntityId:options.characterId??'player',mountTarget:'vehicle'},views:{'third-person':{...cameraData.views['third-person'],opening}}})});
-world.setCaptureTargets([options.characterId ?? 'player']);
+const cameraDocument = parseCameraDocument(cameraData);
+const characterId = cameraDocument.binding.targetEntityId;
+const world = await createHumanoidWorld({characterLoadOptions:{loadTextures:false},...options,characterId});
+world.setCameraFollow({configuration:parseCameraDocument({...cameraDocument,
+  views:{...cameraDocument.views,'third-person':{...cameraDocument.views['third-person'],opening}},
+})});
+world.setCaptureTargets([characterId]);
 await world.start();

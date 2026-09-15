@@ -1,11 +1,12 @@
 import { expect, it, vi } from "vitest";
-import { Box3, Ray, Quaternion, Vector3 } from "three";
+import { Box3, Euler, Ray, Quaternion, Vector3 } from "three";
 import {
   parseCameraDocument,
   serializeCameraDocument,
 } from "../config/camera/index";
 import { CameraController } from "./controller";
 import type { CameraSubjectFacts } from "./subject";
+import { cameraControlForward } from "./control-basis";
 
 const initial: CameraSubjectFacts = {
   id: "actor",
@@ -1114,4 +1115,104 @@ it('derives movement from orbit intent without a second pre-physics collision so
  expect(geometry).not.toHaveBeenCalled();
  expect(new Vector3(0,0,-1).applyQuaternion(new Quaternion(...basis.quaternionWorldXYZW)).x).toBeCloseTo(-Math.sin(.4),10);
  controller.evaluateAndCommit(frame(1));expect(geometry).toHaveBeenCalledTimes(1);
+});
+
+it.each((['world-up','subject-heading','subject-up'] as const).flatMap(referenceFrame=>[true,false].map(inheritSubjectYaw=>({referenceFrame,inheritSubjectYaw}))))('keeps off-axis opening input aligned with $referenceFrame / inherit=$inheritSubjectYaw without collision queries',({referenceFrame,inheritSubjectYaw})=>{
+ let subject=structuredClone(initial);
+ const geometry=vi.fn(()=>({probe:(a:readonly [number,number,number],b:readonly [number,number,number])=>({distanceMeters:new Vector3(...a).distanceTo(new Vector3(...b))})}));
+ const controller=new CameraController({sampleSubject:()=>subject,geometry});
+ try{
+  controller.install(document({activation:'immediate',views:{orbit:{kind:'third-person',opening:{positionWorldMetersXYZ:[0,2,8],lookAtWorldMetersXYZ:[4,2,0],upWorldXYZ:[.2,1,.1],fovDegrees:50},overrides:{framing:{kind:'preserve-opening'},position:{anchor:{kind:'origin'},subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0},orientation:{referenceFrame,inheritSubjectYaw,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}}}),frame());
+  for(const [index,rotation] of [[0,0,0],[.7,.3,-.4]].entries()){
+   subject={...subject,semanticQuaternionWorldXYZW:new Quaternion().setFromEuler(new Euler(rotation[1],rotation[0],rotation[2],'YXZ')).toArray()};
+   geometry.mockClear();
+   const basis=controller.prepareInput({movement:true},1/60,frame(index+1));
+   expect(geometry).not.toHaveBeenCalled();
+   controller.evaluateAndCommit(frame(index+1));
+   expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW)))).toBeLessThan(1e-9);
+  }
+ }finally{controller.dispose();}
+});
+
+it('uses the opening camera right axis for vertical input and retains orbit through pitch poles',()=>{
+ const {controller}=fixture();
+ try{
+  controller.install(document({activation:'immediate',views:{orbit:{kind:'third-person',opening:{positionWorldMetersXYZ:[0,3,8],lookAtWorldMetersXYZ:[0,-2,8],upWorldXYZ:[1,0,0],fovDegrees:50},overrides:{framing:{kind:'preserve-opening'},position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},orientation:{recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}}}),frame());
+  for(const [index,pitch] of [0,.8,1,-2].entries()){
+   const basis=controller.prepareInput({movement:true,orbitDeltaRadiansXY:[0,pitch]},1/60,frame(index+1));
+   controller.evaluateAndCommit(frame(index+1));
+   expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW)))).toBeLessThan(1e-9);
+  }
+ }finally{controller.dispose();}
+});
+
+it.each((['look-at','preserve-opening'] as const).flatMap(framing=>(['world-up','subject-heading','subject-up'] as const).map(referenceFrame=>({framing,referenceFrame}))))('preserves horizontal movement when automatic selection changes an opening to $framing / $referenceFrame and back',({framing,referenceFrame})=>{
+ const {controller,setSubject}=fixture();
+ try{
+  const subject={...initial,semanticQuaternionWorldXYZW:new Quaternion().setFromEuler(new Euler(.2,.4,.1,'YXZ')).toArray()};
+  setSubject(subject);
+  const opening=anchoredOpening();
+  controller.install(parseCameraDocument({...opening,
+   views:{...opening.views,orbit:{...opening.views.orbit,opening:{positionWorldMetersXYZ:[2,3,8],lookAtWorldMetersXYZ:[4,1,0],upWorldXYZ:[.1,1,.1],fovDegrees:50}},water:{kind:'third-person',...(framing==='preserve-opening'?{opening:{positionWorldMetersXYZ:[-3,4,6],lookAtWorldMetersXYZ:[4,1,-2],upWorldXYZ:[.3,1,.1],fovDegrees:55}}:{}),overrides:{framing:{kind:framing},position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},orientation:{referenceFrame,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}},
+   viewSelection:{rules:[{id:'swim',viewId:'water',when:{state:'swimming'}}]},
+  }),frame());
+  step(controller,1,{orbitDeltaRadiansXY:[.4,.2]});
+  const expected=new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW));
+  for(const [index,swimming] of [true,false].entries()){
+   setSubject({...subject,states:{swimming}});
+   const basis=controller.prepareInput({movement:true},1/60,frame(index+2));
+   expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(expected)).toBeLessThan(1e-9);
+   controller.evaluateAndCommit(frame(index+2));
+   expect(controller.inspect().resolved!.viewId).toBe(swimming?'water':'orbit');
+  }
+ }finally{controller.dispose();}
+});
+
+it.each(['world-up','subject-up'] as const)('preserves the vertical opening right-axis input through an automatic %s view change',referenceFrame=>{
+ const {controller,setSubject}=fixture();
+ try{
+  const opening=anchoredOpening();
+  controller.install(parseCameraDocument({...opening,views:{...opening.views,water:{kind:'third-person',opening:{positionWorldMetersXYZ:[0,3,8],lookAtWorldMetersXYZ:[0,-2,8],upWorldXYZ:[1,0,0],fovDegrees:50},overrides:{framing:{kind:'preserve-opening'},position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},orientation:{referenceFrame,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}},viewSelection:{rules:[{id:'swim',viewId:'water',when:{state:'swimming'}}]}}),frame());
+  const expected=new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW));
+  setSubject({...initial,states:{swimming:true}});
+  const basis=controller.prepareInput({movement:true},1/60,frame(1));
+  controller.evaluateAndCommit(frame(1));
+  expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(expected)).toBeLessThan(1e-9);
+ }finally{controller.dispose();}
+});
+
+it.each(['third-person','first-person','shoulder'] as const)('uses the legal yaw branch when an automatic opening switches to bounded %s',kind=>{
+ const {controller,setSubject}=fixture();
+ try{
+  const position=new Vector3(Math.sin(2.6)*8,2,Math.cos(2.6)*8);
+  const direction=new Vector3(-Math.sin(-2.6),0,-Math.cos(-2.6));
+  controller.install(document({activation:'immediate',views:{
+   orbit:{kind:'third-person',opening:{positionWorldMetersXYZ:position.toArray(),lookAtWorldMetersXYZ:position.clone().add(direction).toArray(),fovDegrees:50},overrides:{framing:{kind:'preserve-opening'},position:{anchor:{kind:'origin'},armHalfLifeSeconds:0},orientation:{recenter:{enabled:false}},constraints:{collision:{enabled:false}}}},
+   bounded:{kind,overrides:{orientation:{initialPitchRadians:0,yawLimitsRadians:{kind:'bounded',minimumRadians:-2.7,maximumRadians:2.7},recenter:{enabled:false}},constraints:{collision:{enabled:false}}}},
+  },viewSelection:{rules:[{id:'swim',viewId:'bounded',when:{state:'swimming'}}]}}),frame());
+  expect(controller.inspect().intent!.yawRadians).toBeCloseTo(2.6);
+  setSubject({...initial,states:{swimming:true}});
+  const basis=controller.prepareInput({movement:true},1/60,frame(1));
+  controller.evaluateAndCommit(frame(1));
+  expect(controller.inspect().intent!.yawRadians).toBeCloseTo(-2.6);
+  expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(direction)).toBeLessThan(1e-9);
+ }finally{controller.dispose();}
+});
+
+it.each([
+ {referenceFrame:'subject-heading',inheritSubjectYaw:true,framing:'preserve-opening'},
+ {referenceFrame:'subject-up',inheritSubjectYaw:false,framing:'preserve-opening'},
+ {referenceFrame:'subject-heading',inheritSubjectYaw:true,framing:'look-at'},
+] as const)('retains heading history for vertical semantic subjects in $referenceFrame / $framing',({referenceFrame,inheritSubjectYaw,framing})=>{
+ const {controller,setSubject}=fixture();
+ try{
+  const subject={...initial,semanticQuaternionWorldXYZW:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI/2).toArray()};
+  setSubject(subject);
+  controller.install(document({activation:'immediate',views:{orbit:{kind:'third-person',...(framing==='preserve-opening'?{opening:{positionWorldMetersXYZ:[3,4,8],lookAtWorldMetersXYZ:[-4,1,0],fovDegrees:50}}:{}),overrides:{framing:{kind:framing},position:{anchor:{kind:'origin'},subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0},orientation:{referenceFrame,inheritSubjectYaw,recenter:{enabled:false}},constraints:{collision:{enabled:false}}}}}}),frame());
+  step(controller,1);
+  setSubject({...subject,semanticQuaternionWorldXYZW:new Quaternion().setFromEuler(new Euler(Math.PI/2,Math.PI/2,0,'YXZ')).toArray()});
+  const basis=controller.prepareInput({movement:true},1/60,frame(2));
+  controller.evaluateAndCommit(frame(2));
+  expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW)))).toBeLessThan(1e-9);
+ }finally{controller.dispose();}
 });

@@ -5,7 +5,7 @@ import { cameraReferenceRotation } from './heading';
 
 /** Intersect the orbit cone at the current pitch with the target's world vertical
  * plane. Projecting a direction onto the local XZ plane changes its world azimuth. */
-function worldDirectionYaw(direction:Vector3,reference:Quaternion,currentYaw:number,pitch:number,limits:CameraOrientation['yawLimitsRadians']):number {
+export function worldDirectionYaw(direction:Vector3,reference:Quaternion,currentYaw:number,pitch:number,limits:CameraOrientation['yawLimitsRadians']):number {
   const normal=new Vector3(direction.z,0,-direction.x).applyQuaternion(reference.clone().invert());
   const cosine=Math.cos(pitch),sine=Math.sin(pitch);
   // n dot (-sin(yaw)*cos(pitch), -sin(pitch), -cos(yaw)*cos(pitch)) = 0.

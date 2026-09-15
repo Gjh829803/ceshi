@@ -1,4 +1,5 @@
 import type { EpisodeCapabilities, EpisodeFrame, Vec3, WorldSnapshot } from '@worldkit/three';
+import {Euler,Vector3} from 'three';
 import type { EpisodeCaptureSession } from '../capture/browser.js';
 import type { EpisodeSegmentPlan } from '../contracts.js';
 import { RouteController, type RouteDecision, type RouteMovement } from './route-controller.js';
@@ -8,7 +9,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 const angle = (n: number) => Math.atan2(Math.sin(n), Math.cos(n));
 const pulse = (time: number, start: number, duration: number) => time <= start || time >= start + duration ? 0 : Math.sin(Math.PI * (time - start) / duration) ** 2;
 export interface PlayerDecision extends RouteDecision {
-  behavior: { phase: 'travel' | 'observe' | 'jump' | 'landing' | 'recovery'; paceRatio: number; plannedJump: 'pending' | 'applied' | 'unsupported' | 'not-scheduled' | 'deferred'; jumpProbe?: string; cameraSupported: boolean };
+  behavior: { phase: 'travel' | 'observe' | 'jump' | 'landing' | 'recovery'; paceRatio: number; plannedJump: 'pending' | 'applied' | 'unsupported' | 'not-scheduled' | 'deferred'; jumpProbe?: string; cameraSupported: boolean; cameraYawUnavailableReason?: 'opposed-world-response' };
 }
 
 /** Timing and input only. All targets remain the cloud Agent's polyline. The
@@ -21,12 +22,17 @@ export class PlayerCaptureController {
   private activeSeconds = 0;
   private previousTime = 0;
   private paused = false;
-  private yawBase?: number;
-  private pitchBase?: number;
-  private headingOffset?: number;
-  private yawRate?: number;
-  private pitchRate?: number;
-  private previousCamera?: { yaw: number; pitch: number; yawInput: number; pitchInput: number; time: number } | undefined;
+  private yawBase: number | undefined;
+  private pitchBase: number | undefined;
+  private headingOffset: number | undefined;
+  private yawRate: number | undefined;
+  private pitchRate: number | undefined;
+  private cameraIdentity?: string;
+  private cameraTime?: number;
+  private rebaseHeadingToRoute = false;
+  private yawAssistUnavailable = false;
+  private yawDirectionConfirmed = false;
+  private previousCamera?: { yaw: number; worldYaw: number; pitch: number; yawInput: number; pitchInput: number; time: number; subjectRotation: string | undefined; subjectUp: Vec3 | undefined } | undefined;
   private jumpState: PlayerDecision['behavior']['plannedJump'];
   private nextJumpAt: number;
   private jumpAppliedAt?: number;
@@ -43,15 +49,41 @@ export class PlayerCaptureController {
   }
   holdWaypoint(trigger: { waypointIndex: number; radiusMeters: number } | undefined) { this.route.holdWaypoint(trigger);this.vehicleRoute.holdWaypoint(trigger); }
   completeHeldWaypoint(index: number) { if(this.mounted){this.vehicleRoute.completeHeldWaypoint(index);this.route.seekCursor(this.vehicleRoute.cursor);}else{this.route.completeHeldWaypoint(index);this.vehicleRoute.seekCursor(this.route.cursor);} }
-  pause(time: number) { this.previousTime = time; this.paused = true; this.previousCamera = undefined; }
+  pause(time: number, snapshot?: WorldSnapshot) {
+    this.previousTime = time; this.paused = true; this.previousCamera = undefined;
+    if (snapshot) this.observeCamera(snapshot);
+  }
+  private clearCameraTracking() {
+    this.yawBase = this.pitchBase = this.headingOffset = this.yawRate = this.pitchRate = undefined;
+    this.previousCamera = undefined;
+    this.rebaseHeadingToRoute = true;
+    this.yawAssistUnavailable = false;
+    this.yawDirectionConfirmed = false;
+  }
+  private observeCamera(snapshot: WorldSnapshot) {
+    const camera = snapshot.camera, yaw = camera.desiredYawRadians, pitch = camera.desiredPitchRadians;
+    const cameraSupported = this.cameraMode !== 'authored' && camera.mode !== 'authored' &&
+      typeof yaw === 'number' && Number.isFinite(yaw) && typeof pitch === 'number' && Number.isFinite(pitch);
+    // Commit revisions advance every frame; these identities change only when the
+    // selected configuration, subject or lifecycle invalidates our look baseline.
+    const identity = JSON.stringify([camera.mode, camera.documentHash, camera.configurationRevision,
+      camera.viewId, camera.viewKind, camera.logicalTargetId, camera.resolvedSubjectId,
+      camera.subjectGeneration, camera.lifecycleGeneration, snapshot.controlledEntityId, snapshot.humanoid?.mountedInstanceId]);
+    const cameraReady = cameraSupported && camera.mode === 'follow' && camera.transition.kind !== 'blend';
+    if ((this.cameraIdentity !== undefined && identity !== this.cameraIdentity) ||
+      (this.cameraTime !== undefined && snapshot.simulationSeconds < this.cameraTime) || !cameraReady) this.clearCameraTracking();
+    this.cameraIdentity = identity; this.cameraTime = snapshot.simulationSeconds;
+    return {yaw, pitch, cameraSupported, cameraReady};
+  }
   async step(snapshot: WorldSnapshot, forward: Vec3, time: number): Promise<PlayerDecision> {
+    const {yaw, pitch, cameraSupported, cameraReady} = this.observeCamera(snapshot);
     const mounted=Boolean(snapshot.humanoid?.mountedInstanceId);
     if(mounted!==this.mounted){if(mounted)this.vehicleRoute.seekCursor(this.route.cursor);else this.route.seekCursor(this.vehicleRoute.cursor);this.mounted=mounted;}
     if(mounted){
       this.previousTime=time;
       const decision=this.vehicleRoute.step(snapshot,time);
-      return {...decision,input:decision.mode==='action'||this.cameraMode==='authored'?decision.input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
-        behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
+      return {...decision,input:decision.mode==='action'||!cameraReady?decision.input:{...decision.input,cameraYawRatio:Math.sin(time*.8)*.35,cameraPitchRatio:Math.cos(time*.45)*.08},
+        behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported}};
     }
     const dt = Math.max(0, time - this.previousTime);
     if (!this.paused) this.activeSeconds += dt;
@@ -61,17 +93,15 @@ export class PlayerCaptureController {
       this.paused=decision.mode==='action';
       const target=decision.targetPositionWorldMetersXYZ??decision.positionWorldMetersXYZ;
       const input=await this.customInput({targetPositionWorldMetersXYZ:target,gait:decision.mode==='backtrack'?'walk':this.segment.waypoints[decision.waypointIndex]?.gait??'walk',mode:decision.mode==='travel'||decision.mode==='backtrack'?'travel':'stop'});
-      return {...decision,input,behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported:this.cameraMode!=='authored'}};
+      return {...decision,input,behavior:{phase:'travel',paceRatio:1,plannedJump:'unsupported',cameraSupported}};
     }
     if (decision.mode === 'action') {
       this.paused = true;
-      return { ...decision, behavior: { phase: 'observe', paceRatio: 0, plannedJump: this.jumpState, cameraSupported: this.cameraMode !== 'authored' } };
+      this.previousCamera = undefined;
+      return { ...decision, behavior: { phase: 'observe', paceRatio: 0, plannedJump: this.jumpState, cameraSupported } };
     }
     const actor = snapshot.entities.find(e => e.id === snapshot.controlledEntityId)!;
     const grounded = actor.motion?.isGrounded ?? false;
-    const yaw = snapshot.camera.desiredYawRadians, pitch = snapshot.camera.desiredPitchRadians;
-    const cameraSupported = this.cameraMode !== 'authored' && snapshot.camera.mode !== 'authored' &&
-      typeof yaw === 'number' && Number.isFinite(yaw) && typeof pitch === 'number' && Number.isFinite(pitch);
     const lookStart = 4 + this.ordinal * 0.45;
     const lookDuration = this.ordinal % 2 === 0 ? 2.6 : 1.4;
     const observe = !this.segment.actionGoals?.length && decision.mode === 'travel' && grounded && time >= lookStart && time < lookStart + lookDuration;
@@ -119,12 +149,30 @@ export class PlayerCaptureController {
       input.moveXRatio = (input.moveXRatio ?? 0) * (observe ? 0 : this.pace);
       input.moveZRatio = (input.moveZRatio ?? 0) * (observe ? 0 : this.pace);
     }
-    if (cameraSupported && snapshot.camera) {
-      this.yawBase ??= yaw; this.pitchBase ??= pitch;
+    if (cameraReady && typeof yaw === 'number' && typeof pitch === 'number') {
+      // Route headings are world bearings. Orbit intent may instead be relative
+      // to a turning body, and must not add that body's turn a second time.
+      const worldYaw = Math.atan2(-forward[0], -forward[2]);
+      const rotation = snapshot.entities.find(entity=>entity.id===snapshot.camera.resolvedSubjectId)?.rotationLocalRadiansXYZ;
+      const subjectRotation = rotation?.join(','), subjectUp = rotation && new Vector3(0,1,0).applyEuler(new Euler(...rotation)).toArray();
+      this.yawBase ??= worldYaw; this.pitchBase ??= pitch;
       const previous = this.previousCamera;
       if (previous && snapshot.simulationSeconds > previous.time) {
+        if (subjectUp && previous.subjectUp && new Vector3(...subjectUp).distanceToSquared(new Vector3(...previous.subjectUp)) > 1e-12) this.yawDirectionConfirmed = false;
         if (Math.abs(previous.yawInput) > 0.0001) {
-          const measured = angle(yaw - previous.yaw) / ((snapshot.simulationSeconds - previous.time) * previous.yawInput);
+          const localDelta = angle(yaw - previous.yaw), worldDelta = angle(worldYaw - previous.worldYaw);
+          // A tilted orbit axis can reverse world yaw even when the authored
+          // camera appears upright. Do not keep driving a divergent correction.
+          // A moving body can also oppose the probe; do not blame its input axis.
+          // Once direction is confirmed, damping during an input reversal is
+          // not another axis probe. A later change of subject up invalidates it.
+          if (!this.yawDirectionConfirmed && subjectRotation !== undefined && subjectRotation === previous.subjectRotation &&
+            Math.abs(localDelta) > 1e-5 && Math.abs(worldDelta) > 1e-5 &&
+            localDelta * previous.yawInput > 0) {
+            if (worldDelta * localDelta < 0) this.yawAssistUnavailable = true;
+            else this.yawDirectionConfirmed = true;
+          }
+          const measured = localDelta / ((snapshot.simulationSeconds - previous.time) * previous.yawInput);
           if (measured > 0.0001) this.yawRate = measured;
         }
         if (Math.abs(previous.pitchInput) > 0.0001) {
@@ -136,20 +184,21 @@ export class PlayerCaptureController {
       if (!observe && decision.targetPositionWorldMetersXYZ && grounded) {
         const target = decision.targetPositionWorldMetersXYZ, p = decision.positionWorldMetersXYZ;
         const heading = Math.atan2(-(target[0]-p[0]), -(target[2]-p[2]));
-        this.headingOffset ??= angle(yaw - this.segment.start.facingYawRadians);
+        this.headingOffset ??= angle(worldYaw - (this.rebaseHeadingToRoute ? heading : this.segment.start.facingYawRadians));
         this.yawBase += clamp(angle(heading + this.headingOffset - this.yawBase), -dt * 0.4, dt * 0.4);
       }
       const sign = this.ordinal % 2 === 0 ? 1 : -1;
       const offset = sign * (0.7 * pulse(time, lookStart, lookDuration) - 0.55 * pulse(time, 10.5 + this.ordinal * 0.2, 4.5) + 0.65 * pulse(time, 23.5, 5));
       const pitchOffset = 0.09 * pulse(time, lookStart, lookDuration + 0.5) - 0.07 * pulse(time, 21, 5);
-      const yawError = angle(this.yawBase + offset - yaw), pitchError = this.pitchBase + pitchOffset - pitch;
+      const yawError = angle(this.yawBase + offset - worldYaw), pitchError = this.pitchBase + pitchOffset - pitch;
       const locked = jumpActive || settling || decision.mode !== 'travel';
-      input.cameraYawRatio = locked ? 0 : this.yawRate ? clamp(yawError * 4, -0.85, 0.85) / this.yawRate : (Math.abs(yawError) > 0.005 ? Math.sign(yawError) * 0.01 : 0);
+      input.cameraYawRatio = locked || this.yawAssistUnavailable ? 0 : this.yawRate ? clamp(yawError * 4, -0.85, 0.85) / this.yawRate : (Math.abs(yawError) > 0.005 ? Math.sign(yawError) * 0.01 : 0);
       input.cameraPitchRatio = locked ? 0 : this.pitchRate ? clamp(pitchError * 4, -0.2, 0.2) / this.pitchRate : (Math.abs(pitchError) > 0.003 ? Math.sign(pitchError) * 0.01 : 0);
       input.cameraYawRatio = clamp(input.cameraYawRatio, -1, 1); input.cameraPitchRatio = clamp(input.cameraPitchRatio, -1, 1);
-      this.previousCamera = { yaw, pitch, yawInput: input.cameraYawRatio, pitchInput: input.cameraPitchRatio, time: snapshot.simulationSeconds };
+      this.previousCamera = { yaw, worldYaw, pitch, yawInput: input.cameraYawRatio, pitchInput: input.cameraPitchRatio, time: snapshot.simulationSeconds, subjectRotation, subjectUp };
     }
-    return { ...decision, input, behavior: { phase, paceRatio: observe ? 0 : this.pace, plannedJump: this.jumpState, cameraSupported, ...(jumpProbe ? { jumpProbe } : {}) } };
+    return { ...decision, input, behavior: { phase, paceRatio: observe ? 0 : this.pace, plannedJump: this.jumpState, cameraSupported,
+      ...(this.yawAssistUnavailable?{cameraYawUnavailableReason:'opposed-world-response' as const}:{}), ...(jumpProbe ? { jumpProbe } : {}) } };
   }
 }
 
@@ -190,6 +239,7 @@ export function summarizePlayerBehavior(frames: readonly { snapshot: WorldSnapsh
 /** Optional enrichment diagnostics; explicit requested actions are checked by EpisodeActionController. */
 export function playerBehaviorFeedback(frames: readonly {snapshot:WorldSnapshot;camera:EpisodeFrame['camera'];decision:RouteDecision}[],capabilities:EpisodeCapabilities,hasActionGoals=false){
   const evidence=summarizePlayerBehavior(frames),diagnostics:{code:string;message:string}[]=[];
+  if(frames.some(frame=>(frame.decision as Partial<PlayerDecision>).behavior?.cameraYawUnavailableReason))diagnostics.push({code:'CAMERA_YAW_ASSIST_UNAVAILABLE',message:'Observed world yaw opposed the last yaw input; optional yaw assistance stopped while movement and pitch input continued.'});
   if(!hasActionGoals){
     const mounted=frames.some(f=>!!f.snapshot.humanoid?.mountedInstanceId);
     if(capabilities.camera.mode!=='authored'&&(mounted?evidence.renderedYawTravelDegrees<10:evidence.renderedYawRangeDegrees<20||evidence.renderedYawTravelDegrees<40))diagnostics.push({code:'CAMERA_VARIATION_LOW',message:'Recorded camera variation was limited; compare the actual framing with the requested composition.'});

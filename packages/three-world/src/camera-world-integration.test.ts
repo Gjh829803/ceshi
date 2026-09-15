@@ -10,6 +10,38 @@ const map={id:'camera-integration',name:'Camera',description:'',bounds:{min:[-50
 async function fixture(){return createWorld({navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});}
 function document(targetEntityId='person'):CameraDocument{return {kind:'world-camera',schemaVersion:1,defaultViewId:'third',binding:{targetEntityId},activation:'immediate',input:{cycleViewIds:['third','first','shoulder']},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:4},orientation:{recenter:{enabled:false}}}},first:{kind:'first-person'},shoulder:{kind:'shoulder'}}};}
 const engine=(world:ThreeWorld)=>(world as unknown as {engine:WorldEngine}).engine;
+
+it.each(['ordinary','humanoid'] as const)('moves the %s character along an off-axis opening view on first input and after reset',async kind=>{
+ const world=kind==='humanoid'?await fixture():await createWorld({navigation:false});
+ try{
+  if(kind==='ordinary'){
+   const ground=new THREE.Mesh(new THREE.BoxGeometry(100,1,100),new THREE.MeshBasicMaterial());ground.position.y=-.5;
+   world.addEntity({id:'ground',object:ground,role:'terrain'});
+   const actor=new THREE.Group();actor.position.y=.03;world.addCharacter({id:'person',object:actor,body:{heightMeters:1.8,radiusMeters:.3}});world.setControlledEntity('person');
+   world.onDispose(()=>{ground.geometry.dispose();ground.material.dispose();});
+  }
+  world.setCameraFollow({configuration:{
+   kind:'world-camera',schemaVersion:1,defaultViewId:'opening',activation:'on-input',binding:{targetEntityId:'person'},
+   views:{opening:{kind:'third-person',opening:{positionWorldMetersXYZ:[0,2,8],lookAtWorldMetersXYZ:[4,2,0],fovDegrees:50},overrides:{
+    framing:{kind:'preserve-opening'},position:{anchor:{kind:'origin'},subjectTranslationHalfLifeSeconds:0,anchorHalfLifeSeconds:0,armHalfLifeSeconds:0},
+    orientation:{recenter:{enabled:false}},constraints:{collision:{enabled:false}},
+   }}},
+  }});
+  for(const axis of ['forward','right']){
+   world.step({},30);
+   const forward=world.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+   const expected=axis==='forward'?forward:forward.clone().cross(new THREE.Vector3(0,1,0));
+   const before=new THREE.Vector3(...world.getEntityState('person').positionWorldMetersXYZ);
+   world.step(axis==='forward'?{moveZRatio:-1}:{moveXRatio:1},60);
+   const moved=new THREE.Vector3(...world.getEntityState('person').positionWorldMetersXYZ).sub(before).setY(0);
+   expect(moved.length()).toBeGreaterThan(1);
+   // Native acceleration and physical settling may add a small lateral transient.
+   expect(moved.normalize().distanceTo(expected)).toBeLessThan(.003);
+   expect(world.snapshot().errors).toEqual([]);
+   await world.reset();
+  }
+ }finally{world.dispose();}
+});
 describe('single World camera integration',()=>{
  it('shares one capture rewind cut across repeated requests',()=>{
   const samples=new WorldPresentationContext();samples.sample(8,1);

@@ -67,6 +67,9 @@ it('routes production Agents to preset inheritance, view selection and authored 
  const result=await executeThreeCreatorTool(service,request.tool,request.arguments) as any;
  expect(result.sdkGuide).toContain('### Defaults and custom views');
  expect(result.sdkGuide).toContain('createHumanoidCameraDocument');
+ expect(result.sdkGuide).toContain('shared view overrides still apply to both');
+ expect(result.sdkGuide).toContain('binding.subjectOverrides[vehicleInstanceId].views[viewId].overrides');
+ expect(result.sdkGuide).toContain('disabling recentering alone does not disable this inheritance');
  expect(result.sdkGuide).toContain('cameraPresetSnapshots');
  expect(result.sdkGuide).toContain('same kind does not inherit');
  expect(result.sdkGuide).toContain('does not automatically select it');

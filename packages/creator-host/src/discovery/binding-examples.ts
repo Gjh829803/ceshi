@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {createHumanoidCameraDocument,parseCameraDocument,serializeCameraDocument} from '@worldkit/three';
 import {sha256,type CreatorProfile} from '../contracts.js';
 import {type ExampleTopic} from './example-files.js';
 
@@ -13,7 +14,18 @@ export async function bindingExample(profile:CreatorProfile,topic:ExampleTopic='
   const name=variant==='flying-creature'?'assets/animals/flying-mounts.ts':`examples/${profile==='three-raw'?'raw.ts':sources[topic as keyof typeof sources]}`;
   const source=await readFile(new URL(`../../docs/agent/${name}`,import.meta.url),'utf8');
   const available:Record<string,string>={'main.ts':source};
-  if(topic==='nonhuman-subject'||topic==='getting-started'&&profile==='three-sdk')available['config/camera.json']=await readFile(new URL('../../docs/agent/examples/config/camera.json',import.meta.url),'utf8');
+  if(topic==='nonhuman-subject'||topic==='getting-started'&&profile==='three-sdk'){
+    const bytes=await readFile(new URL('../../docs/agent/examples/config/camera.json',import.meta.url),'utf8');
+    if(topic==='getting-started'){
+      const opening=parseCameraDocument(JSON.parse(bytes)),native=createHumanoidCameraDocument('player');
+      // Snapshot the SDK's human calibration, not generic defaults or a second tuning table.
+      // Authored openings may lie outside the native gameplay orbit limits.
+      available['config/camera.json']=serializeCameraDocument({...native,activation:'on-input',views:{...native.views,
+        'third-person':{...opening.views['third-person']!,kind:'third-person',overrides:{framing:{kind:'preserve-opening'},
+          orientation:{pitchLimitsRadians:{kind:'unbounded'}},zoom:{range:{kind:'unbounded'}}}},
+      }})+'\n';
+    }else available['config/camera.json']=bytes;
+  }
   if(files?.some(file=>!Object.hasOwn(available,file)))throw new Error('THREE_EXAMPLE_FILE_UNKNOWN');
   return {profile,topic,exampleKind:'binding-snippet',requiresAuthoredScene:true,
     source:`packages/creator-host/docs/agent/${name}`,

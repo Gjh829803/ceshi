@@ -168,8 +168,8 @@ guide this choice; they are not mutually exclusive SDK entity classes.
 A human model requirement applies to humans present in the scene, not to every
 possible protagonist. Existing `getting-started` example files demonstrate a human.
 
-For persistent first/third-person defaults and an optional switching key, use
-`profile.view`; the `humanoid` topic contains the configuration example.
+Configure named views with `CameraDocument.defaultViewId` and `input.cycleViewIds`;
+use `world.setCameraView(viewId)` to select one.
 
 ### Human setup
 

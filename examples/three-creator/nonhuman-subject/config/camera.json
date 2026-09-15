@@ -29,6 +29,12 @@
         "lens": {
           "nearMeters": 0.1,
           "farMeters": 200
+        },
+        "orientation": {
+          "referenceFrame": "world-up",
+          "recenter": {
+            "enabled": false
+          }
         }
       }
     },
@@ -44,6 +50,12 @@
           "verticalFovDegrees": 55,
           "nearMeters": 0.1,
           "farMeters": 200
+        },
+        "orientation": {
+          "referenceFrame": "world-up",
+          "recenter": {
+            "enabled": false
+          }
         }
       }
     }

@@ -73,7 +73,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/episode-pipeline/tests/integration/adapter.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-rapier"], suites: ["camera"] },
   { path: "packages/episode-pipeline/tests/integration/contracts.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/episode-pipeline/tests/planning/action-controller.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
-  { path: "packages/episode-pipeline/tests/planning/route-controller.test.ts", lane: "contract" },
+  { path: "packages/episode-pipeline/tests/planning/route-controller.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
   { path: "packages/episode-pipeline/tests/planning/vehicle-route.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/episode-pipeline/tests/source/source-asset-policy.test.ts", lane: "contract" },
   { path: "packages/episode-pipeline/tests/source/source-export.test.ts", lane: "contract" },
