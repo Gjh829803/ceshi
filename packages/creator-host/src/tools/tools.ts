@@ -1,5 +1,7 @@
 import {AGENT_READING_GUIDE,type AgentDocumentPath} from '../discovery/agent-docs.js';
 import type {InspectionQuery} from '../browser/bridge.js';
+import {checkViewport} from './viewport-check.js';
+import type {ViewportSize} from '../browser/viewport-diagnostics.js';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { createServer, type Server } from 'node:http';
 import { readFile, writeFile, mkdir, copyFile, readdir, lstat, realpath, rename } from 'node:fs/promises';
@@ -292,10 +294,19 @@ export class ThreeCreatorTools {
       observation,
       feedback: {
         characterContinuity: observation.characterContinuity,
+        viewport: observation.viewport,
         water: 'snapshot' in observation ? buildWaterFeedback(observation.snapshot?.humanoid?.water) : undefined,
       },
       pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors],
     };
+  }
+  async checkViewport(target: ViewportSize) {
+    if (![target.width, target.height].every(value => Number.isSafeInteger(value) && value >= 1 && value <= 4096)) throw new Error('THREE_VIEWPORT_CHECK_SIZE_INVALID');
+    const candidate = await this.compiler.prepare(), session = await this.open(candidate);
+    const feedback = await checkViewport(session.page, target, () => this.bridge(session, 'viewport'));
+    return {sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash,
+      runtimeHash: candidate.runtimeHash, runtimeSourceHash: candidate.runtimeSourceHash, profile: this.profile,
+      feedback, pageErrors: [...session.errors], blockedNetworkRequests: [...session.networkErrors]};
   }
   async executeCommand(command: WorldCommand, creatorOperationId: string = randomUUID()) {
     if (!checkCommand(command)) throw new Error(`THREE_WORLD_COMMAND_INVALID: ${JSON.stringify(checkCommand.errors)}`);
@@ -439,7 +450,7 @@ export class ThreeCreatorTools {
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
     const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={actions:summarizePlaytestActions(hostEvents,[...worldOperations.values()]),characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const feedback={viewport:lastObservation?.viewport,actions:summarizePlaytestActions(hostEvents,[...worldOperations.values()]),characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
     const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
     const report = {...recording, readTrace:{tool:'world_read_playtest',arguments:{operationId}}, recordingReadiness: {scope: 'recording-only' as const,

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { WorldCommand, WorldObservation } from '@worldkit/three';
 import {captureObjectViews, captureTargets, withCapturePresentation} from './capture.js';
 import {CharacterContinuityMonitor} from './character-continuity.js';
+import {inspectViewport} from './viewport-diagnostics.js';
 export {targetTriviewBasis} from './capture.js';
 
 declare global {
@@ -11,7 +12,7 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
-export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles' | 'camera';
+export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles' | 'camera' | 'viewport';
 export interface InspectionQuery {
   query?: string;
   entityIds?: string[];
@@ -101,6 +102,7 @@ function createBridge() {
   }
   return {
     ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
+    viewport() { const world = observation(); return inspectViewport(world.renderer, world.camera); },
     inspect(query?: InspectionQuery) {
       const world = observation();
       const {sections, vehicleDetail, ...selection} = query ?? {};
@@ -132,6 +134,7 @@ function createBridge() {
         ...(includes('description') ? {description: world.capabilities?.(selection) ?? null} : {}),
         ...(includes('diagnostics') ? {diagnostics: world.inspect?.() ?? null} : {}),
         ...(sections?.includes('camera') ? committedCameraObservation(world) : {}),
+        ...(includes('viewport') ? {viewport: inspectViewport(world.renderer, world.camera)} : {}),
         ...(sections?.includes('vehicles') ? {vehicles: (()=>{try{return world.inspectVehicles?.({...selection,...(vehicleDetail?{detail:vehicleDetail}:{})})??null;}catch{return null;}})()} : {}),
       };
     },
@@ -186,9 +189,10 @@ function createBridge() {
     captureTargets() { return captureTargets(observation()); },
     capture(view: 'opening' | 'current' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
       const world = observation();
+      const viewport = view === 'opening' || view === 'current' ? inspectViewport(world.renderer, world.camera) : undefined;
       if (view === 'opening' || view === 'current') return withCapturePresentation(world,()=>{
         world.scene.updateMatrixWorld(true);world.renderer.render(world.scene,world.camera);
-        return {view,image:world.renderer.domElement.toDataURL('image/png'),controlledObject:describe(world.controlledObject),
+        return {view,image:world.renderer.domElement.toDataURL('image/png'),controlledObject:describe(world.controlledObject),viewport,
           ...(view === 'current' ? {cameraObservation: currentCameraObservation(world)} : {})};
       });
       return captureObjectViews(world, view, entityIds, frontYawRadians);

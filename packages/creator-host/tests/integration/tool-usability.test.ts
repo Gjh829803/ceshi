@@ -461,6 +461,45 @@ it('inspects and executes through actual MCP and a paused browser without advanc
   } finally { await client.close(); await transport.close(); }
 }, 60000);
 
+it('reports viewport risks through public tools and restores a real paused browser without changing submission evidence',async()=>{
+ const tools=await service();
+ await writeFile(path.join(tools.workspace,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
+ await writeFile(path.join(tools.workspace,'index.html'),'<html><head><style>html,body{margin:0;width:100%;height:100%}canvas{display:block;width:100%;height:100%}</style></head><body><canvas></canvas><script type="module" src="./main.ts"></script></body></html>');
+ await writeFile(path.join(tools.workspace,'main.ts'),`
+  import * as THREE from 'three';import {createWorld} from '@worldkit/three';
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight);
+  const renderer=new THREE.WebGLRenderer({canvas:document.querySelector('canvas')});renderer.setSize(480,270,false);
+  const world=await createWorld({scene,camera,renderer,navigation:false});
+  world.addCharacter({id:'hero',object:new THREE.Group(),body:{heightMeters:1,radiusMeters:.2}});world.setControlledEntity('hero');
+  await world.start();world.stop();
+  window.enableResponsiveViewport=()=>{
+   const resize=()=>{renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();};
+   addEventListener('resize',resize);resize();
+  };
+ `);
+ const finish=async(name:string,args:Record<string,unknown>={})=>{
+  const reply=await executeThreeCreatorTool(tools,name,args) as {operationId:string};
+  const result=await tools.getOperation(reply.operationId,25);expect(result.status).toBe('succeeded');return result.result as any;
+ };
+ const before=await finish('world_inspect',{sections:['snapshot','viewport']});
+ expect(before.feedback.viewport).toMatchObject({advisory:true,status:'measured',evidence:{pixelsPerCssPixel:{x:.5,y:.5}},warnings:[{code:'CANVAS_UNDERSAMPLED'}]});
+ const evidence=(tools as any).playtestEvidence;
+ const broken=await finish('world_check_viewport',{widthCssPixels:1280,heightCssPixels:800});
+ expect(broken.feedback).toMatchObject({advisory:true,resizeStatus:'measured',restorationStatus:'restored'});
+ expect(broken.feedback.resized.warnings.map((w:any)=>w.code)).toEqual(expect.arrayContaining(['CANVAS_UNDERSAMPLED','CANVAS_DISPLAY_ASPECT_MISMATCH']));
+ expect(broken.feedback.warnings).toContainEqual(expect.objectContaining({code:'RENDER_SIZE_UNCHANGED_AFTER_RESIZE'}));
+ const session=(tools as any).session;
+ expect(session.page.viewportSize()).toEqual({width:960,height:540});
+ const after=await finish('world_inspect',{sections:['snapshot']});expect(after.observation.snapshot).toEqual(before.observation.snapshot);
+ expect((tools as any).playtestEvidence).toBe(evidence);
+ const preview=await finish('world_preview',{view:'current'});expect(preview.viewport.warnings).toContainEqual(expect.objectContaining({code:'CANVAS_UNDERSAMPLED'}));
+ await session.page.evaluate(()=>{(window as any).enableResponsiveViewport();});
+ const responsive=await finish('world_check_viewport',{widthCssPixels:1280,heightCssPixels:800});
+ expect(responsive.feedback).toMatchObject({resizeStatus:'measured',restorationStatus:'restored',warnings:[],resized:{warnings:[],evidence:{drawingBufferPixels:{width:1280,height:800},cameraAspect:1.6}}});
+ expect(responsive.pageErrors).toEqual([]);
+ await expect(executeThreeCreatorTool(tools,'world_check_viewport',{widthCssPixels:0,heightCssPixels:800})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+},60000);
+
 
 it('keeps the operation feedback envelope in one-shot CLI output', async () => {
   const tools = await service();

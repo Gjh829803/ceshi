@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import {afterEach,expect,it,vi} from 'vitest';
 import {createWorld,type ThreeWorld} from '@worldkit/three';
 import type {WorldObservation} from '@worldkit/three';
+import type {Page} from 'playwright';
+import {inspectViewport} from '../../src/browser/viewport-diagnostics.js';
+import {checkViewport} from '../../src/tools/viewport-check.js';
 
 const worlds:ThreeWorld[]=[];
 afterEach(()=>{for(const world of worlds.splice(0))world.dispose();vi.unstubAllGlobals();vi.restoreAllMocks();});
@@ -108,4 +111,58 @@ it('keeps camera failures local with an explicit reason',async()=>{
  expect(host.inspect({sections:['camera']})).toMatchObject({camera:null,cameraAvailability:{status:'unavailable',reason:'inspection-failed'}});
  delete observer.inspectCamera;
  expect(host.inspect({sections:['camera']})).toMatchObject({camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}});
+});
+
+function viewportFixture(width = 480, height = 270, devicePixelRatio = 1, objectFit = 'fill') {
+ const bounds = {width:1920,height:1080};
+ const win = {innerWidth:1920,innerHeight:1080,devicePixelRatio,getComputedStyle:()=>({objectFit})};
+ const canvas = {width,height,isConnected:true,ownerDocument:{defaultView:win},getBoundingClientRect:()=>bounds,parentElement:{getBoundingClientRect:()=>bounds}};
+ const renderer = {domElement:canvas} as unknown as THREE.WebGLRenderer;
+ const camera = new THREE.PerspectiveCamera(50,16/9);
+ return {renderer,camera,canvas,bounds,win};
+}
+
+it('reports the 480-pixel case as advisory undersampling and keeps native density separate',()=>{
+ const {renderer,camera}=viewportFixture();
+ expect(inspectViewport(renderer,camera)).toMatchObject({advisory:true,status:'measured',evidence:{
+  drawingBufferPixels:{width:480,height:270},canvasBoundsCssPixels:{width:1920,height:1080},pixelsPerCssPixel:{x:.25,y:.25},
+ },warnings:[{code:'CANVAS_UNDERSAMPLED'}]});
+ const retina=viewportFixture(1920,1080,2);
+ expect(inspectViewport(retina.renderer,retina.camera)).toMatchObject({evidence:{nativeResolutionRatio:{x:.5,y:.5}},warnings:[]});
+});
+
+it('respects contain letterboxing, fixed embedded sizes and pixel rounding',()=>{
+ const fit=viewportFixture(480,480,1,'contain');fit.bounds.width=480;fit.bounds.height=1080;fit.camera.aspect=1;
+ expect(inspectViewport(fit.renderer,fit.camera)).toMatchObject({evidence:{displayedImageCssPixels:{width:480,height:480}},warnings:[]});
+ const fixed=viewportFixture(320,240);fixed.bounds.width=320;fixed.bounds.height=240;fixed.camera.aspect=4/3;
+ expect(inspectViewport(fixed.renderer,fixed.camera).warnings).toEqual([]);
+ fixed.bounds.width=320.2;fixed.bounds.height=240.2;
+ expect(inspectViewport(fixed.renderer,fixed.camera).warnings).toEqual([]);
+});
+
+it('reports stale camera aspect and treats a zero-sized viewport as unmeasured',()=>{
+ const f=viewportFixture(1920,1080);f.camera.aspect=1;
+ expect(inspectViewport(f.renderer,f.camera).warnings).toEqual([{code:'CAMERA_ASPECT_MISMATCH',message:expect.any(String)}]);
+ f.bounds.width=0;
+ expect(inspectViewport(f.renderer,f.camera)).toMatchObject({status:'unavailable',reason:'CANVAS_SIZE_UNAVAILABLE',evidence:null,warnings:[]});
+});
+
+it('isolates unavailable canvas measurements and leaves a viewport-only inspection read-only',async()=>{
+ const {observer,host,world}=await fixture(),before=world.snapshot();
+ const f=viewportFixture();Object.assign(observer.renderer,{domElement:f.canvas});
+ const render=vi.spyOn(observer.renderer,'render');
+ const matrix=observer.camera.projectionMatrix.toArray();
+ vi.spyOn(observer.scene,'traverse').mockImplementation(()=>{throw new Error('no hierarchy traversal');});
+ expect(host.inspect({sections:['viewport']}).viewport).toMatchObject({status:'measured',advisory:true});
+ expect(world.snapshot()).toEqual(before);expect(observer.camera.projectionMatrix.toArray()).toEqual(matrix);expect(render).not.toHaveBeenCalled();
+ f.canvas.getBoundingClientRect=()=>{throw new Error('detached or unavailable DOM');};
+ expect(host.inspect({sections:['snapshot','viewport']})).toMatchObject({snapshot:before,viewport:{status:'unavailable',evidence:null,warnings:[]}});
+});
+
+it('restores the original viewport even when resize or diagnostic reads fail',async()=>{
+ const setViewportSize=vi.fn().mockRejectedValueOnce(new Error('resize interrupted')).mockResolvedValue(undefined);
+ const page={viewportSize:()=>({width:960,height:540}),setViewportSize,waitForTimeout:vi.fn().mockResolvedValue(undefined)} as unknown as Page;
+ const result=await checkViewport(page,{width:1280,height:800},async()=>{throw new Error('bridge disconnected');});
+ expect(setViewportSize.mock.calls).toEqual([[{width:1280,height:800}],[{width:960,height:540}]]);
+ expect(result).toMatchObject({advisory:true,resizeStatus:'unavailable',restorationStatus:'unavailable',before:{status:'unavailable'},resized:{status:'unavailable'},restored:{status:'unavailable'}});
 });

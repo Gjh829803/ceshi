@@ -150,6 +150,8 @@ are binding references and must be adapted to an edited runtime.
 | Do real controls and the route work? | `world_playtest`; resets and runs episode keys, pointer drags and explicit commands in real time |
 | What happened during a recording? | `world_read_playtest({operationId,fromSeconds,toSeconds})`; reads existing samples without execution |
 | Does the area fit the overview? | `world_preview({view:'top-down'})`; inspect bounds and boundsSource against all playable routes |
+| Why is the page small or blurry? | `world_inspect({sections:['viewport']})`; compare live canvas render/display sizes, pixel density and camera aspect |
+| Does rendering follow a window size change? | Optional `world_check_viewport({widthCssPixels:1280,heightCssPixels:800})`; temporarily resizes the browser, samples, then restores the original viewport |
 
 Use existing frames and state to locate the cause before changing code or inputs.
 An edit opens a new build; keep earlier evidence associated with its original
@@ -157,6 +159,15 @@ identity. Playtest summaries include recorded action outcomes; use world_read_pl
 the relevant interval. For vehicle issues, request world_inspect's `vehicles`
 section and its wheel detail only when needed; check sampling status/time before
 interpreting values. These reads do not add generation acceptance gates.
+Viewport feedback also accompanies opening/current previews and the final playtest
+observation. Screenshot/video dimensions do not prove live canvas clarity. Density
+below one render pixel per CSS pixel is an advisory blur risk; native screen density
+is reported separately, not required. Compare canvas bounds with its intended parent
+layout; embedded or fixed-size canvases need not fill the browser. The optional resize
+probe waits 250 ms at each size, reports before/resized/restored measurements, and
+does not pause, reset or step the world; a live world continues. It tests a browser
+viewport change, not the Fullscreen API. Check restorationStatus; unavailable
+measurements are unknown, and warnings never change recording/submission eligibility.
 An accepted action is not completion: inspect its World operation and
 resulting state. Proximity alone does not prove interaction or prop displacement.
 Poll the same Creator operationId with `operations_get`; never repeat an action

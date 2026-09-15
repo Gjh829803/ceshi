@@ -102,8 +102,9 @@ describe('Three semantic target views', () => {
     } finally {release?.();await service.close();}
   });
 
-  it('returns trace-backed target offsets through playtest and preserves them in delivery without adding a gate', async () => {
-    const root=await fixture(RAW_EXAMPLE),service=new ThreeCreatorTools(root,'three-raw');
+  it('returns trace-backed target offsets and viewport warnings through playtest and delivery without adding a gate', async () => {
+    const lowResolution = RAW_EXAMPLE.replace('renderer.setSize(innerWidth, innerHeight);','renderer.setSize(innerWidth, innerHeight); renderer.setSize(480,270,false);');
+    const root=await fixture(lowResolution),service=new ThreeCreatorTools(root,'three-raw');
     await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
     await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,
       steps:[{keysDown:['w'],durationSeconds:.5},{keysUp:['w'],durationSeconds:.15}],
@@ -114,6 +115,7 @@ describe('Three semantic target views', () => {
       expect(operation.status).toBe('succeeded');expect(report.status).toBe('passed');
       expect(report.recordingReadiness).toMatchObject({scope:'recording-only',creatorOperationId:started.operationId,
         worldBuildHash:report.worldBuildHash,episodeHash:report.episodeHash,eligible:true,issues:[]});
+      expect(report.feedback.viewport).toMatchObject({advisory:true,status:'measured',warnings:[{code:'CANVAS_UNDERSAMPLED'}]});
       expect(Number.isFinite(Date.parse(report.recordingReadiness.checkedAt))).toBe(true);
       const target=report.targetResults[0];
       expect(target.reached).toBe(false);
@@ -145,6 +147,7 @@ describe('Three semantic target views', () => {
       }
       const saved=JSON.parse(await readFile(path.join(path.dirname(report.videoPath),'playtest.json'),'utf8'));
       expect(saved.recordingReadiness).toEqual(report.recordingReadiness);
+      expect(saved.feedback.viewport).toEqual(report.feedback.viewport);
       // Historical eligibility does not approve an edited input plan.
       const episodeFile=path.join(root,'episode.json');await writeFile(episodeFile,(await readFile(episodeFile,'utf8'))+'\n');
       await expect(service.submit()).rejects.toThrow('EPISODE_CHANGED_AFTER_PLAYTEST');
