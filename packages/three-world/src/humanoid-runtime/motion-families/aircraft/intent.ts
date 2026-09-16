@@ -1,5 +1,6 @@
 import { Euler,Vector3 } from 'three';
 import { VEHICLE_ATTITUDE } from '../../../config/vehicle';
+import {SOARING} from '../../../config/aircraft';
 import { vehicleImpactMass } from '../../config';
 import { EnvironmentQueries,vehicleBody } from '../../environment/queries';
 import { groundVehiclePose } from '../../environment/vehicle-pose';
@@ -33,15 +34,17 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, _time: numbe
                 return;
             }
         }
-        const pitchInput = -i.forward;
-        const desiredPitch = pitchInput * .62;
+        const pitchInput = -i.pitch;
+        const targetSpeed=clamp(s.speed*(1+i.forward*SOARING.speedDemandRatio),s.minimumSpeed,s.maxSpeed);
+        const speedTrim=Math.abs(i.forward)>.001?clamp((targetSpeed-v.speed)/Math.max(targetSpeed,1),-1,1)*SOARING.speedTrimRadians:0;
+        const desiredPitch = pitchInput * .62-speedTrim;
         v.pitch = damp(v.pitch, desiredPitch, s.pitchResponse, dt);
         v.roll = damp(v.roll, clamp(v.steering * .6 + i.roll * .8, -.9, .9), s.rollResponse, dt);
         const flying = mode === 'glider' || v.speed > 14 || !v.grounded;
         v.yaw -= v.steering * s.steer * dt * (flying ? 1 : .35) + Math.sin(v.roll) * .20 * dt;
         const thrust = 0;
-        const drag = s.drag + v.speed * v.speed * s.dragQuadratic;
-        v.speed = clamp(v.speed + (thrust - drag - 9.8 * Math.sin(v.pitch)) * dt, Math.min(s.minimumSpeed, s.speed), s.speed);
+        const drag = s.drag + v.speed * v.speed * s.dragQuadratic + (i.slow||i.lift<0||i.brake?s.brakeDeceleration:0);
+        v.speed = clamp(v.speed + (thrust - drag - 9.8 * Math.sin(v.pitch)) * dt, s.minimumSpeed, s.maxSpeed);
         forward.set(Math.sin(v.yaw) * Math.cos(v.pitch), Math.sin(v.pitch), Math.cos(v.yaw) * Math.cos(v.pitch));
         v.velocity.copy(forward).multiplyScalar(v.speed);
         if (flying) {

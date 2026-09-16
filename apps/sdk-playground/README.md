@@ -44,7 +44,7 @@ The camera checkbox switches the main viewport to an external world camera and
 frames the current subject with the actual gameplay camera model. Frustum length
 does not push the world view farther away.
 Left-drag orbits, right/middle-drag pans and the wheel zooms this world view.
-Clicking the viewport retains keyboard gameplay: movement, mounting and T camera
+Clicking the viewport retains keyboard gameplay: movement, mounting and V camera
 switching still go to the SDK. Simulation continues; there is no observer toolbar
 or separate input mode. The world view shows full characters even when the gameplay
 camera uses first person. Unchecking restores the current gameplay view without
@@ -56,7 +56,7 @@ the current camera and subject, resetting the orbit centre. **跟随位置** (of
 default) translates the world view with the gameplay camera while retaining the
 manually chosen viewing angle and distance. It does not inherit camera rotation.
 World-view pan and zoom respond faster; their scale remains distance-dependent. It copies the original gameplay
-frame at full source resolution, preserves its aspect ratio, follows T camera
+frame at full source resolution, preserves its aspect ratio, follows V camera
 changes and disappears when camera display is disabled. It is UI only and is
 absent from model-input captures.
 With camera display and all-type colliders enabled together, cyan spheres and
@@ -194,7 +194,26 @@ pnpm verify:dragon-training -- http://127.0.0.1:5178
 ```
 
 This browser case exercises ground start, real summon/boarding/takeoff inputs,
-flight and flame, native variant loading, map/reset/reload and history navigation.
+flight, deferred keyboard flame input, native variant loading, map/reset/reload and history navigation.
+
+### Current input hints
+
+The local HUD reads current SDK bindings and the actual vehicle/aircraft subtype.
+Fixed-wing and pusher aircraft show W/S throttle, arrow-key pitch with bounded
+camera follow, Ctrl throttle reduction/ground braking, and Shift as an additional
+throttle assist. Rotorcraft and balloons have separate vertical controls. Camera
+cycling uses the configured key (V by default); Backspace is a mounted, long-held
+scene reset, not vehicle-only recovery. The 1–6 shortcut is still local debug
+travel, not an equipment-slot implementation.
+
+Vehicle changes and rebinding refresh both control strips. Current flight prompts
+do not reuse legacy asset hint strings; offline catalog hints and mobile virtual
+buttons are outside this HUD update. Verify the real pusher/rotorcraft/balloon/
+submarine/tank UI with:
+
+```sh
+pnpm exec tsx apps/sdk-playground/scripts/input-hud-smoke.ts http://127.0.0.1:5178
+```
 
 ## Local camera configuration files
 

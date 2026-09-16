@@ -793,7 +793,9 @@ export class CameraController {
             Number.isFinite,
           ) ||
           deltaSeconds < 0 ||
-          ratio.some((value) => Math.abs(value) > 1)
+          ratio.some((value) => Math.abs(value) > 1) ||
+          input.orbitPitchMaxOffsetRadians !== undefined &&
+            (!Number.isFinite(input.orbitPitchMaxOffsetRadians) || input.orbitPitchMaxOffsetRadians < 0)
         )
           throw failure("CAMERA_INPUT_INVALID");
         const yaw =
@@ -808,13 +810,23 @@ export class CameraController {
         const activated = old;
         const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
         const seed = activated.intent!;
+        let boundedPitch = pitch;
+        if (input.orbitPitchMaxOffsetRadians !== undefined) {
+          const center = resolved.kind === 'third-person' && resolved.values.framing.kind === 'preserve-opening'
+            ? openings.get(resolved.viewId)!.pitchRadians : resolved.values.orientation.initialPitchRadians;
+          const limit = input.orbitPitchMaxOffsetRadians, ratioPitch = pitch - delta[1];
+          // If a mouse orbit left the range, allow gradual movement back without snapping.
+          boundedPitch = delta[1] + (ratioPitch < 0
+            ? Math.max(ratioPitch, Math.min(0, center - limit - seed.pitchRadians))
+            : Math.min(ratioPitch, Math.max(0, center + limit - seed.pitchRadians)));
+        }
         const intent = prepareCameraIntent({
           subject,
           configuration: resolved,
           intent: {
             ...seed,
             yawRadians: seed.yawRadians + yaw,
-            pitchRadians: seed.pitchRadians + pitch,
+            pitchRadians: seed.pitchRadians + boundedPitch,
             distanceMeters: seed.distanceMeters + (input.zoomDeltaMeters ?? 0),
             secondsSinceOrbit: yaw !== 0 || pitch !== 0 ? 0 : seed.secondsSinceOrbit,
           },

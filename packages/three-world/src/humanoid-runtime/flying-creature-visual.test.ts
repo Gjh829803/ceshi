@@ -78,7 +78,7 @@ it('flame history advances only on commits and clears on reset',()=>{
   }finally{flame.dispose();}
 });
 
-it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 eyes through orbit, flight and T switches',async id=>{
+it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 eyes through orbit, flight and V switches',async id=>{
   const {visual}=await fixture(id),variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{
     const bytes=readFileSync(fileURLToPath(url));return parseFixtureGlb(bytes);
@@ -155,7 +155,7 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
     expect(visual.root.getObjectByName('dragon-saddle-ladder')!.visible).toBe(false);
     expect(runtime.simulation.controlledActor.vehicle!.grounded).toBe(true);expect(runtime.simulation.controlledActor.controller.capsule.isEnabled()).toBe(false);
     expect(rider.hip!.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3().setFromMatrixPosition(visual.readSeatWorld()))).toBeLessThan(.001);
-    world.step({humanoid:{...emptyInput(),brake:true}},1);world.step({},180);
+    world.step({humanoid:{...emptyInput(),jump:true}},1);world.step({},180);
     expect(runtime.simulation.controlledActor.vehicle!.motion.flyingCreature!.groundPhase).toBe('airborne');
   }finally{world.dispose();vi.unstubAllGlobals();}
 },30000);

@@ -332,7 +332,7 @@ export class HumanoidRuntime implements PhysicsPort {
   inputGuide(actorId:string=this.inputActorId):HumanoidInputGuide{
     const vehicle=this.simulation.actor(actorId).vehicle;
     const family=vehicle?.spec.mode??'character';
-    return {family,fields:vehicle?.motion.flyingCreature?{forward:'Positive dives, negative climbs; neutral WASD decelerates to hover.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake to zero; release keeps hovering.',brake:'Grounded: take off when overhead is clear. Airborne: glide with sink and inertia.',primary:'Hold flame; does not enable cruise.',secondary:'Evade on the rising edge; consumes stamina.'}:{...HUMANOID_INPUT_GUIDES[family]}};
+    return {family,fields:vehicle?.motion.flyingCreature?{forward:'Positive requests forward speed; negative brakes. Neutral coasts to hover.',pitch:'Positive pitches down; negative pitches up; does not enable cruise.',lift:'Positive takes off/ascends; negative descends; independent of longitudinal braking.',jump:'Takeoff edge when overhead is clear.',steer:'Positive turns right about -Y and banks right.',boost:'Flapping boost consumes stamina.',slow:'Brake horizontal speed to zero; does not cancel Space/C lift.',brake:'Programmatic glide with sink and inertia; no keyboard binding.',primary:'Programmatic flame; no keyboard or mouse binding in this phase.',secondary:'Evade on the rising edge; consumes stamina.'}:{...HUMANOID_INPUT_GUIDES[family]}};
   }
   commandDescriptors(id:string):import('../contracts').CommandDescriptor[]{
     const vec={type:'array',items:{type:'number'},minItems:3,maxItems:3};
@@ -566,8 +566,15 @@ export class HumanoidRuntime implements PhysicsPort {
     for(const [id,actor] of this.simulation.actors){
       const override=this.actorInputs.get(id),selected=id===this.simulation.controlledActorId;
       const semantic=this.aircraftInput(id,dt);if(semantic)aircraftDriven.add(id);
-      const controls=semantic??override?.input??(selected?sampled:this.driveInput(id,drives[id]));
-      if(selected&&!override&&!semantic&&(input.interactPressed??!!(input.interact&&!this.previousInteract)))actor.interact();
+      let controls=semantic??override?.input??(selected?sampled:this.driveInput(id,drives[id]));
+      if(selected&&!override&&!semantic&&(input.interactPressed??!!(input.interact&&!this.previousInteract))){
+        // An existing scene action owns its continuation. Otherwise select one
+        // scene target or nearby mount, without falling through after rejection.
+        const c=actor.controller,s=c.skills;
+        const scene=!actor.vehicle&&(s.active||s.seated||s.carrying||c.surface.surface||s.nearest());
+        if(actor.vehicle||!scene&&actor.nearest()>=0){actor.interact();controls={...controls,actions:{...controls.actions,interact:false}};}
+        else controls={...controls,actions:{...controls.actions,interact:true}};
+      }
       actorInputs.set(id,{input:controls,yaw:selected||override?(controlYawRadians??Math.atan2(this.controlForwardWorldXYZ()[0],this.controlForwardWorldXYZ()[2])):0});
     }
     const recoverySequences=new Map([...this.simulation.actors].map(([id,actor])=>[id,actor.recovery?.sequence]));

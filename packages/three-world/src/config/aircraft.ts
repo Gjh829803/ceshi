@@ -33,6 +33,7 @@ export function aircraftCollisionBoxes(subtype:AircraftSubtype){
 }
 
 export const SOARING={
+ targetSpeed:{glider:28,canopy:8,wingsuit:20},speedDemandRatio:.3,speedTrimRadians:.18,
  glider:{mass:850,area:22,cl0:.25,liftSlope:4.7,drag:.017,induced:.035,trim:.045},
  paraglider:{mass:110,area:25,cl0:.45,liftSlope:2.8,drag:.10,induced:.13,trim:.12},
  // Training preset: effective low-speed lifting area; not a certified wingsuit model.

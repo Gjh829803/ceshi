@@ -40,7 +40,7 @@ describe('native space family',()=>{
   const f=fixture();try{f.step({forward:1},240);expect(f.v.speed).toBeGreaterThan(spec.speed);
    const velocity=f.v.velocity.clone();f.step({},240);
    expect(f.v.velocity.distanceTo(velocity)).toBeLessThan(1e-4);expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);
-   f.step({boost:true},240);expect(f.v.speed).toBeLessThan(velocity.length()*.65);expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);
+   f.step({slow:true},240);expect(f.v.speed).toBeLessThan(velocity.length()*.65);expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);
   }finally{f.dispose();}
  });
  it.each([-1,1])('keeps A/D and arrow strafe directions at signed input %s',direction=>{
@@ -56,7 +56,7 @@ describe('native space family',()=>{
  });
  it('can keep accelerating, braking and turning indefinitely without losing mass or propulsion',()=>{
   const f=fixture();try{
-   for(let n=0;n<100;n++){f.step({forward:1,steer:1},60);f.step({boost:true},120);}
+   for(let n=0;n<100;n++){f.step({forward:1,steer:1},60);f.step({slow:true},120);}
    expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);expect(f.v.speed).toBeLessThan(.2);
    f.step({forward:1},60);expect(f.v.speed).toBeGreaterThan(10);
    setSpaceDriveMode(f.v,'assisted');f.step({},180);expect(f.v.speed).toBeLessThan(.1);

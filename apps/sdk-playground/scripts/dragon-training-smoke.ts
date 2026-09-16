@@ -22,8 +22,8 @@ async function summonAndBoard(){
     const current=await state();if(Date.now()>=nextSample){sampleApproach(current);nextSample=Date.now()+2000;}if(current.dragon.boarding.eligible)break;
     const target=current.dragon.boarding.approachPositionWorldMetersXYZ;
     assert(target,current.dragon.boarding.message);
-    const dx=target[0]-current.position[0],dz=target[2]-current.position[2],yaw=current.camera.yaw;
-    const forward=dx*Math.sin(yaw)+dz*Math.cos(yaw),right=-dx*Math.cos(yaw)+dz*Math.sin(yaw);
+    const dx=target[0]-current.position[0],dz=target[2]-current.position[2],basis=current.camera.controlForwardWorldXYZ;
+    const forward=dx*basis[0]+dz*basis[2],right=-dx*basis[2]+dz*basis[0];
     const key=Math.abs(forward)>=Math.abs(right)?(forward>0?'w':'s'):(right>0?'d':'a');
     await page.keyboard.down(key);await page.waitForTimeout(120);await page.keyboard.up(key);
   }
@@ -50,20 +50,21 @@ try{
   assert(await page.evaluate(()=>{let textured=false;window.__WORLDKIT_EVAL__!.scene.traverse((node:any)=>{if(node.isSkinnedMesh){const materials=Array.isArray(node.material)?node.material:[node.material];if(materials.some((m:any)=>m.map&&m.normalMap)&&node.skeleton?.bones.some((b:any)=>b.name==='Seat'))textured=true;}});return textured;}),'training dragon retains its color and normal textures');
   await summonAndBoard();
   const flightStart=await state();
-  await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('d');
+  await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('w');await page.keyboard.down('d');
   await page.waitForFunction(yaw=>{const delta=(window as any).playground.getState().flyingCreature.yawRadians-yaw;return Math.atan2(Math.sin(delta),Math.cos(delta))<-.3;},flightStart.flyingCreature.yawRadians);
-  await page.keyboard.up('d');const turned=await state(),yaw=flightStart.flyingCreature.yawRadians;
+  await page.keyboard.up('d');await page.keyboard.up('w');const turned=await state(),yaw=flightStart.flyingCreature.yawRadians;
   assert(-(turned.position[0]-flightStart.position[0])*Math.cos(yaw)+(turned.position[2]-flightStart.position[2])*Math.sin(yaw)>0,'D must move to the initial flight heading right');
   await page.keyboard.down('Control');await page.waitForFunction(()=>(window as any).playground.getState().speed===0);await page.keyboard.up('Control');
   await page.waitForTimeout(250);assert.equal((await state()).speed,0);
   await page.keyboard.down('Shift');await page.waitForFunction(()=>(window as any).playground.getState().speed>12);await page.keyboard.up('Shift');
   await page.waitForFunction(()=>(window as any).playground.getState().speed===0,{},{timeout:15000});
-  await page.keyboard.down('e');await page.waitForFunction(()=>(window as any).playground.getState().flyingCreature.flamePhase==='loop');
-  const flame=await state();assert.equal(flame.speed,0);assert(flame.dragonVisual.flameParticles>0);
-  assert(Math.hypot(...flame.riderHip.map((v:number,i:number)=>v-flame.dragonSeat[12+i]))<.001);
-  await page.screenshot({path:path.join(output,'native-flame.png')});await page.keyboard.up('e');
-  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='first-person');await page.screenshot({path:path.join(output,'native-first-person.png')});
-  await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='shoulder');
+  // Shooting bindings are deferred: E must stay inert in dragon context.
+  await page.keyboard.down('e');await page.waitForTimeout(300);await page.keyboard.up('e');
+  const idle=await state();assert.equal(idle.speed,0);assert.equal(idle.flyingCreature.flamePhase,'off');assert.equal(idle.dragonVisual.flameParticles,0);
+  assert(Math.hypot(...idle.riderHip.map((v:number,i:number)=>v-idle.dragonSeat[12+i]))<.001);
+  await page.screenshot({path:path.join(output,'native-hover.png')});
+  await page.keyboard.press('v');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='first-person');await page.screenshot({path:path.join(output,'native-first-person.png')});
+  await page.keyboard.press('v');await page.waitForFunction(()=>(window as any).playground.getState().camera.viewKind==='shoulder');
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');await choose('飞龙 · 空中训练场');await waitMap('flying-creature-training');
   const reset=await state();assert.equal(reset.activeVehicle,null);assert.equal(reset.dragon.state.flamePhase,'off');assert.equal(reset.dragonVisual.flameParticles,0);assert.equal(reset.camera.viewKind,'third-person');
   assert.equal(new URL(page.url()).hash,'#/scenes/flying-creature-training');
@@ -77,7 +78,7 @@ try{
   assert.equal((await state()).dragonVariant,'D02');assert.equal((await state()).activeVehicle,null);
   assert(requests.size>0&&[...requests].some(url=>url.includes('/flying-creature/__creature-assets/D02.glb')));
   assert.equal(page.frames().length,1);assert(![...requests].some(url=>/Havok|babylon|:5186|:5191/.test(url)));
-  assert.deepEqual(errors,[]);await writeFile(path.join(output,'result.json'),JSON.stringify({initial,flame,reset,approachSamples,errors,requests:[...requests]},null,2));
+  assert.deepEqual(errors,[]);await writeFile(path.join(output,'result.json'),JSON.stringify({initial,idle,reset,approachSamples,errors,requests:[...requests]},null,2));
   }
 }catch(error){
   await page.screenshot({path:path.join(output,'failure.png')});

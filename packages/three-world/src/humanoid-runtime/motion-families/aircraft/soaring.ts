@@ -47,8 +47,8 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
   }
   v.steering+=(i.steer-v.steering)*(1-Math.exp(-6*h));
   if(balloon){
-   const b=C.balloon,burn=i.boost&&a.fuel>0?1:0;a.fuel=Math.max(0,a.fuel-burn*h/b.fuelSeconds);v.throttle=burn;
-   a.temperatureKelvin=clamp(a.temperatureKelvin+h*(b.heating*burn-b.cooling*(a.temperatureKelvin-b.ambientKelvin)-(i.slow?b.ventCooling:0)),b.ambientKelvin,b.maxKelvin);
+   const b=C.balloon,burn=a.fuel>0?Math.max(0,i.lift):0;a.fuel=Math.max(0,a.fuel-burn*h/b.fuelSeconds);v.throttle=burn;
+   a.temperatureKelvin=clamp(a.temperatureKelvin+h*(b.heating*burn-b.cooling*(a.temperatureKelvin-b.ambientKelvin)-Math.max(0,-i.lift)*b.ventCooling),b.ambientKelvin,b.maxKelvin);
    const rho=1.225*Math.exp(-Math.max(0,v.position.y)/8500),inside=rho*b.ambientKelvin/a.temperatureKelvin;
    force.y=(rho-inside)*b.volume*9.81;
    force.addScaledVector(relative,-.5*rho*b.dragArea*speed);a.loadFactor=force.y/(mass*9.81);
@@ -61,10 +61,11 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    const area=base.area+(C.paraglider.area-base.area)*canopy,cl0=base.cl0+(C.paraglider.cl0-base.cl0)*canopy;
    const alpha=Math.atan2(-relative.dot(up),Math.max(.1,relative.dot(forward)))+base.trim;
    const cl=(cl0+(base.liftSlope+(C.paraglider.liftSlope-base.liftSlope)*canopy)*clamp(alpha,-.3,.35))*(glider?Math.exp(-Math.max(0,Math.abs(alpha)-.35)*4):1);
-   const dynamic=.5*1.225*speed*speed*area,lift=dynamic*cl*(glider&&i.slow?.6:1);
+   const airBrake=i.slow||i.lift<0;
+   const dynamic=.5*1.225*speed*speed*area,lift=dynamic*cl*(glider&&airBrake?.6:1);
    const liftAxis=up.clone();if(speed>.01)liftAxis.addScaledVector(relative,-up.dot(relative)/(speed*speed)).normalize();
    force.addScaledVector(liftAxis,lift);
-   const drag=dynamic*((!glider?Math.max(0,Math.abs(alpha)-.35)*.35:0)+base.drag+(C.paraglider.drag-base.drag)*canopy+(base.induced+(C.paraglider.induced-base.induced)*canopy)*cl*cl+(glider&&i.slow?.12:0));
+   const drag=dynamic*((!glider?Math.max(0,Math.abs(alpha)-.35)*.35:0)+base.drag+(C.paraglider.drag-base.drag)*canopy+(base.induced+(C.paraglider.induced-base.induced)*canopy)*cl*cl+(airBrake?.12:0));
    if(speed>.01)force.addScaledVector(relative,-Math.min(drag,mass*speed/h)/speed);
    // 地面牵引/助跑后释放。翼装必须从高台离开，不能在平地持续获得推力。
    if(i.boost&&a.towSeconds<C.towSeconds&&(!v.launched||glider&&v.position.y<20)){
@@ -74,11 +75,13 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    // 侧倾时按实际倾角配平，低空速减小坡度；不凭空补速度或高度。
    const liftSlope=base.liftSlope+(C.paraglider.liftSlope-base.liftSlope)*canopy;
    const trim=clamp((mass*9.81/(Math.max(dynamic,1)*(wear?Math.max(.8,Math.cos(v.roll)):1))-cl0)/liftSlope,-.1,.25)-base.trim;
-   let pitchTarget=glider?(v.grounded?-i.forward*.27:clamp(path+trim-i.forward*.24,-.6,.5)):clamp((kind==='paraglider'||canopy>.8?-.12:path+trim)-i.forward*.24,-.35,.25),rollTarget=v.grounded?0:v.steering*.55+i.roll*.2;
+   const speedTarget=(glider?C.targetSpeed.glider:kind==='paraglider'||canopy>.8?C.targetSpeed.canopy:C.targetSpeed.wingsuit)*(1+i.forward*C.speedDemandRatio);
+   const speedTrim=Math.abs(i.forward)>.001?clamp((speedTarget-speed)/speedTarget,-1,1)*C.speedTrimRadians:0;
+   let pitchTarget=glider?(v.grounded?-i.pitch*.27:clamp(path+trim-i.pitch*.24-speedTrim,-.6,.5)):clamp((kind==='paraglider'||canopy>.8?-.12:path+trim)-i.pitch*.24-speedTrim,-.35,.25),rollTarget=v.grounded?0:v.steering*.55+i.roll*.2;
    if(wear){
     const underCanopy=kind==='paraglider'||canopy>.8;
     const canopyTrim=-.12+Math.min(.08,Math.max(0,1/Math.max(.8,Math.cos(v.roll))-1)*.3);
-    pitchTarget=clamp((kind==='paraglider'?canopyTrim:(path+trim)*(1-canopy)+canopyTrim*canopy)-i.forward*.24,-.35,.25);
+    pitchTarget=clamp((kind==='paraglider'?canopyTrim:(path+trim)*(1-canopy)+canopyTrim*canopy)-i.pitch*.24-speedTrim,-.35,.25);
     rollTarget=v.grounded?0:(v.steering*.48+i.roll*.15)*(.45+.55*unit(speed/(underCanopy?8:16)));
     if(wear.lowSpeedAssist)pitchTarget=Math.min(pitchTarget,-.12-.12*unit((13-speed)/8));
     if(!v.grounded&&underCanopy&&i.brake){

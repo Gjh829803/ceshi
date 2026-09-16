@@ -19,7 +19,7 @@ import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
-import { controlsFor } from "@worldkit/preset-content/ui/shortcuts";
+import { controlsFor, controlSummaryFor, systemControlsFor } from "@worldkit/preset-content/ui/shortcuts";
 import { renderAssetThumbnails } from "@worldkit/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
 import { SPECS as PRESET_SPECS, vehicleControlFamily } from "@worldkit/preset-content/config";
@@ -384,7 +384,7 @@ function input() {
         jumpPressed,
         humanCommands,
         sdk.getKeyBindings(),
-        sim.controlledActor.vehicle?.spec.mode,
+        sim.controlledActor.vehicle?{mode:sim.controlledActor.vehicle.spec.mode,aircraftSubtype:sim.controlledActor.vehicle.spec.aircraftSubtype}:undefined,
       );
 }
 function toast(text: string) {
@@ -513,7 +513,6 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (paused || !ready) return;
-    if(e.code==='KeyR'&&!e.ctrlKey&&sim.controlledActor.vehicle&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes('KeyR'))){e.preventDefault();recoverVehicle();return;}
     if (
       /^Digit[1-6]$/.test(e.code) &&
       !Object.values(sdk.getKeyBindings()).some((codes) =>
@@ -1139,10 +1138,14 @@ function updateUI(force = false) {
   const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
   shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.controlledActor.controller,
+    bindings = sdk.getKeyBindings(),
+    key = (action: humanoid.ControlAction) => humanoid.bindingLabel(action, bindings),
+    pitchControls = humanoid.vehicleKeyboardAxes(v?.spec).pitch,
+    summon = session.map.id===DRAGON_TRAINING.id ? sim.vehicles.find(vehicle=>vehicle.motion.flyingCreature)?.motion.flyingCreature?.summon : undefined,
     traversalPrompt = humanoidTraversalReady(h)
-      ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
+      ? `${key('forward')} / ${key('left')} / ${key('backward')} / ${key('right')} + ${key('jump')} · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
       : null;
-  const bindingSignature = JSON.stringify({keys:sdk.getKeyBindings(),cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
+  const bindingSignature = JSON.stringify({keys:bindings,cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
   if (lastActive !== sim.controlledActor.vehicleIndex || lastBindings !== bindingSignature) {
     lastBindings = bindingSignature;
     library.setActive(libraryAssetId(v?.spec.id ?? "person"));
@@ -1156,24 +1159,16 @@ function updateUI(force = false) {
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
     shell.update({
-      controls: controlsFor(vehicleControlFamily(v?.spec), sdk.getKeyBindings()),
+      controls: controlsFor(v?.spec, bindings),
     });
     setText("shortcutSubject", v ? "载具操作" : "人物操作");
-    const systemKeys: [string, string][] = [
-      ...(sdk.inspectCamera().document?.input?.cycleViewIds?.length ? [["T", "切换视角"] as [string,string]] : []),
-      ["点击 / 拖动", "观察"],
-      ["滚轮", "镜头距离"],
-      ["Esc", "释放 / 暂停"],
-      ["1–6", "快速前往"],
-    ];
+    const systemKeys = systemControlsFor(v?.spec, bindings, !!sdk.inspectCamera().document?.input?.cycleViewIds?.length);
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
     setText(
       "cameraNote",
-      v
-        ? v.spec.mode === "spacecraft"
-          ? "相机随飞行器上方向旋转。拖动鼠标自由观察。"
-          : "方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。"
-        : "方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。",
+      pitchControls
+        ? `${key('cameraLeft')} / ${key('cameraRight')} 左右观察；${key('cameraUp')} / ${key('cameraDown')} 控制俯仰，镜头有限跟随。鼠标拖动仍可自由观察。`
+        : `${key('cameraLeft')} / ${key('cameraRight')} 左右观察，${key('cameraUp')} / ${key('cameraDown')} 上下观察；鼠标拖动兼容，滚轮调整距离。`,
     );
   }
   setText(
@@ -1200,7 +1195,7 @@ function updateUI(force = false) {
             : v.spec.mode === "glider" && !v.launched
               ? "等待释放"
               : v.spec.mode === "plane"
-                ? v.motion.aircraft?.wearable?humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy):v.motion.aircraft?.subtype==='balloon'?`热气球 · 热量 ${Math.round(v.motion.aircraft.temperatureKelvin-273.15)}°C`:`${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
+                ? v.motion.aircraft?.wearable?humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy,bindings):v.motion.aircraft?.subtype==='balloon'?`热气球 · 热量 ${Math.round(v.motion.aircraft.temperatureKelvin-273.15)}°C`:`${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · ${['helicopter','multirotor','tiltrotor'].includes(v.spec.aircraftSubtype??'')?'垂直需求':'油门'} ${Math.round(v.throttle * 100)}%`
                 : "驾驶中"
       : p.swimming
         ? "游泳"
@@ -1220,33 +1215,31 @@ function updateUI(force = false) {
     setHTML(
       "interaction",
       v.motion.flyingCreature
-        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?'F 下龙 · Space 起飞':v.motion.flyingCreature.groundPhase==='airborne'?'F 着陆':'起降中 · F 取消着陆'}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
+        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('jump')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
-        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
+        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('jump')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "submarine"
         ? "载具涉水 · 使用页面复位按钮继续训练"
         : v.spec.mode === "glider" && !v.launched
-          ? "<kbd>Shift</kbd>从高台释放，开始滑翔"
-          : v.spec.mode === "plane" && v.spec.aircraftSubtype && v.spec.aircraftSubtype!=="fixed-wing" && v.spec.aircraftSubtype!=="pusher"
-            ? v.spec.hint
-          : v.spec.mode === "plane" && v.grounded
-            ? "<kbd>Shift</kbd>加油门，约 90 km/h 轻按 S 拉起 · Ctrl 收油并刹车 · T 驾驶舱"
-            : v.spec.mode === "plane" ? "W / S 俯仰 · A / D 协调转弯 · 松开回平 · Ctrl 收油 · T 切视角" : `<kbd>F</kbd>${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
+          ? `${key('sprint')} 从高台释放，开始滑翔 · ${key('cameraUp')} / ${key('cameraDown')} 俯仰`
+          : v.spec.mode === "plane"
+            ? controlSummaryFor(v.spec, bindings)
+            : `${key('interact')} ${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
     );
   else
     setHTML(
       "interaction",
       (session.map.id===DRAGON_TRAINING.id
-        ? `${humanoid.bindingLabel('summonDragon',sdk.getKeyBindings())} 召唤飞龙 · ${sim.vehicles.find(v=>v.motion.flyingCreature)?.motion.flyingCreature?.summon?.message??'飞龙会降落在附近，落稳后到鞍侧按 F 上龙'}`
-        : undefined) ?? h?.skills.hint(sdk.getKeyBindings()) ??
+        ? `${key('summonDragon')} 召唤飞龙 · ${summon?.phase==='arrived'?`飞龙已抵达 · 靠近鞍侧按 ${key('interact')} 上龙`:summon?.message??`飞龙会降落在附近，落稳后到鞍侧按 ${key('interact')} 上龙`}`
+        : undefined) ?? h?.skills.hint(bindings) ??
         (h?.surface.mode === "climbing"
-          ? "Space 尝试翻上 · C 松手"
+          ? `${key('jump')} 尝试翻上 · ${key('crouch')} 松手`
           : runtime.characterCapabilities().find((c) => c.id === "climb")
                 ?.eligible
-            ? "E 进入攀爬"
+            ? `${key('interact')} 进入攀爬`
             : null) ??
         (nearest >= 0
-          ? `<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`
+          ? `${key('interact')} 进入 ${SPECS[nearest]!.name}`
           : (traversalPrompt ?? "打开资产库选择主体，或自由探索")),
     );
   if (!v) {
@@ -1255,7 +1248,7 @@ function updateUI(force = false) {
       "bottomHint",
       humanDemo
         ? `演示：${humanDemo.trial.name} · WASD 接管`
-        : (h?.skills.hint(sdk.getKeyBindings()) ??
+        : (h?.skills.hint(bindings) ??
             traversalPrompt ??
             h?.lastResult ??
             "打开人物动作面板选择测试"),
@@ -1263,9 +1256,7 @@ function updateUI(force = false) {
   } else
     setText(
       "bottomHint",
-      sdk.inspectCamera().resolved?.kind === 'first-person'
-        ? "点击画面锁定鼠标 · 自由观察不改变车辆方向 · Esc 释放 / 暂停"
-        : "点击 / 拖动观察 · 滚轮调距离 · 页面复位按钮返回起点 · Esc 暂停",
+      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察 · ${pitchControls?`${key('cameraUp')} / ${key('cameraDown')} 俯仰与有限镜头跟随`:`${key('cameraUp')} / ${key('cameraDown')} 上下观察`} · 长按 ${key('reset')} 场景复位 · Esc 暂停`,
     );
   const pos = v?.position ?? p.position;
   let zone = session.map.regions[0]!,
@@ -1545,6 +1536,7 @@ const labAPI = {
       viewKind: sdk.inspectCamera().resolved?.kind??null,
       yaw: (sdk.inspectCamera().intent?.yawRadians??0),
       pitch: (sdk.inspectCamera().intent?.pitchRadians??0),
+      controlForwardWorldXYZ: runtime.controlForwardWorldXYZ(),
       distance: (sdk.inspectCamera().current?.nominalDistanceMeters??0),
       position: camera.position.toArray(),
       target: cameraTargetPosition().toArray(),
@@ -1619,7 +1611,7 @@ if (context?.registerTool) {
     }
   };
   if(import.meta.env.DEV)register('step_vehicle_controls','Pause and execute up to 600 fixed SDK input steps for a local vehicle regression; leaves the scene paused for inspection.',
-    {type:'object',properties:{frames:{type:'integer',minimum:1,maximum:600},input:{type:'object',properties:Object.fromEntries(['forward','steer','boost','slow','brake','primary','secondary'].map(key=>[key,{type:['forward','steer'].includes(key)?'number':'boolean'}])),additionalProperties:false}},required:['frames','input'],additionalProperties:false},false,(value)=>{
+    {type:'object',properties:{frames:{type:'integer',minimum:1,maximum:600},input:{type:'object',properties:Object.fromEntries(['forward','steer','pitch','roll','lift','strafe','boost','slow','brake','jump','primary','secondary'].map(key=>[key,{type:['forward','steer','pitch','roll','lift','strafe'].includes(key)?'number':'boolean'}])),additionalProperties:false}},required:['frames','input'],additionalProperties:false},false,(value)=>{
       const request=value as {frames:number;input:Partial<humanoid.Input>};
       if(!Number.isInteger(request.frames)||request.frames<1||request.frames>600)throw new Error('Invalid frame count');
       const input={...emptyInput(),...request.input};runtime.setInput(input)();

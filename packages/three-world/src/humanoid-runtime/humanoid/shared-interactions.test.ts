@@ -33,6 +33,12 @@ it('never reserves a target after actor admission fails and retains hands only w
  resources.release(nav);expect(a.skills.request({requestId:'place',action:'putDown'}).status).toBe('completed');expect(resources.inspect('a')).toEqual([]);
 });
 
+it('routes the shared interaction command to put down while carrying',()=>{
+ const q=setup(),a=actor(q,0,'a');step(q,[a],30);
+ expect(a.skills.request({requestId:'take-for-interaction',action:'pickup',targetId:'cup'}).status).toBe('running');step(q,[a],90);
+ expect(a.skills.carrying).toBe('cup');a.skills.step(new Vector3(),false,{interact:true});expect(a.skills.carrying).toBeNull();
+});
+
 it('restores world interactions and crates at the simulation reset entry',()=>{
   const q=setup(),simulation=new Simulation(q,[],{id:'player'});controllers.push(simulation.controlledActor.controller);
   const target=q.interactions.target('cup')!;

@@ -20,7 +20,10 @@ export function rotorForces(v:VehicleState,input:Input,h:number,wingLift:number)
  const desiredLift=clamp((weight+C.mass*(targetVertical-v.velocity.y)*R.verticalResponse)/Math.max(.6,up.y)-Math.max(0,wingLift),0,weight*R.maxLift);
  const total=v.throttle>.001?desiredLift*a.rotorSpeedFraction*a.rotorSpeedFraction:0;
  a.collective=total/(weight*R.maxLift);
- const pitchTarget=input.forward*R.pitchLimit*(1-wing);
+ // W/S requests longitudinal speed; attitude input remains an independent axis.
+ const speedTarget=input.slow?0:input.forward*(input.boost?v.spec.maxSpeed:v.spec.speed);
+ const translationPitch=input.slow||Math.abs(input.forward)>.001?clamp((speedTarget-forwardSpeed)*R.drag/9.81,-R.pitchLimit,R.pitchLimit):0;
+ const pitchTarget=clamp(translationPitch+input.pitch*R.pitchLimit,-R.pitchLimit,R.pitchLimit)*(1-wing);
  const rollTarget=(input.roll*R.bankLimit+v.steering*clamp(forwardSpeed/35,0,1)*.3)*(1-wing);
  const desired=new Vector3(
  C.inertia[0]*clamp((pitchTarget+v.pitch)*R.attitudeGain-localRate.x*R.rateDamping,-3,3),

@@ -18,10 +18,10 @@ try{
  for(const id of ['plane','trainer-plane']){
  await page.evaluate(id=>(window as any).playground.selectVehicle(id),id);await page.waitForTimeout(300);
  await page.locator('[data-worldkit-surface]').click();await page.keyboard.press('f');await page.waitForFunction(id=>(window as any).playground.getState().activeVehicle===id,id);
- while((await state()).camera.viewKind!=='third-person'){await page.keyboard.press('t');await page.waitForTimeout(200);}await page.waitForTimeout(500);await page.mouse.move(720,450);await page.mouse.wheel(0,-350);await page.waitForTimeout(400);
+ while((await state()).camera.viewKind!=='third-person'){await page.keyboard.press('v');await page.waitForTimeout(200);}await page.waitForTimeout(500);await page.mouse.move(720,450);await page.mouse.wheel(0,-350);await page.waitForTimeout(400);
  await orbit(Math.PI/2,.10);await shot(id+'-side');await orbit(Math.PI,.15);await shot(id+'-front');await orbit(0,.23);await shot(id+'-rear');await orbit(1.0,.20);await shot(id+'-oblique');
- await page.keyboard.press('t');await page.waitForTimeout(350);await orbit((await state()).camera.yaw,.85);await shot(id+'-contacts');
- await page.keyboard.press('f');await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle===null);while((await state()).camera.viewKind!=='third-person'){await page.keyboard.press('t');await page.waitForTimeout(150);}await page.waitForTimeout(800);await shot(id+'-exit');
+ await page.keyboard.press('v');await page.waitForTimeout(350);await orbit((await state()).camera.yaw,.85);await shot(id+'-contacts');
+ await page.keyboard.press('f');await page.waitForFunction(()=>(window as any).playground.getState().activeVehicle===null);while((await state()).camera.viewKind!=='third-person'){await page.keyboard.press('v');await page.waitForTimeout(150);}await page.waitForTimeout(800);await shot(id+'-exit');
  }
  assert.deepEqual(errors,[]);await writeFile(output+'/fit-browser.json',JSON.stringify({vehicles:['plane','trainer-plane'],views:['side','front','rear','oblique','contacts','exit'],errors},null,2));
 }finally{await browser.close();}

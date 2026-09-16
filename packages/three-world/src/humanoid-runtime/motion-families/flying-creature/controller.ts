@@ -73,7 +73,7 @@ function stepGround(v:VehicleState,input:Input,dt:number,q:EnvironmentQueries):b
   if(s.groundPhase==='grounded'){
     v.grounded=true;v.launched=false;v.velocity.set(0,0,0);v.speed=0;s.mode='hover';s.speedMetersPerSecond=0;s.tick++;s.groundSeconds+=dt;
     s.staminaRatio=Math.min(1,s.staminaRatio+dt*.13);s.flamePhase='off';
-    if(input.jump||input.brake){
+    if(input.jump||input.lift>0){
       const targetPosition=v.position.clone().add(new Vector3(0,8,0));
       const blocked=dragonProbes(v,0).some(p=>q.bodyOverlap({position:targetPosition,rotation:v.rotation,body:{kind:'capsule',radius:p.radius,height:p.radius*2,offset:p.center}},{excludedActorIds:new Set([v.spec.id])}));
       if(blocked){s.groundFailure='上方空间不足，无法起飞';return true;}
@@ -121,7 +121,7 @@ export function stepNativeFlyingCreature(v:VehicleState,input:Input,dt:number,q:
   if(v.motion.flyingCreature!.summon?.phase==='flying'&&v.motion.flyingCreature!.groundPhase==='grounded')input={...input,jump:true};
   if(stepGround(v,input,dt,q))return;
   const phase=v.motion.flyingCreature!.groundPhase;
-  if(phase==='approach')input={...input,forward:0,steer:0,boost:false,slow:true,brake:false,primary:false,secondary:false};
+  if(phase==='approach')input={...input,forward:0,pitch:0,lift:0,steer:0,boost:false,slow:true,brake:false,primary:false,secondary:false};
   const state=v.motion.flyingCreature!,before=v.rotation.clone(),origin=v.position.clone(),probes=dragonProbes(v);
   const feel=resolveConfiguredFlyingCreatureFeel(v.spec);
   state.yawRadians=v.yaw;state.pitchRadians=v.pitch;state.bankRadians=v.roll;

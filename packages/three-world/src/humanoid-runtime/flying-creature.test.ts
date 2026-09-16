@@ -154,7 +154,15 @@ function fixture(wall=false){
   return {q,v,step};
 }
 it('turns A left and D right in the +Z camera convention',()=>{
-  for(const steer of [-1,1]){const {q,v,step}=fixture();try{step({steer},60);expect(v.position.x*steer).toBeLessThan(-.5);expect(v.roll*steer).toBeGreaterThan(.5);}finally{q.dispose();}}
+  for(const steer of [-1,1]){const {q,v,step}=fixture();try{step({forward:1,steer},60);expect(v.position.x*steer).toBeLessThan(-.5);expect(v.roll*steer).toBeGreaterThan(.5);}finally{q.dispose();}}
+});
+it('keeps forward speed, arrow pitch and Space/C lift independent while Ctrl brakes',()=>{
+ const {q,v,step}=fixture();try{
+  step({forward:1},120);expect(v.speed).toBeGreaterThan(5);expect(Math.abs(v.pitch)).toBeLessThan(.001);
+  step({pitch:-1,slow:true},180);expect(v.pitch).toBeGreaterThan(.6);expect(v.speed).toBeLessThan(.1);
+  const height=v.position.y;step({lift:1,slow:true},120);expect(v.position.y).toBeGreaterThan(height+3);
+  step({lift:-1,slow:true},180);expect(v.position.y).toBeLessThan(height);
+ }finally{q.dispose();}
 });
 it('releases WASD to a true zero-velocity hover, including after Ctrl release',()=>{
   const {q,v,step}=fixture();try{
@@ -169,7 +177,7 @@ it('sweeps the head and torso through a thin wall at maximum speed',()=>{
     expect(v.position.z).toBeLessThan(49.9-Math.max(...DRAGON_VARIANTS[0]!.collisionProbes!.map(p=>p.center[2]+p.radius))+.02);expect(v.motion.flyingCreature!.collisionCount).toBeGreaterThan(0);
     for(const part of creatureBodies(v))expect(q.overlaps(part.position,part.body,part.rotation)).toBe(false);
     step({},300);expect(v.speed).toBe(0);
-    const contact=v.position.clone();step({steer:1},360);expect(v.position.distanceTo(contact)).toBeGreaterThan(3);
+    const contact=v.position.clone();step({forward:1,steer:1},360);expect(v.position.distanceTo(contact)).toBeGreaterThan(3);
   }finally{q.dispose();}
 });
 it('excludes its own collision proxies and blocks another actor',()=>{

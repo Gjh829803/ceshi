@@ -15,8 +15,10 @@ import {Simulation} from './simulation';
 import type {EnvironmentDefinition} from './environment/types';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
-import {DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls} from './input';
+import {CAMERA_PITCH_FOLLOW_RATIO,DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls} from './input';
 import {ACTION_TUNING} from './humanoid/action-schema';
+import {CAMERA_PITCH_FOLLOW_MAX_OFFSET_RADIANS} from '../config/input';
+import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
 import type {MovementSettings} from '../config/control';
 const map:EnvironmentDefinition={id:'test',name:'Test',description:'',bounds:{min:[-100,-10,-100],max:[100,50,100]},boxes:[{id:'ground',position:[0,-.5,0],size:[200,1,200]},{id:'wall',position:[0,2,10],size:[30,4,1]}],water:[],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#aaa',modes:['wheeled']}],spawns:[{id:'car',name:'Car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],playerSpawn:[0,.03,0]};
 const spec:VehicleSpec={id:'car',name:'Car',en:'CAR',mode:'wheeled',kernel:'test',color:'#fff',spawn:[-20,.03,0],yaw:0,speed:28,accel:10,grip:11,steer:1,radius:1.65,seat:[0,1,0],hint:'',archetype:'rover',envelope:{kind:'box',halfExtents:[1.35,1.15,2.15],offset:[0,1.15,0]}};
@@ -24,9 +26,84 @@ async function fixture(renderer?:WebGLRenderer){return createWorld({...(renderer
 describe('SDK humanoid runtime',()=>{
  it('preserves a released Space takeoff edge for dragons without changing other vehicle controls',()=>{
   const released=new Set<string>();
-  expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,'dragon')).toMatchObject({jump:true,brake:false});
-  expect(readControls(released,true,false,{},DEFAULT_KEY_BINDINGS,'dragon').jump).toBe(false);
-  for(const mode of ['plane','wheeled'] as const)expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,mode).jump).toBe(false);
+  expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,{mode:'dragon'})).toMatchObject({jump:true,brake:false});
+  expect(readControls(released,true,false,{},DEFAULT_KEY_BINDINGS,{mode:'dragon'}).jump).toBe(false);
+  for(const mode of ['plane','wheeled'] as const)expect(readControls(released,true,true,{},DEFAULT_KEY_BINDINGS,{mode}).jump).toBe(false);
+ });
+ it('allows disjoint key reuse and rejects conflicts in every active context',()=>{
+  expect(createKeyBindings().slow).toEqual(['ControlLeft','ControlRight']);
+  expect(()=>createKeyBindings({descend:['KeyZ']})).not.toThrow();
+  expect(()=>createKeyBindings({descend:['KeyQ']})).toThrow('KEY_BINDING_CONFLICT');
+  expect(()=>createKeyBindings({rollRight:['KeyF']})).toThrow('KEY_BINDING_CONFLICT');
+  const bindings=createKeyBindings();expect(Object.isFrozen(bindings.descend)).toBe(true);
+ });
+ it('separates mounted brake, lift, unused keys and camera by subtype',()=>{
+  const read=(mode:VehicleSpec['mode'],keys:string[],aircraftSubtype?:VehicleSpec['aircraftSubtype'])=>readControls(new Set(keys),true,false,{},undefined,{mode,aircraftSubtype});
+  expect(read('wheeled',['ControlLeft','KeyC','KeyQ','KeyE'])).toMatchObject({slow:true,brake:false,lift:0,roll:0});
+  expect(read('submarine',['ControlLeft','Space','ArrowUp','KeyE'])).toMatchObject({slow:true,brake:false,lift:1,pitch:-1,roll:1});
+  expect(read('plane',['KeyW','KeyS','KeyA','KeyD','ShiftLeft','KeyQ','KeyE','ControlLeft','Space','ArrowUp'],'balloon')).toMatchObject({forward:0,steer:0,boost:false,slow:false,roll:0,lift:1,pitch:0});
+  expect(read('plane',['KeyC'],'fixed-wing')).toMatchObject({lift:0,slow:false});
+  expect(read('plane',['KeyC'],'glider')).toMatchObject({lift:-1,slow:false});
+  expect(read('spacecraft',['ShiftLeft','ArrowRight','Space'])).toMatchObject({boost:false,strafe:0,lift:1,brake:false});
+  expect(read('dragon',['KeyE','KeyQ'])).toMatchObject({secondary:true,roll:0});
+  expect(read('dragon',['KeyE']).primary).toBeUndefined();
+ });
+ it('counts reset hold only on fixed ticks and cancels it on release or context change',()=>{
+  let resets=0,mounted=true;const keyboard=new WorldKeyboard(()=>0,()=>resets++);
+  keyboard.setHumanoidContext(()=>mounted?{mode:'wheeled'}:undefined);keyboard.enabled=true;
+  keyboard.keyDown('Backspace');for(let n=0;n<200;n++)keyboard.sample();expect(resets).toBe(0);
+  for(let n=0;n<47;n++)expect(keyboard.advanceReset(1/60)).toBe(false);
+  expect(keyboard.advanceReset(1/60)).toBe(true);expect(resets).toBe(1);
+  keyboard.keyDown('Backspace',true);for(let n=0;n<60;n++)keyboard.advanceReset(1/60);expect(resets).toBe(1);
+  keyboard.keyUp('Backspace');keyboard.keyDown('Backspace');keyboard.advanceReset(.7);keyboard.keyUp('Backspace');keyboard.keyDown('Backspace');keyboard.advanceReset(.2);expect(resets).toBe(1);
+  mounted=false;keyboard.advanceReset(.7);mounted=true;keyboard.advanceReset(.8);expect(resets).toBe(1);
+  keyboard.keyDown('Backspace');keyboard.advanceReset(.7);keyboard.clear();keyboard.advanceReset(.2);expect(resets).toBe(1);
+ });
+ it('clears held movement and reset when switching between two instances of the same mode',()=>{
+  let instanceId='car-1',resets=0;const keyboard=new WorldKeyboard(()=>0,()=>resets++);
+  keyboard.setHumanoidContext(()=>({mode:'wheeled',instanceId}));keyboard.enabled=true;
+  keyboard.keyDown('KeyW');keyboard.keyDown('Backspace');keyboard.advanceReset(.7);
+  instanceId='car-2';expect(keyboard.sample().humanoid?.forward).toBe(0);keyboard.advanceReset(.2);expect(resets).toBe(0);
+  keyboard.keyDown('KeyW',true);expect(keyboard.sample().humanoid?.forward).toBe(0);
+  keyboard.keyUp('KeyW');keyboard.keyDown('KeyW');expect(keyboard.sample().humanoid?.forward).toBe(1);
+ });
+ it('sends F to one interaction owner and does not fire or reboard on a held key',async()=>{
+  const world=await fixture();try{
+   const engine=(world as unknown as {engine:WorldEngine}).engine,r=world.humanoid!,actor=r.simulation.controlledActor;
+   r.approach('car-1');const interact=vi.spyOn(actor.controller,'setMounted');engine.keyboard.enabled=true;
+   engine.keyboard.keyDown('KeyF');engine.advance(1/60);expect(r.snapshot().mountedInstanceId).toBe('car-1');expect(interact).toHaveBeenCalledTimes(1);
+   engine.advance(.25);engine.keyboard.keyDown('KeyF',true);engine.advance(.25);expect(interact).toHaveBeenCalledTimes(1);
+   engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);expect(r.snapshot().mountedInstanceId).toBeNull();expect(interact).toHaveBeenCalledTimes(2);
+  }finally{world.dispose();}
+ });
+ it('commits the reset hold only after live fixed ticks, not observations or explicit Episode-style input',async()=>{
+  const world=await fixture();try{
+   const engine=(world as unknown as {engine:WorldEngine}).engine,r=world.humanoid!;
+   r.approach('car-1');expect(r.enter('car-1')).toBe(true);engine.keyboard.enabled=true;
+   const ticks:number[]=[];engine.setResetHandler(()=>ticks.push(world.simulationTick));
+   engine.keyboard.keyDown('Backspace');const before=world.simulationTick;
+   for(let n=0;n<100;n++){world.snapshot();engine.advance(0);}
+   expect(ticks).toEqual([]);
+   for(let n=0;n<48;n++)engine.advance(1/60,{});
+   expect(ticks).toEqual([]);
+   for(let n=0;n<47;n++)engine.advance(1/60);
+   expect(ticks).toEqual([]);engine.advance(1/60);
+   expect(ticks).toEqual([before+96]);
+   for(let n=0;n<60;n++)engine.advance(1/60);
+   expect(ticks).toHaveLength(1);
+  }finally{world.dispose();}
+ });
+ it('does not fall through from a rejected scene interaction to a nearby vehicle on F',async()=>{
+  const world=await fixture();try{
+   const r=world.humanoid!;r.approach('car-1');
+   const p=r.simulation.controlledActor.player.position.toArray();
+   r.switchMap({...map,interactions:[{id:'seat',label:'Seat',kind:'seat',slotId:'seat',position:[p[0],p[1]+.5,p[2]],approach:p,yaw:0}]});r.approach('car-1');
+   const actor=r.simulation.controlledActor;actor.controller.setAvailableClips(new Set(),[]);
+   expect(actor.nearest()).toBeGreaterThanOrEqual(0);expect(actor.controller.skills.nearest()).not.toBeNull();
+   const enter=vi.spyOn(actor,'interact');world.step({interactPressed:true},1);
+   expect(enter).not.toHaveBeenCalled();expect(r.snapshot().mountedInstanceId).toBeNull();
+   expect(r.inspectControls().lastApplied?.input.actions?.interact).toBe(true);
+  }finally{world.dispose();}
  });
  it('invalidates measured wheel evidence on reset while retaining the world physics sequence',async()=>{
   const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,
@@ -167,22 +244,22 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('maps one configurable camera key edge without toggling on repeat or after clearing',()=>{
-  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>undefined);keyboard.enabled=true;
-  keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(true);
-  keyboard.keyDown('KeyT',true);expect(keyboard.sample().cameraTogglePressed).toBe(false);
-  keyboard.keyUp('KeyT');keyboard.keyDown('KeyT');keyboard.clear();expect(keyboard.sample().cameraTogglePressed).toBe(false);
-  keyboard.setKeyBindings({cameraToggle:['KeyV']});keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidContext(()=>undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyV');expect(keyboard.sample().cameraTogglePressed).toBe(true);
+  keyboard.keyDown('KeyV',true);expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.keyUp('KeyV');keyboard.keyDown('KeyV');keyboard.clear();expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.setKeyBindings({cameraToggle:['KeyT']});keyboard.keyDown('KeyV');expect(keyboard.sample().cameraTogglePressed).toBe(false);
+  keyboard.keyDown('KeyT');expect(keyboard.sample().cameraTogglePressed).toBe(true);
  });
- it.each([false,true])('cycles T through all three views once per press while mounted=%s',async mounted=>{
+ it.each([false,true])('cycles V through all three views once per press while mounted=%s',async mounted=>{
   const world=await fixture();world.setCameraFollow({configuration:{...createHumanoidCameraDocument('player'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});try{const r=world.humanoid!;
    world.setCameraFollow({configuration:{...world.inspectCamera().document!,input:{cycleViewIds:['third-person','first-person','shoulder']}}});
    if(mounted){r.approach('car-1');expect(r.enter('car-1')).toBe(true);world.step({},31);}
-   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted?'wheeled':undefined);keyboard.enabled=true;
+   const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidContext(()=>mounted?{mode:'wheeled'}:undefined);keyboard.enabled=true;
    for(const expected of [1,2,0,1]){
-    keyboard.keyDown('KeyT');world.step(keyboard.sample(),3);expect(world.snapshot().camera.viewKind).toBe(['third-person','first-person','shoulder'][expected]);
-    keyboard.keyDown('KeyT',true);world.step(keyboard.sample());expect(world.snapshot().camera.viewKind).toBe(['third-person','first-person','shoulder'][expected]);
-    keyboard.keyUp('KeyT');
+    keyboard.keyDown('KeyV');world.step(keyboard.sample(),3);expect(world.snapshot().camera.viewKind).toBe(['third-person','first-person','shoulder'][expected]);
+    keyboard.keyDown('KeyV',true);world.step(keyboard.sample());expect(world.snapshot().camera.viewKind).toBe(['third-person','first-person','shoulder'][expected]);
+    keyboard.keyUp('KeyV');
    }
   }finally{world.dispose();}
  });
@@ -196,7 +273,7 @@ describe('SDK humanoid runtime',()=>{
   }finally{world.dispose();}
  });
  it('uses a fresh sprint+crouch edge for slide and remaps movement, HUD and action admission together',()=>{
-  const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setHumanoidMode(()=>undefined);keyboard.enabled=true;
+  const keyboard=new WorldKeyboard(()=>0,()=>{throw new Error('unexpected reset');});keyboard.setHumanoidContext(()=>undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyC');keyboard.keyDown('ShiftLeft');expect(keyboard.sample().humanoid?.actions).toEqual({toggleCrouch:true});
   expect(keyboard.sample().humanoid?.actions).toEqual({});keyboard.keyUp('KeyC');keyboard.keyDown('KeyC');expect(keyboard.sample().humanoid?.actions).toEqual({slide:true});
   keyboard.keyDown('KeyC',true);expect(keyboard.sample().humanoid?.actions).toEqual({});keyboard.clear();
@@ -324,7 +401,7 @@ describe('SDK humanoid runtime',()=>{
    const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:sceneMap,character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'craft',assetId:'craft',spec:{...spec,mode,spawn:[-20,mode==='mount'?.03:25,-20]},object:new Group()}]}});
    try{const r=world.humanoid!;const tuning:Partial<MovementSettings>=mode==='plane'?{drag:stronger?5:0,dragQuadratic:0}:mode==='submarine'?{verticalAcceleration:stronger?12:2}:mode==='spacecraft'?{grip:0,brakeDamping:stronger?8:0}:mode==='dragon'?{groundDeceleration:stronger?8:1}:{coastDeceleration:stronger?8:1};
     r.applyProfile({vehicles:{craft:tuning}});r.simulation.controlledActor.vehicleIndex=0;r.simulation.controlledActor.transition=0;const v=r.simulation.controlledActor.vehicle!;v.position.set(-20,mode==='mount'||mode==='dragon'?.03:25,-20);v.velocity.set(0,0,mode==='submarine'?0:20);v.speed=v.velocity.length();v.grounded=mode==='mount'||mode==='dragon';
-    world.step({humanoid:{...emptyInput(),lift:mode==='submarine'?1:0,boost:mode==='spacecraft'}},30);speeds.push(mode==='submarine'?v.velocity.y:v.velocity.z);
+    world.step({humanoid:{...emptyInput(),lift:mode==='submarine'?1:0,slow:mode==='spacecraft'}},30);speeds.push(mode==='submarine'?v.velocity.y:v.velocity.z);
     expect(r.snapshot().controls.vehicles.craft).toMatchObject(tuning);
    }finally{world.dispose();}
   }
@@ -465,21 +542,46 @@ describe('SDK humanoid runtime',()=>{
  });
  it.each(['wheeled','motorcycle','mount','dragon','plane','glider','boat','submarine','tank','spacecraft'] as const)('routes mounted arrow keys only to their consuming controller: %s',mode=>{
   let current:typeof mode|undefined=mode;
-  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>current);keyboard.enabled=true;
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidContext(()=>current?{mode:current}:undefined);keyboard.enabled=true;
   keyboard.setKeyBindings({cameraLeft:['KeyJ'],cameraRight:['KeyL'],cameraUp:['KeyI'],cameraDown:['KeyK']});
   keyboard.keyDown('KeyJ');keyboard.keyDown('KeyI');
-  const sample=keyboard.sample(),pitch=mode==='tank'||mode==='spacecraft',strafe=mode==='spacecraft';
-  expect(sample).toMatchObject({cameraYawRatio:strafe?0:1,cameraPitchRatio:pitch?0:-1,humanoid:{pitch:pitch?-1:0,strafe:strafe?-1:0,forward:0,steer:0}});
-  current=undefined;expect(keyboard.sample()).toMatchObject({cameraYawRatio:1,cameraPitchRatio:-1,humanoid:{pitch:0,strafe:0}});
-  current=mode;expect(keyboard.sample()).toEqual(sample);
+  const sample=keyboard.sample(),pitch=['dragon','plane','glider','submarine','spacecraft'].includes(mode);
+  expect(sample).toMatchObject({cameraYawRatio:1,humanoid:{pitch:pitch?-1:0,strafe:0,forward:0,steer:0}});
+  expect(sample.cameraPitchRatio).toBeCloseTo(pitch?-CAMERA_PITCH_FOLLOW_RATIO:-1);
+  current=undefined;expect(keyboard.sample()).toMatchObject({cameraYawRatio:0,cameraPitchRatio:0,humanoid:{pitch:0,strafe:0}});
+  current=mode;keyboard.keyDown('KeyJ');keyboard.keyDown('KeyI');expect(keyboard.sample()).toEqual(sample);
   keyboard.clear();expect(keyboard.sample()).toMatchObject({cameraYawRatio:0,cameraPitchRatio:0,humanoid:{pitch:0,strafe:0}});
  });
  it('routes all player keys through SDK input and consumes action edges once',()=>{
-  let mounted=false;const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidMode(()=>mounted?'wheeled':undefined);keyboard.enabled=true;
+  let mounted=false;const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidContext(()=>mounted?{mode:'wheeled'}:undefined);keyboard.enabled=true;
   keyboard.keyDown('KeyW');keyboard.keyDown('KeyE');keyboard.keyDown('KeyF');keyboard.keyDown('Space');
-  const first=keyboard.sample();expect(first.humanoid?.forward).toBe(1);expect(first.humanoid?.actions?.interact).toBe(true);expect(first.interactPressed).toBe(true);expect(first.humanoid?.jump).toBe(true);
+  const first=keyboard.sample();expect(first.humanoid?.forward).toBe(1);expect(first.humanoid?.actions?.interact).toBeUndefined();expect(first.interactPressed).toBe(true);expect(first.humanoid?.jump).toBe(true);
   const next=keyboard.sample();expect(next.humanoid?.forward).toBe(1);expect(next.humanoid?.actions?.interact).toBeUndefined();expect(next.interactPressed).toBe(false);
-  mounted=true;expect(keyboard.sample().humanoid).toMatchObject({roll:1,lift:1,brake:true,jump:false});keyboard.clear();expect(keyboard.sample().humanoid?.forward).toBe(0);
+  mounted=true;expect(keyboard.sample().humanoid).toMatchObject({roll:0,lift:0,brake:false,jump:false});keyboard.keyDown('Space');expect(keyboard.sample().humanoid).toMatchObject({brake:true,lift:0});keyboard.clear();expect(keyboard.sample().humanoid?.forward).toBe(0);
+ });
+ it('caps held flight pitch camera follow while the vehicle keeps receiving pitch input',async()=>{
+  const world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:{...map,regions:[{...map.regions[0]!,modes:['dragon']}],spawns:[],bounds:{min:[-100,-10,-100],max:[100,200,100]}},character:{instanceId:'player',object:new Group()},vehicles:[{instanceId:'dragon',assetId:'dragon',spec:createFlyingCreatureSpec('dragon'),object:new Group()}]}});
+  try{
+   world.setCameraFollow({configuration:createHumanoidCameraDocument('player')});
+   world.humanoid!.prepareEpisodeStart({positionWorldMetersXYZ:[0,80,0],facingYawRadians:0,humanoid:{vehicleInstanceId:'dragon',mounted:true}});
+   const e=(world as unknown as {engine:WorldEngine}).engine,limit=CAMERA_PITCH_FOLLOW_MAX_OFFSET_RADIANS;
+   for(const view of ['third-person','first-person','shoulder']){
+    world.setCameraView(view);const center=world.inspectCamera().resolved!.values.orientation.initialPitchRadians;
+    e.keyboard.enabled=true;e.keyboard.keyDown('ArrowUp');
+    for(let n=0;n<120;n++)e.advance(1/60);
+    expect(world.inspectCamera().intent!.pitchRadians).toBeCloseTo(center-limit);
+    expect(world.humanoid!.inspectControls().lastApplied!.input.pitch).toBe(-1);
+    e.keyboard.keyUp('ArrowUp');e.keyboard.keyDown('ArrowDown');
+    for(let n=0;n<180;n++)e.advance(1/60);
+    expect(world.inspectCamera().intent!.pitchRadians).toBeCloseTo(center+limit);
+    expect(world.humanoid!.inspectControls().lastApplied!.input.pitch).toBe(1);e.keyboard.keyUp('ArrowDown');
+   }
+  }finally{world.dispose();}
+ });
+ it('uses F for interaction and no longer admits G as a default action key',()=>{
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.setHumanoidContext(()=>undefined);keyboard.enabled=true;
+  keyboard.keyDown('KeyF');expect(keyboard.sample().interactPressed).toBe(true);
+  keyboard.keyDown('KeyG');expect(keyboard.sample().humanoid?.actions?.putDown).toBeUndefined();expect(keyboard.held.has('KeyG')).toBe(false);
  });
  it('executes closed commands with deduplication and reports failed physical requests',async()=>{
   const world=await fixture();world.setCameraFollow({configuration:{...createHumanoidCameraDocument('player'),input:{cycleViewIds:['third-person','first-person','shoulder']}}});try{

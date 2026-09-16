@@ -90,6 +90,22 @@ const step = (c: CameraController, tick: number, input = {}) => {
   return c.evaluateAndCommit(frame(tick));
 };
 
+it('bounds pitch ratio input without snapping or limiting explicit pointer look',()=>{
+  const {controller:c}=fixture();c.install(document({activation:'immediate'}),frame());
+  const limit=10*Math.PI/180;let tick=0;
+  for(let n=0;n<180;n++)step(c,++tick,{orbitRatioXY:[0,-.2],orbitPitchMaxOffsetRadians:limit});
+  expect(c.inspect().intent!.pitchRadians).toBeCloseTo(-limit);
+  for(let n=0;n<360;n++)step(c,++tick,{orbitRatioXY:[0,.2],orbitPitchMaxOffsetRadians:limit});
+  expect(c.inspect().intent!.pitchRadians).toBeCloseTo(limit);
+  step(c,++tick,{orbitDeltaRadiansXY:[0,.3],orbitPitchMaxOffsetRadians:limit});
+  expect(c.inspect().intent!.pitchRadians).toBeCloseTo(limit+.3);
+  step(c,++tick,{orbitRatioXY:[0,.2],orbitPitchMaxOffsetRadians:limit});
+  expect(c.inspect().intent!.pitchRadians).toBeCloseTo(limit+.3);
+  step(c,++tick,{orbitRatioXY:[0,-.2],orbitPitchMaxOffsetRadians:limit});
+  expect(c.inspect().intent!.pitchRadians).toBeLessThan(limit+.3);
+  expect(c.inspect().intent!.pitchRadians).toBeGreaterThan(limit+.28);
+});
+
 function anchoredOpening(anchor: 'origin' | 'body' = 'origin', activation = 'immediate', worldOffset = [0, 0, 0]) {
   return document({ activation, views: { orbit: { kind: 'third-person', opening: {
     positionWorldMetersXYZ: [2, 3, 8], lookAtWorldMetersXYZ: [0, 1, 0], fovDegrees: 50,

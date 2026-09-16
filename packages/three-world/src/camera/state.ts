@@ -73,6 +73,8 @@ export interface CameraControllerBindings {
 export interface CameraControllerInput {
   readonly orbitDeltaRadiansXY?: readonly [number, number] | undefined;
   readonly orbitRatioXY?: readonly [number, number] | undefined;
+  /** Limit ratio pitch around this view's opening; pointer deltas remain free. */
+  readonly orbitPitchMaxOffsetRadians?: number | undefined;
   readonly zoomDeltaMeters?: number | undefined;
   readonly movement?: boolean | undefined;
 }

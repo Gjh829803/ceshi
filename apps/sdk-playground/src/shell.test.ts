@@ -9,8 +9,11 @@ describe('Shell render isolation',()=>{
  beforeAll(async()=>{
   const bundle=await build({stdin:{resolveDir:process.cwd(),contents:`
    import {mountShell} from './apps/sdk-playground/src/shell.tsx';
+   import {controlsFor,systemControlsFor} from '@worldkit/preset-content/ui/shortcuts';
+   import {humanoid} from '@worldkit/three';
    window.shellRenderCount=0;
    window.shellTest=mountShell(document.body);
+   window.showControls=(subject,overrides={})=>{const bindings=humanoid.createKeyBindings(overrides);window.shellTest.update({controls:controlsFor(subject,bindings),system:systemControlsFor(subject,bindings)});window.shellTest.flush();};
   `},plugins:[{name:'count-shell-renders',setup(builder){
    // Count the actual component invocation, not DOM mutations (React can render
    // without changing the DOM). Instrument only this test bundle.
@@ -78,5 +81,20 @@ describe('Shell render isolation',()=>{
   });
   for(let n=1;n<counts.length;n++)expect(counts[n]).toBeGreaterThan(counts[n-1]!);
   expect(await page.locator('body').innerText()).toContain('Pause now');
+ });
+ it('renders subtype-aware HUD controls and refreshes remapped keys without stale T or F aliases',async()=>{
+  await page.evaluate(()=>(window as any).showControls({mode:'plane',aircraftSubtype:'pusher'}));
+  const footer=page.locator('#shortcutFooter');
+  expect(await footer.innerText()).toContain('增加油门 / 减少油门');
+  expect(await footer.innerText()).toContain('抬头 / 低头（镜头有限跟随）');
+  expect(await footer.locator('kbd').allTextContents()).toContain('V');
+  expect(await footer.locator('kbd').allTextContents()).not.toContain('T');
+  await page.evaluate(()=>(window as any).showControls({mode:'plane',aircraftSubtype:'pusher'},{forward:['KeyI'],backward:['KeyK'],interact:['KeyJ'],cameraToggle:['KeyT']}));
+  const keys=await footer.locator('kbd').allTextContents();
+  expect(keys).toEqual(expect.arrayContaining(['I','K','J','T']));
+  expect(keys).not.toEqual(expect.arrayContaining(['W','S','F','V']));
+  await page.evaluate(()=>(window as any).showControls({mode:'plane',aircraftSubtype:'balloon'}));
+  expect(await footer.innerText()).toContain('放热下降');
+  expect(await footer.innerText()).not.toContain('增加油门');
  });
 });
