@@ -10,3 +10,6 @@ assets/three-creator/presets/** -text
 # Camera discovery verifies exact source bytes against its generated inventory.
 packages/three-world/src/config/camera/*.ts text eol=lf
 packages/three-world/src/control-support.ts text eol=lf
+
+# The generated catalog is verified byte-for-byte against canonical JSON.
+assets/three-creator/asset-catalog.json text eol=lf

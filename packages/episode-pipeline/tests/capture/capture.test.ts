@@ -14,11 +14,16 @@ import type { EpisodePlan } from '../../src/contracts.js';
 import { createRenderedFrameEncoder, inspectRenderedVideo } from '@worldkit/browser-capture/video';
 
 const testFiles = new Map<string, TestTaskFiles>();
-function captureTest(name: string, work: (files: TestTaskFiles) => void | Promise<void>, timeout?: number) {
+function captureTest(name: string, work: (files: TestTaskFiles, mark: (stage: string) => void) => void | Promise<void>, timeout?: number) {
   it(name, context => {
     const files = new TestTaskFiles();
     testFiles.set(context.task.id, files);
-    return files.run(() => work(files));
+    const started = performance.now(), stages: {stage: string; elapsedMs: number}[] = [];
+    const mark = (stage: string) => stages.push({stage, elapsedMs: performance.now() - started});
+    context.onTestFailed(() => {
+      if (stages.length) process.stderr.write('EPISODE_CAPTURE_TEST_STAGES ' + JSON.stringify({elapsedMs: performance.now() - started, stages}) + '\n');
+    });
+    return files.run(() => work(files, mark));
   }, timeout);
 }
 afterEach(async context => {
@@ -215,12 +220,15 @@ describe('Three episode deterministic production capture', () => {
   });
 });
 
-captureTest('resumes an admitted six-clip boundary without a planner or GPU job and rejects corrupted media',async(files)=>{
- const setup=await fixture(files),runtimeHash='b'.repeat(64),{canonicalHash,PRE_SEEDANCE_PROFILE}=await import('../../src/contracts.js');
- const {runEpisodeWorkflow}=await import('../../src/workflow/workflow.js'),{saveEpisodeSource}=await import('../../src/source/source.js'),{hashTree}=await import('@worldkit/creator-host/compiler');
+captureTest('resumes an admitted six-clip boundary without a planner or GPU job and rejects corrupted media',async(files,mark)=>{
+ mark("fixture:start");
+ const setup=await fixture(files),runtimeHash='b'.repeat(64);mark('fixture:end');
+ mark('imports:start');const {canonicalHash,PRE_SEEDANCE_PROFILE}=await import('../../src/contracts.js');
+ mark('workflow-import:start');const {runEpisodeWorkflow}=await import('../../src/workflow/workflow.js');mark('workflow-import:end');
+ const {saveEpisodeSource}=await import('../../src/source/source.js'),{hashTree}=await import('@worldkit/creator-host/compiler');mark('imports:end');
  const {createHash}=await import('node:crypto');const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
  setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);setup.options.outputRoot=path.join(setup.root,'capture');
- const summary=await runCaptureSegments({...setup.options,runtimeHash});
+ mark('capture:start');const summary=await runCaptureSegments({...setup.options,runtimeHash});mark('capture:end');
  const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'fixture source');
  const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
  const source={assetPolicySha256:setup.assetPolicySha256,kind:'three-episode-source' as const,schemaVersion:1 as const,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash,sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:runtimeHash,sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]};
@@ -229,22 +237,23 @@ captureTest('resumes an admitted six-clip boundary without a planner or GPU job 
  await writeFile(path.join(setup.root,'episode.json'),JSON.stringify({episodeId:'fixture-episode',worldBuildHash:source.worldBuildHash,worldId:source.worldId,profile:PRE_SEEDANCE_PROFILE,planPath,planHash:canonicalHash(setup.plan),segments:summary.segments,status:'failed',stage:'style-planning',planRepairsBySegment:{}}));
  const capture=vi.fn(async()=>{throw new Error('unexpected GPU dispatch');}),runCodex=vi.fn(async()=>{throw new Error('unexpected planner');});
  const options={sourceManifestPath,outputRoot:setup.root,episodeId:'fixture-episode',stopBeforeSeedance:true as const,until:'capture' as const,runtimeConfig:{},capture,cloud:{runCodex} as any};
- expect((await runEpisodeWorkflow(options)).status).toBe('paused-before-visuals');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ mark('resume:start');expect((await runEpisodeWorkflow(options)).status).toBe('paused-before-visuals');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ mark('resume:end');
  // Queue suspension must publish the checkpoint before authorizing a CPU continuation.
  const admittedState=JSON.parse(await readFile(path.join(setup.root,'episode.json'),'utf8'));
  await writeFile(path.join(setup.root,'episode.json'),JSON.stringify({...admittedState,segments:[]}));
  capture.mockRejectedValueOnce(Object.assign(new Error('queued'),{code:'EPISODE_CAPTURE_BATCH_PENDING',taskId:'capture-test',cohortId:'cohort-test'}));
  const checkpointOrder:string[]=[];
- const paused=await runEpisodeWorkflow({...options,publishS3Prefix:'s3://bucket/checkpoint',cloud:{runCodex,publishDirectory:async()=>{checkpointOrder.push('published');}} as any,batchQueue:{checkpointReady:async()=>{checkpointOrder.push('continuation-ready');}} as any});
- expect(paused.status).toBe('paused-capture-queue');expect(checkpointOrder).toEqual(['published','continuation-ready']);expect(runCodex).not.toHaveBeenCalled();
+ mark('queue:start');const paused=await runEpisodeWorkflow({...options,publishS3Prefix:'s3://bucket/checkpoint',cloud:{runCodex,publishDirectory:async()=>{checkpointOrder.push('published');}} as any,batchQueue:{checkpointReady:async()=>{checkpointOrder.push('continuation-ready');}} as any});
+ mark('queue:end');expect(paused.status).toBe('paused-capture-queue');expect(checkpointOrder).toEqual(['published','continuation-ready']);expect(runCodex).not.toHaveBeenCalled();
  await writeFile(path.join(setup.root,'episode.json'),JSON.stringify(admittedState));capture.mockClear();
  // A completed legacy summary cannot silently bypass the new input policy.
  await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify({...summary,playerCaptureVersion:'legacy-constant-travel'}));
- await expect(runEpisodeWorkflow(options)).rejects.toThrow('unexpected GPU dispatch');expect(capture).toHaveBeenCalledOnce();expect(runCodex).not.toHaveBeenCalled();
+ mark('legacy:start');await expect(runEpisodeWorkflow(options)).rejects.toThrow('unexpected GPU dispatch');mark('legacy:end');expect(capture).toHaveBeenCalledOnce();expect(runCodex).not.toHaveBeenCalled();
  capture.mockClear();
  await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify(summary));
  await writeFile(path.join(summary.segments[2]!.outputRoot,'video.mp4'),'corrupted');
- await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ mark('corruption:start');await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');mark('corruption:end');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
 });
 
 captureTest('rejects a prior-route candidate from another source before dispatching the cloud Agent',async(files)=>{
