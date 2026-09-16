@@ -8,6 +8,11 @@ import {SDK_EXAMPLE} from '../../src/discovery/examples.js';
 const contracts = readFileSync(new URL('../../../three-world/src/contracts.ts', import.meta.url), 'utf8');
 const guide = readFileSync(new URL('../../../three-world/README.md', import.meta.url), 'utf8');
 
+it('publishes native water binding, signed diving input and observable mode to the action guide',()=>{
+ const selected=guideTopic(guide,'character-actions');
+ for(const text of ['map.water','humanoid.lift','water.contact.swimmingMode','underwater','C/Ctrl'])expect(selected).toContain(text);
+});
+
 it('publishes configuration-only camera authoring',()=>{
  const selected=publicContractTopic(contracts,'getting-started');
  expect(selected).toContain('setCameraView');expect(selected).toContain('CameraDocument');

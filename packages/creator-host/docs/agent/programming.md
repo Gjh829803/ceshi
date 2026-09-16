@@ -20,6 +20,28 @@ kinematic entities can bind pickup/seat slots to their existing body. Use
 `rigidGroup` and `propBoxPose` for map-defined moving groups. For physical edge fences and
 recovery read `boundaries`; world bounds alone do not block movement.
 
+Avoid coplanar overlapping visible faces, including water against stair treads;
+transparency and render order do not resolve depth conflicts. Check these
+junctions while moving the camera.
+
+For suspected surface flicker, call `world_inspect` with
+`sections:['surface-overlaps']` and, when known, `entityIds` to narrow the scan.
+It reports coplanar/near-coplanar overlap risks inside and between visible
+triangle meshes at the sampled pose, including merged geometry. Known moving
+entities are excluded; arbitrary authored animation cannot be inferred. Findings
+include object identity, triangle references, world/local overlap bounds, area
+and a repair hint; merged geometry
+cannot recover original component names or source lines. Optional
+`surfaceOverlaps:{highlight:true}` returns a labeled diagnostic local view of the
+first finding. The overlay is visible through occluders and is not delivery media.
+Read coverage and truncation before interpreting an empty result: animation,
+instancing, shader deformation and budget limits can leave geometry unchecked.
+Configured depth-biased overlays are excluded from the relevant comparisons.
+Repair only unintended overlaps, then recheck the affected entity and inspect
+moving-camera views. This is advisory geometry evidence, not proof of flicker,
+visual acceptance or a reason to disable depth testing globally. Ordinary inspect
+and playtest calls do not perform this scan.
+
 ## Initial state and camera
 
 In three-sdk, bind the scene and subjects, establish their initial relationship,

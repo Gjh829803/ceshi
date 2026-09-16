@@ -151,6 +151,7 @@ export interface HumanoidSnapshot {
   readonly mountedInstanceId:string|null;readonly message:string;
   /** Latest controller sample, copied without issuing another physics query. */
   readonly water:{readonly declaredVolumeCount:number;readonly controllerActive:boolean;readonly swimming:boolean;readonly contact:{
+    readonly swimmingMode:'surface'|'underwater'|null;
     readonly volumeId:string;readonly surfaceHeightMeters:number;readonly depthMeters:number;readonly submersionRatio:number;
     readonly feetBelowSurfaceMeters:number;readonly requiredDepthMeters:number;readonly requiredFeetBelowSurfaceMeters:number;
     readonly depthCheckPassed:boolean;readonly immersionCheckPassed:boolean;readonly wasSwimmingAtSample:boolean;
@@ -355,7 +356,7 @@ export class HumanoidRuntime implements PhysicsPort {
       teleportRevision:actor.teleportRevision,recovery:actor.recovery?{...structuredClone(actor.recovery),subjectInstanceId:actor.recovery.vehicleId??actor.id}:null,
       mapId:this.currentMap.id,timeSeconds:s.time,mountedInstanceId:actor.vehicle?.spec.id??null,message:actor.message,
       water:{declaredVolumeCount:this.currentMap.water.length,controllerActive:waterControllerActive,swimming:waterControllerActive&&Boolean(h?.swimming),
-        contact:contact?{volumeId:contact.volumeId,surfaceHeightMeters:contact.surfaceY,depthMeters:contact.depth,submersionRatio:contact.submersion,
+        contact:contact?{swimmingMode:contact.swimmingMode,volumeId:contact.volumeId,surfaceHeightMeters:contact.surfaceY,depthMeters:contact.depth,submersionRatio:contact.submersion,
           feetBelowSurfaceMeters:contact.feetBelowSurfaceMeters,requiredDepthMeters:contact.requiredDepthMeters,requiredFeetBelowSurfaceMeters:contact.requiredFeetBelowSurfaceMeters,
           depthCheckPassed:contact.depthCheckPassed,immersionCheckPassed:contact.immersionCheckPassed,wasSwimmingAtSample:contact.wasSwimmingAtSample,
           entrySpeedMetersPerSecond:contact.entrySpeed,entrySerial:contact.entrySerial}:null},

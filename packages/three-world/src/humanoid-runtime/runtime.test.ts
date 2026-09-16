@@ -204,7 +204,7 @@ describe('SDK humanoid runtime',()=>{
   keyboard.setKeyBindings({forward:['KeyI'],crouch:['KeyB']});expect(keyboard.sample().humanoid?.actions).toEqual({});
   keyboard.keyDown('KeyW');keyboard.keyDown('KeyC');expect(keyboard.sample().humanoid?.forward).toBe(0);
   keyboard.keyDown('KeyI');keyboard.keyDown('ShiftRight');keyboard.keyDown('KeyB');expect(keyboard.sample().humanoid).toMatchObject({forward:1,boost:true,actions:{slide:true}});
-  expect(controlHints(keyboard.getKeyBindings())).toContainEqual(['B','蹲伏 / 站立；攀爬时松手']);
+  expect(controlHints(keyboard.getKeyBindings())).toContainEqual(['B','蹲伏 / 站立；冲刺时滑铲；攀爬时松手；游泳时按住下潜']);
   expect(()=>createKeyBindings({crouch:['KeyW']})).toThrow('KEY_BINDING_CONFLICT');expect(()=>createKeyBindings({roll:['Escape']})).toThrow('KEY_BINDINGS_INVALID');
   expect(DEFAULT_KEY_BINDINGS.roll).toEqual(['KeyQ']);
  });

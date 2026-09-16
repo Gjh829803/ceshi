@@ -1,10 +1,13 @@
 /** The swimming source clips place their root on the water plane. The physics
  * controller retains the same upright capsule and a foot-based position. */
-export const SWIM_ROOT_DEPTH = 1.15;
-export const SWIM_SPEED = 1.6;
-export const SWIM_FAST_SPEED = 2.6;
+import {SWIMMING_TUNING} from '../../config/actions';
+export const SWIM_ROOT_DEPTH = SWIMMING_TUNING.rootDepthMeters;
+export const SWIM_SPEED = SWIMMING_TUNING.speedMetersPerSecond;
+export const SWIM_FAST_SPEED = SWIMMING_TUNING.fastSpeedMetersPerSecond;
 
 export interface WaterContact {
+  /** Native control mode; null when contact does not qualify for swimming. */
+  swimmingMode:'surface'|'underwater'|null;
   volumeId:string;
   surfaceY:number;
   /** Water depth above the actual supporting collider, including shelves. */
@@ -27,4 +30,11 @@ export interface WaterContact {
 export function swimVerticalVelocity(footY:number,vertical:number,surfaceY:number,dt:number){
   const target=surfaceY-SWIM_ROOT_DEPTH;
   return Math.max(-16,Math.min(3.5,vertical+((target-footY)*36-vertical*12)*dt));
+}
+
+/** Signed input changes velocity; neutral input brakes to a depth hold. */
+export function underwaterVerticalVelocity(vertical:number,lift:number,dt:number){
+  const target=Math.max(-1,Math.min(1,lift))*SWIMMING_TUNING.verticalSpeedMetersPerSecond;
+  const change=SWIMMING_TUNING.verticalAccelerationMetersPerSecondSquared*dt;
+  return vertical+Math.max(-change,Math.min(change,target-vertical));
 }

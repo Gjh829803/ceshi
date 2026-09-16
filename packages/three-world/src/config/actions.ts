@@ -4,3 +4,7 @@ export const ACTION_TUNING = Object.freeze({slideMinimumSpeedMetersPerSecond:2.5
   rollDurationSeconds:44/30,slideEntryDurationSeconds:25/30,slideLoopSeconds:1,slideExitDurationSeconds:.5});
 
 export const SURFACE_TUNING=Object.freeze({standingHeightMeters:1.68,seatedHeightMeters:1.4,proneHeightMeters:.66,climbHeightMeters:1.76,proneSpeedMetersPerSecond:.85,climbVerticalSpeedMetersPerSecond:.72,climbLateralSpeedMetersPerSecond:.42,entryDistanceMinimumMeters:.28,entryDistanceMaximumMeters:.8});
+
+/** Native surface swimming and deliberate underwater movement; SI units. */
+export const SWIMMING_TUNING=Object.freeze({rootDepthMeters:1.15,speedMetersPerSecond:1.6,fastSpeedMetersPerSecond:2.6,
+  verticalSpeedMetersPerSecond:1.55,verticalAccelerationMetersPerSecondSquared:8,surfaceReturnToleranceMeters:.04});

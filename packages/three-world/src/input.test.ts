@@ -7,6 +7,7 @@ import type { CameraPointerInput } from './input.js';
 
 type TestWorld = {
   sample(): WorldInput;
+  nativeHumanoid():void;
   events: CameraPointerInput[];
   releases: number;
   resets: number;
@@ -41,6 +42,7 @@ describe('world input follows the presented surface and UI focus', () => {
           const releases = [router.bind(document.getElementById('world' + index), document.getElementById('ui' + index))];
           return Object.assign(state, {
             sample: () => keyboard.sample(), focus: () => router.focus(),
+            nativeHumanoid: () => keyboard.setHumanoidMode(() => undefined),
             bind: id => releases.push(router.bind(document.getElementById(id))) - 1,
             release: index => releases[index](),
             dispose: () => { router.dispose(); keyboard.detach(); }
@@ -110,6 +112,21 @@ describe('world input follows the presented surface and UI focus', () => {
       await wheel(200);await page.waitForTimeout(150);expect((await state()).position).toEqual(authored);
     }finally{await page.evaluate(()=>(window as any).humanoidWheelTest.dispose());}
   },30000);
+
+  it('keeps native swim lift held while consuming jump/crouch edges and clears lift on blur',async()=>{
+    await page.evaluate(()=>window.inputTest.worlds[0]!.nativeHumanoid());
+    await page.mouse.click(150,155);
+    const sample=()=>page.evaluate(()=>window.inputTest.worlds[0]!.sample().humanoid);
+    await page.keyboard.down('ControlLeft');
+    expect(await sample()).toMatchObject({lift:-1,actions:{toggleCrouch:true}});
+    expect(await sample()).toMatchObject({lift:-1,actions:{}});
+    await page.keyboard.up('ControlLeft');expect((await sample())!.lift).toBe(0);
+    await page.keyboard.down('Space');expect(await sample()).toMatchObject({lift:1,jump:true});
+    expect(await sample()).toMatchObject({lift:1,jump:false});
+    await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
+    expect(await sample()).toMatchObject({lift:0,jump:false});
+    await page.keyboard.up('Space');
+  });
 
   it('locks first-person look on click, uses relative movement and clears held input on release',async()=>{
     const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));

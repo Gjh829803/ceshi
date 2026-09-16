@@ -515,7 +515,7 @@ example and inspect runtime state before requesting an action.
 | Prone and crawl | Z, then WASD | Space for the low capsule and a clear route. Standing requires headroom. |
 | Wall / ladder | E to attach, WASD to climb, Space to attempt top, C/Ctrl to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
 | Hurdle / mantle / high climb | Move toward obstacle + Space | Real obstacle probe, supported height/path/top and adequate headroom; controller chooses the applicable traversal. |
-| Swim | Automatic deep-water contact; style through action menu/input | `map.water` plus actual pool bottom/banks. Deep immersion enables swimming; shallow support returns to walking. |
+| Swim / dive | Automatic deep-water entry; see Water below for vertical input | `map.water` and real pool-bottom/shore colliders. |
 
 **Slide `slide`** — useful on open ground or through a low opening. A tunnel is
 not required to start. The user holds Shift while moving and newly presses C or
@@ -592,13 +592,42 @@ poses from `world.humanoid.simulation.environment.propBoxPose(id)` in
 seat/pickup interactions, visual synchronization and reset. See
 [movable environment props](#movable-environment-props) for the contract.
 
-**Water** — declare volume bounds and surface height, with a real lower floor.
+**Water** — use the native humanoid controller (`createHumanoidWorld` or
+`createWorld({humanoid})`) for surface swimming and diving. Declare volume bounds
+and surface height in `map.water`, with a real lower floor. For example:
+
+```ts
+water: [{id:'pool', min:[-10,-5,-12], max:[10,-.2,12], surface:-.2}]
+```
+
+Use the same surface-height value for the visual water and its declaration.
 A ground collider extending over the pool makes it shallow regardless of the
 visible water. Entry currently requires measured depth >1.28 m and feet >0.95 m
 below the surface; retention uses depth >1.16 m and feet >0.5 m below the surface.
+Depth uses support below the character, so a submerged overhead structure does
+not become the swimmer's floor. Author real pool-bottom, wall and shore colliders.
+
+Once swimming, hold the jump binding (default Space) to ascend and the crouch
+binding (default C/Ctrl) to dive. Semantic input uses `humanoid.lift` in [-1,1]:
+positive ascends, negative descends, and zero brakes to hold depth after a dive
+outside the 4 cm surface-return band.
+Both held keys cancel vertical intent. Vertical speed is 1.55 m/s at full input;
+horizontal sprint does not change it. Entry without a dive preserves surface
+buoyancy. Ascending back to the surface restores buoyancy; walking into shallow
+support restores land movement. Underwater contact still uses the same capsule
+and KCC, including floor/ceiling collision. Water exit, reset and relocation clear
+underwater control. Existing swim clips provide animation; no separate diving
+clip, breath timer or drowning mechanic is implied.
+
 `world.snapshot().humanoid.water` and Creator `feedback.water` report the actual
-contact and threshold decisions. `feedback.waterTimeline` records state changes
-in a playtest. These diagnostics do not modify the controller or validation.
+contact and threshold decisions. `water.contact.swimmingMode` is `surface`,
+`underwater`, or null when not swimming; it identifies the controller mode, not
+whether the head is below water. `feedback.waterTimeline` records surface/underwater
+changes in a playtest. These diagnostics do not modify the controller or validation.
+Verify the task's requested entry, vertical movement and shore exit through real
+input and observed outcomes. For requirements beyond native capabilities, describe
+the missing behavior and extend its owner; custom movement must supply its own
+functional evidence and does not inherit native water diagnostics.
 
 **Clip availability** — `prone-backward`, `prone-left`, `prone-right` and
 `climb-ledge` are loaded material without a dedicated current controller

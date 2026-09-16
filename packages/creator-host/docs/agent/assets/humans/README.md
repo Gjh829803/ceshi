@@ -7,7 +7,7 @@ resources, clip mappings, dependencies and limitations. Do not redraw the human.
 
 | Need | Read next |
 | --- | --- |
-| Walk, run, jump, crouch, crawl or swim | [Movement](movement.md) |
+| Walk, run, jump, crouch, crawl, swim or dive | [Movement](movement.md) |
 | Slide, roll, vault or climb in the environment | [Scene actions](actions.md) |
 | Pick up, carry, put down, sit or stand | [Interactions](interactions.md) |
 | Bind the model, controller, camera, rider or NPC | [Integration](integration.md) |

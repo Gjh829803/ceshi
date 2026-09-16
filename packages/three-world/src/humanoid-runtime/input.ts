@@ -18,7 +18,7 @@ export const bindingLabel=(action:ControlAction,bindings:KeyBindings=DEFAULT_KEY
 export function controlHints(bindings:KeyBindings=DEFAULT_KEY_BINDINGS):[string,string][]{return [
   [['forward','left','backward','right'].map(action=>bindingLabel(action as ControlAction,bindings)).join(''),'移动'],
   [bindingLabel('sprint',bindings),'冲刺 / 加速'],[bindingLabel('jump',bindings),INPUT_BINDINGS.jump.label],
-  [bindingLabel('crouch',bindings),'蹲伏 / 站立；攀爬时松手'],
+  [bindingLabel('crouch',bindings),INPUT_BINDINGS.crouch.label],
   [`${bindingLabel('sprint',bindings)} + ${bindingLabel('crouch',bindings)}`,'滑铲（需助跑）'],
   ...(['prone','roll','interact','putDown','vehicle','summonDragon'] as const).map(action=>[bindingLabel(action,bindings),INPUT_BINDINGS[action].label] as [string,string]),
 ];}
@@ -53,7 +53,7 @@ export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boole
   const i:Input={forward:key('forward')-key('backward'),steer:key('right')-key('left'),roll:0,lift:0,pitch:0,strafe:0,
     boost:!!key('sprint'),brake:false,slow:!!key('slow'),jump:false};
   if(mounted){i.primary=!!key('interact');i.secondary=!!key('roll');i.slow=!!key('crouch');i.roll=key('interact')-key('roll');i.lift=key('jump')-key('crouch');i.pitch=key('cameraDown')-key('cameraUp');i.strafe=key('cameraRight')-key('cameraLeft');i.brake=!!key('jump');}
-  else {i.jump=jump;i.actions={...commands};}
+  else {i.jump=jump;i.lift=key('jump')-key('crouch');i.actions={...commands};}
   // 起飞使用按下沿，避免空格在两个固定步之间松开时丢失指令。
   if(mounted&&mode==='dragon')i.jump=jump;
   if(mode){const axes=vehicleKeyboardAxes(mode);if(!axes.pitch)i.pitch=0;if(!axes.strafe)i.strafe=0;}

@@ -27,6 +27,7 @@ export const HUMANOID_INPUT_GUIDES: Readonly<Record<HumanoidInputFamily,Readonly
     boost: 'Requests sprint; stance, carried objects and active actions can limit speed.',
     slow: 'Requests slow walking; takes precedence over sprint.',
     jump: 'Jump/action edge; traversal and swimming interpret it in the current movement context.',
+    lift: 'While swimming: positive ascends, negative dives; after diving, zero brakes to hold depth. Reaching the surface restores buoyancy. Ignored on land.',
     actions: 'Optional semantic action edges; inspect characterCapabilities for current eligibility.',
   },
   paddled_boat: {

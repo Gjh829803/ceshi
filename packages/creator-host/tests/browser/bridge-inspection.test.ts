@@ -4,6 +4,7 @@ import {createWorld,type ThreeWorld} from '@worldkit/three';
 import type {WorldObservation} from '@worldkit/three';
 import type {Page} from 'playwright';
 import {inspectViewport} from '../../src/browser/viewport-diagnostics.js';
+import {captureSurfaceOverlap} from '../../src/browser/surface-overlap-highlight.js';
 import {checkViewport} from '../../src/tools/viewport-check.js';
 
 const worlds:ThreeWorld[]=[];
@@ -113,6 +114,37 @@ it('keeps camera failures local with an explicit reason',async()=>{
  expect(host.inspect({sections:['camera']})).toMatchObject({camera:null,cameraAvailability:{status:'unavailable',reason:'observer-method-missing'}});
 });
 
+it('inspects coplanar surfaces only on demand and resolves entities outside capture targets',async()=>{
+ const {world,observer,host}=await fixture();
+ const group=new THREE.Group();group.name='arch';
+ for(const color of [0xffffff,0x999999])group.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial({color})));
+ world.addEntity({id:'stone-gate',name:'Stone gate',object:group,role:'decoration'});
+ const before=world.snapshot(),matrix=group.matrix.clone(),children=[...group.children];
+ expect(host.inspect({sections:['snapshot']})).not.toHaveProperty('surfaceOverlaps');
+ expect(observer.targets['stone-gate']).toBeUndefined();
+ const result=host.inspect({sections:['surface-overlaps'],entityIds:['stone-gate']});
+ expect(result.surfaceOverlaps).toMatchObject({advisory:true,status:'complete'});
+ expect(result.surfaceOverlaps?.findings).toEqual(expect.arrayContaining([expect.objectContaining({objects:[expect.objectContaining({entityId:'stone-gate'}),expect.objectContaining({entityId:'stone-gate'})]})]));
+ expect(host.inspect({sections:['surface-overlaps'],entityIds:[]}).surfaceOverlaps?.findings).toEqual([]);
+ expect(host.inspect({sections:['surface-overlaps'],query:'does not exist'}).surfaceOverlaps?.findings).toEqual([]);
+ expect(world.snapshot()).toEqual(before);expect(group.matrix).toEqual(matrix);expect(group.children).toEqual(children);
+});
+
+it('keeps unsupported geometry selection and failed highlights local to advisory inspection',async()=>{
+ const {world,observer,host}=await fixture(),before=world.snapshot();
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+ mesh.add(new THREE.Mesh(mesh.geometry,mesh.material));observer.scene.add(mesh);
+ const {capabilities:_capabilities,getEntityGeometry:_getEntityGeometry,...rest}=observer;
+ const raw={...rest,targets:{hero:observer.controlledObject}};
+ window.__WORLDKIT_EVAL__=raw;
+ const filtered=host.inspect({sections:['surface-overlaps'],query:'unknown'});
+ expect(filtered.surfaceOverlaps).toMatchObject({advisory:true,status:'unavailable',reason:'selection-unavailable'});
+ const highlighted=host.inspect({sections:['surface-overlaps','snapshot'],surfaceOverlaps:{highlight:true}});
+ expect(highlighted.surfaceOverlaps?.findings.length).toBeGreaterThan(0);
+ expect(highlighted.surfaceOverlapHighlight).toMatchObject({status:'unavailable'});
+ expect(highlighted.snapshot).toEqual(before);expect(world.snapshot()).toEqual(before);
+});
+
 function viewportFixture(width = 480, height = 270, devicePixelRatio = 1, objectFit = 'fill') {
  const bounds = {width:1920,height:1080};
  const win = {innerWidth:1920,innerHeight:1080,devicePixelRatio,getComputedStyle:()=>({objectFit})};
@@ -165,4 +197,66 @@ it('restores the original viewport even when resize or diagnostic reads fail',as
  const result=await checkViewport(page,{width:1280,height:800},async()=>{throw new Error('bridge disconnected');});
  expect(setViewportSize.mock.calls).toEqual([[{width:1280,height:800}],[{width:960,height:540}]]);
  expect(result).toMatchObject({advisory:true,resizeStatus:'unavailable',restorationStatus:'unavailable',before:{status:'unavailable'},resized:{status:'unavailable'},restored:{status:'unavailable'}});
+});
+
+
+it.each(['kinematic','rotation','scale'] as const)('excludes known %s geometry without changing capture selection',async kind=>{
+ const {world,observer,host}=await fixture();
+ const object=new THREE.Group();
+ for(let i=0;i<2;i++)object.add(new THREE.Mesh(new THREE.BoxGeometry(2,2,2),new THREE.MeshBasicMaterial()));
+ if(kind==='kinematic')world.addEntity({id:'moving',object,role:'obstacle',physics:{kind:'kinematic'}});
+ else{
+  world.addEntity({id:'moving',object,role:'decoration'});
+  world.defineParameter({id:'transform',description:'Transform owner',schema:{type:'number'},initialValue:0,
+   writes:[{kind:'entity',entityId:'moving',channels:[kind]}],plan:()=>[]});
+ }
+ expect(observer.getEntityGeometry!('moving')).toEqual({object,physicsKind:kind==='kinematic'?'kinematic':'none'});
+ expect(observer.targets.moving).toBeUndefined();
+ const before=world.snapshot();
+ const result=host.inspect({sections:['surface-overlaps'],entityIds:['moving']}).surfaceOverlaps!;
+ expect(result.findings).toEqual([]);
+ expect(world.snapshot()).toEqual(before);
+});
+
+it('contains highlight and framebuffer failures inside a running SDK presentation transaction',async()=>{
+ const {world,observer,host}=await fixture(),r=observer.renderer;
+ const object=new THREE.Group();
+ for(let i=0;i<2;i++)object.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial()));
+ world.addEntity({id:'gate',object,role:'decoration'});
+ Object.assign(r,{getRenderTarget:()=>null,getSize:(v:THREE.Vector2)=>v.set(800,600),getPixelRatio:()=>1,
+  getViewport:(v:THREE.Vector4)=>v.set(0,0,800,600),getScissor:(v:THREE.Vector4)=>v.set(0,0,800,600),getScissorTest:()=>false,
+  getActiveCubeFace:()=>0,getActiveMipmapLevel:()=>0,xr:{enabled:false},setRenderTarget(){},setPixelRatio(){},setSize(){},setViewport(){},setScissor(){},setScissorTest(){}});
+ Object.assign(r.domElement,{toDataURL:()=> 'data:image/png;base64,AA=='});
+ const finding=host.inspect({sections:['surface-overlaps']}).surfaceOverlaps!.findings[0]!;
+ await world.start();
+ const before=world.snapshot(),children=[...observer.scene.children];
+ expect(before.isRunning).toBe(true);
+ expect(captureSurfaceOverlap(observer,finding)).toMatchObject({diagnostic:true});
+ expect(world.snapshot()).toEqual(before);
+ const original=new Error('DIAGNOSTIC_FAILED'),restore=new Error('FRAMEBUFFER_FAILED');
+ const getSize=r.getSize,render=r.render;
+ r.getSize=()=>{throw original;};
+ r.render=()=>{throw restore;};
+ expect(()=>captureSurfaceOverlap(observer,finding)).toThrow(original);
+ expect(world.snapshot()).toEqual(before);expect(observer.scene.children).toEqual(children);
+ r.getSize=getSize;
+ expect(()=>captureSurfaceOverlap(observer,finding)).toThrow(restore);
+ expect(world.snapshot()).toEqual(before);expect(observer.scene.children).toEqual(children);
+ r.render=(scene,camera)=>{if(camera===observer.camera)throw restore;return render.call(r,scene,camera);};
+ expect(()=>captureSurfaceOverlap(observer,finding)).toThrow(restore);
+ expect(world.snapshot()).toEqual(before);expect(observer.scene.children).toEqual(children);
+});
+
+
+it('reports raw geometry at its sampled pose without inventing physics classification',async()=>{
+ const {observer,host}=await fixture();
+ const object=new THREE.Group();
+ for(let i=0;i<2;i++)object.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial()));
+ observer.scene.add(object);
+ const {snapshot:_snapshot,inspect:_inspect,capabilities:_capabilities,getEntityGeometry:_geometry,...raw}=observer;
+ window.__WORLDKIT_EVAL__={...raw,targets:{gate:object}};
+ const result=host.inspect({sections:['surface-overlaps'],entityIds:['gate']}).surfaceOverlaps!;
+ expect(result.findings.length).toBeGreaterThan(0);
+ expect(result.scope).toContain('sampled pose');
+ expect(result).not.toHaveProperty('physicsKind');
 });

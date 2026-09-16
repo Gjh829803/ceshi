@@ -28,7 +28,7 @@ export function stepHumanoidInput(controller:HumanoidController,input:Input,yaw:
   if(direction.lengthSq()>1)direction.normalize();
   if(input.actions?.toggleSwimStyle&&controller.swimming)controller.swimStyle=controller.swimStyle==='freestyle'?'breaststroke':'freestyle';
   if(input.actions?.cancel&&controller.skills.active)controller.skills.cancel(controller.skills.active.requestId);
-  const serial=controller.motionSerial;controller.step(direction,input.boost,input.slow,input.jump,input.actions);
+  const serial=controller.motionSerial;controller.step(direction,input.boost,input.slow,input.jump,input.actions,input.lift);
   return controller.motionSerial!==serial&&!controller.traversal&&!controller.completedMotion;
 }
 

@@ -495,6 +495,8 @@ export interface WorldObservation {
  /** Same active presentation for application transport/UI integration; absent when no presentation layer is installed. */
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
+ /** Read-only registry lookup for geometry diagnostics; physics classification is known only for registered entities. Does not change capture selection. */
+ getEntityGeometry?(entityId:string):{readonly object:THREE.Object3D;readonly physicsKind:'none'|'fixed'|'kinematic'|'dynamic'|'character'}|undefined;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
  readonly captureTargetIds?:readonly string[];
  readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;

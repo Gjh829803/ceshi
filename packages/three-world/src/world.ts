@@ -789,6 +789,7 @@ export class ThreeWorld implements API.World {
   const observer:API.WorldObservation={withPresentation:(work,options)=>world.engine.withPresentation(work,1,options?.view),ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
    get presentation(){return world.presentation;},
    get controlledObject(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
+   getEntityGeometry:entityId=>{const entry=world.entries.get(entityId);return entry?{object:entry.object,physicsKind:entry.physicsKind}:undefined;},
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
    startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),inspectVehicles:query=>world.inspectVehicles(query),inspectCamera:()=>world.inspectCamera(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
