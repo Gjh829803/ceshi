@@ -356,8 +356,10 @@ SDK、Playground、Creator 与 Episode 对同一规则和配置的消费必须�
 
 Creator 先短测关键接缝与交互，修复后复查受影响部分，再用紧凑的完整真实输入计划
 覆盖代表性路线、互动、核心功能及动作结果。录制长度由覆盖需要决定；内容容量与
-实测录制时间分别说明。episode.json 按 durationSeconds 的真实时间执行输入，
-按键保持到 keysUp，沿用 SDK 控制器与物理。operations_get 返回操作与完整结果；
+实测录制时间分别说明。episode.json 的定时步骤按 durationSeconds 的真实时间执行输入，
+按键保持到 keysUp。可选 driveTo 步骤按车辆实际状态计算输入，以 timeoutSeconds 限时，
+到达后提前结束；复用 SDK 路点输入计算，仍由同一控制器和物理执行，不另建模拟时钟。
+具体输入与结果见 Creator 编程指南。operations_get 返回操作与完整结果；
 world_read_playtest 按录制时间范围读取位置、速度、骑乘、镜头和键盘采样，不重新
 执行世界。采样身份属于原录制，不能直接证明当前源码状态或玩法合格。
 提交使用同一 MCP session 中最新的完整合格录制，重新校验当前源码、运行时、episode、

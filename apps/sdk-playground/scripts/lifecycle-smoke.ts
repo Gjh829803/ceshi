@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {launchChromiumWithSystemFallback} from '@worldkit/browser-capture/browser';
 
 const browser = await launchChromiumWithSystemFallback();
 const page = await browser.newPage();
 const browserErrors: string[] = [];
-page.on('pageerror', error => browserErrors.push(error.message));
+const browserFailureDetails:string[]=[];
+page.on('pageerror', error => {browserErrors.push(error.message);browserFailureDetails.push(error.stack??error.message);});
+page.on('requestfailed', request => browserFailureDetails.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
 await page.addInitScript(`
   window.__registeredToolSignals = [];
   window.__registeredTools = new Map();
@@ -65,6 +68,20 @@ try {
   assert.deepEqual(debugTools.rejected,Array.from({length:2},()=>({status:'rejected',code:'DEBUG_INPUT_INVALID'})));
   assert(debugTools.rejectionUnchanged,'invalid debug input must not change the world, camera, pause state or pending input');
   assert.deepEqual(debugTools.errors,[]);
+  const incident=await page.evaluate(async()=>{
+    const tools=(window as any).__registeredTools,recorder=(window as any).playground.recording;
+    const enabled=await tools.get('set_debug_history').execute({enabled:true});
+    if(enabled.status!=='applied')throw Error(JSON.stringify(enabled));
+    await tools.get('step_debug_simulation').execute({frames:1});
+    const before=recorder.inspect().frame;
+    const saved=await tools.get('capture_debug_incident').execute({label:'lifecycle frame identity',pause:true});
+    return {before,after:recorder.inspect().frame,saved};
+  });
+  assert.equal(incident.saved.status,'saved');assert.deepEqual(incident.after,incident.before,'capture/pause must not render a replacement frame');
+  const incidentMetadata=JSON.parse(await readFile(incident.saved.files['incident.json'].path,'utf8'));
+  assert.equal(incidentMetadata.frame.frameId,incident.before.frameId);
+  assert.equal(incidentMetadata.frame.simulationTick,incidentMetadata.fixedSnapshot.simulationTick);
+  assert.equal((await readFile(incident.saved.files['frame.png'].path)).subarray(0,8).toString('hex'),'89504e470d0a1a0a');
   const result = await page.evaluate(() => {
     const errors: string[] = [];
     window.addEventListener('error', event => {errors.push(event.message); event.preventDefault();});
@@ -127,4 +144,9 @@ try {
   assert.deepEqual(demoTakeover.errors,[]);assert.deepEqual(browserErrors,[]);
 
   console.log('Playground read-only inspection, debug pause/step/rejection and demonstration takeover, pagehide cleanup, all tool revocations and real keyboard input after reload: passed.');
+} catch(error) {
+  console.error('Playground browser errors:',browserErrors);
+  console.error('Playground failure details:',browserFailureDetails.slice(-10));
+  console.error('Playground body:',(await page.locator('body').innerText().catch(()=>'<unavailable>')).slice(0,4000));
+  throw error;
 } finally { await browser.close(); }

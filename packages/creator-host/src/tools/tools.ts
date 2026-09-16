@@ -10,8 +10,8 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import Ajv from 'ajv';
 import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assertNoSymlinks, type Candidate, type AssetPolicyOptions } from '../compiler/compiler.js';
-import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, type CreatorProfile, type Episode, errorMessage, sha256 } from '../contracts.js';
-import { humanoid, type WorldCommand } from '@worldkit/three';
+import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, episodeStepBudget, type CreatorProfile, type Episode, errorMessage, sha256 } from '../contracts.js';
+import { humanoid, RoadVehicleRouteController, roadVehicleBrakeInput, type WorldInput, type WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, type AuthoringTopic } from '../discovery/authoring-schema.js';
 import { readRuntimeGuidance } from '../discovery/runtime-guidance.js';
 import { CreatorDiscovery, type SchemaSection } from '../discovery/creator-discovery.js';
@@ -27,7 +27,7 @@ import {buildWaterFeedback,summarizeWaterFeedback} from './water-feedback.js';
 import {hasRequiredCaptureViews,selectTriviewTargets} from './capture-plan.js';
 import {recordedVideoEncodingArgs} from './video.js';
 import {measureEpisodeTargets} from './target-feedback.js';
-import {summarizePlaytestActions, summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
+import {summarizePlaytestActions, summarizeRoadRouteResults, summarizePlaytestTrace, validatePlaytestTraceQuery, type PlaytestTraceQuery} from './playtest-summary.js';
 
 const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(EPISODE_SCHEMA);
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
@@ -66,7 +66,7 @@ export function playtestSubmissionReadiness(report: any, current: { worldBuildHa
   if (!report) return { eligible: false, issues: [{ code: 'NO_PLAYTEST_IN_THIS_SERVICE_SESSION' }] };
   if (report.status !== 'passed') issues.push({ code: 'PLAYTEST_DID_NOT_PASS', actual: report.status ?? null, required: 'passed' });
   if (report.isCompleteEpisode !== true) issues.push({ code: 'INCOMPLETE_EPISODE', actual: report.isCompleteEpisode ?? null, required: true });
-  if (report.capturedInput !== true) issues.push({ code: 'TRUSTED_KEYBOARD_INPUT_MISSING', actual: report.capturedInput ?? null, required: true });
+  if (report.capturedInput !== true) issues.push({ code: 'RECORDED_INPUT_MISSING', actual: report.capturedInput ?? null, required: true });
   for (const field of ['actualWallSeconds', 'inputWallSeconds', 'activePlaySeconds', 'videoDurationSeconds']) {
     const actual = field === 'videoDurationSeconds' ? report.videoMetadata?.durationSeconds : report[field];
     if (!positiveFinite(actual)) issues.push({ code: 'RECORDED_TIME_INVALID', field, actual: actual ?? null, required: 'finite-positive' });
@@ -176,7 +176,8 @@ export class ThreeCreatorTools {
       sourceHash:report.sourceHash, worldBuildHash:report.worldBuildHash, runtimeHash:report.runtimeHash,
       runtimeSourceHash:report.runtimeSourceHash, episodeHash:report.episodeHash};
     const identity = {kind:'three-creator-playtest-summary', advisory:true, source, currentWorldComparison:'not-performed',
-      recording:{status:report.status,executionMode:report.executionMode,isCompleteEpisode:report.isCompleteEpisode,creatorOperationStatus:operation.status}};
+      recording:{status:report.status,executionMode:report.executionMode,isCompleteEpisode:report.isCompleteEpisode,creatorOperationStatus:operation.status,
+        ...(report.roadRouteResults?{roadRoutes:summarizeRoadRouteResults(report.roadRouteResults)}:{})}};
     try {
       const file = path.join(evidence.root, 'trace.json'), stat = await lstat(file);
       if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 128 * 1024 * 1024 ||
@@ -354,12 +355,14 @@ export class ThreeCreatorTools {
     const file = path.join(this.workspace, 'episode.json'); if ((await lstat(file)).isSymbolicLink() || !isWithin(await realpath(this.workspace), await realpath(file))) throw new Error('THREE_EPISODE_PATH_INVALID');
     const bytes = await readFile(file), episode = JSON.parse(bytes.toString());
     if (!checkEpisode(episode)) throw new Error(`THREE_EPISODE_INVALID: ${JSON.stringify(checkEpisode.errors)}`);
-    const duration = (episode as Episode).steps.reduce((sum, step) => sum + step.durationSeconds, 0);
+    const duration = (episode as Episode).steps.reduce((sum, step) => sum + episodeStepBudget(step), 0);
     if (!Number.isFinite(duration) || duration <= 0 || duration > 600) throw new Error('THREE_EPISODE_DURATION_INVALID: total duration must be within (0,600] seconds');
     return { episode: episode as Episode, hash: sha256(bytes), bytes };
   }
   async playtest(operationId: string, durationSeconds?: number, framesPerSecond = 3) {
-    const candidate = await this.compiler.prepare(), input = await this.episode(), plannedSeconds = input.episode.steps.reduce((sum, step) => sum + step.durationSeconds, 0);
+    const candidate = await this.compiler.prepare(), input = await this.episode(), plannedSeconds = input.episode.steps.reduce((sum, step) => sum + episodeStepBudget(step), 0);
+    const hasRoadRoutes=input.episode.steps.some(step=>step.driveTo);
+    const minimumInputSeconds=hasRoadRoutes&&durationSeconds===undefined?input.episode.steps.reduce((sum,step)=>sum+(step.durationSeconds??0),0):durationSeconds??plannedSeconds;
     const budget = resolvePlaytestBudget(plannedSeconds, durationSeconds, input.episode.steps.length);
     const requestedSeconds = budget.requestedSeconds;
     const limitSeconds = budget.mode === 'full-episode' ? Infinity : requestedSeconds;
@@ -383,9 +386,64 @@ export class ThreeCreatorTools {
       }
     };
     const send = async (type: 'keydown' | 'keyup', key: string, cleanup = false) => { const before = await this.bridge(session, 'read'); if (type === 'keydown') { await session.page.keyboard.down(key); held.add(key); } else { await session.page.keyboard.up(key); held.delete(key); } hostEvents.push({ type, key, cleanup, wallSeconds: elapsed(), before }); };
+    const roadRouteResults:any[]=[];
+    let roadActorId:string|undefined,roadInputSequence=0;
+    let roadSubject:{actorGeneration:number;vehicleId:string;lifecycleGeneration:number}|undefined;
+    const sendRoadInput=async(value:WorldInput['humanoid']|null,cleanup=false)=>{
+      if(!roadActorId)return;
+      const command={type:'humanoid.set-input' as const,actorId:roadActorId,input:value??null};
+      const result=await this.bridge(session,'executeCommand',[command,`creator-road-route:${operationId}:${roadInputSequence++}`,roadSubject]);
+      hostEvents.push({type:'world-command',source:'road-route',command,cleanup,wallSeconds:elapsed(),...result});
+      if(result.worldCommandReceipt.status!=='applied')throw new Error(`THREE_ROAD_ROUTE_INPUT_REJECTED: ${JSON.stringify(result.worldCommandReceipt)}`);
+    };
+    const captureKeyframe=async()=>{
+      if(elapsed()<nextKeyframe)return;
+      const file=path.join(root,`keyframe-${keyframes.length.toString().padStart(3,'0')}.png`);
+      const frame=await this.bridge(session,'capture',['opening']),bytes=Buffer.from(frame.image.replace(/^data:image\/png;base64,/,''),'base64');
+      await writeFile(file,bytes);keyframes.push({path:file,sha256:sha256(bytes),wallSeconds:elapsed()});nextKeyframe+=15;
+    };
     try {
       for (const [index, step] of input.episode.steps.entries()) {
         if (elapsed() >= limitSeconds) break; this.assertActive(operationId);
+        if(step.driveTo){
+          if(this.profile!=='three-sdk')throw new Error('THREE_ROAD_ROUTE_SDK_REQUIRED');
+          for(const key of [...held])await send('keyup',key,true);
+          const route=step.driveTo,controller=new RoadVehicleRouteController(route),started=elapsed(),samples:any[]=[];
+          const result:any={stepIndex:index,vehicleId:route.vehicleId,targetPositionWorldMetersXYZ:route.positionWorldMetersXYZ,stopAtTarget:route.stopAtTarget!==false,status:'running',startedAtSeconds:started,samples,appliedInputCount:0};
+          roadRouteResults.push(result);
+          try{
+            let previousInput='',subjectIdentity:string|undefined;
+            while(true){
+              this.assertActive(operationId);
+              if(elapsed()>=limitSeconds)throw new Error('THREE_ROAD_ROUTE_TRUNCATED');
+              if(elapsed()-started>=step.timeoutSeconds!)throw new Error('THREE_ROAD_ROUTE_TIMEOUT');
+              const state=await this.bridge(session,'roadVehicleState',[route.vehicleId]);
+              assertSdkPlaytestRunning(this.profile,state);
+              if(state.errors?.length)throw new Error(`THREE_PLAYTEST_RUNTIME_ERRORS: ${JSON.stringify(state.errors)}`);
+              if(roadActorId!==undefined&&roadActorId!==state.actorId)throw new Error('THREE_ROAD_ROUTE_ACTOR_CHANGED');
+              const identity=JSON.stringify([state.actorId,state.actorGeneration,state.vehicleGeneration,state.lifecycleGeneration]);
+              if(subjectIdentity!==undefined&&identity!==subjectIdentity)throw new Error('THREE_ROAD_ROUTE_SUBJECT_CHANGED');
+              subjectIdentity=identity;roadActorId=state.actorId;
+              result.subjectIdentity??={actorId:state.actorId,actorGeneration:state.actorGeneration,vehicleId:route.vehicleId,vehicleGeneration:state.vehicleGeneration,lifecycleGeneration:state.lifecycleGeneration};
+              roadSubject={actorGeneration:state.actorGeneration,vehicleId:route.vehicleId,lifecycleGeneration:state.lifecycleGeneration};
+              result.startSimulationTick??=state.simulationTick;result.endSimulationTick=state.simulationTick;
+              const decision=controller.step(state.motion,state.simulationSeconds);
+              if(samples.at(-1)?.simulationTick!==state.simulationTick||samples.at(-1)?.status!==decision.status)samples.push({wallSeconds:elapsed(),simulationTick:state.simulationTick,simulationSeconds:state.simulationSeconds,positionWorldMetersXYZ:state.motion.positionWorldMetersXYZ,collisionEntityIds:state.collisionEntityIds,...decision});
+              if(decision.status==='failed')throw new Error(decision.errorCode);
+              const serialized=JSON.stringify(decision.input);
+              if(serialized!==previousInput){await sendRoadInput(decision.input.humanoid);result.appliedInputCount++;previousInput=serialized;}
+              if(decision.status==='arrived'){result.status='arrived';break;}
+              const operation=this.operations.get(operationId);if(operation)operation.progress={phase:'road-route',stepIndex:index,elapsedSeconds:elapsed(),requestedSeconds,currentState:state,roadRoute:decision};
+              if(session.errors.length)throw new Error(`THREE_PLAYTEST_PAGE_ERROR: ${session.errors.join('\n')}`);
+              if(elapsed()>=nextOperationPoll){await observeWorldOperations();nextOperationPoll=elapsed()+1;}
+              await captureKeyframe();
+              await sleep(50);
+            }
+          }catch(error){result.status='failed';result.error=errorMessage(error);throw error;}
+          finally{result.endedAtSeconds=elapsed();}
+          await sendRoadInput(null,true);roadActorId=undefined;roadSubject=undefined;
+          completedSteps++;continue;
+        }
         for (const key of step.keysUp ?? []) await send('keyup', key);
         if (step.lifecycle) {
           accountPlay();
@@ -406,28 +464,30 @@ export class ThreeCreatorTools {
         }
         for (const key of step.keysDown ?? []) await send('keydown', key);
         if (step.pointerDrag) { const drag = step.pointerDrag; await session.page.mouse.move(480, 270); await session.page.mouse.down({ button: drag.button ?? 'left' }); await session.page.mouse.move(480 + drag.deltaXPixels, 270 + drag.deltaYPixels, { steps: 8 }); await session.page.mouse.up({ button: drag.button ?? 'left' }); hostEvents.push({ type: 'pointer-drag', wallSeconds: elapsed(), ...drag }); }
-        const until = Math.min(limitSeconds, elapsed() + step.durationSeconds);
+        const until = Math.min(limitSeconds, elapsed() + step.durationSeconds!);
         while (elapsed() < until) {
           this.assertActive(operationId);
           const currentState = await this.bridge(session, 'read'); if (expectedRunning) assertSdkPlaytestRunning(this.profile, currentState);
           if (currentState.errors?.length) throw new Error(`THREE_PLAYTEST_RUNTIME_ERRORS: ${JSON.stringify(currentState.errors)}`);
           if (elapsed() >= nextOperationPoll) { await observeWorldOperations(); nextOperationPoll = elapsed() + 1; }
-          if (elapsed() >= nextKeyframe) { const file = path.join(root, `keyframe-${keyframes.length.toString().padStart(3, '0')}.png`); const frame = await this.bridge(session, 'capture', ['opening']); const bytes = Buffer.from(frame.image.replace(/^data:image\/png;base64,/, ''),'base64'); await writeFile(file,bytes); keyframes.push({ path: file, sha256: sha256(bytes), wallSeconds: elapsed() }); nextKeyframe += 15; }
+          await captureKeyframe();
           const operation = this.operations.get(operationId); if (operation) operation.progress = { phase: 'real-browser-keyboard', stepIndex: index, elapsedSeconds: elapsed(), requestedSeconds, currentState };
           if (session.errors.length) throw new Error(`THREE_PLAYTEST_PAGE_ERROR: ${session.errors.join('\n')}`);
           await sleep(Math.max(0, Math.min(200, (until - elapsed()) * 1000)));
         }
         completedSteps++;
       }
-      while (elapsed() < requestedSeconds) { this.assertActive(operationId); if (expectedRunning) assertSdkPlaytestRunning(this.profile, await this.bridge(session, 'read')); await observeWorldOperations(); await sleep(Math.min(200, (requestedSeconds - elapsed()) * 1000)); }
+      while ((!hasRoadRoutes||durationSeconds!==undefined)&&elapsed() < requestedSeconds) { this.assertActive(operationId); if (expectedRunning) assertSdkPlaytestRunning(this.profile, await this.bridge(session, 'read')); await observeWorldOperations(); await sleep(Math.min(200, (requestedSeconds - elapsed()) * 1000)); }
       await observeWorldOperations();
     } catch (error) { failure = budgetExceeded ? 'THREE_EPISODE_BUDGET_EXCEEDED' : errorMessage(error); }
     finally {
       clearTimeout(budgetTimer);
+      if(roadActorId)await sendRoadInput(roadVehicleBrakeInput().humanoid,true).catch(error=>{failure??=errorMessage(error);});
       for (const key of [...held]) await send('keyup', key, true).catch(error => { failure ??= errorMessage(error); });
       accountPlay();
       const finished = await withStageDeadline(() => this.bridge(session, 'finishRun'), 15_000, 'THREE_RECORDING_FINALIZATION_TIMEOUT', async () => { finalizationTimedOut = true; await this.closeSession(); }).catch(error => { failure ??= errorMessage(error); return { trace: { samples: [], keyboardEvents: [], browserFrameDeltasSeconds: [] }, recording: null }; });
       trace = finished.trace; recorded = finished.recording;
+      if(roadActorId)await sendRoadInput(null,true).catch(error=>{failure??=errorMessage(error);});
       if (!recorded && !finalizationTimedOut) await this.closeSession();
     }
     const actualWallSeconds = elapsed(), inputWallSeconds = trace.timing?.durationSeconds ?? null, captureTiming = recorded?.timing ?? null, lastObservation = finalizationTimedOut || !recorded ? null : await this.bridge(session, 'inspect').catch(() => null);
@@ -445,13 +505,22 @@ export class ThreeCreatorTools {
     if (samples.length !== validSamples.length) failure ??= 'THREE_PLAYTEST_OBSERVATION_INVALID: missing or nonfinite actual player position';
     let travelledMeters = 0; for (let i = 1; i < validSamples.length; i++) { const a = validSamples[i - 1]!.positionMetersXYZ, b = validSamples[i]!.positionMetersXYZ; travelledMeters += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
     const targetResults = measureEpisodeTargets(input.episode.targets, samples);
-    const capturedInput = trace.keyboardEvents.some((event: any) => event.type === 'keydown' && event.isTrusted) && trace.keyboardEvents.some((event: any) => event.type === 'keyup' && event.isTrusted);
+    const capturedKeyboardInput = trace.keyboardEvents.some((event: any) => event.type === 'keydown' && event.isTrusted) && trace.keyboardEvents.some((event: any) => event.type === 'keyup' && event.isTrusted);
+    const capturedRoadInput=roadRouteResults.some(result=>result.appliedInputCount>0&&result.endSimulationTick>result.startSimulationTick);
+    const capturedInput=capturedKeyboardInput||capturedRoadInput;
     const isCompleteEpisode = completedSteps === input.episode.steps.length && budget.mode === 'full-episode';
     if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
-    const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
-    const feedback={viewport:lastObservation?.viewport,actions:summarizePlaytestActions(hostEvents,[...worldOperations.values()]),characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
-    const recording = { feedback, kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
+    const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= minimumInputSeconds - 0.05;
+    let roadRouteTrace: {file:string;sha256:string}|undefined;
+    if(hasRoadRoutes){
+      const file='road-route-trace.json';
+      await json(path.join(root,file),{sourceHash:candidate.sourceHash,runtimeHash:candidate.runtimeHash,worldBuildHash:candidate.worldBuildHash,episodeHash:input.hash,steps:roadRouteResults});
+      roadRouteTrace={file,sha256:sha256(await readFile(path.join(root,file)))};
+    }
+    const compactRoadResults=roadRouteResults.map(({samples,...result})=>({...result,sampleCount:samples.length,initialSample:samples[0]??null,finalSample:samples.at(-1)??null}));
+    const feedback={viewport:lastObservation?.viewport,actions:summarizePlaytestActions(hostEvents,[...worldOperations.values()]),...(hasRoadRoutes?{roadRoutes:summarizeRoadRouteResults(roadRouteResults)}:{}),characterContinuity:summarizeCharacterContinuity(trace.samples??[]),water:buildWaterFeedback(lastObservation?.snapshot?.humanoid?.water),waterTimeline:summarizeWaterFeedback(trace.samples??[])};
+    const recording = { feedback, ...(hasRoadRoutes?{roadRouteResults:compactRoadResults,roadRouteTrace,timingMode:'bounded-steps',minimumInputSeconds,capturedKeyboardInput,capturedRoadInput}:{}), kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     const identity = {worldBuildHash: candidate.worldBuildHash, episodeHash: input.hash};
     const report = {...recording, readTrace:{tool:'world_read_playtest',arguments:{operationId}}, recordingReadiness: {scope: 'recording-only' as const,
       checkedAt: new Date().toISOString(), creatorOperationId: operationId, ...identity,

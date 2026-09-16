@@ -612,6 +612,15 @@ rebuilding camera follow/recovery history without advancing simulation or changi
 reset baseline, subject or physics. It is not a recording-checkpoint restore. Unknown/nonfinite or
 out-of-range values, pending/authored views and Episode ownership are rejected; first-person views
 accept yaw/pitch but reject distance. Collision may shorten the resulting eye distance.
+For opt-in maintenance evidence, `world.onRuntimeSample(callback)` reports consumed
+`fixed-input` samples and `rendered-frame` camera/subject transforms. Rendered
+transforms are sampled while presentation is applied; callbacks run after it is
+restored. Samples are detached copies; a throwing observer is detached without
+stopping gameplay. This does not add a simulation or rendering loop.
+`WorldInput.cameraYawDeltaRadians`, `cameraPitchDeltaRadians` and
+`cameraDistanceDeltaMeters` represent one-tick deltas; repeated manual ticks clear
+them after the first tick. Fixed samples include those consumed pointer deltas and
+the native actor's applied input. These are replay inputs, not physics checkpoints.
 Ordinary first-person subjects supply `eyePositionLocalMetersXYZ` at registration;
 complete humanoids use stable capsule eye positions on foot and prefer their
 animation-bound eye while mounted, with a seat-relative fallback. Inspect
@@ -1363,6 +1372,24 @@ contact. Proximity, a blocked character, or a technically successful Creator
 recording does not prove that the prop moved. Use the existing playtest and
 on-demand observation evidence; this is an outcome choice, not a separate fixed
 test for every scene.
+
+## Road vehicle route input
+
+`RoadVehicleRouteController` and `roadVehicleRouteInput` return `WorldInput` for an
+existing wheeled vehicle or motorcycle. Pass its logical world position, body rotation,
+velocity, and the SDK simulation time; the controller never moves an object, steps
+physics or writes the camera. Creator and Episode use this same input calculation.
+
+A target supplies `positionWorldMetersXYZ`, optional `maximumSpeedMetersPerSecond`
+(default 4), `arrivalToleranceMeters` (default 1.5), and `stopAtTarget` (default true).
+The controller slows for heading error and stopping distance, confirms arrival only
+after low-speed dwell, and reports invalid state, clock rollback or lack of progress.
+Repeated observations do not advance dwell time. These are input-control defaults in
+`src/config/road-vehicle-route.ts`, not changes to vehicle handling calibration.
+Hosts sequence targets and bound execution time. Supply paths that fit the vehicle;
+there is no path search, obstacle detour or automatic reversing/unsticking.
+See [Creator recording](../creator-host/docs/agent/programming.md#record-and-submit)
+for the `driveTo` input-plan contract.
 
 ## Per-wheel road simulation
 

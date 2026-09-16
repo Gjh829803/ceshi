@@ -1,5 +1,6 @@
 export {AIRCRAFT_SUBTYPES,type AircraftSubtype} from './config/aircraft.js';
 export * from './contracts.js';
+export {RoadVehicleRouteController,roadVehicleRouteInput,roadVehicleBrakeInput,type RoadVehicleRouteTarget,type RoadVehicleRouteMotion,type RoadVehicleRouteDecision} from './road-vehicle-route.js';
 export {setObjectColor,type ObjectColorBinding} from './object-color.js';
 export {INTERACTION_SLOT_SCHEMA} from './interaction-contracts.js';
 export type * from './episode-contracts.js';

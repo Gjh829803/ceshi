@@ -121,6 +121,9 @@ export type WorldInput = Readonly<{
   moveYRatio?: number;
   cameraYawRatio?: number;
   cameraPitchRatio?: number;
+  cameraYawDeltaRadians?: number;
+  cameraPitchDeltaRadians?: number;
+  cameraDistanceDeltaMeters?: number;
   run?: boolean;
   jump?: boolean;
   jumpPressed?: boolean;

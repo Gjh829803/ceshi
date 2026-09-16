@@ -51,7 +51,43 @@ request ID and `get_character_operation` to inspect completion. Semantic actions
 preserve pause state and need stepping/resume to progress.
 Tools return applied/rejected status and actual state; unsupported actions are not
 forced. The existing `window.playground.reset()` restores the scene baseline.
-These controls do not provide arbitrary checkpoints or recent-input replay.
+These controls do not restore arbitrary physics checkpoints.
+
+### Incident capture and input replay
+
+In development, click **记录现场** (or call `set_debug_history({enabled:true})`)
+before reproducing. This opts into the latest renderer-frame copy and the last
+600 consumed input ticks. **保存现场** / `capture_debug_incident` saves that cached
+image, its displayed camera pose, fixed snapshot, camera diagnostics and source
+identity, and pauses by default. Capture never re-renders or advances the world;
+without a cached frame it reports unavailable. During a reproducible recording,
+saving an incident freezes the input prefix ending at that exact captured frame.
+The result reports whether that frame has a replayable trace; recent-input history
+alone has no reset anchor. Images keep aspect ratio with a
+maximum edge of 1600 pixels; enabling history adds frame-copy/observation overhead.
+
+`start_debug_recording({maximumSeconds:30})` explicitly resets the scene baseline,
+then reapplies the current on-foot position, movement profile and follow-camera
+setup. It leaves paused so input can start deliberately. Resume or use debug steps;
+`stop_debug_recording` pauses and saves the recording. `replay_debug_recording`
+replays the stopped session, or accepts `{bundleId}` from a saved result after reload.
+Replay returns a task ID immediately; poll `inspect_debug_recording.replayOperation`
+for its progress and retained terminal result. It uses recorded SDK input
+(including pointer deltas), fixed ticks and render
+interpolation; `cancel_debug_replay` interrupts it. `inspect_debug_recording` reads
+status. Recordings are bounded to 120 seconds / 20,000 events.
+
+Artifacts go to ignored `.codex-tmp/playground-incidents/<id>/`: `incident.json`,
+optional `frame.png`, and `recording.json`. The loopback-only service requires a
+same-origin session; static builds expose no filesystem service. `sourceHash`
+identifies workspace source and asset bytes, including dirty files, rather than
+pretending the Git HEAD alone identifies the running development tree.
+Changed source/map or discontinuous input ticks reject replay by default. To test
+a fix against saved inputs, explicitly set `allowSourceChange:true`; the result
+retains both source hashes and marks a cross-version comparison. External commands,
+random scene behavior or unrecorded edits can diverge: replay checks character,
+mount/posture and camera results and reports the first mismatch. It is baseline
+input reproduction, not a claim that any live physical state can be restored.
 
 ## Display previews
 

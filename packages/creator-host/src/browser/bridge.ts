@@ -101,6 +101,22 @@ function createBridge() {
     requestAnimationFrame(frame);
   }
   return {
+    roadVehicleState(vehicleId:string) {
+      const snapshot=observation().snapshot?.();
+      if(!snapshot)throw new Error('THREE_ROAD_ROUTE_SDK_REQUIRED');
+      const vehicle=snapshot.humanoid?.vehicles.find(v=>v.instanceId===vehicleId);
+      const entity=snapshot.entities.find(e=>e.id===vehicleId);
+      const actor=snapshot.entities.find(e=>e.id===snapshot.controlledEntityId);
+      if(!actor)throw new Error('THREE_ROAD_ROUTE_ACTOR_UNAVAILABLE');
+      if(snapshot.humanoid?.mountedInstanceId!==vehicleId||!vehicle||!entity)throw new Error('THREE_ROAD_ROUTE_VEHICLE_NOT_MOUNTED');
+      if(!['wheeled','motorcycle'].includes(vehicle.mode))throw new Error('THREE_ROAD_ROUTE_VEHICLE_UNSUPPORTED');
+      if(!entity.motion)throw new Error('THREE_ROAD_ROUTE_MOTION_UNAVAILABLE');
+      // Humanoid vehicle snapshots use the logical physics pose, independent
+      // of displayed interpolation and capture-target selection.
+      return {actorId:actor.id,actorGeneration:actor.generation,vehicleGeneration:entity.generation,lifecycleGeneration:snapshot.camera.lifecycleGeneration,simulationTick:snapshot.simulationTick,simulationSeconds:snapshot.simulationSeconds,isRunning:snapshot.isRunning,
+        motion:{positionWorldMetersXYZ:entity.positionWorldMetersXYZ,rotationWorldRadiansXYZ:entity.rotationLocalRadiansXYZ,velocityWorldMetersPerSecondXYZ:entity.motion.velocityWorldMetersPerSecondXYZ},
+        collisionEntityIds:entity.motion.collisionEntityIds,errors:snapshot.errors};
+    },
     ready() { try { const world=observation();characterContinuity.read(world,world.snapshot?.()??null);return true; } catch { return false; } },
     viewport() { const world = observation(); return inspectViewport(world.renderer, world.camera); },
     inspect(query?: InspectionQuery) {
@@ -138,11 +154,21 @@ function createBridge() {
         ...(sections?.includes('vehicles') ? {vehicles: (()=>{try{return world.inspectVehicles?.({...selection,...(vehicleDetail?{detail:vehicleDetail}:{})})??null;}catch{return null;}})()} : {}),
       };
     },
-    async executeCommand(command: WorldCommand, commandId: string) {
+    async executeCommand(command: WorldCommand, commandId: string, roadSubject?:{actorGeneration:number;vehicleId:string;lifecycleGeneration:number}) {
       const world = observation(); if (!world.execute) throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED');
       const before = world.snapshot?.() ?? null;
+      if(roadSubject){
+        if(command.type!=='humanoid.set-input'||before?.entities.find(e=>e.id===command.actorId)?.generation!==roadSubject.actorGeneration)throw new Error('THREE_ROAD_ROUTE_SUBJECT_CHANGED');
+        if(command.input!==null&&(before.humanoid?.mountedInstanceId!==roadSubject.vehicleId||before.camera.lifecycleGeneration!==roadSubject.lifecycleGeneration))throw new Error('THREE_ROAD_ROUTE_SUBJECT_CHANGED');
+      }
       const worldCommandReceipt = await world.execute(command, { commandId });
       if (worldCommandReceipt.commandId !== commandId) throw new Error('THREE_WORLD_COMMAND_ID_MISMATCH');
+      if(roadSubject){
+        // Frequent route inputs retain receipts and tick identity without copying
+        // every scene entity twice per control sample. Poses live in route samples.
+        const compact=(s:ReturnType<NonNullable<WorldObservation['snapshot']>>|null)=>s?{simulationTick:s.simulationTick,simulationSeconds:s.simulationSeconds,worldRevision:s.worldRevision}:null;
+        return {worldCommandReceipt,before:compact(before),after:compact(world.snapshot?.()??null)};
+      }
       return { worldCommandReceipt, before, after: world.snapshot?.() ?? null };
     },
     worldOperation(worldOperationId: string) {

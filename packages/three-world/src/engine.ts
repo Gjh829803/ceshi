@@ -1,3 +1,4 @@
+import type {RuntimeSample} from "./contracts";
 import { CameraSubjectVisibility } from "./camera/subject-visibility";
 import { cameraControlForward } from "./camera/control-basis";
 import { cameraPositionAnchor } from "./camera/subject";
@@ -91,6 +92,14 @@ export class WorldEngine {
   readonly resources:ActorResources;
   private nextResourceOwner=0;
   private readonly afterUpdates = new Set<() => void>();
+  private readonly runtimeObservers = new Set<(sample:RuntimeSample)=>void>();
+  private observedFrameId=0;
+  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void {this.alive();this.runtimeObservers.add(callback);return()=>{this.runtimeObservers.delete(callback);};}
+  private emitRuntimeSample(sample:RuntimeSample):void {
+    for(const callback of this.runtimeObservers)try{callback(structuredClone(sample));}catch(error){
+      this.runtimeObservers.delete(callback);console.warn('WORLD_RUNTIME_OBSERVER_DETACHED',error);
+    }
+  }
   private driveProvider: ((id:string,input:WorldInput,direction:Vec3,dt:number)=>{drive:CharacterDrive;facing?:Vec3;actionId?:string}|undefined)|undefined;
   private pointerInput: CameraPointerInput = {};
   private readonly jumped = new Set<string>();
@@ -338,7 +347,7 @@ export class WorldEngine {
   step(input: WorldInput = {}, ticks = 1): WorldSnapshot {
     this.validateStep(input,ticks);
     this.sealInitialState();
-    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.humanoid?{humanoid:{...input.humanoid,jump:false,actions:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) });
+    for (let i = 0; i < ticks; i++) this.fixedStep(i === 0 ? input : { ...input, ...(input.cameraYawDeltaRadians===undefined?{}:{cameraYawDeltaRadians:0}),...(input.cameraPitchDeltaRadians===undefined?{}:{cameraPitchDeltaRadians:0}),...(input.cameraDistanceDeltaMeters===undefined?{}:{cameraDistanceDeltaMeters:0}), ...(input.humanoid?{humanoid:{...input.humanoid,jump:false,actions:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) });
     return this.snapshot();
   }
   validateStep(input:WorldInput,ticks:number):void{
@@ -349,6 +358,7 @@ export class WorldEngine {
     if (!input || typeof input !== 'object') throw new Error('WORLD_INPUT_INVALID');
     if(input.humanoid){if(!this.controlledHumanoid)throw new Error('HUMANOID_INPUT_REQUIRES_CONTROLLED_ACTOR');this.controlledHumanoid.validateInput(input.humanoid);}
     for (const key of ['moveXRatio', 'moveZRatio', 'moveYRatio', 'cameraYawRatio', 'cameraPitchRatio'] as const) if (input[key] !== undefined && (!Number.isFinite(input[key]) || Math.abs(input[key]) > 1)) throw new Error('WORLD_INPUT_INVALID');
+    for(const key of ['cameraYawDeltaRadians','cameraPitchDeltaRadians','cameraDistanceDeltaMeters'] as const)if(input[key]!==undefined&&!Number.isFinite(input[key]))throw new Error('WORLD_INPUT_INVALID');
     for (const key of ['run', 'jump', 'jumpPressed', 'interact', 'interactPressed', 'cameraTogglePressed'] as const) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error('WORLD_INPUT_INVALID');
   }
   private faceDirection(entity: Entity, direction: THREE.Vector3): void {
@@ -411,11 +421,12 @@ export class WorldEngine {
     try {
       for (const update of this.updates) { const result: unknown = update({ world: this, deltaSeconds: dt, simulationTick: this.tick + 1 }); if (result && typeof (result as Promise<unknown>).then === 'function') throw new Error('WORLD_ASYNC_UPDATE_UNSUPPORTED: prepare async content before a fixed update'); }
       const jumpPressed = input.jumpPressed ?? Boolean(input.jump && !this.previousJump);
+      const orbitDelta={cameraYawDeltaRadians:(input.cameraYawDeltaRadians??0)+(this.pointerInput.yawDeltaRadians??0),cameraPitchDeltaRadians:(input.cameraPitchDeltaRadians??0)+(this.pointerInput.pitchDeltaRadians??0),cameraDistanceDeltaMeters:(input.cameraDistanceDeltaMeters??0)+(this.pointerInput.distanceDeltaMeters??0)};
       this.syncCameraLifecycle();
       if(this.cameraMode!=='authored'){
         const inspected=this.inspectCamera(),cycle=inspected.resolved!.input.cycleViewIds;
         if(input.cameraTogglePressed&&cycle.length){const next=cycle[(cycle.indexOf(inspected.resolved!.viewId)+1)%cycle.length]!;this.cameraController.setView(next,this.cameraFrame());}
-        this.cameraBasis=this.cameraController.prepareInput({orbitDeltaRadiansXY:[this.pointerInput.yawDeltaRadians??0,this.pointerInput.pitchDeltaRadians??0],orbitRatioXY:[input.cameraYawRatio??0,input.cameraPitchRatio??0],zoomDeltaMeters:this.pointerInput.distanceDeltaMeters??0,movement:Boolean(input.moveXRatio||input.moveZRatio||input.moveYRatio||input.humanoid?.forward||input.humanoid?.steer||input.humanoid?.lift||input.humanoid?.strafe||input.humanoid?.pitch||input.humanoid?.roll||input.humanoid?.jump||jumpPressed||(this.humanoid&&humanoidHost(this.humanoid).hasMovementIntent()))},dt,{...this.cameraFrame(),simulationTick:this.tick+1});
+        this.cameraBasis=this.cameraController.prepareInput({orbitDeltaRadiansXY:[orbitDelta.cameraYawDeltaRadians,orbitDelta.cameraPitchDeltaRadians],orbitRatioXY:[input.cameraYawRatio??0,input.cameraPitchRatio??0],zoomDeltaMeters:orbitDelta.cameraDistanceDeltaMeters,movement:Boolean(input.moveXRatio||input.moveZRatio||input.moveYRatio||input.humanoid?.forward||input.humanoid?.steer||input.humanoid?.lift||input.humanoid?.strafe||input.humanoid?.pitch||input.humanoid?.roll||input.humanoid?.jump||jumpPressed||(this.humanoid&&humanoidHost(this.humanoid).hasMovementIntent()))},dt,{...this.cameraFrame(),simulationTick:this.tick+1});
       }
       this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
@@ -442,6 +453,10 @@ export class WorldEngine {
       // Prepared input is scoped to this simulation step. Post-tick consumers
       // (including Episode route decisions) must see the newly committed view.
       this.cameraBasis=undefined;
+      if(this.runtimeObservers.size){
+        const native=this.controlledHumanoid?.inspectControls().lastApplied?.input;
+        this.emitRuntimeSample({kind:'fixed-input',simulationTick:this.tick,deltaSeconds:dt,controlledEntityId:this.controlled??null,input:{...input,...orbitDelta,...(native?{humanoid:native}:{})}});
+      }
       for(const callback of this.afterUpdates)callback();
     } catch (error) { this.cameraController.abortPreparedInput();this.cameraBasis=undefined;this.recordError('WORLD_FIXED_STEP_FAILED', error); this.stop(); throw error; } finally{this.fixedTransaction=false;}
   }
@@ -737,7 +752,19 @@ export class WorldEngine {
   stop(): void { this.running = false; this.clearInput(); this.frameGeneration += 1; this.keyboard.enabled = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(alpha=1): void {
     if(this.disposed)return;
-    this.withPresentation(()=>this.renderer?.render(this.scene,this.camera),alpha);
+    if(!Number.isFinite(alpha)||alpha<0||alpha>1)throw new Error('WORLD_PRESENTATION_ALPHA_INVALID');
+    let sample:RuntimeSample|undefined;
+    this.withPresentation(()=>{
+      if(this.runtimeObservers.size&&this.renderer){
+        const object=this.controlled?this.entities.get(this.controlled)?.object:undefined;
+        sample={kind:'rendered-frame',frameId:++this.observedFrameId,simulationTick:this.tick,interpolationAlpha:Math.min(1,Math.max(0,alpha)),sampledAtMilliseconds:performance.now(),
+          widthPixels:this.renderer?.domElement.width??0,heightPixels:this.renderer?.domElement.height??0,controlledEntityId:this.controlled??null,
+          controlledPositionWorldMetersXYZ:object?tuple(object.getWorldPosition(new THREE.Vector3())):null,
+          camera:{positionWorldMetersXYZ:tuple(this.camera.getWorldPosition(new THREE.Vector3())),quaternionWorldXYZW:this.camera.getWorldQuaternion(new THREE.Quaternion()).toArray(),projectionMatrix:[...this.camera.projectionMatrix.elements]}};
+      }
+      this.renderer?.render(this.scene,this.camera);
+    },alpha);
+    if(sample)this.emitRuntimeSample(sample);
     try { for(const callback of this.renders)callback(); }
     catch(error){this.recordError('WORLD_FRAME_FAILED',error);this.stop();throw error;}
   }
@@ -852,7 +879,7 @@ export class WorldEngine {
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for(const entity of [...this.entities.values(),...this.retired])entity.releaseHumanoid?.();
     this.cameraController.dispose();this.cameraSubjects.clear();this.navigation?.dispose(); this.physics.dispose();this.manualActions.clear();this.resources.clear(); if (this.ownsRenderer) this.renderer?.dispose();
-    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.locomotionAnimations.clear();this.jumped.clear();
+    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.runtimeObservers.clear();this.locomotionAnimations.clear();this.jumped.clear();
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }
   }
 }

@@ -1,5 +1,6 @@
 import {CameraEditorState} from "./camera/editor-state";
 import {inspectPlaygroundCamera} from './diagnostics/camera-inspection';
+import {createDebugRecording} from './diagnostics/recording';
 import {createPlaygroundDebugControls} from './diagnostics/debug-controls';
 import {createCameraFileClient} from "./camera/file-client";
 import {createCameraPreview} from "./camera/preview";
@@ -1599,7 +1600,24 @@ const labAPI = {
     capabilities: runtime.characterCapabilities(),
   }),
 };
-Object.assign(window, { playground: labAPI });
+let debugRecordButton:HTMLButtonElement|undefined;
+const debugRecording=import.meta.env.DEV?createDebugRecording({
+  world:sdk,canvas,ready:()=>ready&&!pageLifetime.signal.aborted,mapId:()=>session.map.id,
+  onStateChange:enabled=>{if(debugRecordButton&&!pageLifetime.signal.aborted)debugRecordButton.textContent=enabled?'保存现场':'记录现场';},
+  pause:()=>{sdk.stop();updatePausePresentation(true,false);},
+  reset:()=>labAPI.reset(),clearInput:()=>{clearInput();humanDemo=null;},render:alpha=>sdk.render(alpha),
+}):undefined;
+if(debugRecording){
+  const button=document.createElement('button');debugRecordButton=button;button.textContent='记录现场';button.type='button';
+  button.style.cssText='position:absolute;right:16px;bottom:16px;pointer-events:auto;padding:8px 12px;border:1px solid #526b6a;border-radius:6px;background:#102c30;color:#dcebd4';
+  button.addEventListener('click',()=>{void(async()=>{
+    if(!debugRecording.inspect().enabled){const result=await debugRecording.setHistory({enabled:true});if('error' in result)toast(String(result.error));else{button.textContent='保存现场';toast('现场记录已开启，继续操作复现后点击保存');}}
+    else{const result=await debugRecording.capture({pause:true});toast(result.status==='saved'?'现场已保存，游戏已暂停':String('error' in result?result.error:'保存失败'));}
+  })();});
+  const unmount=sdkPresentation.ui.mount(button,{interactive:true});
+  pageLifetime.signal.addEventListener('abort',()=>{debugRecording.dispose();unmount();},{once:true});
+}
+Object.assign(window, { playground: {...labAPI,...(debugRecording?{recording:debugRecording}:{})} });
 type ModelContext = {
   registerTool: (
     tool: {
@@ -1646,7 +1664,7 @@ if (context?.registerTool) {
       const input={...emptyInput(),...request.input};runtime.setInput(input)();
       clearInput();pause(true,false);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
     });
-  for (const tool of debugControls?.tools ?? []) {
+  for (const tool of [...(debugControls?.tools ?? []),...(debugRecording?.tools??[])]) {
     register(tool.name, tool.description, tool.inputSchema, tool.annotations.readOnlyHint, tool.execute);
   }
   register(

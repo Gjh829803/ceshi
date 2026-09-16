@@ -18,7 +18,7 @@ export interface WorldObservation {
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
  'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','start','stop','reset','dispose'],
  programming: ['getKeyBindings','createPresentation','onUpdate','onReset','onDispose','start','stop','reset','dispose'],
- quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets'],
+ quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets','onRuntimeSample'],
  boundaries: ['getEntityState','describe','snapshot'],
  'nonhuman-subject': ['scene','camera','cameraMode','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],

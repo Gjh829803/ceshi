@@ -198,11 +198,19 @@ export interface WorldInput {
  readonly humanoid?:import('./humanoid-runtime/simulation').Input;
  readonly moveXRatio?:number; readonly moveZRatio?:number; readonly moveYRatio?:number;
  readonly cameraYawRatio?:number; readonly cameraPitchRatio?:number;
+ /** One-tick orbit/zoom deltas, including consumed pointer input when recording. */
+ readonly cameraYawDeltaRadians?:number; readonly cameraPitchDeltaRadians?:number; readonly cameraDistanceDeltaMeters?:number;
  readonly run?:boolean; readonly jump?:boolean; readonly jumpPressed?:boolean;
  readonly interact?:boolean; readonly interactPressed?:boolean;
  /** One-shot first/third-person toggle, subject to the active camera's shortcut permission. */
  readonly cameraTogglePressed?:boolean;
 }
+/** Opt-in detached observations from the existing SDK fixed step and renderer. */
+export type RuntimeSample =
+ | {readonly kind:'fixed-input';readonly simulationTick:number;readonly deltaSeconds:number;readonly controlledEntityId:string|null;readonly input:WorldInput}
+ | {readonly kind:'rendered-frame';readonly frameId:number;readonly simulationTick:number;readonly interpolationAlpha:number;readonly sampledAtMilliseconds:number;
+    readonly widthPixels:number;readonly heightPixels:number;readonly controlledEntityId:string|null;readonly controlledPositionWorldMetersXYZ:Vec3|null;
+    readonly camera:{readonly positionWorldMetersXYZ:Vec3;readonly quaternionWorldXYZW:readonly[number,number,number,number];readonly projectionMatrix:readonly number[]}};
 export interface MovementContext<T extends JsonValue> {
  readonly entityId:string; readonly deltaSeconds:number; readonly simulationTick:number;
  readonly input:WorldInput; readonly desiredDirectionWorldXYZ:Vec3; readonly state:DeepReadonly<T>;
@@ -443,6 +451,8 @@ export interface World {
  onInteract(entityId:string,plan:()=>WorldCommand|readonly WorldCommand[]):()=>void;
  /** Direct Three writes are for visual descendants; managed root channels use execute(). */
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
+ /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
+ onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
  /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */
  onRender(callback:()=>void):()=>void;
  onReset(callback:()=>void):()=>void;

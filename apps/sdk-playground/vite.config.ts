@@ -4,6 +4,7 @@ import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import {playgroundDiagnosticsPlugin} from "./server/diagnostics";
 import { cameraConfigPlugin } from "./server/camera-config";
 import { dragonTrainingPlugin } from "./dragon-training-plugin";
 import {
@@ -96,7 +97,10 @@ function catalogPlugin(): Plugin {
   };
 }
 export default defineConfig({
-  plugins: [...cameraConfigPlugin(import.meta.dirname), react(), tailwind(), catalogPlugin(), dragonTrainingPlugin(repository)],
+  plugins: [...cameraConfigPlugin(import.meta.dirname), react(), tailwind(), playgroundDiagnosticsPlugin(repository), catalogPlugin(), dragonTrainingPlugin(repository)],
+  // Maintenance Vite/SSR tests also use the application root. Their dependency
+  // optimizer must not replace chunks served by the running Playground.
+  cacheDir: path.join(repository, '.codex-tmp', 'playground-vite'),
   resolve: { dedupe: ["react", "react-dom", "three"] },
   server: {
     host: "127.0.0.1",

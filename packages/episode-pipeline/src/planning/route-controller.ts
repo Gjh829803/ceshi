@@ -1,7 +1,7 @@
 import type { Vec3, WorldInput, WorldSnapshot } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from '../contracts.js';
 
-export const ROUTE_CONTROLLER_VERSION = 'worldkit-three-route-controller-1';
+export const ROUTE_CONTROLLER_VERSION = 'worldkit-three-route-controller-2';
 export interface RouteMovement {
   readonly kind: string; readonly walkSpeedMetersPerSecond: number; readonly runSpeedMetersPerSecond: number;
   readonly jumpSpeedMetersPerSecond?: number; readonly heightMeters: number; readonly radiusMeters: number;

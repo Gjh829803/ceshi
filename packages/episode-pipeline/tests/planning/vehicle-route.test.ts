@@ -85,9 +85,10 @@ it('holds mounted action waypoints without route timeout, then synchronizes segm
   waypoints: [{ positionWorldMetersXYZ: [0, 0, 0], gait: 'walk' }, { positionWorldMetersXYZ: [0, 0, 10], gait: 'walk' }], endBehavior: 'reverse', purpose: 'mounted actions' };
  const controller = new VehicleRouteController(segment);
  const snapshot = { humanoid: { mountedInstanceId: 'car', vehicles: [{ instanceId: 'car', mode: 'wheeled' }] },
-  entities: [{ id: 'car', positionWorldMetersXYZ: [0, 0, 0], rotationLocalRadiansXYZ: [0, 0, 0] }] } as unknown as WorldSnapshot;
+  entities: [{ id: 'car', positionWorldMetersXYZ: [0, 0, 0], rotationLocalRadiansXYZ: [0, 0, 0], motion:{velocityWorldMetersPerSecondXYZ:[0,0,0],isGrounded:true,phase:'grounded',collisionEntityIds:[]} }] } as unknown as WorldSnapshot;
  controller.holdWaypoint({ waypointIndex: 0, radiusMeters: .6 });
- expect(controller.step(snapshot, 0)).toMatchObject({ mode: 'action', waypointIndex: 0, input: { humanoid: { forward: 0, brake: true } } });
+ expect(controller.step(snapshot, 0)).toMatchObject({ mode: 'travel', waypointIndex: 0, input: { humanoid: { forward: 0, brake: true } } });
+ expect(controller.step(snapshot, .5)).toMatchObject({ mode: 'action', waypointIndex: 0 });
  expect(controller.step(snapshot, 10).mode).toBe('action');
  controller.completeHeldWaypoint(0); controller.holdWaypoint(undefined);
  expect(controller.cursor.waypointIndex).toBe(1);
@@ -95,7 +96,10 @@ it('holds mounted action waypoints without route timeout, then synchronizes segm
  controller.seekCursor({ waypointIndex: 0, direction: 1, finished: false });
  expect(controller.cursor.waypointIndex).toBe(0);
  controller.holdWaypoint({ waypointIndex: 0, radiusMeters: .6 });
- expect(controller.step(snapshot, 20).mode).toBe('action');
+ expect(controller.step(snapshot, 20).mode).toBe('travel');
+ expect(controller.step(snapshot, 20.5).mode).toBe('action');
+ const missingMotion={...snapshot,entities:snapshot.entities.map(({motion,...entity})=>entity)};
+ expect(controller.step(missingMotion,21)).toMatchObject({mode:'failed',diagnostic:{code:'ROAD_ROUTE_MOTION_UNAVAILABLE'}});
 });
 
 for(const subtype of ['helicopter','multirotor','tiltrotor'] as const)it(`${subtype} follows an Episode route using rotor inputs`,async()=>{

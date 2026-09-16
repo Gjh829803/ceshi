@@ -1,5 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { humanoid, emptyHumanoidInput, type Vec3, type WorldInput, type WorldSnapshot, type AircraftSubtype } from '@worldkit/three';
+import { humanoid, emptyHumanoidInput, RoadVehicleRouteController, roadVehicleRouteInput, roadVehicleBrakeInput, type Vec3, type WorldInput, type WorldSnapshot, type AircraftSubtype } from '@worldkit/three';
 import type { EpisodeSegmentPlan } from '../contracts.js';
 import type {
   RouteCursor,
@@ -33,6 +33,7 @@ const clamp=(n:number)=>Math.max(-1,Math.min(1,n));
 const angle=(n:number)=>Math.atan2(Math.sin(n),Math.cos(n));
 /** Steering is body-relative; camera orbit never steers a vehicle. No transforms are written. */
 export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotation:Vec3,velocity:Vec3,target:Vec3,aircraft?:{subtype?:AircraftSubtype|undefined;throttle:number}):WorldInput {
+  if(family==='wheeled'||family==='motorcycle')return roadVehicleRouteInput({positionWorldMetersXYZ:position,rotationWorldRadiansXYZ:rotation,velocityWorldMetersPerSecondXYZ:velocity},{positionWorldMetersXYZ:target,maximumSpeedMetersPerSecond:30,stopAtTarget:false});
   const delta=new Vector3(...target).sub(new Vector3(...position));
   const q=new Quaternion().setFromEuler(new Euler(...rotation));
   const heading=new Vector3(0,0,1).applyQuaternion(q);
@@ -74,11 +75,14 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
   return {humanoid:input};
 }
 export class VehicleRouteController {
+  private roadController:RoadVehicleRouteController|undefined;
+  private roadControllerKey='';
   private index=0;private direction=1;private finished=false;private anchor:Vec3|undefined;private lastProgress=0;
   private readonly route:Vec3[];
   private waypointHold: { waypointIndex: number; radiusMeters: number } | undefined;
   get cursor(): RouteCursor { return { waypointIndex: this.index - (this.segment.endBehavior === 'reverse' ? 1 : 0), direction: this.direction, finished: this.finished }; }
   seekCursor(cursor: RouteCursor) {
+    this.roadController=undefined;
     this.index = cursor.waypointIndex + (this.segment.endBehavior === 'reverse' ? 1 : 0);
     this.direction = cursor.direction; this.finished = cursor.finished; this.anchor = undefined;
   }
@@ -88,6 +92,7 @@ export class VehicleRouteController {
     this.anchor = undefined; this.advanceWaypoint();
   }
   private advanceWaypoint() {
+    this.roadController=undefined;
     const next = this.index + this.direction;
     if (next >= 0 && next < this.route.length) this.index = next;
     else if (this.segment.endBehavior === 'loop') this.index = 0;
@@ -107,6 +112,23 @@ export class VehicleRouteController {
     const hover=rotary&&!vehicle.grounded?vehicleDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,target,{subtype:vehicle.aircraftSubtype,throttle:vehicle.throttle}):undefined;
     if(this.finished)return {...base,mode:'finished',input:hover??{humanoid:{forward:0,steer:0,roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:true,slow:true,jump:false}}};
     const held = this.waypointHold?.waypointIndex === base.waypointIndex ? this.waypointHold : undefined;
+    if(vehicle.mode==='wheeled'||vehicle.mode==='motorcycle'){
+      if(!actor.motion)return {...base,mode:'failed',input:roadVehicleBrakeInput(),diagnostic:{code:'ROAD_ROUTE_MOTION_UNAVAILABLE',message:'Road route requires measured vehicle velocity; missing telemetry is not a stopped vehicle.',collisionEntityIds:[]}};
+      const stopping=!!held||(this.index===this.route.length-1&&this.segment.endBehavior==='stop');
+      const key=`${mounted}:${actor.generation}:${this.index}:${held?.radiusMeters??1}:${stopping}`;
+      if(!this.roadController||this.roadControllerKey!==key){
+        this.roadController=new RoadVehicleRouteController({positionWorldMetersXYZ:target,arrivalToleranceMeters:held?.radiusMeters??1,maximumSpeedMetersPerSecond:30,stopAtTarget:stopping});this.roadControllerKey=key;
+      }
+      const decision=this.roadController.step({positionWorldMetersXYZ:position,rotationWorldRadiansXYZ:actor.rotationLocalRadiansXYZ,velocityWorldMetersPerSecondXYZ:velocity},time);
+      if(decision.status==='failed')return {...base,mode:'failed',input:decision.input,diagnostic:{code:decision.errorCode!,message:'Road vehicle route failed; inspect the recorded pose, speed and route.',collisionEntityIds:actor.motion?.collisionEntityIds??[]}};
+      if(decision.status==='arrived'){
+        if(held)return {...base,mode:'action',input:decision.input};
+        this.advanceWaypoint();
+        if(this.finished)return {...base,mode:'finished',input:decision.input};
+        return {...base,mode:'travel',input:vehicleDirectionInput(vehicle.mode,position,actor.rotationLocalRadiansXYZ,velocity,this.route[this.index]!)};
+      }
+      return {...base,mode:'travel',input:decision.input};
+    }
     if (held && distance <= held.radiusMeters) {
       this.anchor = position; this.lastProgress = time;
       return { ...base, mode: 'action', input: hover??{ humanoid: { ...emptyHumanoidInput(), brake: true, slow: true } } };

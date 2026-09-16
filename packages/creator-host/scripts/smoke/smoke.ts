@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ThreeCreatorTools } from '../../src/tools/tools.js';
 import { executeThreeCreatorTool } from '../../src/cli/mcp.js';
-import { profileFrom, type EpisodeStep } from '../../src/contracts.js';
+import { profileFrom, type TimedEpisodeStep } from '../../src/contracts.js';
 
 const value = (name: string) => { const index = process.argv.indexOf(name); return index < 0 ? undefined : process.argv[index + 1]; };
 const profile = profileFrom(value('--profile') ?? 'three-raw'), duration = Number(value('--duration') ?? 4);
@@ -15,13 +15,13 @@ async function call(name: string, args: Record<string, unknown> = {}) {
 }
 try {
   const example = await service.examples(); for (const [name, text] of Object.entries(example.files)) await writeFile(path.join(root, name), text);
-  const cycle: EpisodeStep[] = [
+  const cycle: TimedEpisodeStep[] = [
     { keysDown: ['w'], durationSeconds: 2 }, { keysDown: ['w'], durationSeconds: 0.1 }, { keysDown: ['Shift'], durationSeconds: 1 }, { keysUp: ['w', 'Shift'], durationSeconds: 0.5 },
     { keysDown: ['ArrowRight'], durationSeconds: 2 }, { keysUp: ['ArrowRight'], durationSeconds: 0.2 },
     { keysDown: ['s'], durationSeconds: 2.1 }, { keysDown: ['Shift'], durationSeconds: 1 }, { keysUp: ['s', 'Shift'], durationSeconds: 0.5 },
     { keysDown: ['ArrowLeft'], durationSeconds: 2 }, { keysUp: ['ArrowLeft'], keysDown: ['Space'], durationSeconds: 0.15 }, { keysDown: ['Space'], durationSeconds: 0.1 }, { keysUp: ['Space'], durationSeconds: 0.5 },
   ];
-  const steps: EpisodeStep[] = []; let total = 0;
+  const steps: TimedEpisodeStep[] = []; let total = 0;
   while (total < duration) for (const step of cycle) { if (total >= duration) break; const seconds = Math.min(step.durationSeconds, duration - total); steps.push({ ...step, durationSeconds: seconds }); total += seconds; }
   steps.push({ keysUp: ['w', 's', 'ArrowRight', 'ArrowLeft', 'Shift', 'Space'], durationSeconds: 0 });
   await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps, targets: [{ id: 'spawn-return', positionMetersXYZ: [0, 0, 0], toleranceMeters: 1 }] }, null, 2));

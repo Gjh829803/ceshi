@@ -290,7 +290,7 @@ describe('Three tool operations and truthful submission', () => {
   it('requires successful execution and trusted keyboard input even for a complete nonempty recording', () => {
     const current = { worldBuildHash: 'world', episodeHash: 'episode' };
     const report = { status: 'failed', isCompleteEpisode: true, capturedInput: false, actualWallSeconds: 1, inputWallSeconds: 1, activePlaySeconds: 1, videoMetadata: { durationSeconds: 1 }, ...current };
-    expect(playtestSubmissionReadiness(report, current).issues.map(issue => issue.code)).toEqual(['PLAYTEST_DID_NOT_PASS', 'TRUSTED_KEYBOARD_INPUT_MISSING']);
+    expect(playtestSubmissionReadiness(report, current).issues.map(issue => issue.code)).toEqual(['PLAYTEST_DID_NOT_PASS', 'RECORDED_INPUT_MISSING']);
   });
   it('fails fast when the real SDK snapshot says stopped and retains its original runtime errors', () => {
     expect(() => assertSdkPlaytestRunning('three-sdk', { isRunning: false, simulationTick: 0, errors: [{ code: 'WORLD_FRAME_FAILED', message: 'original clock failure' }] })).toThrow(/THREE_PLAYTEST_RUNTIME_STOPPED.*WORLD_FRAME_FAILED.*original clock failure/);

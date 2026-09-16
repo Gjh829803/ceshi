@@ -152,6 +152,12 @@ and locally probed jumps where supported. Physical support/probes are local,
 not global pathfinding. Successful capture segments remain reusable while their
 source, runtime, plan and playback-policy identities match.
 
+Wheeled vehicles and motorcycles share the SDK's road-vehicle input controller
+with Creator. Final stop points and held action points confirm low-speed dwell
+before reporting completion or handing control to an action. Other vehicle families
+retain their existing controllers. This follows supplied waypoints; it does not
+provide automatic obstacle detours.
+
 ## Styles and request readiness
 
 `visuals.mjs` prepares ten styles: one `source-reference` variant bound to the

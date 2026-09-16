@@ -4,6 +4,17 @@ const finite = (value: unknown): number | null => typeof value === 'number' && N
 const text = (value: unknown, limit = 160): string | null => typeof value === 'string' ? value.length > limit ? value.slice(0, limit - 1) + '…' : value : null;
 const vector = (value: unknown): [number, number, number] | null => Array.isArray(value) && value.length === 3 && value.every(n => finite(n) !== null) ? [...value] as [number, number, number] : null;
 
+export function summarizeRoadRouteResults(results:readonly unknown[]) {
+  return {totalSteps:results.length,omittedSteps:Math.max(0,results.length-16),steps:results.slice(0,16).map(value=>{
+    const r=object(value),samples=Array.isArray(r.samples)?r.samples:[],last=object(r.finalSample??samples.at(-1)),identity=object(r.subjectIdentity);
+    return {stepIndex:finite(r.stepIndex),vehicleId:text(r.vehicleId),status:text(r.status),error:text(r.error,400),
+      subjectIdentity:{actorId:text(identity.actorId),actorGeneration:finite(identity.actorGeneration),vehicleId:text(identity.vehicleId),vehicleGeneration:finite(identity.vehicleGeneration),lifecycleGeneration:finite(identity.lifecycleGeneration)},
+      targetPositionWorldMetersXYZ:vector(r.targetPositionWorldMetersXYZ),stopAtTarget:r.stopAtTarget===true,
+      startedAtSeconds:finite(r.startedAtSeconds),endedAtSeconds:finite(r.endedAtSeconds),
+      finalPositionWorldMetersXYZ:vector(last.positionWorldMetersXYZ),finalDistanceMeters:finite(last.distanceMeters),finalSpeedMetersPerSecond:finite(last.speedMetersPerSecond)};
+  })};
+}
+
 /** Actual dispatch and last observed operation states; task intent decides whether rejection was expected. */
 export function summarizePlaytestActions(events: readonly unknown[], operations: readonly unknown[]) {
   const dispatchCounts = {applied:0, accepted:0, rejected:0};

@@ -212,6 +212,7 @@ export class ThreeWorld implements API.World {
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  /** Observes a completed render after presentation materials are restored; observers must not advance simulation. */
  onRender(callback:()=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ onRuntimeSample(callback:(sample:API.RuntimeSample)=>void):()=>void{this.alive();return this.engine.onRuntimeSample(callback);}
  /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
  onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
  onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.updating.add(callback);return()=>{this.updating.delete(callback);};}
@@ -894,7 +895,7 @@ export class ThreeWorld implements API.World {
   }
   this.engine.step(input,ticks);return this.snapshot();
  }
- render():void{this.engine.render();}
+ render(interpolationAlpha=1):void{this.engine.render(interpolationAlpha);}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
   if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireHumanoidActivities();

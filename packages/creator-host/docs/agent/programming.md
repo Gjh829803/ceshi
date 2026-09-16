@@ -191,11 +191,39 @@ to poll. Read actual errors; unavailable telemetry is not measured success.
 
 ## Record and submit
 
-Episode steps run for `durationSeconds` in wall time; keys stay held until
+Timed Episode steps run for `durationSeconds` in wall time; keys stay held until
 `keysUp`. Omit the playtest duration to execute the complete plan. A shorter
 value tests the prefix from opening. Read the control registry for each action;
 pressed edges and continuous axes differ. Use the active vehicle inputGuide for
 family-specific axes. `framesPerSecond` controls video sampling, not simulation.
+
+For an already mounted wheeled vehicle or motorcycle, schema version 2 also accepts
+a feedback-controlled `driveTo` step. Supply a traversable sequence of targets with
+enough room for the vehicle's turning radius; this does not find paths or avoid obstacles.
+
+```json
+{"driveTo":{"vehicleId":"motorcycle","positionWorldMetersXYZ":[12,0,25],"maximumSpeedMetersPerSecond":4,"arrivalToleranceMeters":1.5,"stopAtTarget":true},"timeoutSeconds":30}
+```
+
+The SDK controller computes body-relative throttle, steering and braking from actual
+physics state. `stopAtTarget` defaults to true: arrival requires staying within the
+3D tolerance at no more than 0.25 m/s for 0.4 simulation seconds. Set it to false
+only for intermediate points; stop at the final point before a following F-key step.
+Speed defaults to 4 m/s (accepted range >0–12), tolerance to 1.5 m (0.25–5).
+Speed is a control target; physical braking can briefly overshoot it.
+
+`timeoutSeconds` is a wall-time limit, not a hold duration. Do not combine `driveTo`
+with keys, commands, lifecycle, pointer drag or `durationSeconds` in the same step.
+Keys are released before driving, and the route input override is released afterward.
+Omit the tool's duration override for a complete plan: bounded steps finish early;
+`plannedSeconds`/`requestedSeconds` include their timeout budgets, while actual elapsed
+time is recorded separately. A full road-input-only plan can provide real-input evidence.
+Timeout, sustained lack of progress, reset or subject changes fail the recording and
+prevent subsequent steps. Inspect `feedback.roadRoutes` and `roadRouteResults` for
+outcomes, subject identity and endpoint samples; `roadRouteTrace` identifies the full, hashed
+`road-route-trace.json` in the recording evidence. `world_read_playtest` includes a
+compact route summary. These outcomes do
+not replace visual review or turn a reset between steps into a successful return trip.
 
 Keep the same MCP session. After repairs/debugging, finish with a complete eligible
 recording of the current world and episode. Register complete capture targets via
