@@ -20,7 +20,9 @@ it('records and replays native movement plus camera deltas from a declared reset
  f.world.step({moveXRatio:1,cameraYawDeltaRadians:.4,cameraPitchRatio:.2},20);f.world.render(.4);
  f.world.step({moveZRatio:-1,cameraYawRatio:-.4},20);f.world.render(.6);
  const end=f.world.getEntityState('person').positionWorldMetersXYZ;
+ expect(f.recorder.inspect().recording).toMatchObject({elapsedSeconds:40/60,maximumSeconds:10});
  expect(await f.recorder.stop()).toMatchObject({status:'saved'});expect(f.saved()?.inputTicks).toBe(40);
+ expect(f.recorder.inspect().savedRecording).toMatchObject({bundleId:'saved',replayable:true,inputTicks:40});
  expect(await f.recorder.replay()).toMatchObject({status:'started'});
  await vi.waitFor(()=>expect(f.recorder.inspect().replayOperation?.result).toMatchObject({status:'replayed',advancedTicks:40}));
  await vi.waitFor(()=>expect(f.recorder.inspect().busy).toBe(false));
@@ -45,6 +47,7 @@ it('detects discontinuous clocks and invalid stored inputs instead of falsely re
  expect(f.recorder.inspect().recording?.invalidReason).toBe('simulation-tick-discontinuity');f.world.step({},1);
  expect(f.recorder.inspect().recording?.invalidReason).toBe('simulation-tick-discontinuity');
  await f.recorder.stop();expect(await f.recorder.replay()).toMatchObject({status:'failed',error:'DEBUG_RECORDING_NOT_REPLAYABLE'});
+ expect(f.recorder.inspect().savedRecording?.replayable).toBe(false);
  const data=f.saved()!;data.invalidReason=null;(data.events.find(event=>event.sample.kind==='fixed-input')!.sample as {simulationTick:number}).simulationTick=999;
  f.files.load.mockResolvedValue(data);const before=f.world.snapshot();
  expect(await f.recorder.replay({bundleId:'saved'})).toMatchObject({status:'failed',error:'DEBUG_RECORDING_INPUT_INVALID'});expect(f.world.snapshot()).toEqual(before);
@@ -63,6 +66,26 @@ it('bounds the recorded prefix when a caller advances more than its duration lim
  expect(f.recorder.inspect().recording?.inputTicks).toBe(60);
  await f.recorder.stop();expect(f.saved()?.inputTicks).toBe(60);
 });
+
+it('keeps a valid duration-limited trace replayable when the cached image is newer',async()=>{
+ const f=await fixture(true);await f.recorder.start({maximumSeconds:1});f.world.step({},60);f.world.render();
+ expect(f.recorder.inspect().recording?.status).toBe('limit-reached');
+ expect(await f.recorder.stop()).toMatchObject({status:'saved',replayable:true});
+ expect(f.files.save.mock.calls.at(-1)![0]).toMatchObject({metadata:{recordingCoversFrame:false}});
+ expect(await f.recorder.replay({bundleId:'saved'})).toMatchObject({status:'started'});
+ await vi.waitFor(()=>expect(f.recorder.inspect().replayOperation?.result).toMatchObject({status:'replayed',advancedTicks:60}));
+});
+
+it('pauses at event capacity with a valid bounded prefix instead of invalidating high-refresh recordings',async()=>{
+ const f=await fixture(true);await f.recorder.start({maximumSeconds:120});f.world.step({},1);
+ const pauses=f.pause.mock.calls.length;
+ for(let n=0;n<20010;n++)f.world.render();
+ await Promise.resolve();
+ expect(f.recorder.inspect().recording).toMatchObject({status:'limit-reached',events:20000,invalidReason:null});
+ expect(f.pause.mock.calls.length).toBe(pauses+1);
+ expect(await f.recorder.stop()).toMatchObject({status:'saved',replayable:true});
+ expect(f.saved()!.events).toHaveLength(20000);
+},30000);
 
 it('checks rendered camera samples as well as fixed simulation state',async()=>{
  const f=await fixture(true);await f.recorder.start({maximumSeconds:2});f.world.step({cameraYawRatio:.5},12);f.world.render(.3);await f.recorder.stop();

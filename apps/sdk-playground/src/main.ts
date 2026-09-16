@@ -1,3 +1,4 @@
+import {createRecordingControls} from './diagnostics/recording-controls';
 import {CameraEditorState} from "./camera/editor-state";
 import {inspectDebugCamera,createDebugRecording,createDebugControls} from '@worldkit/three/debug';
 import {createDebugFileClient} from './diagnostics/file-client';
@@ -471,20 +472,18 @@ function visit(n: number) {
   runtime.prepare(spec.id, spawn);
   syncTeleport();
 }
-function pause(value = !paused, showOverlay = true) {
+function pause(value = !paused) {
   if (value) sdk.stop();
   else if (ready && !preparingRender && !panelOpen) void sdk.start();
-  updatePausePresentation(value, showOverlay);
+  updatePausePresentation(value);
 }
-function updatePausePresentation(value: boolean, showOverlay: boolean) {
+function updatePausePresentation(value: boolean) {
   paused = value;
   visuals.forEach(resetVehicleWheels);
   resetFramePacing();
   clearInput();
-  shell.flag("paused", value && showOverlay);
-  shell.text("pauseButton", value ? "继续" : "暂停");
-  const recordingState=shell.get().debugRecording;
-  if(!value&&recordingState?.saved)shell.update({debugRecording:{...recordingState,saved:false}});
+  shell.flag("paused", value);
+  shell.text("pauseButton", value ? "继续游玩" : "暂停世界");
   if (!value && !panelOpen) sdkPresentation.focus();
 }
 function setCameraView(viewId: string) {
@@ -659,7 +658,7 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
     sdk.setCameraView(sdk.inspectCamera().document!.defaultViewId);
     sim.controlledActor.message='按 H 召唤飞龙 · 等待落稳后到鞍侧按 F 上龙';
   }else prepareCourse(sim, map, regionId, assetId);
-  pause(false, false);
+  pause(false);
   syncTeleport();
   resetFramePacing();
 }
@@ -703,7 +702,7 @@ function prepareHumanTrial(mapId: string, trial: CharacterTrial, demo = false) {
     throw new Error(sim.controlledActor.message);
   sim.controlledActor.message = `${trial.name} · ${trial.description}`;
   humanDemo = null;
-  pause(false, false);
+  pause(false);
   syncTeleport();
   if (demo) {
     humanDemo = new HumanoidDemo(trial, sim.controlledActor.controller?.events.length ?? 0);
@@ -794,10 +793,10 @@ const workbench = mountWorkbench(document.body, {
         ? "程序姿势占位 · 待替换专用骑乘动作"
         : undefined,
   }),
-  togglePause: () => pause(!paused, false),
+  togglePause: () => pause(!paused),
   step: () => {
     if (!ready) return;
-    pause(true, false);
+    pause(true);
     clearInput();
     sdk.step({humanoid:emptyInput()}, 1);
     renderPausedState(FIXED_STEP);
@@ -1205,7 +1204,7 @@ function updateUI(force = false) {
       ["滚轮", "镜头距离"],
       ["Esc", "释放 / 暂停"],
       ["1–6", "快速前往"],
-      ...(import.meta.env.DEV ? [["F8", "记录 / 保存现场"] as [string,string]] : []),
+      ...(import.meta.env.DEV ? [["F8", "开始录制 / 停止并保存"] as [string,string]] : []),
     ];
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
     setText(
@@ -1442,7 +1441,7 @@ sdk.onReset(() => {
 // Seal only the persistent Playground content. Scene-local NPCs are recreated on reset.
 sdk.step({}, 0);
 npcLab = createNpcPlayground(sdk, {
-  focus: () => { pause(false, false); sdkPresentation.focus(); },
+  focus: () => { pause(false); sdkPresentation.focus(); },
   beforeControl: () => { clearInput(); humanDemo = null; },
   changed: () => { lastActive = -99; refreshDisplayMetadata(); },
 });
@@ -1531,7 +1530,7 @@ const debugControls = import.meta.env.DEV ? createDebugControls({
     if (!value && (preparingRender || panelOpen)) throw new Error('Close the editor panel and wait for scene preparation before resuming.');
     if (value) sdk.stop();
     else await sdk.start();
-    updatePausePresentation(value, false);
+    updatePausePresentation(value);
   },
   clearInput: () => { clearInput(); humanDemo = null; },
   render: () => renderPausedState(),
@@ -1626,30 +1625,31 @@ const labAPI = {
     capabilities: runtime.characterCapabilities(),
   }),
 };
+let refreshRecordingControls:(()=>unknown)|undefined;
 const debugRecording=import.meta.env.DEV?createDebugRecording({
   world:sdk,canvas,ready:()=>ready&&!pageLifetime.signal.aborted,mapId:()=>session.map.id,
-  onStateChange:enabled=>{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled,busy:false,saved:enabled&&(shell.get().debugRecording?.saved??false)}});},
-  pause:()=>{sdk.stop();updatePausePresentation(true,false);},
+  onStateChange:()=>{if(!pageLifetime.signal.aborted)refreshRecordingControls?.();},
+  pause:()=>{sdk.stop();updatePausePresentation(true);},
   reset:()=>labAPI.reset(),clearInput:()=>{clearInput();humanDemo=null;},render:alpha=>sdk.render(alpha),
 },createDebugFileClient()):undefined;
 if(debugRecording){
-  shell.update({debugRecording:{enabled:false,busy:false,saved:false}});
-  const recordIncident=async()=>{
-    const state=debugRecording.inspect();if(state.busy||!ready)return;
-    shell.update({debugRecording:{enabled:state.enabled,busy:true,saved:false}});
-    let saved=false;
-    try{
-      if(!state.enabled){const result=await debugRecording.setHistory({enabled:true});if('error' in result)toast(String(result.error));else toast('现场记录已开启，复现异常后点击「保存现场」或按 F8');}
-      else{const result=await debugRecording.capture({pause:true});saved=result.status==='saved';toast(saved?'现场已保存，游戏已暂停。可以让 AI 查看并定位问题':String('error' in result?result.error:'保存失败'));}
-    }finally{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled:debugRecording.inspect().enabled,busy:false,saved}});}
-  };
-  shell.on('debugRecordButton',()=>{void recordIncident();});
+  const controls=createRecordingControls(debugRecording,{
+    ready:()=>ready,paused:()=>paused,resume:()=>pause(false),
+    publish:state=>{if(!pageLifetime.signal.aborted)shell.update({debugRecording:state});},notify:toast,
+  });
+  refreshRecordingControls=controls.sync;
+  const statusTimer=setInterval(controls.sync,250);
+  shell.on('debugRecordButton',()=>{void controls.record();});
+  shell.on('debugRecordingRestart',controls.requestRestart);
+  shell.on('debugRecordingStart',()=>{void controls.start();});
+  shell.on('debugRecordingCancel',controls.cancelStart);
+  shell.on('debugSnapshotButton',()=>{void controls.snapshot();});
   window.addEventListener('keydown',event=>{
     if(event.code!=='F8'||event.repeat||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||!ready||panelOpen)return;
     if(event.target instanceof HTMLElement&&event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role=dialog],[role=listbox],[data-slot=popover-content]'))return;
-    event.preventDefault();event.stopImmediatePropagation();void recordIncident();
+    event.preventDefault();event.stopImmediatePropagation();void controls.record();
   },{capture:true,signal:pageLifetime.signal});
-  pageLifetime.signal.addEventListener('abort',()=>{debugRecording.dispose();},{once:true});
+  pageLifetime.signal.addEventListener('abort',()=>{clearInterval(statusTimer);refreshRecordingControls=undefined;debugRecording.dispose();},{once:true});
 }
 Object.assign(window, { playground: {...labAPI,...(debugRecording?{recording:debugRecording}:{})} });
 type ModelContext = {
@@ -1696,7 +1696,7 @@ if (context?.registerTool) {
       const request=value as {frames:number;input:Partial<humanoid.Input>};
       if(!Number.isInteger(request.frames)||request.frames<1||request.frames>600)throw new Error('Invalid frame count');
       const input={...emptyInput(),...request.input};runtime.setInput(input)();
-      clearInput();pause(true,false);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
+      clearInput();pause(true);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
     });
   for (const tool of [...(debugControls?.tools ?? []),...(debugRecording?.tools??[])]) {
     register(tool.name, tool.description, tool.inputSchema, tool.annotations.readOnlyHint, tool.execute);

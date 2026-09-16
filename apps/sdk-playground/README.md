@@ -20,6 +20,9 @@ imports or external model fetches are needed.
 
 ## Local diagnostics and reproduction
 
+For taking over another person's incident without conversation history, use the
+[Playground debugging skill](../../.agents/skills/playground-debugging/SKILL.md).
+
 The shared camera inspection, debug controls and input recording implementation
 comes from `@worldkit/three/debug`. Playground supplies scene lifecycle, UI and the
 loopback artifact service; these adapters are not imported by the SDK.
@@ -59,18 +62,29 @@ These controls do not restore arbitrary physics checkpoints.
 
 ### Incident capture and input replay
 
-In development, click **记录现场** in the upper-right viewport toolbar or press **F8**
-(or call `set_debug_history({enabled:true})`)
-before reproducing. This opts into the latest renderer-frame copy and the last
-600 consumed input ticks. When an issue appears, click **保存现场**, press **F8** again,
-or call `capture_debug_incident` to save that cached
-image, its displayed camera pose, fixed snapshot, camera diagnostics and source
-identity, and pauses by default. Capture never re-renders or advances the world;
-without a cached frame it reports unavailable. During a reproducible recording,
-saving an incident freezes the input prefix ending at that exact captured frame.
-The result reports whether that frame has a replayable trace; recent-input history
-alone has no reset anchor. Images keep aspect ratio with a
-maximum edge of 1600 pixels; enabling history adds frame-copy/observation overhead.
+In development, click **开始录制** in the upper-right viewport toolbar or press
+**F8**. The confirmation explains that recording resets scene vehicles/objects
+and preserves the current on-foot position and follow-camera setup. Exit the
+vehicle first; after confirming, gameplay resumes automatically, and you can
+mount it again to reproduce the issue. Press **F8** or **停止并保存** to pause and
+save. The toolbar shows elapsed simulation time, the two-minute maximum (or 20,000 events), and whether
+the saved trace is replayable. At the limit, click **保存录制** to save; failed saves
+retain the stopped trace for retry. **放弃并重录** offers a confirmed restart if a
+trace cannot be saved, for example after source changes. Avoid resetting, switching scenes or refreshing
+until saved. Replayability indicates a trace with a reset anchor; actual replay
+still checks for divergence.
+
+The separate **启用快照 / 保存快照** control does not reset the scene. Enabling it
+(or calling `set_debug_history({enabled:true})`) opts into the latest renderer-frame
+copy and the last 600 consumed input ticks. Continue gameplay until the issue
+appears, then save (or call `capture_debug_incident`). This saves the cached image,
+its displayed camera pose, fixed snapshot, camera diagnostics and source identity,
+and pauses by default. Capture never re-renders or advances the world; without a
+cached frame it reports unavailable. During a reproducible recording, an incident
+freezes the input prefix ending at that exact captured frame. Recent-input history
+alone has no reset anchor and cannot replace full recording. Images keep aspect
+ratio with a maximum edge of 1600 pixels; enabling history adds frame-copy and
+observation overhead.
 
 `start_debug_recording({maximumSeconds:30})` explicitly resets the scene baseline,
 then reapplies the current on-foot position, movement profile and follow-camera

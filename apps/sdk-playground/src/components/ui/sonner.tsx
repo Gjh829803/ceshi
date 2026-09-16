@@ -11,7 +11,7 @@ import {
 import * as React from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-const Toaster = ({ position = "top-right", ...props }: ToasterProps) => {
+const Toaster = ({ position = "bottom-right", ...props }: ToasterProps) => {
   return (
     <Sonner
       position={position}

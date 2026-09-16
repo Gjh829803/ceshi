@@ -62,7 +62,7 @@ export function stepWheelVehicle(v:VehicleState,input:Input,dt:number,q:Environm
       const localRotation=new Quaternion().setFromAxisAngle(Y,w.steer).multiply(new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2));
       const wheelRotation=v.rotation.clone().multiply(localRotation);
       const hit=q.wheelSweep(mount,wheelRotation,down,c.radius,c.wheelWidth??.4,maxLength);
-      w.contact=!!hit&&hit.normal.dot(up)>.3;
+      w.contact=!!hit;
       w.length=w.contact?clamp(hit!.distance,minLength,maxLength):maxLength;
       const point=mount.clone().addScaledVector(down,w.length+c.radius),arm=point.clone().sub(com);
       const correctionSpeed=w.contact?Math.min(.6,Math.max(0,minLength-hit!.distance)*.15/h):0;
