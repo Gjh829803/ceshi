@@ -22,7 +22,7 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, _time: numbe
     const isAircraft = mode === 'glider';
     if (isAircraft) {
         if (mode === 'glider' && !v.launched) {
-            if (i.boost) {
+            if ((i.boost||i.forward>0)&&!i.slow&&!i.brake&&i.forward>=0) {
                 v.launched = true;
                 v.speed = s.launchSpeed;
                 v.grounded = false;

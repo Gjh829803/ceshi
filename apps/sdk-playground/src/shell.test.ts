@@ -83,10 +83,15 @@ describe('Shell render isolation',()=>{
   expect(await page.locator('body').innerText()).toContain('Pause now');
  });
  it('renders subtype-aware HUD controls and refreshes remapped keys without stale T or F aliases',async()=>{
+  await page.evaluate(()=>(window as any).showControls(undefined));
+  const onFoot=await page.locator('#shortcutFooter').innerText();
+  expect(onFoot).toContain('慢走（不蹲伏）');expect(onFoot).not.toContain('C / Ctrl');
   await page.evaluate(()=>(window as any).showControls({mode:'plane',aircraftSubtype:'pusher'}));
   const footer=page.locator('#shortcutFooter');
   expect(await footer.innerText()).toContain('增加油门 / 减少油门');
-  expect(await footer.innerText()).toContain('抬头 / 低头（镜头有限跟随）');
+  expect(await footer.innerText()).toContain('抬头 / 低头');
+  expect(await footer.innerText()).toContain('镜头向上 / 镜头向下');
+  expect(await footer.locator('kbd').allTextContents()).not.toEqual(expect.arrayContaining(['Z','X']));
   expect(await footer.locator('kbd').allTextContents()).toContain('V');
   expect(await footer.locator('kbd').allTextContents()).not.toContain('T');
   await page.evaluate(()=>(window as any).showControls({mode:'plane',aircraftSubtype:'pusher'},{forward:['KeyI'],backward:['KeyK'],interact:['KeyJ'],cameraToggle:['KeyT']}));

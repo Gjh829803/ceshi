@@ -19,6 +19,7 @@ import {resetRigidState} from './motion-families/space/physics-state';
 import {spaceFamily} from './motion-families/space/family';
 import {SPECS} from '@worldkit/preset-content/config';
 import {buildSpaceModel} from '@worldkit/preset-content/space-model';
+import {readControls} from './input';
 
 const spec:VehicleSpec={...SPECS.find(s=>s.id==='spacecraft')!,spawn:[0,20,0],spaceFlight:{...SPACE_FLIGHT_PRESETS.shuttle,driveMode:'inertial',dockingPorts:[{id:'bay',name:'Bay',positionMetersXYZ:[0,20,4],rotationXYZW:[0,0,0,1]}]}};
 const map:EnvironmentDefinition={id:'space-test',name:'Space',description:'',bounds:{min:[-500,-100,-500],max:[500,500,500]},boxes:[{id:'floor',position:[0,-2,0],size:[1000,1,1000]}],water:[],regions:[{id:'flight',name:'Flight',description:'',center:[0,0,0],size:[1000,1000],color:'#ddd',modes:['spacecraft','wheeled','plane','dragon']}],spawns:[{id:'bay',name:'Bay',vehicleId:'space',position:[0,20,0],yaw:0,regionId:'flight'}],playerSpawn:[4,.025,0]};
@@ -29,6 +30,14 @@ function fixture(overrides:Partial<VehicleSpec>={},scene=map){
  return {v,q,step(input:Partial<Input>,frames=60){for(let n=0;n<frames;n++){stepVehicle(v,{...emptyInput(),...input},1/60,n/60,q);q.stepPhysics(1/60);}},dispose(){q.dispose();}};
 }
 describe('native space family',()=>{
+ it.each(['assisted','inertial'] as const)('%s uses Space/C pitch and Z/X roll independently of camera arrows',mode=>{
+  for(const [key,axis,sign] of [['KeyC','x',1],['Space','x',-1],['KeyZ','z',-1],['KeyX','z',1]] as const){
+   const f=fixture();try{setSpaceDriveMode(f.v,mode);f.step(readControls(new Set([key,'ArrowUp']),true,false,{},undefined,f.v.spec),30);
+    expect(f.v.rotation[axis]*sign).toBeGreaterThan(.01);expect(f.v.velocity.length()).toBeCloseTo(0,5);
+    f.step(readControls(new Set(['ControlLeft']),true,false,{},undefined,f.v.spec),240);expect(f.v.motion.family).toBe('space');
+   }finally{f.dispose();}
+  }
+ });
  it('uses Newton thrust and fixed mass in the one Rapier world',()=>{
   const f=fixture();try{f.step({forward:1},60);const t=spaceTelemetry(f.v)!;
    expect(t).not.toHaveProperty('fuelKilograms');expect(f.v.motion).not.toHaveProperty('fuelKilograms');
@@ -36,14 +45,14 @@ describe('native space family',()=>{
    expect(f.v.position.y).toBeCloseTo(20,4);expect(t.thrustNewtonsXYZ).toEqual([0,0,28000]);
   }finally{f.dispose();}
  });
- it('coasts without drag or a hard speed cap; Shift brakes with counter-thrust',()=>{
+ it('coasts without drag or a hard speed cap; slow brakes with counter-thrust',()=>{
   const f=fixture();try{f.step({forward:1},240);expect(f.v.speed).toBeGreaterThan(spec.speed);
    const velocity=f.v.velocity.clone();f.step({},240);
    expect(f.v.velocity.distanceTo(velocity)).toBeLessThan(1e-4);expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);
    f.step({slow:true},240);expect(f.v.speed).toBeLessThan(velocity.length()*.65);expect(spaceTelemetry(f.v)!.massKilograms).toBe(2160);
   }finally{f.dispose();}
  });
- it.each([-1,1])('keeps A/D and arrow strafe directions at signed input %s',direction=>{
+ it.each([-1,1])('keeps steer and programmatic strafe directions at signed input %s',direction=>{
   const f=fixture();try{f.step({steer:direction},30);const front=new Vector3(0,0,1).applyQuaternion(f.v.rotation);
    expect(front.x*direction).toBeLessThan(0);expect(f.v.velocity.length()).toBeCloseTo(0,5);
    resetRigidState(f.v);f.v.rotation.identity();f.v.velocity.set(0,0,0);f.step({strafe:direction},30);expect(f.v.velocity.x*direction).toBeLessThan(0);

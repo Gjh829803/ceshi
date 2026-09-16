@@ -40,6 +40,7 @@ export const SOARING={
  wingsuit:{mass:95,area:3.2,cl0:.55,liftSlope:3.0,drag:.09,induced:.09,trim:.15},
  balloon:{mass:300,volume:1200,ambientKelvin:288.15,maxKelvin:410,heating:20,cooling:.025,ventCooling:10,fuelSeconds:180,dragArea:120},
  towSeconds:8,towAcceleration:10,canopySeconds:2,
+ wingsuitLaunchClearanceMeters:3,wingsuitLaunchFallSeconds:.15,
 } as const;
 
 /** 动力飞机训练小类的航迹转向响应；教练机及其他飞机继续使用各自原有配置。 */

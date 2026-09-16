@@ -11,6 +11,7 @@ import {sampleTankVisual} from './tank-visual';
 import {Character} from './character';
 import {TANK_SPEC,TANK_SOCKETS} from '@worldkit/preset-content/tank';
 import {buildTankModel} from '@worldkit/preset-content/tank-model';
+import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
 function fixture(wall=false){
  const q=new EnvironmentQueries({id:'tank-test',name:'Tank',description:'',bounds:{min:[-2000,-10,-2000],max:[2000,100,2000]},
@@ -19,6 +20,13 @@ function fixture(wall=false){
  const run=(seconds:number,input:Partial<Input>={})=>{for(let i=0;i<Math.round(seconds*60);i++)stepVehicle(v,{...emptyInput(),...input},1/60,i/60,q);};
  return {q,v,run};
 }
+it('moves the turret through Z/X but never Q/E or camera arrows',()=>{
+ const {q,v,run}=fixture();const keys=(codes:string[])=>readControls(new Set(codes),true,false,{},undefined,v.spec);
+ try{run(1,keys(['KeyX']));expect(v.motion.tank!.turretYaw).toBeLessThan(-.5);const before=v.motion.tank!.turretYaw;
+  run(1,keys(['KeyQ','KeyE','ArrowUp']));expect(v.motion.tank!.turretYaw).toBe(before);expect(v.motion.tank!.gunElevation).toBe(0);
+  run(2,keys(['KeyZ']));expect(v.motion.tank!.turretYaw).toBeGreaterThan(.5);
+ }finally{q.dispose();}
+});
 it('accelerates, boosts, brakes before reversing and holds still with no input',()=>{
  const {q,v,run}=fixture();try{
   run(1);expect(v.speed).toBeLessThan(.01);

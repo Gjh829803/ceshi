@@ -13,6 +13,7 @@ import {SUBMERSIBLE_WATER,createSubmersibleState} from './motion-families/underw
 import {sampleSubmersibleVisual,disposeSubmersibleVisual} from './submersible-visual';
 import {SUBMERSIBLE_SPEC} from '@worldkit/preset-content/submersible';
 import {buildSubmersibleModel} from '@worldkit/preset-content/submersible-model';
+import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
 function fixture(dry=false,wall=false){
  const q=new EnvironmentQueries({id:'pool',name:'Pool',description:'',bounds:{min:[-100,-30,-100],max:[100,30,100]},boxes:[{id:'floor',position:[0,dry?-1.55:-21,0],size:[200,1,200]},...(wall?[{id:'wall',position:[0,-4,9] as const,size:[100,40,.5] as const}]:[])],water:dry?[]:[{id:'water',min:[-90,-20.5,-90],max:[90,0,90],surface:0}],regions:[{id:'pool',name:'Pool',description:'',center:[0,0,0],size:[180,180],color:'#aaa',modes:['submarine','character']}],spawns:[],playerSpawn:[-20,1,0]});
@@ -21,11 +22,12 @@ function fixture(dry=false,wall=false){
  return {q,v,run,time:()=>time};
 }
 describe('observation submersible',()=>{
- it('separates arrow pitch from vertical thrust and gives Ctrl priority over forward drive',()=>{
+ it('separates Space/C pitch from camera and Q/E vertical thrust and gives Ctrl priority over forward drive',()=>{
   const f=fixture();try{
    f.v.position.y=-6;f.v.motion.submersible!.diving=true;f.v.motion.submersible!.ballast=1;
-   f.run(2,{pitch:-1});expect(f.v.pitch).toBeGreaterThan(.15);expect(f.v.motion.submersible!.ballast).toBe(1);
-   f.run(2,{lift:1});expect(Math.abs(f.v.pitch)).toBeLessThan(.05);
+   f.run(2,readControls(new Set(['Space','ArrowDown','KeyX']),true,false,{},undefined,f.v.spec));expect(f.v.pitch).toBeGreaterThan(.15);expect(f.v.motion.submersible!.ballast).toBe(1);expect(Math.abs(f.v.roll)).toBeLessThan(.01);
+   f.run(2,readControls(new Set(['KeyC']),true,false,{},undefined,f.v.spec));expect(f.v.pitch).toBeLessThan(-.15);
+   f.run(2,readControls(new Set(['KeyQ']),true,false,{},undefined,f.v.spec));expect(Math.abs(f.v.pitch)).toBeLessThan(.05);
    f.run(3,{forward:1});const moving=f.v.speed;f.run(3,{forward:1,boost:true,slow:true});expect(f.v.speed).toBeLessThan(moving*.2);
   }finally{f.q.dispose();}
  });

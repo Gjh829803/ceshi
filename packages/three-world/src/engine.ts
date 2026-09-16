@@ -24,8 +24,6 @@ import { geometrySignature,setEntityBoundary,worldPose } from './geometry.js';
 import { humanoidHost } from './humanoid-runtime/host-access';
 import { HumanoidRuntime,type HumanoidRuntimeOptions } from './humanoid-runtime/runtime.js';
 import { emptyInput } from './humanoid-runtime/simulation';
-import { vehicleKeyboardAxes } from './humanoid-runtime/input';
-import { CAMERA_PITCH_FOLLOW_MAX_OFFSET_RADIANS } from './config/input';
 import { WorldInputRouter,WorldKeyboard } from './input.js';
 import { LocomotionAnimation } from './locomotion-animation.js';
 import { ThreeNavigation,type NavigationSteering } from './navigation.js';
@@ -252,7 +250,7 @@ export class WorldEngine {
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
   clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
-  private updateKeyboardOwner():void{this.keyboard.setHumanoidContext(this.controlledHumanoid?()=>{const v=this.controlledHumanoid?.simulation.controlledActor.vehicle;return v?{mode:v.spec.mode,aircraftSubtype:v.spec.aircraftSubtype,instanceId:v.spec.id}:undefined;}:undefined);}
+  private updateKeyboardOwner():void{this.keyboard.setHumanoidContext(this.controlledHumanoid?()=>{const actor=this.controlledHumanoid?.simulation.controlledActor,v=actor?.vehicle;return v?{mode:v.spec.mode,aircraftSubtype:v.spec.aircraftSubtype,instanceId:v.spec.id,groundLocomotion:actor.wingsuitGroundControl,canopyDeployed:(v.motion.aircraft?.canopy??0)>0}:undefined;}:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
   onReset(callback: () => void): () => void { this.resets.add(callback); return () => { this.resets.delete(callback); }; }
@@ -400,7 +398,7 @@ export class WorldEngine {
     this.cameraSubjects.relocated([this.controlled]);this.syncCameraLifecycle();
     this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.pointerInput = {};
   }
-  private fixedStep(input: WorldInput, keyboardInput=false): void {
+  private fixedStep(input: WorldInput): void {
     const dt = this.fixedTimeStepSeconds;
     if(this.fixedTransaction||this.displayTransaction)throw new Error('WORLD_TRANSACTION_REENTRY');
     this.fixedTransaction=true;
@@ -411,9 +409,7 @@ export class WorldEngine {
       if(this.cameraMode!=='authored'){
         const inspected=this.inspectCamera(),cycle=inspected.resolved!.input.cycleViewIds;
         if(input.cameraTogglePressed&&cycle.length){const next=cycle[(cycle.indexOf(inspected.resolved!.viewId)+1)%cycle.length]!;this.cameraController.setView(next,this.cameraFrame());}
-        const vehicle=this.controlledHumanoid?.simulation.controlledActor.vehicle;
-        const pitchFollow=keyboardInput&&vehicleKeyboardAxes(vehicle?{mode:vehicle.spec.mode,aircraftSubtype:vehicle.spec.aircraftSubtype}:undefined).pitch;
-        this.cameraBasis=this.cameraController.prepareInput({orbitDeltaRadiansXY:[this.pointerInput.yawDeltaRadians??0,this.pointerInput.pitchDeltaRadians??0],orbitRatioXY:[input.cameraYawRatio??0,input.cameraPitchRatio??0],orbitPitchMaxOffsetRadians:pitchFollow?CAMERA_PITCH_FOLLOW_MAX_OFFSET_RADIANS:undefined,zoomDeltaMeters:this.pointerInput.distanceDeltaMeters??0,movement:Boolean(input.moveXRatio||input.moveZRatio||input.moveYRatio||input.humanoid?.forward||input.humanoid?.steer||input.humanoid?.lift||input.humanoid?.strafe||input.humanoid?.pitch||input.humanoid?.roll||input.humanoid?.jump||jumpPressed||(this.humanoid&&humanoidHost(this.humanoid).hasMovementIntent()))},dt,{...this.cameraFrame(),simulationTick:this.tick+1});
+        this.cameraBasis=this.cameraController.prepareInput({orbitDeltaRadiansXY:[this.pointerInput.yawDeltaRadians??0,this.pointerInput.pitchDeltaRadians??0],orbitRatioXY:[input.cameraYawRatio??0,input.cameraPitchRatio??0],zoomDeltaMeters:this.pointerInput.distanceDeltaMeters??0,movement:Boolean(input.moveXRatio||input.moveZRatio||input.moveYRatio||input.humanoid?.forward||input.humanoid?.steer||input.humanoid?.lift||input.humanoid?.strafe||input.humanoid?.pitch||input.humanoid?.roll||input.humanoid?.jump||jumpPressed||(this.humanoid&&humanoidHost(this.humanoid).hasMovementIntent()))},dt,{...this.cameraFrame(),simulationTick:this.tick+1});
       }
       this.pointerInput={};
       const drives: Record<string, CharacterDrive> = {};
@@ -698,7 +694,7 @@ export class WorldEngine {
           ...(pending.humanoidJump||Object.keys(pending.actions).length?{humanoid:{...emptyInput(),...sampled.humanoid,jump:pending.humanoidJump||!!sampled.humanoid?.jump,actions:{...sampled.humanoid?.actions,...pending.actions}}}:{})};
         this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};
       }
-      this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled,input===undefined);
+      this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
       if(input===undefined&&this.keyboard.advanceReset(this.fixedTimeStepSeconds))break;
     }
   }

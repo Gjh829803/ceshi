@@ -1,7 +1,7 @@
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {requestDragonLanding} from './motion-families/flying-creature/ground';
 import {dragonStandingPoint} from './motion-families/flying-creature/mount';
-import {actionForKey,createKeyBindings} from './input';
+import {actionForKey,createKeyBindings,readControls} from './input';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {beforeAll,expect,it} from 'vitest';
 import {DRAGON_VARIANTS} from '@worldkit/preset-content/dragon-variants';
@@ -156,12 +156,19 @@ function fixture(wall=false){
 it('turns A left and D right in the +Z camera convention',()=>{
   for(const steer of [-1,1]){const {q,v,step}=fixture();try{step({forward:1,steer},60);expect(v.position.x*steer).toBeLessThan(-.5);expect(v.roll*steer).toBeGreaterThan(.5);}finally{q.dispose();}}
 });
-it('keeps forward speed, arrow pitch and Space/C lift independent while Ctrl brakes',()=>{
+it('keeps forward speed, Space/C pitch and Q/E lift independent while Ctrl brakes',()=>{
  const {q,v,step}=fixture();try{
   step({forward:1},120);expect(v.speed).toBeGreaterThan(5);expect(Math.abs(v.pitch)).toBeLessThan(.001);
-  step({pitch:-1,slow:true},180);expect(v.pitch).toBeGreaterThan(.6);expect(v.speed).toBeLessThan(.1);
-  const height=v.position.y;step({lift:1,slow:true},120);expect(v.position.y).toBeGreaterThan(height+3);
-  step({lift:-1,slow:true},180);expect(v.position.y).toBeLessThan(height);
+  step(readControls(new Set(['Space','ControlLeft','ArrowDown']),true,false,{},undefined,v.spec),180);expect(v.pitch).toBeGreaterThan(.6);expect(v.speed).toBeLessThan(.1);
+  const height=v.position.y;step(readControls(new Set(['KeyQ','ControlLeft']),true,false,{},undefined,v.spec),120);expect(v.position.y).toBeGreaterThan(height+3);
+  step(readControls(new Set(['KeyE','ControlLeft']),true,false,{},undefined,v.spec),180);expect(v.position.y).toBeLessThan(height);
+ }finally{q.dispose();}
+});
+it('evades once per Z press without Q/E triggering evasion or an on-foot action',()=>{
+ const {q,v,step}=fixture();const keys=(codes:string[])=>readControls(new Set(codes),true,false,{},undefined,v.spec);
+ try{step(keys(['KeyQ']),30);expect(v.motion.flyingCreature!.evadeCount).toBe(0);
+  step(keys(['KeyZ']),300);expect(v.motion.flyingCreature!.evadeCount).toBe(1);
+  step(keys([]),300);step(keys(['KeyZ']),1);expect(v.motion.flyingCreature!.evadeCount).toBe(2);
  }finally{q.dispose();}
 });
 it('releases WASD to a true zero-velocity hover, including after Ctrl release',()=>{

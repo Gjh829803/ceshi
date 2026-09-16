@@ -1,4 +1,6 @@
 import type {Vec3} from '../../contracts';
+import {SOARING} from '../../config/aircraft';
+import {createWearableFlight} from '../motion-families/aircraft/wearable-flight';
 import {requestDragonLanding} from '../motion-families/flying-creature/ground';
 import {planDragonSummon} from '../motion-families/flying-creature/summon';
 import {planDragonMount,dragonStandingPoint,dragonMountPosition,dragonTransitionClear,type DragonMountTransition} from '../motion-families/flying-creature/mount';
@@ -11,7 +13,7 @@ import { paddleRiderBody } from '../motion-families/surface-vessel/paddling';
 import { evaluateDismount,evaluateMount,type MountContext,type MountDecision,type MountFailureCode } from '../mounted-interaction';
 import type { Input,PlayerState,Simulation,VehicleState } from '../simulation';
 import { actorBlocksPlayer,createVehicle,emptyInput } from '../simulation';
-import { HUMANOID_BODY,HumanoidController } from './controller';
+import { FIXED_DT,HUMANOID_BODY,HumanoidController } from './controller';
 export interface ActorInput {readonly input:Input;readonly yaw:number}
 
 export function syncPlayer(controller:HumanoidController,player:PlayerState):void{
@@ -48,11 +50,27 @@ export class HumanoidActor {
   get environment(){return this.world.environment;}
   get vehicles(){return this.world.vehicles;}
   get time(){return this.world.time;}
+  get wingsuitGroundControl(){return this.vehicle?.motion.aircraft?.subtype==='wingsuit'&&this.vehicle.motion.aircraft.wearable?.groundLocomotion===true;}
+  private beginWingsuitWalking(v:VehicleState,position=this.controller.position):void{
+    const a=v.motion.aircraft!;
+    a.wearable={...createWearableFlight(),groundLocomotion:true};a.canopy=0;a.towSeconds=0;a.towReleased=false;a.angularVelocity.set(0,0,0);a.airspeedMetersPerSecond=0;delete a.sample;
+    this.environment.releaseVehicleRig(v.spec.id);
+    this.controller.commitDismount(position.clone(),this.player.yaw,this.player.velocity.clone());
+    this.copyWalkingWingsuit(v);this.world.syncActorBodies();
+  }
+  private copyWalkingWingsuit(v:VehicleState):void{
+    syncPlayer(this.controller,this.player);v.position.copy(this.player.position);v.velocity.copy(this.player.velocity);
+    v.yaw=this.player.yaw;v.pitch=v.roll=0;v.rotation.setFromAxisAngle(new Vector3(0,1,0),v.yaw);
+    v.grounded=this.controller.grounded;v.speed=v.velocity.length();v.launched=false;
+  }
+  private releaseWalkingWingsuit():void{
+    if(this.wingsuitGroundControl)this.vehicle!.motion.aircraft!.wearable!.groundLocomotion=false;
+  }
   constructor(readonly id:string,readonly world:Simulation,position:Vector3,yaw=0){
     this.controller=new HumanoidController(world.environment,id);
     try{this.resetAt(position,yaw);}catch(error){this.controller.dispose();throw error;}
   }
-  resetAt(position:Vector3,yaw:number):void{this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
+  resetAt(position:Vector3,yaw:number):void{this.releaseWalkingWingsuit();this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(position,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;}
   beginStep(dt:number):void{
     if(this.vehicle?.motion.aircraft?.wearable?.phase==='stowed'&&this.vehicle.grounded&&this.vehicle.speed<.5&&this.transition===0)this.exit();
     const transition=this.dragonTransition;
@@ -68,12 +86,25 @@ export class HumanoidActor {
   }
   step(input:Input,yaw:number):void{
     const v=this.vehicle,p=this.player;
+    if(v&&this.wingsuitGroundControl){
+      if(stepHumanoidInput(this.controller,{...input,actions:{}},yaw))this.teleportRevision++;
+      this.copyWalkingWingsuit(v);
+      const wear=v.motion.aircraft!.wearable!,floor=this.environment.support(v.position,2000,.1);
+      wear.heightMeters=floor?Math.max(0,v.position.y-floor.height):null;
+      wear.sinkMetersPerSecond=Math.max(0,-v.velocity.y);
+      wear.phase=Math.hypot(v.velocity.x,v.velocity.z)>.1?'runup':'ready';
+      wear.launchFallSeconds=!v.grounded&&v.velocity.y<0?(wear.launchFallSeconds??0)+FIXED_DT:0;
+      if(!this.controller.swimming&&!this.controller.traversal&&(wear.heightMeters===null||wear.heightMeters>SOARING.wingsuitLaunchClearanceMeters)&&wear.launchFallSeconds>=SOARING.wingsuitLaunchFallSeconds&&this.controller.setMounted(true)){
+        wear.groundLocomotion=false;wear.phase='leap';wear.hadFlight=true;v.launched=true;
+      }
+      return;
+    }
     if(v&&this.dragonTransition){const t=this.dragonTransition,progress=1-this.transition/t.duration;p.position.copy(dragonMountPosition(t,progress));p.yaw=v.yaw-t.side*Math.PI/2*Math.sin(Math.PI*progress);p.animation=t.entering?'Sitting_Enter':'Sitting_Exit';return;}
     if(v){p.position.copy(v.position);if(v.spec.mode==='mount')p.position.add(new Vector3(...v.spec.seat).applyQuaternion(v.rotation));p.yaw=v.yaw;p.animation=this.transition>0?'Sitting_Enter':v.spec.characterPose==='stand'?'Idle_Loop':'Driving_Loop';return;}
     if(stepHumanoidInput(this.controller,this.transition>0?emptyInput():input,yaw))this.teleportRevision++;syncPlayer(this.controller,this.player);
   }
   finishStep():void{const v=this.vehicle;if(v&&!this.dragonTransition&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)){this.player.position.copy(v.position);this.player.yaw=v.yaw;}this.controller.skills.checkSeatSupport();}
-  dispose():void{this.controller.dispose();}
+  dispose():void{this.releaseWalkingWingsuit();this.controller.dispose();}
   recoveryTrigger(){
     const rule=this.environment.map.recovery;if(!rule)return null;
     const position=this.vehicle?.position??this.controller.position,bounds=this.environment.map.bounds;
@@ -145,7 +176,7 @@ export class HumanoidActor {
   /** Explicit reset for authored test starts; ordinary vehicle visits retain world targets. */
   prepareCharacter(position:Vector3,yaw:number){
     const safe=this.environment.safeSpawn(position,HUMANOID_BODY);if(!safe||this.environment.bodyOverlap({position:safe,rotation:new Quaternion(),body:HUMANOID_BODY},{excludedColliderHandles:new Set([this.controller.capsule.handle])},.015)){this.message='人物测试点没有站立净空';return false;}
-    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(safe,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;return true;
+    this.releaseWalkingWingsuit();this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.controller.resetAt(safe,yaw);syncPlayer(this.controller,this.player);this.teleportRevision++;return true;
   }
   prepare(n:number,spawn:MapSpawn):boolean {
     const v=this.vehicles[n],q=this.environment;if(!v)return false;
@@ -159,7 +190,7 @@ export class HumanoidActor {
     if(q.withVehicleCollisions(v.spec.id,()=>!canPlaceCreature(candidate,q))){this.message='准备点被其他载具占用';return false;}
     const boarding=this.boardingPoint(candidate);
     if(!boarding){this.message='准备点旁没有安全交互位置';return false;}
-    q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.noteVehicleRelocation(v.spec.id);this.world.preparedVehicleSpawns.set(v.spec.id,spawn);
+    this.releaseWalkingWingsuit();q.releaseVehicleRig(v.spec.id);Object.assign(v,candidate);this.world.noteVehicleRelocation(v.spec.id);this.world.preparedVehicleSpawns.set(v.spec.id,spawn);
     this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;
     this.player.position.copy(boarding);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!q.waterAt(boarding),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});
     this.controller.setMounted(false,boarding,v.yaw);this.world.syncActorBodies();
@@ -174,6 +205,7 @@ export class HumanoidActor {
     this.vehicleIndex=index;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;
     this.player.position.copy(vehicle.position).add(new Vector3(...vehicle.spec.seat).applyQuaternion(vehicle.rotation));
     this.player.yaw=vehicle.yaw;this.player.velocity.copy(vehicle.velocity);this.player.grounded=vehicle.grounded;
+    if(vehicle.motion.aircraft?.subtype==='wingsuit'&&vehicle.grounded)this.beginWingsuitWalking(vehicle,vehicle.position);
     this.world.syncActorBodies();
   }
   /** Establish a grounded initial relationship. Interaction approach points are irrelevant to an already seated start. */
@@ -370,6 +402,11 @@ export class HumanoidActor {
         return false;
       }
       if (!this.controller.setMounted(false, pt, v.yaw)) return false;
+      this.releaseWalkingWingsuit();
+      if(v.motion.aircraft?.subtype==='wingsuit'){
+        this.environment.releaseVehicleRig(v.spec.id);v.pitch=v.roll=0;v.rotation.setFromAxisAngle(new Vector3(0,1,0),v.yaw);
+        v.velocity.set(0,0,0);v.speed=0;v.motion.aircraft.angularVelocity.set(0,0,0);
+      }
       this.vehicleIndex = -1;
       this.player.position.copy(pt); this.player.velocity.copy(v.velocity); this.player.yaw = v.yaw;
       this.player.grounded = false; this.player.animation = 'Sitting_Exit';
@@ -384,6 +421,10 @@ export class HumanoidActor {
     }
     const entering=this.vehicles[n]!;
     if(entering.motion.submersible&&(this.environment.waterAt(entering.position)?.surface??-Infinity)-entering.position.y>.4){this.message='潜艇尚在水下，请先准备到水面再登艇';return false;}
+    if(entering.motion.aircraft?.subtype==='wingsuit'){
+      if(!this.controller.grounded||this.controller.swimming){this.message='请先在干燥地面站稳再穿戴翼装';return false;}
+      this.vehicleIndex=n;this.beginWingsuitWalking(entering);this.transition=0;this.transitionKind='';this.message='已穿戴翼装 · 可自由走动，F 脱下';return true;
+    }
     if (!this.controller.setMounted(true)) return false;
     this.vehicleIndex = n; this.player.velocity.set(0, 0, 0); this.player.animation = 'Sitting_Enter';
     this.transition = .5; this.transitionKind = 'enter'; this.message = '控制权已交给载具';
@@ -402,7 +443,7 @@ export class HumanoidActor {
     if(v.velocity.length()>=3){this.message='载具仍在移动，请减速或使用场景预设重新准备';return false;}
     const pt=this.boardingPoint(v);if(!pt){this.message='载具附近没有安全交互位置，请重新准备';return false;}
     if(!this.controller.setMounted(false,pt,v.yaw))return false;
-    this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.player.position.copy(pt);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!this.environment.waterAt(pt),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});return true;
+    this.releaseWalkingWingsuit();this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.player.position.copy(pt);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!this.environment.waterAt(pt),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});return true;
   }
     recoverVehicle():boolean {
       const v=this.vehicle,q=this.environment;

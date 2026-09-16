@@ -10,7 +10,7 @@ const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 export interface AircraftState {
  sample?:SolverSample;
  wearable?:WearableFlightState;
- temperatureKelvin:number;fuel:number;canopy:number;towSeconds:number;
+ temperatureKelvin:number;fuel:number;canopy:number;towSeconds:number;towReleased?:boolean;
  subtype:AircraftSubtype;rotorSpeedFraction:number;collective:number;tilt:number;rotorPhases:number[];rotorThrusts:number[];motorThrusts:number[];
  angularVelocity:Vector3;airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;
  stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;

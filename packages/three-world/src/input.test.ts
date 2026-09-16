@@ -14,6 +14,7 @@ type TestWorld = {
   canZoom: boolean;
   firstPerson: boolean;
   focus(): void;
+  useHumanoid(): void;
   bind(id: string): number;
   release(index: number): void;
   dispose(): void;
@@ -41,6 +42,7 @@ describe('world input follows the presented surface and UI focus', () => {
           const releases = [router.bind(document.getElementById('world' + index), document.getElementById('ui' + index))];
           return Object.assign(state, {
             sample: () => keyboard.sample(), focus: () => router.focus(),
+            useHumanoid: () => keyboard.setHumanoidContext(() => undefined),
             bind: id => releases.push(router.bind(document.getElementById(id))) - 1,
             release: index => releases[index](),
             dispose: () => { router.dispose(); keyboard.detach(); }
@@ -72,6 +74,20 @@ describe('world input follows the presented surface and UI focus', () => {
   });
   afterEach(async () => { await page.close(); });
   afterAll(async () => { await browser?.close(); });
+
+  it('holds Ctrl for humanoid walking and clears it on UI focus without crouching',async()=>{
+    await page.evaluate(()=>{const world=window.inputTest.worlds[0]!;world.useHumanoid();world.focus();});
+    const sample=()=>page.evaluate(()=>window.inputTest.worlds[0]!.sample().humanoid);
+    await page.keyboard.down('Control');await page.keyboard.down('w');
+    expect(await sample()).toMatchObject({forward:1,slow:true,actions:{}});
+    await page.keyboard.down('Shift');expect(await sample()).toMatchObject({slow:true,boost:true,actions:{}});
+    await page.keyboard.up('Control');expect(await sample()).toMatchObject({slow:false,boost:true,actions:{}});
+    await page.keyboard.down('Control');await page.locator('#prompt').focus();
+    expect(await sample()).toMatchObject({forward:0,slow:false,boost:false,actions:{}});
+    await page.keyboard.up('Control');await page.keyboard.up('Shift');await page.keyboard.up('w');
+    await page.evaluate(()=>window.inputTest.worlds[0]!.focus());await page.keyboard.press('c');
+    expect(await sample()).toMatchObject({slow:false,actions:{toggleCrouch:true}});
+  });
 
   it('zooms the actual Player camera through wheel events, preserving first-person, UI and authored-camera boundaries',async()=>{
     const compiled=await build({stdin:{resolveDir:process.cwd(),contents:`

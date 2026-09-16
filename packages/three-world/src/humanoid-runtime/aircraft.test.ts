@@ -10,14 +10,51 @@ import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {SPECS} from '@worldkit/preset-content/config';
 import {getMap} from '@worldkit/preset-content/environment/maps';
+import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
 function fixture(){const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,0,0]});const step=(input:Partial<Input>,n:number)=>{for(let i=0;i<n;i++){stepVehicle(v,{...emptyInput(),...input},1/60,i/60,q);q.stepPhysics(1/60);}};return {q,v,step};}
+it.each(['helicopter','multirotor','tiltrotor'] as const)('%s Z/X produces opposite lateral travel and levels after release',subtype=>{
+ for(const [key,sign] of [['KeyZ',-1],['KeyX',1]] as const){
+  const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype===subtype)!,spawn:[0,100,0],yaw:0});
+  const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+  try{v.throttle=.5;step([key],240);expect(v.roll*sign).toBeGreaterThan(.1);expect(v.position.x*sign).toBeLessThan(-1);
+   step([],360);expect(Math.abs(v.roll)).toBeLessThan(.1);expect(v.throttle).toBe(.5);
+  }finally{q.dispose();}
+ }
+});
+it.each(['ControlLeft','KeyS'])('tiltrotor keyboard accelerates through transition, uses %s to return to rotor flight and descends without independent pitch',slowKey=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype==='tiltrotor')!,spawn:[0,150,0],yaw:0});
+ const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);expect(input.pitch).toBe(0);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{v.throttle=.5;step(['KeyW'],1800);expect(v.motion.aircraft!.tilt).toBeGreaterThan(.65);expect(v.grounded).toBe(false);
+  const speed=v.speed;step([slowKey],1200);expect(v.speed).toBeLessThan(speed*(slowKey==='ControlLeft'?.5:1));expect(v.motion.aircraft!.tilt).toBeLessThan(.25);expect(v.grounded).toBe(false);
+  if(slowKey==='KeyS')expect(v.velocity.dot(new Vector3(0,0,1).applyQuaternion(v.rotation))).toBeLessThan(-1);
+  const height=v.position.y;step(['KeyE'],60);step([],240);expect(v.position.y).toBeLessThan(height-1);
+ }finally{q.dispose();}
+});
+it('glider takes off with W alone, trims speed with W/S and lands without manual pitch or roll',()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,0,0],yaw:0});
+ const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);expect(input.pitch).toBe(0);expect(input.roll).toBe(0);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{step(['KeyW'],480);expect(v.position.y,'keyboard tow launch').toBeGreaterThan(1);expect(v.grounded).toBe(false);
+  const tow=v.motion.aircraft!.towSeconds;step(['KeyW','KeyD'],120);expect(v.roll).toBeGreaterThan(.1);expect(v.motion.aircraft!.towSeconds).toBe(tow);expect(v.throttle).toBe(0);
+  step(['KeyS'],120);step(['KeyC','ControlLeft','Space'],2400);expect(v.grounded).toBe(true);expect(v.speed).toBeLessThan(1);
+ }finally{q.dispose();}
+});
 it('separates throttle from pitch and gives Ctrl priority over held W/Shift',()=>{
  const f=fixture();try{
   f.step({forward:1},90);expect(f.v.throttle).toBeGreaterThan(.4);
   const throttle=f.v.throttle;f.step({pitch:-1},30);expect(f.v.throttle).toBe(throttle);
   f.step({forward:1,boost:true,slow:true},90);expect(f.v.throttle).toBeCloseTo(0,12);
  }finally{f.q.dispose();}
+});
+it('glider braking cancels W tow and a released airborne tow cannot restart',()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,0,0],yaw:0});
+ const step=(keys:string[],ticks:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);for(let n=0;n<ticks;n++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{
+  for(const brake of ['Space','ControlLeft','KeyS']){step(['KeyW',brake],60);expect(v.motion.aircraft!.towSeconds).toBe(0);expect(v.speed).toBeLessThan(.2);}
+  step(['KeyW'],60);expect(v.motion.aircraft!.towSeconds).toBeGreaterThan(0);
+  v.position.y=10;v.grounded=false;v.launched=true;step([],1);const tow=v.motion.aircraft!.towSeconds;
+  expect(v.motion.aircraft!.towReleased).toBe(true);step(['KeyW'],60);expect(v.motion.aircraft!.towSeconds).toBe(tow);
+ }finally{q.dispose();}
 });
 it('rotorcraft keeps collective independent from horizontal speed, pitch and Ctrl',()=>{
  const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype==='helicopter')!,spawn:[0,100,0]});
@@ -145,6 +182,24 @@ for(const subtype of ['wingsuit','paraglider'])it(subtype+' settles, stows and h
   expect(v.motion.aircraft!.wearable!.phase).toBe('stowed');expect(v.grounded).toBe(true);expect(v.speed).toBeLessThan(.5);
   expect(v.motion.aircraft!.wearable!.spread).toBe(0);expect(v.motion.aircraft!.wearable!.seated).toBe(0);
   expect(v.motion.aircraft!.wearable!.heightMeters).toBeLessThan(.2);
+ }finally{q.dispose();}
+});
+
+for(const subtype of ['paraglider','wingsuit'])for(const steer of [-1,1])for(const approach of [false,true])it(`${subtype} landing steering ${steer}, approach=${approach} keeps the rider upright through stowing`,()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id===subtype)!,spawn:[0,25,0]});
+ v.velocity.set(0,-2,8);v.grounded=false;if(subtype==='wingsuit')v.motion.aircraft!.canopy=1;
+ let touched=false,groundTicks=0,minUp=1,maxHeight=0;
+ try{
+  for(let n=0;n<3600;n++){
+   stepVehicle(v,{...emptyInput(),steer:touched||approach&&v.position.y<6?steer:0},1/60,0,q);q.stepPhysics(1/60);
+   if(v.grounded)touched=true;
+   if(touched){groundTicks++;minUp=Math.min(minUp,new Vector3(0,1,0).applyQuaternion(v.rotation).y);maxHeight=Math.max(maxHeight,v.position.y);}
+   if(groundTicks>=240)break;
+  }
+  const diagnostic=JSON.stringify({minUp,maxHeight,position:v.position.toArray(),rotation:v.rotation.toArray(),angular:v.motion.aircraft!.angularVelocity.toArray(),wear:v.motion.aircraft!.wearable});
+  expect(touched,diagnostic).toBe(true);expect(minUp,diagnostic).toBeGreaterThan(.85);
+  expect(maxHeight,diagnostic).toBeLessThan(.65);expect(v.motion.aircraft!.wearable!.phase,diagnostic).toBe('stowed');
+  expect(v.grounded).toBe(true);expect(v.speed).toBeLessThan(.5);
  }finally{q.dispose();}
 });
 

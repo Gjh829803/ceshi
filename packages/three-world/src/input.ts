@@ -4,8 +4,8 @@ export type CameraPointerInput = Readonly<{
   pitchDeltaRadians?: number; distanceDeltaMeters?: number; activate?: boolean;
 }>;
 
-import {CAMERA_PITCH_FOLLOW_RATIO,INPUT_RESET_HOLD_SECONDS} from './config/input.js';
-import { activeControlActions,vehicleKeyboardAxes,type MountedInputContext } from './humanoid-runtime/input.js';
+import {INPUT_RESET_HOLD_SECONDS} from './config/input.js';
+import { activeControlActions,cameraKeyboardPitchRatio,type MountedInputContext } from './humanoid-runtime/input.js';
 import { actionForKey, readControls, DEFAULT_KEY_BINDINGS, createKeyBindings, type KeyBindings, type KeyAction, type ControlAction } from './humanoid-runtime/input.js';
 
 const UI_CONTROL_SELECTOR = 'input,textarea,select,button,a[href],[role="textbox"],[role="button"]';
@@ -68,7 +68,8 @@ export class WorldKeyboard {
     if (!this.held.has(code)) {
       if(this.humanoidMounted){const action=actionForKey(code,!!this.humanoidMounted(),this.held,this.bindings);if(action)this.humanoidPressed.push(action);}
       if(!this.humanoidMounted&&this.bound('cameraToggle',code))this.cameraToggleQueued=true;
-      if (this.bound('jump',code)) this.jumpQueued = true;
+      const context=this.humanoidMounted?.(),jumpAction=context?.mode==='dragon'?'ascend':'jump';
+      if (activeControlActions(context).includes(jumpAction)&&this.bound(jumpAction,code)) this.jumpQueued = true;
       if (this.bound('interact',code)) this.interactQueued = true;
     }
     this.held.add(code);
@@ -88,10 +89,10 @@ export class WorldKeyboard {
   sample(): WorldInput {
     this.syncContext();
     if(this.humanoidMounted){
-      const context=this.humanoidMounted(),mounted=!!context,axes=vehicleKeyboardAxes(context),humanoid:import('./humanoid-runtime/simulation').HumanoidActionInput={};let interact=false,cameraTogglePressed=false;
+      const context=this.humanoidMounted(),mounted=!!context,humanoid:import('./humanoid-runtime/simulation').HumanoidActionInput={};let interact=false,cameraTogglePressed=false;
       for(const action of this.humanoidPressed){if(action.kind==='interact')interact=true;else if(action.kind==='camera-toggle')cameraTogglePressed=true;else if(!mounted)Object.assign(humanoid,action.input);}
       const player=readControls(this.held,mounted,this.jumpQueued,humanoid,this.bindings,context);
-      const result:WorldInput={humanoid:player,interactPressed:interact,cameraTogglePressed,cameraYawRatio:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:(Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code))))*(axes.pitch?CAMERA_PITCH_FOLLOW_RATIO:1)};
+      const result:WorldInput={humanoid:player,interactPressed:interact,cameraTogglePressed,cameraYawRatio:Number(this.bindings.cameraLeft.some(code=>this.held.has(code)))-Number(this.bindings.cameraRight.some(code=>this.held.has(code))),cameraPitchRatio:(Number(this.bindings.cameraDown.some(code=>this.held.has(code)))-Number(this.bindings.cameraUp.some(code=>this.held.has(code))))*cameraKeyboardPitchRatio(context)};
       this.humanoidPressed.length=0;this.jumpQueued=false;this.interactQueued=false;return result;
     }
     const has = (action:ControlAction) => this.bindings[action].some(code => this.held.has(code));

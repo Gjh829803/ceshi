@@ -52,6 +52,13 @@ views, `upHalfLifeSeconds` filters reference up and preserves that history acros
 cuts. Native aircraft shoulder presets use `subject-heading`; spacecraft chase
 uses full subject up with independent yaw.
 
+Continuous aircraft heading uses frame-to-frame rotation only to choose a branch
+of the measured forward heading, not as an uncorrected yaw integrator. Inverted
+pitch loops preserve pole continuity; upright recovery uses actual forward again
+so combined pitch/bank motion cannot retain a false yaw offset. Content presets
+may set recenter minimum speed to zero for rest/hover recovery; this does not
+change generic strategy defaults or enable new pitch/roll inheritance.
+
 Native `follow-pivot` and `shoulder-eye` anchors distinguish posture framing from
 first-person eye position. Display posture uses the same fixed frame pair as the
 camera. An opted-in `orientation.recenter.pitch.targetSource:'subject'` consumes

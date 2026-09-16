@@ -12,7 +12,9 @@ export function rotorForces(v:VehicleState,input:Input,h:number,wingLift:number)
  const localRate=a.angularVelocity.clone().applyQuaternion(v.rotation.clone().invert());
  const wing=a.subtype==='tiltrotor'?a.tilt:0;
  const forwardSpeed=v.velocity.dot(new Vector3(0,0,1).applyQuaternion(v.rotation));
- const targetTilt=a.subtype==='tiltrotor'?clamp((forwardSpeed-R.transitionStart)/(R.transitionEnd-R.transitionStart),0,1):0;
+ // Ctrl/S must be able to leave wing-borne cruise: airspeed alone otherwise
+ // keeps both rotors facing forward and removes all horizontal brake authority.
+ const targetTilt=a.subtype==='tiltrotor'&&!input.slow&&input.forward>=0?clamp((forwardSpeed-R.transitionStart)/(R.transitionEnd-R.transitionStart),0,1):0;
  a.tilt+=clamp(targetTilt-a.tilt,-R.tiltRate*h,R.tiltRate*h);
  // 减速时自动恢复朝上的旋翼；过渡不瞬切姿态或补写速度。
  a.rotorSpeedFraction+=(Number(v.throttle>.001)-a.rotorSpeedFraction)*(1-Math.exp(-R.governorRate*h));

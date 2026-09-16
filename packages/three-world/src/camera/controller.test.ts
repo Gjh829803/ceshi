@@ -1018,6 +1018,48 @@ it('keeps aircraft heading through pitch poles, speculative input and checkpoint
   expect(c.inspect().intent!.yawRadians).toBeCloseTo(.2,9);
 });
 
+it.each([1/60,1/120])('returns behind the actual aircraft after closed pitch/bank paths, dt=%s',dt=>{
+ const f=fixture(),c=f.controller;let tick=0;
+ const aircraft={...initial,speedMetersPerSecond:20,continuousHeadingSeedRadians:0};
+ f.setSubject(aircraft);
+ c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'},armHalfLifeSeconds:.1},orientation:{recenter:{enabled:true,delaySeconds:0,minimumSpeedMetersPerSecond:0,yawHalfLifeSeconds:.2}}}}}}),frame());
+ const pose=(pitch:number,roll:number,yaw=0)=>{
+  f.setSubject({...aircraft,semanticQuaternionWorldXYZW:new Quaternion().setFromEuler(new Euler(pitch,yaw,roll,'YXZ')).toArray()});
+  c.prepareInput({},dt,frame(++tick));c.evaluateAndCommit(frame(tick));
+ };
+ const count=Math.round(1/dt),a=Math.PI/4;
+ for(let repeat=0;repeat<3;repeat++){
+  for(let n=1;n<=count;n++)pose(0,a*n/count);
+  for(let n=1;n<=count;n++)pose(a*n/count,a);
+  for(let n=1;n<=count;n++)pose(a,a*(1-n/count));
+  for(let n=1;n<=count;n++)pose(a*(1-n/count),0);
+ }
+ for(let n=0;n<count*5;n++)pose(0,0);
+ expect(c.inspect().intent!.yawRadians).toBeCloseTo(0,5);
+ expect(c.inspect().current!.positionWorldMetersXYZ[0]).toBeCloseTo(0,4);
+ // Half-loop plus half-roll ends upright facing the opposite heading. Do not
+ // preserve a stale inverted branch once the real forward is defined again.
+ for(let n=1;n<=count;n++)pose(Math.PI*n/count,0);
+ for(let n=1;n<=count;n++)pose(Math.PI,Math.PI*n/count);
+ for(let n=0;n<count*5;n++)pose(Math.PI,Math.PI);
+ expect(Math.cos(c.inspect().intent!.yawRadians)).toBeCloseTo(-1,5);
+ const before=c.inspect();c.sampleProjection({epoch:0,previousTick:tick-1,currentTick:tick,alpha:.5,cut:false},1);expect(c.inspect()).toEqual(before);
+});
+
+it('recenters yaw and pitch after released observation at rest when the document admits zero speed',()=>{
+ const f=fixture(),c=f.controller;
+ c.install(document({activation:'immediate',views:{orbit:{kind:'third-person',overrides:{position:{anchor:{kind:'origin'}},orientation:{initialPitchRadians:.2,recenter:{enabled:true,minimumSpeedMetersPerSecond:0,delaySeconds:1.5,yawHalfLifeSeconds:.5,pitch:{targetRadians:.2,halfLifeSeconds:.5}}}}}}}),frame());
+ step(c,1,{orbitDeltaRadiansXY:[1,.5]});
+ for(let n=2;n<=60;n++)step(c,n);
+ expect(c.inspect().intent).toMatchObject({yawRadians:1,pitchRadians:.7});
+ for(let n=61;n<=600;n++)step(c,n);
+ expect(c.inspect().intent!.yawRadians).toBeCloseTo(0,4);expect(c.inspect().intent!.pitchRadians).toBeCloseTo(.2,4);
+ // Body turning at rest must also be followed, without creating motion input.
+ f.setSubject({...initial,semanticQuaternionWorldXYZW:new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI/2).toArray()});
+ for(let n=601;n<=1200;n++)step(c,n);
+ expect(c.inspect().intent!.yawRadians).toBeCloseTo(Math.PI/2,4);
+});
+
 it('uses the displayed aircraft heading for heading-space anchors at both endpoints and between them',()=>{
   const f=fixture(),c=f.controller;
   const previous:CameraSubjectFacts={...initial,continuousHeadingSeedRadians:0};

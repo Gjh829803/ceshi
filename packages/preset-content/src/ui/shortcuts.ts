@@ -1,6 +1,6 @@
 import {humanoid} from '@worldkit/three';
 
-type ControlSubject = Pick<humanoid.VehicleSpec, 'mode' | 'aircraftSubtype' | 'flyingCreature'> & Partial<Pick<humanoid.VehicleSpec, 'archetype'>>;
+type ControlSubject = Pick<humanoid.VehicleSpec, 'mode' | 'aircraftSubtype' | 'flyingCreature'> & Partial<Pick<humanoid.VehicleSpec, 'archetype'>> & {groundLocomotion?:boolean};
 type Shortcut = [string, string];
 
 /** Presentation only: key admission and bindings remain owned by the SDK. */
@@ -23,11 +23,7 @@ export function controlsFor(subject: ControlSubject | undefined, bindings = huma
   if (!subject) return humanoid.controlHints(bindings);
   const {rows, add, pair} = shortcutRows(subject, bindings);
   const turn = () => pair('left', 'right', '左转', '右转');
-  const pitch = () => {
-    const start = rows.length;
-    pair('cameraUp', 'cameraDown', '抬头', '低头');
-    for (let n = start; n < rows.length; n++) rows[n]![1] += '（镜头有限跟随）';
-  };
+  const pitch = () => pair('pitchUp', 'pitchDown', '抬头', '低头');
   const roll = () => pair('rollLeft', 'rollRight', '向左横滚', '向右横滚');
   const forward = () => pair('forward', 'backward', '前进', '制动后后退');
   const boost = () => add('sprint', '加速');
@@ -35,42 +31,47 @@ export function controlsFor(subject: ControlSubject | undefined, bindings = huma
   const brake = (label = '刹车') => add('jump', label);
   const subtype = subject.aircraftSubtype;
 
+  if(subtype==='wingsuit'&&subject.groundLocomotion){
+    pair('forward','backward','前进','后退');pair('left','right','向左移动','向右移动');
+    add('sprint','跑步（可选）');slow('慢走');add('jump','跳跃');add('interact','脱下翼装');return rows;
+  }
+
   if (subject.mode === 'plane') {
     if (subtype === 'balloon') {
-      add('jump', '加热上升'); add('descend', '放热下降');
+      add('ascend', '加热上升'); add('descend', '放热下降');
       rows.push(['松键', '自然冷却，水平随风漂移']);
     } else if (subtype === 'helicopter' || subtype === 'multirotor' || subtype === 'tiltrotor') {
       pair('forward', 'backward', '向前飞行', '向后飞行');
-      pair('jump', 'descend', '增加垂直需求', '降低垂直需求（50% 悬停）');
-      pitch(); turn(); slow('水平减速（不降低升力）');
-      roll(); add('sprint', '提高前飞目标速度');
+      pair('ascend', 'descend', '增加垂直需求', '降低垂直需求（50% 悬停）');
+      turn(); slow('水平减速（不降低升力）');
+      pair('rollLeft', 'rollRight', '侧倾侧移左', '侧倾侧移右'); add('sprint', '提高前飞目标速度');
     } else if (subtype === 'glider' || subtype === 'paraglider' || subtype === 'wingsuit') {
-      pair('forward', 'backward', '提高目标空速', '降低目标空速'); pitch(); turn();
-      add('sprint', subtype === 'glider' ? '有限牵引起飞' : '地面助跑');
-      slow('空中减速'); add('descend', '扰流 / 下降辅助'); roll();
+      pair('forward', 'backward', '提高目标空速', '降低目标空速'); turn();
+      if(subtype!=='wingsuit')add('forward',subtype==='glider'?'起飞阶段：有限牵引':'地面助跑');
+      slow('空中减速'); add('airbrake', '扰流 / 下降辅助');
       brake(subtype === 'wingsuit' ? '开伞 / 伞下降落制动' : subtype === 'paraglider' ? '伞下降落制动' : '地面刹车');
     } else {
-      pair('forward', 'backward', '增加油门', '减少油门'); pitch(); turn();
-      slow('减油门 / 地面刹车'); brake('地面刹车'); roll();
+      pair('forward', 'backward', '增加油门', '减少油门'); pair('fixedWingPitchDown','fixedWingPitchUp','低头','抬头'); turn();
+      slow('减油门 / 地面刹车'); brake('地面刹车');
       add('sprint', '辅助增加油门');
     }
   } else switch (subject.mode) {
     case 'dragon':
       pair('forward', 'backward', '前进', '减速'); pitch(); turn();
-      pair('jump', 'descend', '起飞 / 上升', '下降');
+      pair('ascend', 'descend', '起飞 / 上升', '下降');
       slow('减速悬停'); boost(); if (subject.flyingCreature) add('rollLeft', '闪避');
       rows.push(['松开前进', '减速悬停']); break;
     case 'glider':
-      pair('forward', 'backward', '提高目标空速', '降低目标空速'); pitch(); turn();
-      add('sprint', '释放起飞'); slow('空中减速'); add('descend', '扰流 / 下降辅助');
-      roll(); brake('着陆制动'); break;
+      pair('forward', 'backward', '提高目标空速', '降低目标空速'); turn();
+      add('forward', '起飞阶段：有限牵引'); slow('空中减速'); add('airbrake', '扰流 / 下降辅助');
+      brake('着陆制动'); break;
     case 'submarine':
       pair('forward', 'backward', '前进', '倒航'); turn();
-      pair('jump', 'descend', '上浮', '下潜'); pitch();
-      slow('减速制动'); boost(); roll(); break;
+      pair('ascend', 'descend', '上浮', '下潜'); pitch();
+      slow('减速制动'); boost(); break;
     case 'spacecraft':
       pair('forward', 'backward', '向前推进', '向后推进'); turn();
-      pair('jump', 'descend', '局部上升', '局部下降'); pitch(); roll(); slow('反推制动'); break;
+      pair('ascend', 'descend', '局部上升', '局部下降'); pitch(); roll(); slow('反推制动'); break;
     case 'mount':
       pair('forward', 'backward', '前进', '后退'); turn();
       add('sprint', '疾驰'); slow('慢走'); add('jump', '跳跃'); break;
@@ -104,7 +105,7 @@ export function controlsFor(subject: ControlSubject | undefined, bindings = huma
       forward(); turn(); slow(); brake(subject.mode === 'wheeled' ? '手刹' : '刹车');
       if (subject.mode !== 'bus') boost();
   }
-  add('interact', subject.mode === 'dragon' ? '着陆 / 上下龙' : '离开载具（需满足离座条件）');
+  add('interact', subtype==='wingsuit'?'脱下翼装（需安全落地）':subject.mode === 'dragon' ? '着陆 / 上下龙' : '离开载具（需满足离座条件）');
   return rows;
 }
 
@@ -112,7 +113,7 @@ export function controlsFor(subject: ControlSubject | undefined, bindings = huma
 export function systemControlsFor(subject: ControlSubject | undefined, bindings = humanoid.DEFAULT_KEY_BINDINGS, canCycleView = true): Shortcut[] {
   const {rows, add, pair} = shortcutRows(subject, bindings);
   pair('cameraLeft', 'cameraRight', '镜头左转', '镜头右转');
-  if (!humanoid.vehicleKeyboardAxes(subject).pitch) pair('cameraUp', 'cameraDown', '镜头向上', '镜头向下');
+  pair('cameraUp', 'cameraDown', '镜头向上', '镜头向下');
   if (canCycleView) add('cameraToggle', '切换视角');
   if (subject) add('reset', '长按 · 场景复位');
   rows.push(['拖动', '自由观察'], ['滚轮', '镜头距离'], ['Esc', '释放 / 暂停'], ['1–6', '快速前往（调试）']);

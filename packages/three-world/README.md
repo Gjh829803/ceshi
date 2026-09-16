@@ -464,20 +464,22 @@ example and inspect runtime state before requesting an action.
 | Ability | Trigger | Character and scene requirements / result |
 | --- | --- | --- |
 | Walk, run, jump, land | WASD, Shift, Space | Real supporting collision. Start/stop/turn/fall/landing clips follow motion automatically. |
-| Crouch | C or Ctrl | Enter low stance; standing requires headroom. |
+| Slow walk | Hold Ctrl + WASD | Walk slowly without changing stance; takes precedence over Shift sprint. Release Ctrl to restore ordinary movement or held Shift sprint. |
+| Crouch | C | Enter low stance; standing requires headroom. |
 | Roll | Q; `roll` | Grounded, standing, empty hands, no conflicting action, cooldown clear. Collision can stop displacement. |
-| Slide | Shift + new C/Ctrl press; `slide` | Grounded, standing, empty hands, free action/cooldown, speed ≥2.5 m/s. See the complete card below. |
+| Slide | Shift + new C press; `slide` | Grounded, standing, empty hands, free action/cooldown, speed ≥2.5 m/s. See the complete card below. |
 | Pickup and carry | F; `pickup` with `targetId` | Pickup anchor, clear approach/path, empty hands, supported ground, object ≤8 kg; grasp position must fit the supplied table-height pickup. |
 | Put down | F; `putDown` | Carrying, supported ground and a valid clear placement on a supporting surface. No dedicated put-down clip. F is the shared interaction edge. |
 | Sit / stand | F; `sit` / `standUp`; Space to stand | Seat anchor and its collider IDs, clear approach; standing requires headroom. |
 | Prone and crawl | Z, then WASD | Space for the low capsule and a clear route. Standing requires headroom. |
-| Wall / ladder | F to attach, WASD to climb, Space to attempt top, C/Ctrl to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
+| Wall / ladder | F to attach, WASD to climb, Space to attempt top, C to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
 | Hurdle / mantle / high climb | Move toward obstacle + Space | Real obstacle probe, supported height/path/top and adequate headroom; controller chooses the applicable traversal. |
 | Swim | Automatic deep-water contact; style through action menu/input | `map.water` plus actual pool bottom/banks. Deep immersion enables swimming; shallow support returns to walking. |
 
 **Slide `slide`** — useful on open ground or through a low opening. A tunnel is
-not required to start. The user holds Shift while moving and newly presses C or
-Ctrl; pressing crouch during ordinary movement keeps the crouch intent. The Agent
+not required to start. The user holds Shift while moving and newly presses C;
+pressing C during ordinary movement keeps the crouch intent. Ctrl is held slow
+walking, not a crouch or slide edge. The Agent
 can directly request `slide`, after accelerating to at least 2.5 m/s. Provide
 run-up distance and actual colliders for a low opening. The character gradually
 lowers its capsule to approximately 0.9 m; collision limits actual travel. At
@@ -702,23 +704,42 @@ children after the SDK places actors, without writing roots, mixer or camera.
 | --- | --- |
 | WASD | Movement; climbing directions |
 | Mouse drag | Camera orbit, including while mounted |
-| Arrow keys | Look left/right; flying objects and submarines use up/down for pitch with small camera follow (except balloon) |
+| Arrow keys | Camera observation only, in every movement mode |
 | Shift held | Sprint / acceleration |
-| Space | Jump / traverse / stand; climbing top attempt |
-| C or Ctrl | On foot: crouch / stand; release climbing. Mounted: C descends/special; Ctrl slows/brakes |
-| Shift + C/Ctrl | Slide after run-up |
-| Z | Prone / stand |
-| Q / E | On foot: Q roll. Mounted: subtype roll/turret/strafe; dragon Q evade, E unused |
+| Space | On foot: jump / traverse / stand; climbing top attempt. Dragon, submarine, powered fixed-wing and spacecraft: pitch up. Soaring: special action |
+| C | On foot: crouch / stand; release climbing. Same pitch-capable vehicles: pitch down. Soaring: airbrake |
+| Ctrl (held) | On foot: slow walk without changing stance, overriding Shift. Mounted: slow / brake |
+| Shift + C | Slide after run-up |
+| Q / E | On foot: Q roll. Dragon, submarine, rotorcraft, balloon and spacecraft: ascend/descend. Powered fixed-wing and soaring: unused |
+| Z / X | On foot: Z prone/stand. Spacecraft: roll; rotorcraft: bank-induced lateral movement; tank: turret; hovercraft: strafe; dragon: Z evade |
 | F | One contextual interaction: pickup/put down, scene/climb or enter/exit vehicle/mount |
 | V | Cycle configured camera views (press edge) |
 | Backspace held | Mounted reset through the existing reset callback after 0.8 simulation seconds |
 
 Transition clips need no key. Swimming style is a secondary menu/input choice.
 Keyboard routing uses the controlled actor's current vehicle mode, independently
-of the camera target. Unreserved axes remain camera inputs and do not also drive
-the vehicle. Live flying pitch adds camera follow at 20% of the pitch orbit rate,
-bounded to ±10° around the view's initial/opening pitch. Mouse and explicit camera
-input retain the document's range. Rebound keys follow the same rule. For initial framing and
+of the camera target. Observation keys never generate vehicle pitch, and Space/C pitch
+does not inject camera orbit. Flying objects and submarines retain their calibrated
+20% vertical observation rate (except balloon), but no additional ±10° limit:
+keyboard, mouse and explicit camera input use the document's normal pitch range.
+Rotorcraft/tiltrotor and soaring aircraft have no separate keyboard pitch; W/S
+requests travel speed or airspeed trim. Fixed-wing and soaring aircraft retain
+A/D coordinated bank without manual Z/X roll; submarine Z/X is unused.
+`fixedWingPitchDown` / `fixedWingPitchUp` use Q/E on powered fixed-wing/pusher aircraft;
+Space is their ground wheel brake and C is unused. `pitchUp` / `pitchDown` use Space/C
+on dragon, submarine and spacecraft; `ascend` /
+`descend` use Q/E in vertically controlled contexts. The separate soaring
+`airbrake` action retains C. Foot/mount `jump` remains Space; dragon takeoff uses
+the `ascend` press edge. Rotorcraft and balloon Space/C are inactive.
+Glider W initiates finite tow, then W/S trims airspeed; released tow cannot restart
+in flight. Paraglider W runs off the launch platform. Neither requires Shift.
+Wingsuits can be equipped with F near grounded gear, including on level ground.
+Equipped ground WASD, Shift, Ctrl and Space use ordinary movement, optional sprint,
+slow walk and jump. Sustained descent beyond 3 m of clearance hands off to flight;
+ordinary jumps do not. Space needs a fresh press to open the canopy, then holding
+it brakes under canopy. Landing and stowing automatically unequip the suit at the
+landing site; ground F also unequips. Re-equipping clears the previous flight state.
+Rebound keys follow the same context rules. For initial framing and
 mount handoffs, follow the [camera setup guide](../creator-host/docs/agent/programming.md#initial-state-and-camera).
 HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
@@ -1531,8 +1552,9 @@ or scaling the root does not change that solver. Movement parameters remain
 configurable. Use the ordered wheel groups with `onVisualUpdate` and
 `updateVehicleWheels` for suspension, steering and spin.
 
-W/S increases/decreases persistent throttle, Shift assists and Ctrl decreases it (braking takes priority). Up/down arrows pitch up/down, A/D
-request coordinated turns, Q/E add bank, and Space brakes on the ground. The SDK
+W/S increases/decreases persistent throttle, Shift assists and Ctrl decreases it
+(braking takes priority). Q pitches down, E pitches up, A/D requests coordinated turns,
+and Space/Ctrl brake on the ground. C and Z/X are unused; arrows only observe. The SDK
 owns thrust, lift/drag, stall and landing physics. This factory does not supply
 rotorcraft/VTOL, propeller RPM/dynamics or automatic aerial navigation.
 

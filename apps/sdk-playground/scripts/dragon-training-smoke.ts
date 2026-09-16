@@ -29,7 +29,7 @@ async function summonAndBoard(){
   }
   assert((await state()).dragon.boarding.eligible,(await state()).dragon.boarding.message);
   await page.keyboard.press('f');await page.waitForFunction(()=>{const s=(window as any).playground.getState();return s.activeVehicle==='dragon'&&s.transitionSeconds===0;},{},{timeout:15000});
-  await page.keyboard.press('Space');await page.waitForFunction(()=>(window as any).playground.getState().flyingCreature.groundPhase==='airborne',{},{timeout:20000});
+  await page.keyboard.press('q');await page.waitForFunction(()=>(window as any).playground.getState().flyingCreature.groundPhase==='airborne',{},{timeout:20000});
 }
 try{
   await page.goto(base);await waitMap('campus');
@@ -58,7 +58,7 @@ try{
   await page.waitForTimeout(250);assert.equal((await state()).speed,0);
   await page.keyboard.down('Shift');await page.waitForFunction(()=>(window as any).playground.getState().speed>12);await page.keyboard.up('Shift');
   await page.waitForFunction(()=>(window as any).playground.getState().speed===0,{},{timeout:15000});
-  // Shooting bindings are deferred: E must stay inert in dragon context.
+  // Shooting bindings are deferred: E descends, but must never emit flame.
   await page.keyboard.down('e');await page.waitForTimeout(300);await page.keyboard.up('e');
   const idle=await state();assert.equal(idle.speed,0);assert.equal(idle.flyingCreature.flamePhase,'off');assert.equal(idle.dragonVisual.flameParticles,0);
   assert(Math.hypot(...idle.riderHip.map((v:number,i:number)=>v-idle.dragonSeat[12+i]))<.001);

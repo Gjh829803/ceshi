@@ -384,7 +384,7 @@ function input() {
         jumpPressed,
         humanCommands,
         sdk.getKeyBindings(),
-        sim.controlledActor.vehicle?{mode:sim.controlledActor.vehicle.spec.mode,aircraftSubtype:sim.controlledActor.vehicle.spec.aircraftSubtype}:undefined,
+        sim.controlledActor.vehicle?{mode:sim.controlledActor.vehicle.spec.mode,aircraftSubtype:sim.controlledActor.vehicle.spec.aircraftSubtype,groundLocomotion:sim.controlledActor.wingsuitGroundControl,canopyDeployed:(sim.controlledActor.vehicle.motion.aircraft?.canopy??0)>0}:undefined,
       );
 }
 function toast(text: string) {
@@ -1140,12 +1140,12 @@ function updateUI(force = false) {
   const h = sim.controlledActor.controller,
     bindings = sdk.getKeyBindings(),
     key = (action: humanoid.ControlAction) => humanoid.bindingLabel(action, bindings),
-    pitchControls = humanoid.vehicleKeyboardAxes(v?.spec).pitch,
     summon = session.map.id===DRAGON_TRAINING.id ? sim.vehicles.find(vehicle=>vehicle.motion.flyingCreature)?.motion.flyingCreature?.summon : undefined,
     traversalPrompt = humanoidTraversalReady(h)
       ? `${key('forward')} / ${key('left')} / ${key('backward')} / ${key('right')} + ${key('jump')} · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
       : null;
-  const bindingSignature = JSON.stringify({keys:bindings,cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
+  const controlSubject=v?{...v.spec,groundLocomotion:sim.controlledActor.wingsuitGroundControl}:undefined;
+  const bindingSignature = JSON.stringify({keys:bindings,groundLocomotion:controlSubject?.groundLocomotion,cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
   if (lastActive !== sim.controlledActor.vehicleIndex || lastBindings !== bindingSignature) {
     lastBindings = bindingSignature;
     library.setActive(libraryAssetId(v?.spec.id ?? "person"));
@@ -1159,16 +1159,14 @@ function updateUI(force = false) {
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
     shell.update({
-      controls: controlsFor(v?.spec, bindings),
+      controls: controlsFor(controlSubject, bindings),
     });
-    setText("shortcutSubject", v ? "载具操作" : "人物操作");
+    setText("shortcutSubject", controlSubject?.groundLocomotion?"翼装步行":v ? "载具操作" : "人物操作");
     const systemKeys = systemControlsFor(v?.spec, bindings, !!sdk.inspectCamera().document?.input?.cycleViewIds?.length);
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
     setText(
       "cameraNote",
-      pitchControls
-        ? `${key('cameraLeft')} / ${key('cameraRight')} 左右观察；${key('cameraUp')} / ${key('cameraDown')} 控制俯仰，镜头有限跟随。鼠标拖动仍可自由观察。`
-        : `${key('cameraLeft')} / ${key('cameraRight')} 左右观察，${key('cameraUp')} / ${key('cameraDown')} 上下观察；鼠标拖动兼容，滚轮调整距离。`,
+      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察，${key('cameraUp')} / ${key('cameraDown')} 上下观察；方向键不控制载具姿态。鼠标拖动兼容，滚轮调整距离。`,
     );
   }
   setText(
@@ -1215,15 +1213,17 @@ function updateUI(force = false) {
     setHTML(
       "interaction",
       v.motion.flyingCreature
-        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('jump')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
+        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('ascend')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
-        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('jump')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
+        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('ascend')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "submarine"
         ? "载具涉水 · 使用页面复位按钮继续训练"
+        : v.motion.aircraft?.wearable
+        ? humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy,bindings)
         : v.spec.mode === "glider" && !v.launched
-          ? `${key('sprint')} 从高台释放，开始滑翔 · ${key('cameraUp')} / ${key('cameraDown')} 俯仰`
+          ? `${key('forward')} 从高台释放，开始滑翔 · ${key('forward')} / ${key('backward')} 空速配平`
           : v.spec.mode === "plane"
-            ? controlSummaryFor(v.spec, bindings)
+            ? controlSummaryFor(controlSubject!, bindings)
             : `${key('interact')} ${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
     );
   else
@@ -1239,7 +1239,7 @@ function updateUI(force = false) {
             ? `${key('interact')} 进入攀爬`
             : null) ??
         (nearest >= 0
-          ? `${key('interact')} 进入 ${SPECS[nearest]!.name}`
+          ? `${key('interact')} ${SPECS[nearest]!.aircraftSubtype==='wingsuit'?'穿戴':'进入'} ${SPECS[nearest]!.name}`
           : (traversalPrompt ?? "打开资产库选择主体，或自由探索")),
     );
   if (!v) {
@@ -1256,7 +1256,7 @@ function updateUI(force = false) {
   } else
     setText(
       "bottomHint",
-      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察 · ${pitchControls?`${key('cameraUp')} / ${key('cameraDown')} 俯仰与有限镜头跟随`:`${key('cameraUp')} / ${key('cameraDown')} 上下观察`} · 长按 ${key('reset')} 场景复位 · Esc 暂停`,
+      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察 · ${key('cameraUp')} / ${key('cameraDown')} 上下观察 · 长按 ${key('reset')} 场景复位 · Esc 暂停`,
     );
   const pos = v?.position ?? p.position;
   let zone = session.map.regions[0]!,
