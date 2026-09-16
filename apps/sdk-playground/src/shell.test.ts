@@ -62,7 +62,7 @@ describe('Shell render isolation',()=>{
   });
   expect(await page.locator('.powertrain-hud').innerText()).toContain('10 km/h');
   expect(await page.locator('#fpsReadout').innerText()).toBe('FPS 10');
-  expect(await page.locator('.stage-bar').innerText()).toContain('Moving 10');
+  expect(await page.locator('.workspace-statusbar').innerText()).toContain('Moving 10');
   expect(counts.after).toBe(counts.before);
  });
  it('refreshes real key, label, order and length edits, including reused input arrays',async()=>{

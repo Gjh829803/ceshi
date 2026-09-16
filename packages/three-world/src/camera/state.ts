@@ -108,6 +108,8 @@ export interface ViewState {
   readonly subject: CameraSubjectFacts;
   readonly intent: CameraIntent;
 }
+/** Internal authority: only CameraController publishes this state.
+ * Strategies return proposals; observers consume detached samples or frozen inspection. */
 export interface ControllerState {
   readonly selectionMemory?:CameraViewSelectionMemory|undefined;
   readonly viewSelection?:CameraViewSelectionInspection|undefined;
@@ -141,6 +143,8 @@ export interface ControllerState {
   }[];
   readonly operations: ReadonlySet<string>;
 }
+/** Detached, deeply frozen observation. Reading never advances camera time.
+ * Diagnostic sampling may refresh query records without changing commit revision. */
 export interface CameraInspection {
   readonly performance?: import("./performance").CameraPerformanceReading;
   readonly viewSelection?:CameraViewSelectionInspection|undefined;

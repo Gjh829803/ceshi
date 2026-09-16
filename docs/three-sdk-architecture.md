@@ -276,6 +276,8 @@ preserve-opening 沿用作者构图朝向，第一人称保留视线方向。显
 
 ### 相机扩展维护规范
 
+相机模块的当前职责、固定步与展示阶段边界、可重复的验收步骤见[相机职责与回归验收](camera-maintenance.md)。
+
 本节是维护者和开发 Agent 扩展相机的权威入口。现有实现支持命名视角、主体绑定、
 分层参数、显式 `setCameraView(viewId)` 和可选 `viewSelection.rules`。第一项状态事实
 是原生人物 `swimming`；普通 Mesh 缺少该事实时明确不可用。`resumeCameraViewSelection()`

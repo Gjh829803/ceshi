@@ -48,7 +48,8 @@ it('exposes changed schema after trusted maintenance regeneration',async()=>{
  await writeFile(path.join(root,'sdk/three-world/package.json'),JSON.stringify({type:'module'}));
  const scripts=path.join(root,'sdk/three-world/scripts');await mkdir(scripts);
  await copyFile('packages/three-world/scripts/generate-camera-validator.ts',path.join(scripts,'generate-camera-validator.ts'));
- await symlink(path.resolve('node_modules'),path.join(root,'node_modules'));
+ // Windows junctions link directory fixtures without requiring symlink privileges.
+ await symlink(path.resolve('node_modules'),path.join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
  execFileSync(process.execPath,['--import','tsx',path.join(scripts,'generate-camera-validator.ts')],{cwd:process.cwd(),stdio:'pipe'});
  const result=await discover();
  expect(result.cameraConfiguration.status).toBe('available');

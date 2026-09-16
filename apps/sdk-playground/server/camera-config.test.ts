@@ -89,6 +89,11 @@ describe('local camera file HTTP service',()=>{
  });
 });
 describe('Vite exact imported camera bytes',()=>{
+ it('rejects an unregistered file in a static bundle',async()=>{
+  const f=await fixture();await writeFile(path.join(f.root,'config/unregistered.json'),source);
+  await writeFile(path.join(f.root,'entry.js'),`export {default} from './config/unregistered.json?camera-document';`);
+  await expect(build({configFile:false,root:f.root,logLevel:'silent',plugins:[cameraDocumentPlugin(f.root)],build:{write:false,minify:false,lib:{entry:path.join(f.root,'entry.js'),formats:['es']}}})).rejects.toThrow('CAMERA_IMPORT_UNKNOWN');
+ });
  it('application adapter fails explicitly when a runner lacks its loader',async()=>{
   const {loadCameraProject}=await import('../src/camera-project');
   expect(()=>loadCameraProject('campus','D01')).toThrow('CAMERA_IMPORT_IDENTITY_UNAVAILABLE');
@@ -107,12 +112,12 @@ describe('Vite exact imported camera bytes',()=>{
   const f=await fixture();const file=path.join(f.root,'config/camera.json');await writeFile(file,source);
   const first=await f.server.transformRequest('/config/camera.json?camera-document');expect(first!.code).toContain(sha(source));
   const changed=source+'\n ';await writeFile(file,changed);
-  await new Promise<void>((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('HMR not invalidated')),4000);const check=()=>{const module=f.server.moduleGraph.getModuleById(file+'?camera-document');if(module?.transformResult===null){clearTimeout(timeout);resolve();}else setTimeout(check,20);};check();});
+  await new Promise<void>((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('HMR not invalidated')),4000);const check=()=>{const module=f.server.moduleGraph.getModuleById(file.split(path.sep).join('/')+'?camera-document');if(module?.transformResult===null){clearTimeout(timeout);resolve();}else setTimeout(check,20);};check();});
   const second=await f.server.transformRequest('/config/camera.json?camera-document');expect(second!.code).toContain(sha(changed));expect(second!.code).not.toContain(sha(source));
  });
- it('static bundle pairs default document with exact input hash, not a later disk read',async()=>{
-  const f=await fixture();const file=path.join(f.root,'config/camera.json');await writeFile(file,source);
-  await writeFile(path.join(f.root,'entry.js'),`export {default as document,fileSha256} from './config/camera.json?camera-document';`);
+ it.each(['config/camera.json','config/cameras/indoor-lab.json','config/cameras/npc-workshop.json'])('static bundle pairs exact input bytes for %s, not a later disk read',async(relativeFile)=>{
+  const f=await fixture();const file=path.join(f.root,relativeFile);await writeFile(file,source);
+  await writeFile(path.join(f.root,'entry.js'),`export {default as document,fileSha256} from './${relativeFile}?camera-document';`);
   const result=await build({configFile:false,root:f.root,plugins:[cameraDocumentPlugin(f.root),{name:'later-disk-edit',transform(code,id){if(id.endsWith('?camera-document'))return writeFile(file,source+'\n').then(()=>code);}}],build:{write:false,minify:false,lib:{entry:path.join(f.root,'entry.js'),formats:['es']}}});
   const output=(Array.isArray(result)?result[0]:result) as {output:{type:string;code?:string}[]};const code=output.output.find(o=>o.type==='chunk')!.code!;
   const adopted=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));expect(adopted.fileSha256).toBe(sha(source));expect(adopted.document).toEqual(JSON.parse(source));expect(sha(await readFile(file,'utf8'))).not.toBe(adopted.fileSha256);

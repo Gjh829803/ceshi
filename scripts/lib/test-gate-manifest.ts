@@ -102,6 +102,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   {path:"packages/three-world/src/camera/strategies/recenter.test.ts",lane:"contract",suites:["camera"]},
   { path: "packages/three-world/src/camera/strategies/strategies.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/three-world/src/camera/view-selection.test.ts", lane: "contract", suites:["camera"] },
+  { path: "packages/three-world/src/camera/world-subject.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/three-world/src/capture-selection-integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/capture-selection.test.ts", lane: "contract" },
   { path: "packages/three-world/src/config/camera/browser-validator.test.ts", lane: "contract", suites: ["camera"] },

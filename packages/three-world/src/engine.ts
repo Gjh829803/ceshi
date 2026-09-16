@@ -137,7 +137,10 @@ export class WorldEngine {
     this.physics = physics; this.navigation = navigation;
     this.humanoid=physics instanceof HumanoidRuntime?physics:undefined;
     this.resources=this.humanoid?humanoidHost(this.humanoid).resources:new ActorResources();
-    this.cameraSubjects=new WorldCameraSubjects(id=>this.entities.get(id),id=>this.physics.state(id)?.velocityMetersPerSecondXYZ,this.humanoid);
+    this.cameraSubjects=new WorldCameraSubjects(id=>this.entities.get(id),id=>this.physics.state(id)?.velocityMetersPerSecondXYZ,this.humanoid?{
+      sampleCamera:(binding,generation,display)=>humanoidHost(this.humanoid!).sampleCamera(binding,generation,display),
+      cameraOperation:binding=>humanoidHost(this.humanoid!).cameraOperation(binding),
+    }:undefined);
     this.cameraController=new CameraController({entityGeneration:id=>this.cameraSubjects.generation(id),sampleSubject:binding=>this.cameraSubjects.sample(binding),geometry:({subject})=>this.humanoid?humanoidHost(this.humanoid).cameraGeometry(subject):{probe:(from,to,radius)=>this.physics.castCameraArm(from,to,radius,subject.id)}});
     if(this.humanoid)humanoidHost(this.humanoid).bindCamera({assertExternalMutation:()=>this.assertLifecycleMutationAllowed(),follow:options=>this.setCameraFollow(options),view:(id,cut)=>this.setCameraView(id,cut),authored:()=>this.useAuthoredCamera(),inspect:()=>this.cameraController.inspect(),snapshot:()=>this.cameraSnapshot(),forward:()=>this.controlForwardWorldXYZ(),changed:()=>{if(!this.fixedTransaction&&!this.resetting)this.syncCameraLifecycle();}});
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;

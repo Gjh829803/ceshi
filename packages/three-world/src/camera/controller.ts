@@ -1,11 +1,13 @@
 import {CameraPerformance} from "./performance";
-import {composeCameraAtPosition} from './composition';
+import {sampleCameraDisplay} from './display-sample';
+import {resolveCameraInput, prepareCameraControl} from './input-intent';
+import {evaluateCameraPose, resolveCameraDesiredPose} from './pose';
+import {planCameraViewTransition} from './view-transition';
 import {cameraControlForward,cameraInputRotation,cameraInputYaw} from './control-basis';
 import {selectCameraView} from "./view-selection";
-import {sameCameraReference,cameraSubjectHeading} from './strategies/heading';
+import {sameCameraReference} from './strategies/heading';
 import {createOpeningReference} from './strategies/third-person';
-import {cameraDisplayAnchor, cameraDisplaySubject} from './display-anchor';
-import {cameraFramesCompatible} from './state';
+import {cameraDisplayAnchor} from './display-anchor';
 import {
   resolve,
   adoptAuthoredOpening,
@@ -36,15 +38,12 @@ import {
   type CameraLifecycleEvent,
 } from "./lifecycle";
 import {
-  blendCameraProposals,
-  sampleCameraPresentation,
   validateCameraProposal,
 } from "./presentation";
 import type { CameraFixedFrame, PresentationSampleContext } from "./state";
 import type { CameraOrbitOptions } from "../contracts";
 import { cameraSubjectCapabilities, cameraPositionAnchor, subjectHeading, type CameraSubjectFacts } from "./subject";
-import { prepareCameraIntent, evaluateStrategy } from "./strategies/evaluation";
-import { evaluateFirstPerson } from "./strategies/first-person";
+import { evaluateStrategy } from "./strategies/evaluation";
 import type {
   CameraIntent,
   CameraOpeningReference,
@@ -251,20 +250,7 @@ export class CameraController {
       deltaSeconds: dt,
       previousVerticalFovDegrees: state.current?.lens.verticalFovDegrees ?? state.initialVerticalFovDegrees,
     };
-    return input.configuration.kind === "first-person"
-      ? evaluateFirstPerson({
-          ...input,
-          configuration: input.configuration,
-          history: input.history as
-            | CameraStrategyHistory<"first-person">
-            | undefined,
-        })
-      : evaluateStrategy(input);
-  }
-  private desiredPose(candidate: ControllerState, base: CameraProposal): CameraProposal {
-    return candidate.mode === "follow-pending"
-      ? (candidate.pendingPose ?? (candidate.resolved?.kind === "third-person" && candidate.resolved.opening ? base : (candidate.authoredPose ?? base)))
-      : base;
+    return evaluateCameraPose(input);
   }
   private intentAtOpening(reference: CameraOpeningReference, configuration: ResolvedCameraConfiguration,
     subject: CameraSubjectFacts, previous: CameraIntent): CameraIntent {
@@ -285,38 +271,13 @@ export class CameraController {
     headingHistory?: CameraStrategyHistory,
   ): void {
     const result = this.pose(candidate, candidate.subject!, dt, headingHistory);
-    let base = result.proposal;
-    let transition = candidate.transition;
-    if (transition.kind === "blend") {
-      if (dt === 0)
-        this.constraints.project(
-          base,
-          candidate.resolved!,
-          candidate.subject!,
-          frame.aspect,
-          base,
-          frame.simulationTick,
-          "fixed",
-        );
-      const elapsed = Math.min(
-        transition.durationSeconds,
-        transition.elapsedSeconds + dt,
-      );
-      base = blendCameraProposals(
-        transition.source,
-        base,
-        elapsed / transition.durationSeconds,
-      );
-      transition =
-        elapsed >= transition.durationSeconds
-          ? {
-              kind: "none",
-              configuredDurationSeconds: transition.configuredDurationSeconds,
-              effectiveDurationSeconds: 0,
-            }
-          : { ...transition, elapsedSeconds: elapsed };
-    }
-    const desired = this.desiredPose(candidate, base);
+    if (candidate.transition.kind === "blend" && dt === 0)
+      this.constraints.project(result.proposal, candidate.resolved!, candidate.subject!,
+        frame.aspect, result.proposal, frame.simulationTick, "fixed");
+    const { base, desired, transition } = resolveCameraDesiredPose(result.proposal, {
+      configuration: candidate.resolved!, mode: candidate.mode, pendingPose: candidate.pendingPose,
+      authoredPose: candidate.authoredPose, transition: candidate.transition, deltaSeconds: dt,
+    });
     validateCameraProposal(desired, frame.aspect);
     const solved = this.constraints.solve(
       desired,
@@ -693,9 +654,11 @@ export class CameraController {
     const activated=old.resolved.viewId===viewId?this.activatePendingFollow(old,subject):old;
     const resolved=resolve(old.document,viewId,subject,activated.openings.get(viewId));
     const cached=activated.views.get(viewId);
-    let intent=initialIntent(resolved,subject,activated.openings.get(viewId));
-    if(subject.continuousHeadingSeedRadians!==undefined&&resolved.values.orientation.referenceFrame==='world-up'&&!activated.openings.has(viewId))
-      intent=clampCameraIntent({...intent,yawRadians:cameraSubjectHeading(subject,old.history)??intent.yawRadians},resolved);
+    const planned = planCameraViewTransition({
+      configuration: resolved, previousConfiguration: old.resolved, subject, previousSubject: old.subject,
+      opening: activated.openings.get(viewId), headingHistory: old.history, current: old.current, requestedCut: options.cut,
+    });
+    let intent = planned.intent;
     if(options.automatic&&old.intent){
       // Gameplay changes framing without steering the player. In particular, a
       // backwards-moving subject may face opposite the player's orbit heading.
@@ -706,12 +669,7 @@ export class CameraController {
         intent=clampCameraIntent({...intent,yawRadians:cameraInputYaw(direction,resolved,subject,intent,activated.openings.get(viewId),old.history)},resolved);
       }
     }
-    const firstPerson=old.resolved.kind==='first-person'||resolved.kind==='first-person';
-    const incompatible=!sameCameraReference(old.resolved.values.orientation,resolved.values.orientation);
-    const duration=firstPerson||options.cut||incompatible?0:resolved.transition.durationSeconds;
-    const transition:CameraTransition=duration>0&&old.current
-      ?{kind:'blend',source:old.current,sourceSubject:old.subject,targetViewId:viewId,elapsedSeconds:0,durationSeconds:duration,configuredDurationSeconds:resolved.transition.durationSeconds,effectiveDurationSeconds:duration}
-      :{kind:'none',configuredDurationSeconds:resolved.transition.durationSeconds,effectiveDurationSeconds:0,...(firstPerson?{reason:'first-person-cut' as const}:options.cut?{reason:'requested-cut' as const}:{})};
+    const transition = planned.transition;
     return {...activated,
       ...(old.document.viewSelection&&!options.automatic?{selectionMemory:{manualViewId:viewId},viewSelection:{source:'manual' as const,viewId,unavailableRules:[]}}:{}),
       resolved,subject,intent,history:undefined,mode:'follow',transition,
@@ -820,43 +778,16 @@ export class CameraController {
         const subject = this.sample(old.document!, frame);
         if (!sameCameraSubject(subject, old.subject!))
           throw failure("CAMERA_LIFECYCLE_EVENT_REQUIRED");
-        const delta = input.orbitDeltaRadiansXY ?? [0, 0],
-          ratio = input.orbitRatioXY ?? [0, 0];
-        if (
-          ![...delta, ...ratio, input.zoomDeltaMeters ?? 0, deltaSeconds].every(
-            Number.isFinite,
-          ) ||
-          deltaSeconds < 0 ||
-          ratio.some((value) => Math.abs(value) > 1)
-        )
-          throw failure("CAMERA_INPUT_INVALID");
-        const yaw =
-          delta[0] +
-          ratio[0] * old.resolved!.input.orbitRateRadiansPerSecond * deltaSeconds;
-        const pitch =
-          delta[1] +
-          ratio[1] * (old.resolved!.input.orbitPitchRateRadiansPerSecond ?? old.resolved!.input.orbitRateRadiansPerSecond) * deltaSeconds;
-        const active = !!input.movement || yaw !== 0 || pitch !== 0 || (input.zoomDeltaMeters ?? 0) !== 0;
+        const delta = resolveCameraInput(input, old.resolved!.input, deltaSeconds);
+        const active = delta.active;
         const selected=this.selectionCandidate(active?this.activatePendingFollow(old,subject):old,subject,deltaSeconds);
         old=selected.state;
         const activated = old;
         const resolved = activated.resolved!, openings = activated.openings, history = activated.history;
-        const seed = activated.intent!;
-        const intent = prepareCameraIntent({
-          subject,
-          configuration: resolved,
-          intent: {
-            ...seed,
-            yawRadians: seed.yawRadians + yaw,
-            pitchRadians: seed.pitchRadians + pitch,
-            distanceMeters: seed.distanceMeters + (input.zoomDeltaMeters ?? 0),
-            secondsSinceOrbit: yaw !== 0 || pitch !== 0 ? 0 : seed.secondsSinceOrbit,
-          },
-          history,
-          headingHistory: old.history,
-          opening: openings.get(resolved.viewId),
-          deltaSeconds,
-        });
+        const { intent, basis } = prepareCameraControl({
+          subject, configuration: resolved, intent: activated.intent!, history, headingHistory: old.history,
+          opening: openings.get(resolved.viewId), deltaSeconds,
+        }, delta, old.resolved!.viewId);
         const state: ControllerState = {
           ...activated,
           subject,
@@ -865,14 +796,6 @@ export class CameraController {
           history,
           intent,
           mode: active ? "follow" : old.mode,
-        };
-        // Movement follows the player's orbit intent. Collision changes the eye,
-        // never the movement heading, and is solved once after physics.
-        const basis: CameraControlBasis = {
-          quaternionWorldXYZW: cameraInputRotation(resolved,subject,intent,openings.get(resolved.viewId),old.history).toArray(),
-          viewId: old.resolved!.viewId,
-          resolvedSubjectId: subject.id,
-          subjectGeneration: subject.generation,
         };
         this.pending = { state, frame: clone(frame), deltaSeconds, basis, selectionCut:selected.cut };
         return immutable(clone(basis));
@@ -1247,46 +1170,19 @@ export class CameraController {
       if (!s.current || !s.previous)
         return s.authoredPose ? clone(s.authoredPose) : undefined;
       if (!s.resolved || !s.subject) return clone(s.current);
-      let subject = displaySubject ?? s.subject;
+      const subject = displaySubject ?? s.subject;
       if (!sameCameraSubject(subject, s.subject))
         throw failure("CAMERA_PRESENTATION_IDENTITY_MISMATCH");
-      let proposal = sampleCameraPresentation(s.previous, s.current, context);
-      if(displaySubject&&s.previous.subjectAnchorWorldMetersXYZ&&s.current.subjectAnchorWorldMetersXYZ){
-        const alpha=context.cut||!cameraFramesCompatible(s.previous,s.current)?1:context.alpha;
-        const sampled=cameraDisplaySubject(s.previous.subject!,s.current.subject!,displaySubject,alpha);
-        subject=sampled;
-        const fixedAnchor=new Vector3(...s.previous.subjectAnchorWorldMetersXYZ).lerp(new Vector3(...s.current.subjectAnchorWorldMetersXYZ),alpha);
-        // Preserve PR 240's pure displayed-heading correction. Posture facts use
-        // the same pair of fixed samples, never the latest un-interpolated height.
-        const displayHeading=cameraSubjectHeading(sampled,s.history) ?? s.history?.headingRadians;
-        const orbitYaw=(s.previous.orbitYawRadians??s.intent!.yawRadians)+((s.current.orbitYawRadians??s.intent!.yawRadians)-(s.previous.orbitYawRadians??s.intent!.yawRadians))*alpha;
-        const correction=cameraDisplayAnchor(sampled,s.resolved,displayHeading,orbitYaw).sub(fixedAnchor);
-        const shift=(point:readonly [number,number,number])=>new Vector3(...point).add(correction).toArray();
-        proposal={...proposal,positionWorldMetersXYZ:shift(proposal.positionWorldMetersXYZ),pivotWorldMetersXYZ:shift(proposal.pivotWorldMetersXYZ),lookAtWorldMetersXYZ:shift(proposal.lookAtWorldMetersXYZ),...(proposal.visibilityTargetWorldMetersXYZ?{visibilityTargetWorldMetersXYZ:shift(proposal.visibilityTargetWorldMetersXYZ)}:{})};
-      }
-      // Linear eye interpolation and quaternion interpolation describe different
-      // arcs. For a settled look-at view, re-aim intermediate display samples at
-      // their interpolated pivot using the same reference horizon as collision.
-      // Authored framing, mixed-view blends and exact fixed endpoints keep their
-      // declared pose; observation still never advances the controller.
-      if (s.mode === 'follow' && s.transition.kind === 'none' && proposal.composition
-        && !context.cut && context.alpha > 0 && context.alpha < 1
-        && cameraFramesCompatible(s.previous, s.current)
-        && (s.resolved.kind === 'shoulder'
-          || (s.resolved.kind === 'third-person' && s.resolved.values.framing.kind === 'look-at'))) {
-        proposal = composeCameraAtPosition(proposal, proposal.positionWorldMetersXYZ,
-          proposal.collisionComposition);
-      }
+      const sample = sampleCameraDisplay({
+        previous: s.previous, current: s.current, configuration: s.resolved, fixedSubject: s.subject,
+        displaySubject, history: s.history, intent: s.intent, context, mode: s.mode, transition: s.transition,
+      });
       this.busy = true;
       try {
-        return this.constraints.project(
-          proposal,
-          s.resolved,
-          subject,
-          aspect,
-          s.current,
-          context.currentTick,
-        );
+        // Keep presentation results detached from authoritative fixed frames.
+        return clone(this.constraints.project(
+          sample.proposal, s.resolved, sample.subject, aspect, s.current, context.currentTick,
+        ));
       } finally {
         this.busy = false;
       }

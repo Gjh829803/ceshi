@@ -5,6 +5,7 @@ import {
   serializeCameraDocument,
 } from "../config/camera/index";
 import { CameraController } from "./controller";
+import { CameraConstraints } from "./constraints";
 import type { CameraSubjectFacts } from "./subject";
 import { cameraControlForward } from "./control-basis";
 
@@ -1373,3 +1374,179 @@ it.each([
   expect(new Vector3(...cameraControlForward(basis.quaternionWorldXYZW)).distanceTo(new Vector3(...cameraControlForward(controller.inspect().desired!.quaternionWorldXYZW)))).toBeLessThan(1e-9);
  }finally{controller.dispose();}
 });
+
+it('samples on-foot eye height at display time without writing the subject or advancing camera state', () => {
+  const f = fixture(), c = f.controller;
+  f.setSubject({ ...initial, kind: 'humanoid' });
+  c.install(document({ activation: 'immediate', views: {
+    orbit: { kind: 'first-person', overrides: {
+      position: { anchor: { kind: 'eye' }, subjectTranslationHalfLifeSeconds: 0, anchorHalfLifeSeconds: 0, armHalfLifeSeconds: 0 },
+      orientation: { initialPitchRadians: 0, recenter: { enabled: false } },
+    } },
+  } }), frame());
+  f.setSubject({ ...initial, kind: 'humanoid', positionWorldMetersXYZ: [0, 2, 0], eyeWorldMetersXYZ: [0, 2.8, 0] });
+  step(c, 1);
+  const before = c.inspect();
+  // The adapter can carry the latest posture while displaying interpolated translation.
+  const display = Object.freeze({ ...initial, kind: 'humanoid',
+    positionWorldMetersXYZ: Object.freeze([0, 1, 0] as const),
+    eyeWorldMetersXYZ: Object.freeze([0, 2.8, 0] as const),
+  });
+  const displayBefore = structuredClone(display);
+  const context = { epoch: 1, previousTick: 0, currentTick: 1, alpha: .5, cut: false };
+  try {
+    const sampled = c.sampleProjection(context, 1.5, display)!;
+    // Display root (1) + midpoint of relative eye heights (1.6 and 0.8).
+    expect(sampled.pivotWorldMetersXYZ[1]).toBeCloseTo(2.2, 12);
+    expect(c.sampleProjection(context, 1.5, display)).toEqual(sampled);
+    expect(c.sampleProjection({ ...context, cut: true }, 1.5, display)!.pivotWorldMetersXYZ[1]).toBeCloseTo(1.8, 12);
+    expect(c.inspect()).toEqual(before);
+    expect(display).toEqual(displayBefore);
+  } finally { c.dispose(); }
+});
+
+
+it.each([undefined, 1])('combines orbit deltas and rates without collision queries or premature state writes (pitch rate %s)', pitchRate => {
+  const f = fixture(), c = f.controller;
+  c.install(document({ input: { orbitRateRadiansPerSecond: 2,
+    ...(pitchRate === undefined ? {} : { orbitPitchRateRadiansPerSecond: pitchRate }) } }), frame());
+  const before = c.inspect();
+  const command = Object.freeze({ orbitDeltaRadiansXY: Object.freeze([.1, .05] as const),
+    orbitRatioXY: Object.freeze([.5, -.25] as const), zoomDeltaMeters: .3 });
+  const basis = c.prepareInput(command, .2, frame(1));
+  expect(c.inspect()).toEqual(before);
+  const forward = new Vector3(0, 0, -1).applyQuaternion(new Quaternion(...basis.quaternionWorldXYZW));
+  expect(Math.atan2(-forward.x, -forward.z)).toBeCloseTo(.3, 12);
+  c.evaluateAndCommit(frame(1));
+  expect(c.inspect().intent).toMatchObject({ distanceMeters: 4.3 });
+  expect(c.inspect().intent!.pitchRadians).toBeCloseTo(pitchRate === undefined ? -.05 : 0, 12);
+  const committed = c.inspect();
+  // If preparation touches geometry this fixture throws; commit alone owns collision solving.
+  f.fail();
+  expect(() => c.prepareInput(command, .2, frame(2))).not.toThrow();
+  expect(c.inspect()).toEqual(committed);
+  c.abortPreparedInput();
+  c.dispose();
+});
+
+it.each([
+  { input: { orbitRatioXY: [1.01, 0] as const }, dt: .1 },
+  { input: { orbitDeltaRadiansXY: [NaN, 0] as const }, dt: .1 },
+  { input: { zoomDeltaMeters: Infinity }, dt: .1 },
+  { input: {}, dt: -.1 },
+])('rejects invalid orbit input and preserves the single pending candidate: %j', ({ input, dt }) => {
+  const { controller: c } = fixture();
+  c.install(document(), frame());
+  const before = c.inspect();
+  expect(() => c.prepareInput(input, dt, frame(1))).toThrow('CAMERA_INPUT_INVALID');
+  expect(c.inspect()).toEqual(before);
+  c.prepareInput({ orbitDeltaRadiansXY: [.2, 0] }, .1, frame(1));
+  expect(() => c.prepareInput(input, dt, frame(1))).toThrow('CAMERA_TRANSACTION_REENTRY');
+  expect(c.inspect()).toEqual(before);
+  c.evaluateAndCommit(frame(1));
+  expect(c.inspect().intent!.yawRadians).toBeCloseTo(.2, 12);
+  c.dispose();
+});
+
+it('preflights the target before blending and solves the blend before committing', () => {
+  const {controller: c} = fixture();
+  c.install(document({activation: 'immediate', transition: {durationSeconds: 1}}), frame());
+  const before = c.inspect();
+  const events: string[] = [];
+  const project = CameraConstraints.prototype.project;
+  const solve = CameraConstraints.prototype.solve;
+  const projected: number[][] = [], solved: number[][] = [];
+  const p = vi.spyOn(CameraConstraints.prototype, 'project').mockImplementation(function(this: CameraConstraints, ...args) {
+    events.push('project'); projected.push([...args[0].positionWorldMetersXYZ]);
+    expect(c.inspect().cameraCommitRevision).toBe(before.cameraCommitRevision);
+    return project.apply(this, args);
+  });
+  const s = vi.spyOn(CameraConstraints.prototype, 'solve').mockImplementation(function(this: CameraConstraints, ...args) {
+    events.push('solve'); solved.push([...args[0].positionWorldMetersXYZ]);
+    expect(c.inspect().cameraCommitRevision).toBe(before.cameraCommitRevision);
+    return solve.apply(this, args);
+  });
+  try {
+    c.setView('other', frame());
+    expect(events).toEqual(['project', 'solve']);
+    expect(projected[0]).not.toEqual(before.current!.positionWorldMetersXYZ);
+    expect(solved[0]).toEqual(before.current!.positionWorldMetersXYZ);
+    expect(c.inspect().cameraCommitRevision).toBe(before.cameraCommitRevision + 1);
+  } finally { p.mockRestore(); s.mockRestore(); c.dispose(); }
+});
+it('rejects an obstructed transition target before solving or publishing the blend', () => {
+  const {controller: c} = fixture();
+  c.install(document({activation: 'immediate', transition: {durationSeconds: 1}}), frame());
+  const before = c.inspect();
+  const p = vi.spyOn(CameraConstraints.prototype, 'project').mockImplementation(() => { throw new Error('target unavailable'); });
+  const s = vi.spyOn(CameraConstraints.prototype, 'solve');
+  try {
+    expect(() => c.setView('other', frame())).toThrow('target unavailable');
+    expect(s).not.toHaveBeenCalled();
+    expect(c.inspect()).toEqual(before);
+  } finally { p.mockRestore(); s.mockRestore(); c.dispose(); }
+});
+
+it('reselects the calibrated intent instead of restoring a cached manual orbit', () => {
+  const {controller: c} = fixture();
+  c.install(document({activation:'immediate'}), frame());
+  const calibrated = c.inspect().intent;
+  step(c, 1, {orbitDeltaRadiansXY:[.6,.1],zoomDeltaMeters:1});
+  const manual = c.inspect().intent;
+  expect(manual).not.toEqual(calibrated);
+  c.setView('other', frame(1));
+  c.setView('orbit', frame(1));
+  expect(c.inspect().intent).toEqual(calibrated);
+  expect(c.inspect().adaptations.at(-1)).toEqual({viewId:'orbit',old:manual,next:calibrated,reason:'view-reactivation-adaptation'});
+  c.dispose();
+});
+it.each([
+  {target:'other',cut:false,reference:'world-up',kind:'blend',reason:undefined},
+  {target:'other',cut:true,reference:'world-up',kind:'none',reason:'requested-cut'},
+  {target:'eye',cut:true,reference:'world-up',kind:'none',reason:'first-person-cut'},
+  {target:'other',cut:false,reference:'subject-up',kind:'none',reason:undefined},
+])('keeps view transition precedence for $target / $cut / $reference', ({target,cut,reference,kind,reason}) => {
+  const {controller:c} = fixture();
+  const d = structuredClone(document({activation:'immediate',transition:{durationSeconds:1}})) as any;
+  d.views.other.overrides.orientation.referenceFrame=reference;
+  c.install(d,frame());
+  const before = c.inspect().current;
+  c.setView(target,frame(),{cut});
+  expect(c.inspect().transition).toMatchObject({kind,configuredDurationSeconds:1,effectiveDurationSeconds:kind==='blend'?1:0});
+  expect((c.inspect().transition as {reason?:string}).reason).toBe(reason);
+  if(kind==='blend')expect(c.inspect().transition).toMatchObject({source:before,elapsedSeconds:0});
+  c.dispose();
+});
+it('ignores an already active selection before geometry and preserves an interrupted blend', () => {
+  const f=fixture(), c=f.controller;
+  c.install(document({activation:'immediate',transition:{durationSeconds:1}}),frame());
+  c.setView('other',frame());
+  c.prepareInput({},.25,frame(1));c.evaluateAndCommit(frame(1));
+  const before=c.inspect();f.fail();
+  c.setView('other',frame(1),{cut:true});
+  expect(c.inspect()).toEqual(before);
+  c.dispose();
+});
+
+it.each([false,true].flatMap(collision=>[0,.5,1].map(alpha=>({collision,alpha}))))(
+  'detaches display sample data from authority and future reads (collision=$collision, alpha=$alpha)',
+  ({collision,alpha})=>{
+    const {controller:c}=fixture();
+    const d=structuredClone(document({activation:'immediate'})) as any;
+    d.views.orbit.overrides.constraints={collision:{enabled:collision}};
+    c.install(d,frame());step(c,1,{orbitDeltaRadiansXY:[.1,.02]});
+    const before=c.inspect();
+    const context={epoch:1,previousTick:before.previous!.simulationTick,currentTick:before.current!.simulationTick,alpha,cut:false};
+    const sample=c.sampleProjection(context,1.5)!;
+    const expected=structuredClone(sample);
+    try {
+      expect(Reflect.set(sample.lens,'verticalFovDegrees',25)).toBe(true);
+      expect(Reflect.set(sample.positionWorldMetersXYZ,'0',900)).toBe(true);
+      expect(c.sampleProjection(context,1.5)).toEqual(expected);
+      expect(c.inspect()).toEqual(before);
+      // Force a new inspection rather than trusting an already cached snapshot.
+      c.setCollisionDiagnosticsEnabled(true);
+      expect(c.inspect().current).toEqual(before.current);
+      expect(c.inspect().previous).toEqual(before.previous);
+    } finally {c.dispose();}
+  });
