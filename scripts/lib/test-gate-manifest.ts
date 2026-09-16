@@ -111,6 +111,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   {path:"packages/three-world/src/debug/camera-inspection.test.ts",lane:"contract",suites:["camera"]},
   {path:"packages/three-world/src/debug/collision-geometry.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"],suites:["camera"]},
   {path:"packages/three-world/src/debug/debug-controls.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"],suites:["camera"]},
+  {path:"packages/three-world/src/debug/incident.test.ts",lane:"contract",suites:["camera"]},
   {path:"packages/three-world/src/debug/recording.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"],suites:["camera"]},
   { path: "packages/three-world/src/episode-locomotion.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/episode.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },

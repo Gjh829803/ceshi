@@ -31,7 +31,13 @@ register browser tools, start recording or change simulation.
   saving. `registerTools:true` registers the same actions with browser WebMCP.
   Disposal releases the overlay, subscriptions, shortcut and tool registrations.
 - `createBrowserDebugStore(identity)` uses browser-local IndexedDB and supports
-  explicit JSON download; it never uploads an incident or requires a local server.
+  explicit JSON import/download and a newest-first scene-specific incident list;
+  it never uploads an incident or requires a local server. Pass `listIncidents`,
+  `readIncident`, `importIncident` and `downloadIncident` callbacks to the panel
+  to enable its saved-incident library, including after reload. Imports preserve
+  original source identity; replay still validates the complete trace before reset.
+  Cross-version comparison requires an explicit opt-in and reports both identities.
+  Ordinary diagnostic snapshots without an input trace cannot be replayed.
 
 Playground consumes this entry and supplies its local file adapter. Replay currently
 requires an on-foot native humanoid and a follow camera at the starting point;

@@ -17,7 +17,7 @@ if(identityElement){
    const owned=!observer.presentation,presentation=observer.presentation??world.createPresentation();
    const store=createBrowserDebugStore({sourceHash:identity.worldBuildHash,authorSourceHash:identity.sourceHash,runtimeHash:identity.runtimeHash,worldBuildHash:identity.worldBuildHash});
    cleanup=()=>{if(owned)presentation.dispose();void store.dispose().catch(()=>{});};
-   const panel=mountDebugPanel({world,presentation,store,sceneId:world.humanoid?.environment.map.id??'creator-world',registerTools:true,downloadIncident:id=>store.download(id),readIncident:id=>store.readIncident(id)});
+   const panel=mountDebugPanel({world,presentation,store,sceneId:world.humanoid?.environment.map.id??'creator-world',registerTools:true,downloadIncident:id=>store.download(id),readIncident:id=>store.readIncident(id),listIncidents:sceneId=>store.listIncidents(sceneId),importIncident:text=>store.importIncident(text)});
    active=world;target.__WORLDKIT_DEBUG__={identity,panel};
    dispose=()=>{panel.dispose();cleanup();if(active===world){active=undefined;delete target.__WORLDKIT_DEBUG__;}};
   }catch(error){cleanup();failed=world;console.warn('SDK debug tools unavailable; gameplay continues.',error);}

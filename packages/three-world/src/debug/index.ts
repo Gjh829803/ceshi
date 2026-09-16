@@ -6,3 +6,5 @@ export type {DebugSourceIdentity,DebugArtifactStore,DebugBundleFiles} from './st
 export {createCollisionOverlay} from './collision-overlay.js';
 export {createBrowserDebugStore} from './browser-storage.js';
 export {mountDebugPanel,type DebugPanelOptions} from './panel.js';
+
+export {parseDebugIncident,MAX_DEBUG_INCIDENT_BYTES,type DebugIncidentBundle,type DebugIncidentSummary} from './incident.js';
