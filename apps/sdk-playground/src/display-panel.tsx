@@ -8,11 +8,15 @@ import {Icon} from './components/icon';
 import {DISPLAY_MODES, DISPLAY_TYPES, isDisplayPreviewActive, type DisplaySettings, type DisplayObjectRow, type DisplayAvailability} from './display-settings';
 import {DisplayPictureControls, DisplayScope, DisplayObjects, DisplayHelpers, DisplayPresets, displaySummary} from './display-controls';
 
-export function DisplayPanel({settings:s,change,open,onOpenChange,rows,available,pinned,onPinnedChange,error}:{
-  settings:DisplaySettings;change(next:DisplaySettings):void;open:boolean;onOpenChange(open:boolean):void;
+import type {PanelStateStore} from './panel-state';
+
+export function DisplayPanel({panels,settings:s,change,open,onOpenChange,rows,available,pinned,onPinnedChange,error}:{
+  panels?:PanelStateStore;settings:DisplaySettings;change(next:DisplaySettings):void;open:boolean;onOpenChange(open:boolean):void;
   rows:readonly DisplayObjectRow[];available:DisplayAvailability;pinned:boolean;onPinnedChange(pinned:boolean):void;error?:string;
 }) {
-  const [pictureOpen,setPictureOpen]=useState(false),[tab,setTab]=useState('objects');
+  const [pictureOpen,updatePictureOpen]=useState(()=>panels?.read('picture').open??false),[tab,updateTab]=useState(()=>panels?.read('display').tab??'objects');
+  const setPictureOpen=(open:boolean)=>{updatePictureOpen(open);panels?.update('picture',{open});};
+  const setTab=(value:string)=>{if(value==='objects'||value==='helpers'){updateTab(value);panels?.update('display',{tab:value});}};
   const [mobile,setMobile]=useState(()=>window.matchMedia('(max-width: 720px)').matches);
   const panelRef=useRef<HTMLElement>(null),triggerRef=useRef<HTMLButtonElement>(null);
   useEffect(()=>{const media=window.matchMedia('(max-width: 720px)');const listener=()=>setMobile(media.matches);media.addEventListener('change',listener);return()=>media.removeEventListener('change',listener);},[]);

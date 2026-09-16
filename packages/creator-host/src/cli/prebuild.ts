@@ -9,9 +9,9 @@ if (!output) throw new Error('Use --profile three-raw|three-sdk --output <Host-o
 if (process.env.WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT) throw new Error('Unset WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT when producing a prebuilt runtime');
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'three-runtime-prebuild-'));
 try {
-  const compiler = new ThreeCompiler(temporary, profile), runtime = await compiler.prepareRuntime(), target = path.resolve(output);
+  const compiler = new ThreeCompiler(temporary, profile,{debugTools:process.argv.includes('--debug-tools')}), runtime = await compiler.prepareRuntime(), target = path.resolve(output);
   await mkdir(target, { recursive: true }); await rm(path.join(target, 'runtime'), { recursive: true, force: true }); await cp(runtime.root, path.join(target, 'runtime'), { recursive: true, dereference: false });
-  const manifest: PrebuiltRuntimeManifest = { schemaVersion: 1, profile, cacheIdentity: runtime.cacheIdentity, runtimeHash: runtime.hash, files: await hashTree(path.join(target, 'runtime')) };
+  const manifest: PrebuiltRuntimeManifest = { schemaVersion: 1, profile, debugTools:compiler.debugTools, cacheIdentity: runtime.cacheIdentity, runtimeHash: runtime.hash, files: await hashTree(path.join(target, 'runtime')) };
   const file = path.join(target, 'runtime-manifest.json'); await writeFile(file, JSON.stringify(manifest, null, 2));
   process.stdout.write(`${JSON.stringify({ profile, root: target, runtimeHash: runtime.hash, manifestSha256: sha256(await readFile(file)) }, null, 2)}\n`);
 } finally { await rm(temporary, { recursive: true, force: true }); }

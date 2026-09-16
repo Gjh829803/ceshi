@@ -1,7 +1,7 @@
 import {expect,it,vi} from 'vitest';
 import {Quaternion,Vector3} from 'three';
 import {createHumanoidCameraDocument,resolveCameraConfiguration,type CameraInspection,type CameraCollisionProbeSample,type RuntimeError} from '@worldkit/three';
-import {inspectPlaygroundCamera} from './camera-inspection';
+import {inspectDebugCamera} from '@worldkit/three/debug';
 
 function fixture(viewId='third-person'){
  const document=createHumanoidCameraDocument('person',viewId);
@@ -16,7 +16,7 @@ function fixture(viewId='third-person'){
  const snapshot={simulationTick:10,worldRevision:5,isRunning:true,controlledEntityId:'person',errors:[] as RuntimeError[]};
  return {inspection,snapshot};
 }
-function read(inspection:CameraInspection,snapshot=fixture().snapshot){return inspectPlaygroundCamera({inspectCamera:()=>inspection,snapshot:()=>snapshot});}
+function read(inspection:CameraInspection,snapshot=fixture().snapshot){return inspectDebugCamera({inspectCamera:()=>inspection,snapshot:()=>snapshot});}
 const querySample=(source:CameraCollisionProbeSample['source'],sampleId:number,simulationTick=10):CameraCollisionProbeSample=>({
  source,sampleId,simulationTick,droppedProbes:0,
  probes:[{from:[0,1,8],to:[0,1,0],radius:.2,hit:{distanceMeters:4,colliderEntityId:'wall',normalWorldXYZ:[0,0,1]}}],
@@ -27,7 +27,7 @@ it('reads public observations once and returns detached compact state without ch
  const {inspection,snapshot}=fixture();freeze(inspection);freeze(snapshot);
  const before=JSON.stringify({inspection,snapshot});
  const world={inspectCamera:vi.fn(()=>inspection),snapshot:vi.fn(()=>snapshot),step:vi.fn(),stop:vi.fn(),render:vi.fn(),setCameraCollisionDiagnosticsEnabled:vi.fn()};
- const first=inspectPlaygroundCamera(world),second=inspectPlaygroundCamera(world);
+ const first=inspectDebugCamera(world),second=inspectDebugCamera(world);
  expect(first).toEqual(second);expect(world.inspectCamera).toHaveBeenCalledTimes(2);expect(world.snapshot).toHaveBeenCalledTimes(2);
  for(const mutation of [world.step,world.stop,world.render,world.setCameraCollisionDiagnosticsEnabled])expect(mutation).not.toHaveBeenCalled();
  expect(first).toMatchObject({source:'committed-camera',sample:{simulationTick:10,cameraFrameStatus:'current'},identity:{documentHash:'a'.repeat(64),subjectGeneration:2,configurationRevision:3,cameraCommitRevision:4},desired:{armDistanceMeters:8.8},current:{armDistanceMeters:2},collision:{phase:'constrained',limited:true,colliderEntityId:'wall'}});

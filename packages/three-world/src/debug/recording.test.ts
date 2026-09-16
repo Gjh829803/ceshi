@@ -1,7 +1,7 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {Group,type WebGLRenderer} from 'three';
 import {createWorld,createHumanoidCameraDocument} from '@worldkit/three';
-import {createDebugRecording,type DebugRecording} from './recording';
+import {createDebugRecording,type DebugRecording} from '@worldkit/three/debug';
 const cleanups:(()=>void)[]=[];
 afterEach(()=>{for(const work of cleanups.splice(0).reverse())work();});
 async function fixture(withRenderer=false){

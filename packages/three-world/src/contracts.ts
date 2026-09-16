@@ -206,6 +206,14 @@ export interface WorldInput {
  readonly cameraTogglePressed?:boolean;
 }
 /** Opt-in detached observations from the existing SDK fixed step and renderer. */
+export interface CollisionGeometrySample {
+ readonly source:'committed-physics';
+ readonly simulationTick:number;
+ readonly verticesWorldMeters:Float32Array;
+ readonly colorsRGBA:Float32Array;
+ readonly segmentCount:number;
+ readonly omittedSegments:number;
+}
 export type RuntimeSample =
  | {readonly kind:'fixed-input';readonly simulationTick:number;readonly deltaSeconds:number;readonly controlledEntityId:string|null;readonly input:WorldInput}
  | {readonly kind:'rendered-frame';readonly frameId:number;readonly simulationTick:number;readonly interpolationAlpha:number;readonly sampledAtMilliseconds:number;
@@ -431,6 +439,8 @@ export interface World {
  setCameraOrbit(options:CameraOrbitOptions):void;
  resumeCameraViewSelection():void;
  inspectCamera():import('./camera/state').CameraInspection;
+ /** Read detached line data from the actual Rapier world; opt-in, never advances simulation. */
+ inspectCollisionGeometry(maximumSegments?:number):CollisionGeometrySample;
  /** Opt-in bounded CPU samples; disabled by default and independent of simulation. */
  setCameraPerformanceDiagnosticsEnabled(enabled:boolean):void;
  /** Collect bounded samples from actual camera collision queries; disabled by default. */
@@ -473,6 +483,8 @@ export interface World {
 
 /** Small same-scene browser observer. Tools inspect these live objects, never a display clone. */
 export interface WorldObservation {
+ /** SDK-owned instance for optional host debugging. Non-enumerable; absent for raw Three worlds. */
+ readonly world?:import('./world.js').ThreeWorld;
  /** Host-only synchronous capture transaction. Object views show the complete preset body. */
  withPresentation?<T>(work:()=>T,options?:{readonly view?:'world'|'object'}):T;
  readonly episode?:import('./episode-contracts.js').EpisodeRuntimePort;

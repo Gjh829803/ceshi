@@ -821,6 +821,12 @@ export class ThreePhysics implements PhysicsPort {
     if (!entry.character) for (const collider of entry.colliders) this.world.contactPairsWith(collider, other => { const owner = this.colliderOwners.get(other.handle)??this.borrowed?.colliderOwner?.(other.handle); if (owner && owner !== id) collisions.add(owner); });
     return Object.freeze({ id, positionMetersXYZ: vec(entry.body.translation()), velocityMetersPerSecondXYZ: vec(entry.body.linvel()), isGrounded: entry.body.isEnabled() && (entry.character?.grounded ?? false), collisionEntityIds: Object.freeze([...collisions].sort()) });
   }
+  collisionGeometry(maximumSegments:number){
+    this.live();
+    const {vertices,colors}=this.world.debugRender();
+    const total=Math.floor(vertices.length/6),count=Math.min(total,maximumSegments);
+    return {verticesWorldMeters:vertices.slice(0,count*6),colorsRGBA:colors.slice(0,count*8),segmentCount:count,omittedSegments:total-count};
+  }
   audit(): PhysicsAudit {
     this.live(); const entities = [...this.entries.values()].map(entry => Object.freeze({ id: entry.id, kind: entry.kind, colliderCount: entry.colliders.length, triangleCount: entry.geometry?.geometries.reduce((sum, geometry) => sum + geometry.triangleCount, 0) ?? 0 }));
     return Object.freeze({ engine: 'rapier', entityCount: entities.length, colliderCount: entities.reduce((sum, entry) => sum + entry.colliderCount, 0), triangleCount: entities.reduce((sum, entry) => sum + entry.triangleCount, 0), entities: Object.freeze(entities), diagnostics: Object.freeze([]) });

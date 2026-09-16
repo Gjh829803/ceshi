@@ -1,5 +1,5 @@
 import {Quaternion,Vector3} from 'three';
-import type {CameraCollisionProbeSample,CameraInspection,RuntimeError,WorldSnapshot} from '@worldkit/three';
+import type {CameraCollisionProbeSample,CameraInspection,RuntimeError,WorldSnapshot} from '../index.js';
 
 type CameraPose=NonNullable<CameraInspection['current']>|NonNullable<CameraInspection['desired']>;
 type CameraReader={
@@ -63,7 +63,7 @@ function probeSummary(inspection:CameraInspection,simulationTick:number){
 const errorSummary=(error:RuntimeError)=>({code:error.code,message:error.message,category:error.category,entityIds:error.entityIds});
 
 /** Read public SDK observations once; no rendering, sampling toggles or state writes. */
-export function inspectPlaygroundCamera(world:CameraReader){
+export function inspectDebugCamera(world:CameraReader){
  const snapshot=world.snapshot(),inspection=world.inspectCamera(),current=inspection.current,diagnostics=inspection.diagnostics;
  return structuredClone({
   schemaVersion:1,source:'committed-camera' as const,

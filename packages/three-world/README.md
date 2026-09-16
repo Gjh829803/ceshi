@@ -7,6 +7,42 @@ Choose the controlled subject from the request; animal protagonists need no extr
 Reuse other supplied subjects when suitable; otherwise create and bind
 Mesh/Group subjects matching the reference.
 
+## Optional debug tools
+
+`@worldkit/three/debug` is an explicit browser entry, separate from the core SDK
+and the internal `@worldkit/three/testing` entry. Importing it does not mount UI,
+register browser tools, start recording or change simulation.
+
+- `inspectDebugCamera(world)` reads compact camera state without stepping or rendering.
+- `createDebugControls(port)` provides validated pause/step, character placement,
+  camera intent and vehicle interaction tools. The host supplies readiness, input
+  clearing, pause presentation and rendering against its existing world.
+- `createDebugRecording(port, store)` provides bounded input history, same-frame
+  incident capture and reset-baseline replay. The host supplies a `DebugArtifactStore`
+  for source identity and artifact persistence; the SDK contains no local HTTP service.
+- `world.inspectCollisionGeometry()` samples detached line buffers from the actual
+  shared Rapier world, with a simulation tick and an explicit omitted-segment count.
+- `createCollisionOverlay(world, presentation.ui)` projects these committed physics
+  lines using the last rendered camera into a separate DOM canvas. This diagnostic
+  is an x-ray view, not a depth-tested material; interpolated visuals can differ by
+  one fixed tick. It does not change simulation, scene objects or source capture pixels.
+- `mountDebugPanel({world,presentation,store,sceneId})` mounts optional controls,
+  collider display, camera inspection, recording/replay and source-bound incident
+  saving. `registerTools:true` registers the same actions with browser WebMCP.
+  Disposal releases the overlay, subscriptions, shortcut and tool registrations.
+- `createBrowserDebugStore(identity)` uses browser-local IndexedDB and supports
+  explicit JSON download; it never uploads an incident or requires a local server.
+
+Playground consumes this entry and supplies its local file adapter. Replay currently
+requires an on-foot native humanoid and a follow camera at the starting point;
+it does not restore arbitrary physics checkpoints. Existing version-1 recording
+and incident format identifiers are retained so saved evidence remains readable.
+The core browser bundle excludes this optional module. Creator's explicit
+`--debug-tools` build adds the separate module and automatically mounts it on the
+SDK observer's existing world. Production and test builds use identical core runtime
+bytes but have different complete artifact hashes. Debug builds cannot be submitted
+as production deliveries; rebuild and record without the flag for delivery.
+
 | Layer | Read or change |
 | --- | --- |
 | Reuse | `createWorld` or the complete `createHumanoidWorld` helper, subject example and selected asset |

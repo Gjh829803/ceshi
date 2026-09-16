@@ -9,7 +9,7 @@ import { profileFrom } from '../contracts.js';
 const args = process.argv.slice(2), value = (name: string) => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
 const policyPath=value('--asset-policy-snapshot'),policyHash=value('--asset-policy-sha256');
 const service = new ThreeCreatorTools(path.resolve(value('--workspace') ?? process.cwd()), profileFrom(value('--profile')),
- {...(policyPath===undefined?{}:{assetPolicySnapshotPath:policyPath}),...(policyHash===undefined?{}:{assetPolicySha256:policyHash})});
+ {debugTools:args.includes('--debug-tools'),...(policyPath===undefined?{}:{assetPolicySnapshotPath:policyPath}),...(policyHash===undefined?{}:{assetPolicySha256:policyHash})});
 try {
   if (args.includes('--session')) {
     // JSON-lines mode keeps operation/evidence authority in this one process, just like MCP.

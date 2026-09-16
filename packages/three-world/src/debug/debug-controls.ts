@@ -76,11 +76,11 @@ function boolean(value: unknown, field: string): boolean {
 }
 
 /** Small explicit maintainer controls. State and simulation remain owned by SDK. */
-export function createPlaygroundDebugControls(port: DebugControlsPort) {
+export function createDebugControls(port: DebugControlsPort) {
   let busy = false;
   const world = (): DebugWorld => {
     const value = port.getWorld();
-    if (!port.isReady() || !value) fail('DEBUG_WORLD_NOT_READY', 'The Playground world is not ready.');
+    if (!port.isReady() || !value) fail('DEBUG_WORLD_NOT_READY', 'The world is not ready.');
     return value;
   };
   const controlledHumanoid = (sdk: DebugWorld) => {

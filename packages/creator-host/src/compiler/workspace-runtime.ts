@@ -74,9 +74,9 @@ export async function readWorkspaceRuntime(repository:string,workspace:string):P
  const entry=path.join(root,value.entry);resolveLocal(entry);
  const plugin:Plugin={name:'workspace-runtime-browser-boundary',setup(build){
   build.onResolve({filter:/.*/},args=>{
-   if(args.kind==='entry-point'&&args.path===entry)return resolveLocal(entry);
+   if(args.kind==='entry-point'&&path.resolve(args.path).startsWith(root+path.sep))return resolveLocal(args.path);
    if(args.namespace!=='workspace-sdk')return;
-   if(args.path==='three')return {path:'three',external:true};
+   if(args.path==='three'||args.path==='@worldkit/three')return {path:args.path,external:true};
    if(args.path==='@worldkit/camera-collision')return resolveLocal(path.join(root,'camera-collision/src/index.ts'));
    if(args.path.startsWith('.'))return resolveLocal(path.resolve(args.resolveDir,args.path));
    const packageId=args.path.startsWith('@')?args.path.split('/').slice(0,2).join('/'):args.path.split('/')[0]!;

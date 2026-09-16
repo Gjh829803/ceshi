@@ -25,6 +25,7 @@ import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
 
 type Tab = "scenes" | "camera";
 interface WorkbenchOptions {
+  panels?:import('./panel-state').PanelStateStore;
   cameraEditor?():CameraEditorBinding;
   specs?: readonly VehicleSpec[];
   onOpenChange(open: boolean): void;
@@ -50,7 +51,7 @@ function Workbench({
   const subjects = [{ id: "person", name: "主体人物", mode: "character" }, ...(o.specs ?? SPECS)];
   const openRef = useRef(false),
     previousFocus = useRef<HTMLElement | null>(null);
-  const [tab, setTab] = useState<Tab>("scenes"),
+  const [tab, setTab] = useState<Tab>(()=>o.panels?.read('workbench').tab??'scenes'),
     [mapId, setMapId] = useState(o.getMapId),
     [assetId, setAssetId] = useState(o.getAssetId);
   const [open, setOpen] = useState(false);
@@ -81,7 +82,7 @@ function Workbench({
         setAssetId(o.getAssetId());
         changeOpen(true);
       }
-      setTab(next);
+      setTab(next);o.panels?.update('workbench',{tab:next});
       setRevision((n) => n + 1);
       setTelemetry(o.getState());
       inform("");
@@ -145,7 +146,7 @@ function Workbench({
                 className="wb-button"
                 aria-current={tab === id}
                 onClick={() => {
-                  setTab(id);
+                  setTab(id);o.panels?.update('workbench',{tab:id});
                   setRevision((n) => n + 1);
                   inform("");
                 }}

@@ -1,7 +1,6 @@
 import {CameraEditorState} from "./camera/editor-state";
-import {inspectPlaygroundCamera} from './diagnostics/camera-inspection';
-import {createDebugRecording} from './diagnostics/recording';
-import {createPlaygroundDebugControls} from './diagnostics/debug-controls';
+import {inspectDebugCamera,createDebugRecording,createDebugControls} from '@worldkit/three/debug';
+import {createDebugFileClient} from './diagnostics/file-client';
 import {createCameraFileClient} from "./camera/file-client";
 import {createCameraPreview} from "./camera/preview";
 import {selectDragonCameraVariant} from "./camera/project-state";
@@ -15,6 +14,7 @@ import {updateSpaceExhaust} from '@worldkit/preset-content/space-model';
 import {mountSpacePanel} from './space-panel';
 import { createNpcPlayground } from "./npc-playground";
 import { mountShell } from "./shell";
+import {createPanelStateStore} from "./panel-state";
 import { performanceDetails } from "./performance-details";
 import { DRAGON_TRAINING } from "./training-destinations";
 import { DRAGON_VARIANTS, readDragonVariant } from '@worldkit/preset-content/dragon-variants';
@@ -91,7 +91,10 @@ const { emptyInput, actionForKey, readControls } = humanoid;
 type HumanoidActionInput = humanoid.HumanoidActionInput;
 type SkillRequest = humanoid.SkillRequest;
 const FIXED_STEP = 1 / 60;
-const shell = mountShell(document.querySelector<HTMLDivElement>("#app")!);
+const panelState=createPanelStateStore();
+const modalPanelIds=['humanActions','equipment','workbench','contribution'] as const;
+const restoredModal=modalPanelIds.find(id=>panelState.read(id).open);
+const shell = mountShell(document.querySelector<HTMLDivElement>("#app")!,panelState);
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!,
   scene = new T.Scene();
 const renderer = new T.WebGLRenderer({
@@ -462,6 +465,8 @@ function updatePausePresentation(value: boolean, showOverlay: boolean) {
   clearInput();
   shell.flag("paused", value && showOverlay);
   shell.text("pauseButton", value ? "继续" : "暂停");
+  const recordingState=shell.get().debugRecording;
+  if(!value&&recordingState?.saved)shell.update({debugRecording:{...recordingState,saved:false}});
   if (!value && !panelOpen) sdkPresentation.focus();
 }
 function setCameraView(viewId: string) {
@@ -582,12 +587,17 @@ const onPanelChange = (open: boolean) => {
   clearInput();
   resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
 };
+const onModalPanelChange=(id:typeof modalPanelIds[number],open:boolean)=>{
+  if(open)for(const other of modalPanelIds)if(other!==id)panelState.update(other,{open:false});
+  panelState.update(id,{open});onPanelChange(open);
+};
 const catalog = buildWorkspaceCatalog(SPECS).map(asset=>asset.dragonVariantId
   ? {...asset,thumbnail:`./dragon-thumbnails/${asset.dragonVariantId}.png`} : asset);
 function libraryAssetId(instanceId:string):string {
   return instanceId==='dragon' ? catalog.find(asset=>asset.dragonVariantId===dragonVariant.id)?.id??instanceId : instanceId;
 }
 const library = mountAssetLibrary(el("libraryHost"), {
+  panels:panelState,
   assets: catalog,
   onSelect: selectAsset,
   onOpenChange: (open) => {
@@ -595,6 +605,7 @@ const library = mountAssetLibrary(el("libraryHost"), {
     shell.flag("libraryOpen", open);
     if (open) ensureThumbnails();
   },
+  onPinnedChange: pinned => {clearInput();shell.update({libraryPinned:pinned});},
   onQuickSlotsChange: renderQuickSlots,
 });
 renderQuickSlots(library.getQuickSlots());
@@ -682,7 +693,7 @@ function prepareHumanTrial(mapId: string, trial: CharacterTrial, demo = false) {
   }
 }
 const humanPanel = mountHumanoidLab(document.body, {
-  onOpenChange: onPanelChange,
+  onOpenChange: open=>onModalPanelChange('humanActions',open),
   onPrepare: prepareHumanTrial,
   getState: humanoidState,
   onAction: (command) => {
@@ -712,12 +723,13 @@ const equipmentPanel = mountEquipmentPanel(
   document.body,
   character,
   accessories,
-  onPanelChange,
+  open=>onModalPanelChange('equipment',open),
 );
 const workbench = mountWorkbench(document.body, {
+  panels:panelState,
   cameraEditor:getCameraEditor,
   specs: SPECS,
-  onOpenChange: onPanelChange,
+  onOpenChange: open=>onModalPanelChange('workbench',open),
   onPrepare: prepareSelection,
   getMapId: () => session.map.id,
   getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
@@ -786,6 +798,7 @@ function movementState() {
   };
 }
 const inspector = mountInspector(el("inspectorHost"), {
+  panels:panelState,
   cameraEditor:getCameraEditor,
   getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
   getSubject: () => ({
@@ -854,11 +867,6 @@ function toggleInspector(show: boolean) {
 shell.on("libraryButton", () =>
   library.isOpen() ? library.close() : library.open(),
 );
-shell.on("exploreButton", () => {
-  library.close();
-  shell.flag("quickOpen", false);
-  sdkPresentation.focus();
-});
 const openScenes = () => {
   library.close();
   workbench.open("scenes");
@@ -873,6 +881,7 @@ shell.on("debugButton", () =>
   ),
 );
 shell.on("inspectorClose", () => toggleInspector(false));
+shell.on("inspectorPin", () => {clearInput();shell.update({inspectorPinned:!shell.get().inspectorPinned});});
 shell.on("equipmentButton", () => {
   if (sim.controlledActor.id !== "person") npcLab?.control("person");
   library.close();
@@ -920,11 +929,11 @@ function restoreMapFromHash() {
 }
 shell.on("contributeButton", () => {
   shell.flag("contributionOpen", true);
-  onPanelChange(true);
+  onModalPanelChange('contribution',true);
 });
 shell.on("contributionClose", () => {
   shell.flag("contributionOpen", false);
-  onPanelChange(false);
+  onModalPanelChange('contribution',false);
 });
 shell.on("downloadManifest", () => {
   const template = {
@@ -965,6 +974,7 @@ document.addEventListener("focusin", releaseUIInput, pageEventOptions);
 window.addEventListener(
   "pagehide",
   () => {
+    panelState.suspendPersistence();
     ready = false;
     pageLifetime.abort();
     disposeThumbnails?.();
@@ -1161,9 +1171,14 @@ function updateUI(force = false) {
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
-    shell.update({
-      controls: controlsFor(vehicleControlFamily(v?.spec), sdk.getKeyBindings()),
-    });
+    const controls=controlsFor(vehicleControlFamily(v?.spec),sdk.getKeyBindings());
+    const actionLabels=new Set([humanoid.INPUT_BINDINGS.roll.label,humanoid.INPUT_BINDINGS.interact.label,humanoid.INPUT_BINDINGS.putDown.label]);
+    const vehicleLabels=new Set([humanoid.INPUT_BINDINGS.vehicle.label,humanoid.INPUT_BINDINGS.summonDragon.label]);
+    shell.update({controls,controlGroups:v ? [{title:"载具操作",rows:controls}] : [
+      {title:"移动与姿态",rows:controls.filter(([,label])=>!actionLabels.has(label)&&!vehicleLabels.has(label))},
+      {title:"动作与交互",rows:controls.filter(([,label])=>actionLabels.has(label))},
+      {title:"载具与坐骑",rows:controls.filter(([,label])=>vehicleLabels.has(label))},
+    ]});
     setText("shortcutSubject", v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
       ...(sdk.inspectCamera().document?.input?.cycleViewIds?.length ? [["T", "切换视角"] as [string,string]] : []),
@@ -1171,6 +1186,7 @@ function updateUI(force = false) {
       ["滚轮", "镜头距离"],
       ["Esc", "释放 / 暂停"],
       ["1–6", "快速前往"],
+      ...(import.meta.env.DEV ? [["F8", "记录 / 保存现场"] as [string,string]] : []),
     ];
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
     setText(
@@ -1221,7 +1237,6 @@ function updateUI(force = false) {
     "height",
     `${Math.round(altitude < -2 ? -altitude - 2 : altitude)} m`,
   );
-  shell.flag("interactionSmall", !!v || nearest < 0);
   if (v)
     setHTML(
       "interaction",
@@ -1253,7 +1268,7 @@ function updateUI(force = false) {
             : null) ??
         (nearest >= 0
           ? `<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`
-          : (traversalPrompt ?? "打开资产库选择主体，或自由探索")),
+          : (traversalPrompt ?? "")),
     );
   if (!v) {
     setText("stateValue", controlledCharacter().clipLabel);
@@ -1466,6 +1481,11 @@ if(requestedSpace&&['spacecraft','survey-spacecraft'].includes(requestedSpace)&&
 shell.flag("loading", false);
 shell.flush();
 sdkPresentation.focus();
+if(library.isOpen())ensureThumbnails();
+if(restoredModal==='humanActions')humanPanel.open();
+else if(restoredModal==='equipment')equipmentPanel.open();
+else if(restoredModal==='workbench')workbench.open(panelState.read('workbench').tab);
+else if(restoredModal==='contribution'){shell.flag('contributionOpen',true);onModalPanelChange('contribution',true);}
 toast(
   `Whitebox SDK · 101 骨 / 48 动作 / ${SPECS.length} 载具 / ${MAPS.length} 地图`,
 );
@@ -1497,7 +1517,7 @@ shell.on("exportProfiles", () => {
 });
 // Small local command surface for repeatable player selections and state inspection.
 let cancelAircraftAction: (() => void) | undefined;
-const debugControls = import.meta.env.DEV ? createPlaygroundDebugControls({
+const debugControls = import.meta.env.DEV ? createDebugControls({
   getWorld: () => sdk,
   isReady: () => ready && !pageLifetime.signal.aborted,
   isPaused: () => paused,
@@ -1513,7 +1533,7 @@ const debugControls = import.meta.env.DEV ? createPlaygroundDebugControls({
 }) : undefined;
 const labAPI = {
   ...(debugControls ? { debug: debugControls } : {}),
-  inspectCamera:()=>inspectPlaygroundCamera(sdk),
+  inspectCamera:()=>inspectDebugCamera(sdk),
   inspectAircraftActions: () => ({
     vehicleId: sim.controlledActor.vehicle?.motion.aircraft ? sim.controlledActor.vehicle.spec.id : null,
     actions: runtime.inspectAircraftActions(),
@@ -1600,22 +1620,30 @@ const labAPI = {
     capabilities: runtime.characterCapabilities(),
   }),
 };
-let debugRecordButton:HTMLButtonElement|undefined;
 const debugRecording=import.meta.env.DEV?createDebugRecording({
   world:sdk,canvas,ready:()=>ready&&!pageLifetime.signal.aborted,mapId:()=>session.map.id,
-  onStateChange:enabled=>{if(debugRecordButton&&!pageLifetime.signal.aborted)debugRecordButton.textContent=enabled?'保存现场':'记录现场';},
+  onStateChange:enabled=>{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled,busy:false,saved:enabled&&(shell.get().debugRecording?.saved??false)}});},
   pause:()=>{sdk.stop();updatePausePresentation(true,false);},
   reset:()=>labAPI.reset(),clearInput:()=>{clearInput();humanDemo=null;},render:alpha=>sdk.render(alpha),
-}):undefined;
+},createDebugFileClient()):undefined;
 if(debugRecording){
-  const button=document.createElement('button');debugRecordButton=button;button.textContent='记录现场';button.type='button';
-  button.style.cssText='position:absolute;right:16px;bottom:16px;pointer-events:auto;padding:8px 12px;border:1px solid #526b6a;border-radius:6px;background:#102c30;color:#dcebd4';
-  button.addEventListener('click',()=>{void(async()=>{
-    if(!debugRecording.inspect().enabled){const result=await debugRecording.setHistory({enabled:true});if('error' in result)toast(String(result.error));else{button.textContent='保存现场';toast('现场记录已开启，继续操作复现后点击保存');}}
-    else{const result=await debugRecording.capture({pause:true});toast(result.status==='saved'?'现场已保存，游戏已暂停':String('error' in result?result.error:'保存失败'));}
-  })();});
-  const unmount=sdkPresentation.ui.mount(button,{interactive:true});
-  pageLifetime.signal.addEventListener('abort',()=>{debugRecording.dispose();unmount();},{once:true});
+  shell.update({debugRecording:{enabled:false,busy:false,saved:false}});
+  const recordIncident=async()=>{
+    const state=debugRecording.inspect();if(state.busy||!ready)return;
+    shell.update({debugRecording:{enabled:state.enabled,busy:true,saved:false}});
+    let saved=false;
+    try{
+      if(!state.enabled){const result=await debugRecording.setHistory({enabled:true});if('error' in result)toast(String(result.error));else toast('现场记录已开启，复现异常后点击「保存现场」或按 F8');}
+      else{const result=await debugRecording.capture({pause:true});saved=result.status==='saved';toast(saved?'现场已保存，游戏已暂停。可以让 AI 查看并定位问题':String('error' in result?result.error:'保存失败'));}
+    }finally{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled:debugRecording.inspect().enabled,busy:false,saved}});}
+  };
+  shell.on('debugRecordButton',()=>{void recordIncident();});
+  window.addEventListener('keydown',event=>{
+    if(event.code!=='F8'||event.repeat||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||!ready||panelOpen)return;
+    if(event.target instanceof HTMLElement&&event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role=dialog],[role=listbox],[data-slot=popover-content]'))return;
+    event.preventDefault();event.stopImmediatePropagation();void recordIncident();
+  },{capture:true,signal:pageLifetime.signal});
+  pageLifetime.signal.addEventListener('abort',()=>{debugRecording.dispose();},{once:true});
 }
 Object.assign(window, { playground: {...labAPI,...(debugRecording?{recording:debugRecording}:{})} });
 type ModelContext = {

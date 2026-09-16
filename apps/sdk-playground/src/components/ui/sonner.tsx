@@ -11,11 +11,11 @@ import {
 import * as React from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
-const Toaster = ({ position = "top-center", ...props }: ToasterProps) => {
+const Toaster = ({ position = "top-right", ...props }: ToasterProps) => {
   return (
     <Sonner
       position={position}
-      theme="dark"
+      theme="light"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
@@ -26,9 +26,21 @@ const Toaster = ({ position = "top-center", ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "#102f36",
-          "--normal-text": "#e3ece0",
-          "--normal-border": "#48635d",
+          "--normal-bg": "#e5efc9",
+          "--normal-text": "#19352e",
+          "--normal-border": "#b5ce88",
+          "--success-bg": "#d9f5e2",
+          "--success-text": "#12532e",
+          "--success-border": "#79c996",
+          "--info-bg": "#dcedff",
+          "--info-text": "#174b78",
+          "--info-border": "#8bbceb",
+          "--warning-bg": "#fff0c2",
+          "--warning-text": "#704400",
+          "--warning-border": "#e3b552",
+          "--error-bg": "#ffe0df",
+          "--error-text": "#8c2529",
+          "--error-border": "#e69a9d",
           "--border-radius": "8px",
         } as React.CSSProperties
       }

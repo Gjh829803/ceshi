@@ -34,16 +34,7 @@
 .react-viewport-ui select {
   pointer-events: auto;
 }
-.configuration-status {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  color: #fff;
-  background: #20343ddd;
-  padding: 6px;
-  font: 12px sans-serif;
-  pointer-events: none;
-}
+
 .export-profiles {
   margin: 10px 18px;
   background: #c7dda4;
@@ -203,4 +194,11 @@ button:focus-visible,
 }
 [data-sonner-toaster] {
   font-family: inherit;
+}
+
+/* Loading blocks all workspace panels, including portaled menus. */
+[data-slot="dialog-overlay"].loading-overlay { z-index: 1300; }
+[data-slot="dialog-content"].loading-card { z-index: 1301; }
+[data-sonner-toast][data-styled="true"] {
+  box-shadow: 0 8px 28px #00131955;
 }

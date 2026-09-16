@@ -65,6 +65,16 @@ Asset producers follow [asset integration](../../docs/asset-production-integrati
 
 ## Verify and deliver
 
+For a local test build, add `--debug-tools` to the CLI/MCP or prebuild command;
+`pnpm dev:example /absolute/author-project 5175 --debug-tools` previews that variant.
+The resulting SDK build includes a separate debug bundle and automatically mounts
+the shared panel after the SDK observer is ready. Collider overlays are separate
+from pure renderer pixels; recording stays opt-in. Incidents are stored locally
+in IndexedDB and can be downloaded as JSON. The complete debug build identity is
+used for replay comparisons. Neither a production build nor a raw Three profile
+silently enables these tools. Debug builds are not eligible for `world_submit`.
+The same source must be rebuilt and self-checked without the flag for delivery.
+
 The [record and submit guide](docs/agent/programming.md#record-and-submit) is the Agent
 workflow. The Host verifies current source/runtime/world/episode identity,
 complete real-input video, files and captures; technical success is separate from

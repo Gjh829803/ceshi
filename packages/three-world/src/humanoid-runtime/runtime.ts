@@ -754,6 +754,7 @@ export class HumanoidRuntime implements PhysicsPort {
   }
   castCameraArm(target:Vec3,eye:Vec3,radius:number){return this.environment.cameraProbe(target,eye,radius);}
   probe(origin:Vec3,direction:Vec3,distance:number){const result=this.environment.raycast(new THREE.Vector3(...origin),new THREE.Vector3(...direction),distance);return result?{entityId:result.id,distanceMeters:result.distance,normalWorldXYZ:tuple(result.normal)}:null;}
+  collisionGeometry(maximumSegments:number){return this.ordinaryPhysics.collisionGeometry(maximumSegments);}
   audit():PhysicsAudit{
     const ordinary=this.ordinaryPhysics.audit(),base={engine:'rapier' as const,entityCount:this.objects.size,colliderCount:this.environment.colliderCount,triangleCount:0,entities:[...this.objects.keys()].map(id=>({id,kind:this.actors.has(id)?'character':'vehicle',colliderCount:this.simulation.vehicles.find(v=>v.spec.id===id)?.spec.mode==='carriage'?2:1,triangleCount:0})),diagnostics:[]};
     return {...base,entityCount:base.entityCount+ordinary.entityCount,triangleCount:ordinary.triangleCount,

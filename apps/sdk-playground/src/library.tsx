@@ -22,12 +22,17 @@ import {
 } from "@worldkit/preset-content/platform/catalog";
 import "./styles/platform.css";
 import { Icon } from "./components/icon";
+import { Pin, PinOff } from "lucide-react";
+
+import type {PanelStateStore} from './panel-state';
 
 export type LibraryOptions = {
+  panels?:PanelStateStore;
   assets: readonly AssetEntry[];
   /** Called only by the primary action, never by browsing a result. */
   onSelect: (id: string) => void;
   onOpenChange: (open: boolean) => void;
+  onPinnedChange?: (pinned:boolean) => void;
   onBrowseChange?: (asset: AssetEntry) => void;
   onQuickSlotsChange?: (assets: AssetEntry[]) => void;
 };
@@ -100,11 +105,13 @@ type State = {
   favoritesOnly: boolean;
   query: string;
   storageAvailable: boolean;
+  pinned: boolean;
   thumbnails: Record<string, string>;
 };
-function initialState(assets: readonly AssetEntry[]): State {
+function initialState(assets: readonly AssetEntry[],panels?:PanelStateStore): State {
   const state: State = {
     opened: false,
+    pinned: false,
     favorites: [],
     recent: [],
     activeId: null,
@@ -137,6 +144,9 @@ function initialState(assets: readonly AssetEntry[]): State {
   } catch {
     state.storageAvailable = false;
   }
+  const restored=panels?.read('assetLibrary');
+  if(restored)Object.assign(state,{opened:restored.open,pinned:restored.pinned,query:restored.query,category:restored.category,order:restored.order,favoritesOnly:restored.favoritesOnly,
+    selectedId:assets.some(asset=>asset.id===restored.selectedId)?restored.selectedId:state.selectedId});
   return state;
 }
 type LibraryHandle = Omit<AssetLibrary, "dispose">;
@@ -144,7 +154,7 @@ const Library = forwardRef<
   LibraryHandle,
   LibraryOptions & { libraryId: string }
 >(function Library(options, ref) {
-  const [state, setState] = useState(() => initialState(options.assets));
+  const [state, setState] = useState(() => initialState(options.assets,options.panels));
   // The ref makes synchronous SDK calls observe the latest state even before React commits.
   const current = useRef(state);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -154,6 +164,7 @@ const Library = forwardRef<
   function update(patch: Partial<State>) {
     current.current = { ...current.current, ...patch };
     setState(current.current);
+    const next=current.current;options.panels?.update('assetLibrary',{open:next.opened,pinned:next.pinned,query:next.query,category:next.category,order:next.order,favoritesOnly:next.favoritesOnly,selectedId:next.selectedId??''});
   }
   function getQuickSlots() {
     return resolveQuickSlots(options.assets, [
@@ -270,6 +281,14 @@ const Library = forwardRef<
             <span className="asset-library-total">{options.assets.length}</span>
           </div>
         </div>
+        <div className="asset-library-header-actions">
+        {options.onPinnedChange && <Hint content={state.pinned ? "取消固定：浮在场景上，恢复完整画布" : "固定到左侧：为面板预留空间，缩小画布"}>
+          <Button type="button" className="asset-library-close panel-pin"
+            aria-label={state.pinned ? "取消固定资产库面板" : "固定资产库面板"} aria-pressed={state.pinned}
+            onClick={()=>{const pinned=!current.current.pinned;update({pinned});options.onPinnedChange?.(pinned);}}>
+            {state.pinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />}
+          </Button>
+        </Hint>}
         <Hint content="收起资产库 · Esc">
           <Button
             type="button"
@@ -280,6 +299,7 @@ const Library = forwardRef<
             <Icon name="x" size={16} />
           </Button>
         </Hint>
+        </div>
       </header>
       <div className="asset-library-tools">
         <label className="asset-library-search">

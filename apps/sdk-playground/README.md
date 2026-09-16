@@ -20,6 +20,10 @@ imports or external model fetches are needed.
 
 ## Local diagnostics and reproduction
 
+The shared camera inspection, debug controls and input recording implementation
+comes from `@worldkit/three/debug`. Playground supplies scene lifecycle, UI and the
+loopback artifact service; these adapters are not imported by the SDK.
+
 The read-only browser tool `inspect_camera` (also `window.playground.inspectCamera()`)
 returns compact committed camera poses, orbit, relative roll, collision and errors.
 It does not render or enable probe capture. Existing query evidence names its
@@ -55,9 +59,11 @@ These controls do not restore arbitrary physics checkpoints.
 
 ### Incident capture and input replay
 
-In development, click **记录现场** (or call `set_debug_history({enabled:true})`)
+In development, click **记录现场** in the upper-right viewport toolbar or press **F8**
+(or call `set_debug_history({enabled:true})`)
 before reproducing. This opts into the latest renderer-frame copy and the last
-600 consumed input ticks. **保存现场** / `capture_debug_incident` saves that cached
+600 consumed input ticks. When an issue appears, click **保存现场**, press **F8** again,
+or call `capture_debug_incident` to save that cached
 image, its displayed camera pose, fixed snapshot, camera diagnostics and source
 identity, and pauses by default. Capture never re-renders or advances the world;
 without a cached frame it reports unavailable. During a reproducible recording,
@@ -92,6 +98,8 @@ input reproduction, not a claim that any live physical state can be restored.
 ## Display previews
 
 The **性能** panel stays open during gameplay until its button is toggled again.
+It floats above the bottom status bar, or above the shortcut window while that
+window is expanded. Its open/detail state is persisted with the other panels.
 Its FPS and interval graph measure browser animation callback cadence, not screen
 presentation. Expand **详细信息** for actual drawing-buffer resolution, renderer
 pixel ratio, mean CPU update and main-view render-submission times over each
@@ -198,6 +206,21 @@ pnpm exec tsx apps/sdk-playground/scripts/display-smoke.ts http://127.0.0.1:5178
 - All editor icons use official `lucide-react` components.
   `node apps/sdk-playground/scripts/sync-lucide-icons.mjs` refreshes the semantic
   mapping from the locked package. No icon font or hand-authored icon paths are used.
+
+The asset library and 3C inspector float over the scene by default without reserving
+canvas space. Each header has a pin toggle to dock its panel beside the canvas;
+unpinning restores the full viewport. Panel state is restored from the versioned
+`worldkit.playground.panels` localStorage record. This includes open/pinned states,
+shortcut layout, minimap expansion, inspector/display/workbench tabs, library
+filters and the last open tool dialog. Dialogs restore after scene readiness.
+At widths of 720 px or less, panels remain floating and pin controls are hidden.
+`src/panel-state.ts` owns the panel ID registry and per-field defaults/validation;
+new panels add a definition and connect their existing state owner. Unknown panel
+IDs/fields are retained, unsupported document versions are not overwritten, and
+unavailable storage falls back to the current session. Teardown does not save
+disposal-driven closes. Scene physics and temporary loading/recording states are
+not layout preferences. Shortcut help has collapsed, floating and pinned states;
+camera/render status stays in the header and contextual hints in the slim footer.
 
 Form focus releases driving input. Modal panels pause through the SDK callback;
 closing restores focus and the previous paused state. Configurations still need

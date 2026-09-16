@@ -1,6 +1,6 @@
 import {Euler,Vector3,Quaternion} from 'three';
-import type {ThreeWorld,RuntimeSample,CameraDocument} from '@worldkit/three';
-import {createDebugFileClient,type DebugSourceIdentity} from './file-client';
+import type {ThreeWorld,RuntimeSample,CameraDocument} from '../index.js';
+import {type DebugArtifactStore,type DebugSourceIdentity} from './storage.js';
 
 type InputSample=Extract<RuntimeSample,{kind:'fixed-input'}>;
 type FrameSample=Extract<RuntimeSample,{kind:'rendered-frame'}>;
@@ -15,7 +15,7 @@ export interface DebugRecordingPort {
 const distance=(a:readonly number[],b:readonly number[])=>Math.hypot(...a.map((n,i)=>n-b[i]!));
 const failure=(error:unknown)=>({status:'failed',error:error instanceof Error?error.message:String(error)});
 const schema=(properties:Record<string,unknown>={},required:string[]=[])=>({type:'object',properties,required,additionalProperties:false});
-export function createDebugRecording(port:DebugRecordingPort,files=createDebugFileClient()){
+export function createDebugRecording(port:DebugRecordingPort,files:DebugArtifactStore){
  const world=port.world,canvas=port.canvas.ownerDocument.createElement('canvas'),context=canvas.getContext('2d');
  let enabled=false,disposed=false,busy=false,replaying=false,cancelled=false,lastError:string|null=null;
  let source:DebugSourceIdentity|undefined,recording:DebugRecording|undefined;
@@ -130,7 +130,7 @@ export function createDebugRecording(port:DebugRecordingPort,files=createDebugFi
   const input=value as {label?:string;pause?:boolean};
   if(input?.label!==undefined&&(typeof input.label!=='string'||input.label.length>200)||input?.pause!==undefined&&typeof input.pause!=='boolean')throw Error('DEBUG_INPUT_INVALID');
   if(!enabled||!latest)throw Error('DEBUG_FRAME_UNAVAILABLE: enable debug history before reproducing.');
-  const bundle=freezeBundle(input.label??'Playground issue',true);
+  const bundle=freezeBundle(input.label??'World issue',true);
   if(input.pause!==false)await port.pause();
   return {status:'saved',replayable:bundle.metadata.recordingCoversFrame&&!bundle.recording?.invalidReason,...await saveFrozen(bundle)};
  });
@@ -204,9 +204,9 @@ export function createDebugRecording(port:DebugRecordingPort,files=createDebugFi
  const tools=[
   {name:'inspect_debug_recording',description:'Read recording/history status without stepping or rendering.',inputSchema:schema(),annotations:{readOnlyHint:true},execute:inspect},
   {name:'set_debug_history',description:'Enable/disable bounded recent input history (600 ticks) and the latest displayed frame. Opt in before reproducing; captures may add diagnostic rendering-copy overhead.',inputSchema:schema({enabled:{type:'boolean'}},['enabled']),annotations:{readOnlyHint:false},execute:setHistory},
-  {name:'capture_debug_incident',description:'Save the cached displayed frame, same-frame fixed state, source identity and recent consumed inputs to local ignored artifacts. Requires enabled history. Optionally pause (default true). Never re-renders or resets.',inputSchema:schema({label:{type:'string',maxLength:200},pause:{type:'boolean'}}),annotations:{readOnlyHint:false},execute:capture},
+  {name:'capture_debug_incident',description:'Save the cached displayed frame, same-frame fixed state, source identity and recent consumed inputs through the host artifact store. Requires enabled history. Optionally pause (default true). Never re-renders or resets.',inputSchema:schema({label:{type:'string',maxLength:200},pause:{type:'boolean'}}),annotations:{readOnlyHint:false},execute:capture},
   {name:'start_debug_recording',description:'RESET the current scene baseline, reapply the current on-foot position, profile and follow-camera setup, and prepare a bounded reproducible input recording. Leaves paused; resume or step. This clears prior world progress.',inputSchema:schema({maximumSeconds:{type:'number',minimum:1,maximum:120,default:30}}),annotations:{readOnlyHint:false},execute:start},
-  {name:'stop_debug_recording',description:'Pause, stop the current input recording and save its trace plus the latest captured frame to local artifacts.',inputSchema:schema(),annotations:{readOnlyHint:false},execute:stop},
+  {name:'stop_debug_recording',description:'Pause, stop the current input recording and save its trace plus the latest captured frame through the host artifact store.',inputSchema:schema(),annotations:{readOnlyHint:false},execute:stop},
   {name:'replay_debug_recording',description:'RESET and replay the last stopped recording from its recorded baseline using real SDK input and recorded render interpolation. Returns a replayId immediately; poll inspect_debug_recording.replayOperation. Reject changed map and, by default, changed source; allowSourceChange explicitly runs a cross-version comparison retaining both identities. Report per-tick divergence and leave paused.',inputSchema:schema({bundleId:{type:'string',description:'Optional ID returned when saving a local recording; omit to replay the in-memory recording.'},allowSourceChange:{type:'boolean',default:false,description:'Explicitly compare saved inputs against changed code; retain both identities and report divergence, without inheriting original acceptance.'}}),annotations:{readOnlyHint:false},execute:replay},
   {name:'cancel_debug_replay',description:'Request cancellation of the current bounded replay; leaves paused at its last completed tick.',inputSchema:schema(),annotations:{readOnlyHint:false},execute:()=>{cancelled=true;return {status:'cancellation-requested'};}},
  ];

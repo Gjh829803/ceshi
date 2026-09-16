@@ -20,12 +20,15 @@ import { createPortal, flushSync } from "react-dom";
 import { Button } from "./components/ui/button";
 import { ChoiceSelect, ChoiceOption } from "./components/choice-select";
 import { Icon } from "./components/icon";
+import { Pin, PinOff } from "lucide-react";
 import type { AssetEntry } from "@worldkit/preset-content/platform/catalog";
 import { MAPS } from "@worldkit/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
 import { DRAGON_VARIANTS } from '@worldkit/preset-content/dragon-variants';
 import { DisplayPanel } from './display-panel';
 import { defaultDisplaySettings, type DisplayObjectRow } from './display-settings';
+
+import {createPanelStateStore,type PanelStateStore} from './panel-state';
 
 type Flags =
   | "libraryOpen"
@@ -38,26 +41,32 @@ type Flags =
   | "paused"
   | "loading"
   | "contributionOpen"
-  | "interactionSmall"
   | "fpsSlow"
   | "debugActive";
-export function mountShell(host: HTMLElement) {
+export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanelStateStore()) {
+  const libraryState=panels.read('assetLibrary'),inspectorState=panels.read('inspector'),displayState=panels.read('display');
   let state = {
     texts: {} as Record<string, string>,
-    flags: { loading: true, debugActive: true } as Record<Flags, boolean>,
+    flags: { loading:true,debugActive:inspectorState.open,libraryOpen:libraryState.open,inspectorClosed:!inspectorState.open,inspectorMobileOpen:inspectorState.open,
+      displayOpen:displayState.open,performanceOpen:panels.read('performance').open,quickOpen:panels.read('quickAccess').open,mapExpanded:panels.read('minimap').expanded } as Record<Flags, boolean>,
     mapId: "campus",
     dragonId: 'D01',
     collider: "off",
     display: defaultDisplaySettings(),
     displayAvailable: {anchors:false,climbSurfaces:false,water:false,physics:false,unmappedColliders:0},
     displayRows: [] as DisplayObjectRow[],
-    displayPinned: false,
+    displayPinned: displayState.pinned&&displayState.open,
+    libraryPinned: libraryState.pinned,
+    inspectorPinned: inspectorState.pinned,
+    controlsLayout: panels.read('shortcuts').layout,
     displayError: '',
     quick: [] as AssetEntry[],
     activeId: "person",
     controls: [] as [string, string][],
+    controlGroups: [] as {title:string;rows:[string,string][]}[],
     system: [] as [string, string][],
     recoverable:false,
+    debugRecording: null as null | {enabled:boolean;busy:boolean;saved:boolean},
     drivetrain:null as null|{kind:'engine'|'pedal'|'paddle'|'push'|'motion';cadence:number;rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
     interaction: "",
     pacing: null as FrameRateReading | null,
@@ -96,6 +105,10 @@ export function mountShell(host: HTMLElement) {
     }
     if(Object.entries(next).every(([key,value])=>Object.is(state[key as keyof typeof state],value)))return;
     Object.assign(state, next);
+    if('libraryPinned' in next)panels.update('assetLibrary',{pinned:state.libraryPinned});
+    if('inspectorPinned' in next)panels.update('inspector',{pinned:state.inspectorPinned});
+    if('displayPinned' in next)panels.update('display',{pinned:state.displayPinned});
+    if('controlsLayout' in next)panels.update('shortcuts',{layout:state.controlsLayout});
     schedule();
   };
   const flush = () => {
@@ -110,6 +123,13 @@ export function mountShell(host: HTMLElement) {
   const flag = (key: Flags, value: boolean) => {
     if (state.flags[key] === value) return;
     state.flags = { ...state.flags, [key]: value };
+    if(key==='libraryOpen')panels.update('assetLibrary',{open:value});
+    else if(key==='inspectorClosed')panels.update('inspector',{open:!value});
+    else if(key==='displayOpen')panels.update('display',{open:value});
+    else if(key==='performanceOpen')panels.update('performance',{open:value});
+    else if(key==='quickOpen')panels.update('quickAccess',{open:value});
+    else if(key==='mapExpanded')panels.update('minimap',{expanded:value});
+    else if(key==='contributionOpen')panels.update('contribution',{open:value});
     schedule();
   };
   const action = (id: string, value?: string, event?: React.SyntheticEvent) => {
@@ -133,7 +153,7 @@ export function mountShell(host: HTMLElement) {
   function LiveText({id,fallback=''}:{id:string;fallback?:string}){
     return useSyncExternalStore(subscribe,()=>state.texts[id]??fallback);
   }
-  function Pacing(){const reading=useSyncExternalStore(subscribe,()=>state.pacing);return <FramePacingView reading={reading}/>;}
+  function Pacing(){const reading=useSyncExternalStore(subscribe,()=>state.pacing);return <FramePacingView reading={reading} panels={panels}/>;}
   function FPS(){const slow=useSyncExternalStore(subscribe,()=>state.flags.fpsSlow);return <output id="fpsReadout" aria-label="渲染回调频率" aria-live="off" data-slow={slow||undefined}><LiveText id="fpsReadout" fallback="渲染回调 —/s"/></output>;}
   function Drivetrain(){
     const d=useSyncExternalStore(subscribe,()=>state.drivetrain);
@@ -186,12 +206,6 @@ export function mountShell(host: HTMLElement) {
       ));
     const hud = (
       <>
-        <div className="stage-bar">
-          <span className="status-dot" />
-          <span>{t("activeName", "人物动作训练")}</span>
-          <span className="stage-divider" />
-          <span><LiveText id="stateValue" fallback="载入中"/></span>
-        </div>
         <section
           className={`minimap ${f("mapExpanded") ? "expanded" : ""}`}
           id="minimap"
@@ -230,7 +244,7 @@ export function mountShell(host: HTMLElement) {
             </ChoiceSelect>
           </label>}
           {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
-          <DisplayPanel settings={s.display} available={s.displayAvailable} error={s.displayError}
+          <DisplayPanel panels={panels} settings={s.display} available={s.displayAvailable} error={s.displayError}
             rows={s.displayRows} pinned={s.displayPinned} onPinnedChange={value=>action('displayPin',String(value))}
             open={!!f('displayOpen')} onOpenChange={open => { flag('displayOpen', open); action('displayOpen', String(open)); }}
             change={next => action('displayChange', JSON.stringify(next))}/>
@@ -296,16 +310,28 @@ export function mountShell(host: HTMLElement) {
             { title: "返回当前场景起点" },
           )}
           {btn("pauseButton", t("pauseButton", "暂停"), "subtle-button")}
+          {s.debugRecording && (
+            <HoverHint side="bottom" content={s.debugRecording.saved
+              ? "现场已保存，游戏已暂停。告诉 AI「现场已保存」即可协助定位问题；点击「继续」后会继续记录，也可以按 F8 再次保存。"
+              : s.debugRecording.enabled
+              ? "正在记录。发现画面、相机或操作异常时，立即点击或按 F8 保存现场并暂停，再告诉 AI「现场已保存」，帮助 AI 定位并修复问题。"
+              : "帮助 AI 定位并修复问题：准备复现异常前，点击或按 F8 开启记录；异常出现后，再按一次保存截图、人物与相机状态及最近操作。"}>
+              <Button id="debugRecordButton" className="subtle-button debug-record-button" aria-keyshortcuts="F8"
+                data-state={s.debugRecording.saved ? "saved" : s.debugRecording.enabled ? "recording" : "idle"}
+                aria-label={s.debugRecording.saved ? "已保存现场" : s.debugRecording.enabled ? "保存现场" : "记录现场"}
+                aria-busy={s.debugRecording.busy}
+                disabled={s.debugRecording.busy}
+                onClick={() => action("debugRecordButton")}>
+                {s.debugRecording.saved
+                  ? <span aria-hidden="true">✓</span>
+                  : s.debugRecording.enabled && <span className="recording-dot" aria-hidden="true" />}
+                {s.debugRecording.busy ? (s.debugRecording.enabled ? "保存中…" : "开启中…") : s.debugRecording.saved ? "已保存" : s.debugRecording.enabled ? "保存现场" : "记录现场"} <kbd aria-hidden="true">F8</kbd>
+              </Button>
+            </HoverHint>
+          )}
         </div>
 
-        <div
-          className={`interaction ${f("interactionSmall") ? "small" : ""}`}
-          id="interaction"
-        >
-          <Hint value={s.interaction} />
-        </div>
         <Drivetrain/>
-        <div className="bottom-hint">{t("bottomHint")}</div>
         {["left", "right"].map((side) => (
           <div key={side} className={`touch ${side}`}>
             {(side === "left"
@@ -333,15 +359,12 @@ export function mountShell(host: HTMLElement) {
             {side === "right" && btn("touchInteract", "F", "")}
           </div>
         ))}
-        <span className="configuration-status">
-          {s.configurationDirty ? "配置有未导出修改" : "项目配置已锁定"}
-        </span>
       </>
     );
     return (
       <>
         <main
-          className={`workspace ${f("libraryOpen") ? "library-open" : ""} ${f("inspectorClosed")&&!s.displayPinned ? "inspector-closed" : ""} ${f("inspectorMobileOpen") ? "inspector-mobile-open" : ""}`}
+          className={`workspace controls-${s.controlsLayout} ${f("libraryOpen") ? "library-open" : ""} ${s.libraryPinned ? "library-pinned" : ""} ${s.inspectorPinned||s.displayPinned ? "inspector-pinned" : ""} ${f("inspectorClosed")&&!s.displayPinned ? "inspector-closed" : ""} ${f("inspectorMobileOpen") ? "inspector-mobile-open" : ""}`}
           id="workspace"
         >
           <header className="workspace-header">
@@ -386,6 +409,10 @@ export function mountShell(host: HTMLElement) {
               Creator界面
             </a>
             <div className="header-spacer" />
+            <div className="header-live-status" aria-label="相机与渲染状态">
+              {btn("cameraButton", t("cameraButton", "相机 · 跟随"), "camera-mode-button")}
+              <FPS/>
+            </div>
             {btn(
               "contributeButton",
               <>
@@ -401,7 +428,6 @@ export function mountShell(host: HTMLElement) {
           </header>
           <nav className="workspace-rail" aria-label="训练工作区">
             {[
-              ["exploreButton", "explore", "探索"],
               ["libraryButton", "assets", "资产库"],
               ["humanButton", "character", "人物动作"],
               ["equipmentButton", "t-shirt", "人物装备"],
@@ -419,44 +445,22 @@ export function mountShell(host: HTMLElement) {
                   "aria-pressed":
                     id === "libraryButton"
                       ? !!f("libraryOpen")
-                      : id === "exploreButton"
-                        ? !f("libraryOpen")
-                        : id === "debugButton"
-                          ? !!f("debugActive")
-                          : undefined,
+                      : id === "debugButton"
+                        ? !!f("debugActive")
+                        : undefined,
                 },
               ),
             )}
             <div className="rail-spacer" />
-            <Popover
-              open={!!f("performanceOpen")}
-              onOpenChange={(open) => {
-                flag("performanceOpen", open);
-                flush();
-              }}
-            >
-              <HoverHint content="性能" side="right"><PopoverTrigger asChild>
-                {btn(
-                  "performanceButton",
-                  <><Icon name="chart" size={20} /><span className="rail-label">性能</span></>,
-                  "rail-button",
-                  { "aria-expanded": !!f("performanceOpen"), "aria-label": "性能" },
-                )}
-              </PopoverTrigger></HoverHint>
-              <PopoverContent
-                id="performancePanel"
-                className="performance-panel"
-                aria-label="性能诊断"
-                side="right"
-                align="end"
-                sideOffset={12}
-                onOpenAutoFocus={(e) => e.preventDefault()}
-                onInteractOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-              >
-                <Pacing/>
-              </PopoverContent>
-            </Popover>
+            {btn("performanceButton", <><Icon name="chart" size={20}/><span className="rail-label">性能</span></>, "rail-button", {
+              "aria-expanded":!!f("performanceOpen"),"aria-pressed":!!f("performanceOpen"),"aria-label":"性能",title:"显示 / 收起性能面板",
+              onClick:()=>{flag("performanceOpen",!f("performanceOpen"));flush();},
+            })}
+            {btn("controlsButton", <><Icon name="keyboard" size={20}/><span className="rail-label">快捷键</span></>, "rail-button", {
+              "aria-label":s.controlsLayout === "collapsed" ? "展开快捷键" : "收起快捷键",
+              "aria-pressed":s.controlsLayout !== "collapsed", title:s.controlsLayout === "collapsed" ? "浮动显示快捷键" : "收起快捷键",
+              onClick:()=>update({controlsLayout:s.controlsLayout === "collapsed" ? "floating" : "collapsed"}),
+            })}
           </nav>
           <section
             id="stage"
@@ -474,6 +478,13 @@ export function mountShell(host: HTMLElement) {
             <div id="displayInspectorHost" hidden={!s.displayPinned}/>
             <div className="inspector-top">
               <span>主体属性</span>
+              {btn(
+                "inspectorPin",
+                s.inspectorPinned ? <PinOff size={16} aria-hidden="true" /> : <Pin size={16} aria-hidden="true" />,
+                "asset-library-close panel-pin",
+                { "aria-label": s.inspectorPinned ? "取消固定 3C 调试面板" : "固定 3C 调试面板", "aria-pressed":s.inspectorPinned,
+                  title:s.inspectorPinned ? "取消固定：浮在场景上，恢复完整画布" : "固定到右侧：为面板预留空间，缩小画布" },
+              )}
               {btn(
                 "inspectorClose",
                 <Icon name="x" size={16} />,
@@ -497,23 +508,37 @@ export function mountShell(host: HTMLElement) {
             className="shortcut-footer"
             aria-label="全部可用快捷键"
           >
-            <div className="shortcut-main">
-              <span className="shortcut-heading">
-                <Icon name="keyboard" size={18} />
-                <span>{t("shortcutSubject", "人物操作")}</span>
-              </span>
-              <div className="shortcut-list">{keyList(s.controls)}</div>
+            <div className="shortcut-window-actions">
+              {btn("controlsPin", s.controlsLayout === "pinned" ? <PinOff size={14} aria-hidden="true"/> : <Pin size={14} aria-hidden="true"/>, "shortcut-window-button", {
+                "aria-label":s.controlsLayout === "pinned" ? "取消固定快捷键" : "固定快捷键", "aria-pressed":s.controlsLayout === "pinned",
+                title:s.controlsLayout === "pinned" ? "浮动在场景底部，不缩小画布" : "固定到底部，为快捷键预留空间",
+                onClick:()=>update({controlsLayout:s.controlsLayout === "pinned" ? "floating" : "pinned"}),
+              })}
+              {btn("controlsCollapse", <Icon name="chevron" size={14}/>, "shortcut-window-button", {"aria-label":"收起快捷键",title:"收起到左侧「快捷键」入口",onClick:()=>update({controlsLayout:"collapsed"})})}
             </div>
-            <div className="shortcut-system">
-              <div className="system-keys">{keyList(s.system)}</div>
-              {btn(
-                "cameraButton",
-                t("cameraButton", "相机 · 跟随"),
-                "camera-mode-button",
-              )}
-              <FPS/>
+            <div className="shortcut-panel-header">
+              <h2><Icon name="keyboard" size={16}/>快捷键 <small>{t("shortcutSubject", "人物操作")}</small></h2>
             </div>
+            {s.controlGroups.filter(group=>group.rows.length>0).map(group=>(
+              <section className="shortcut-section" key={group.title} aria-label={group.title}>
+                <h3>{group.title}</h3><div className="shortcut-list">{keyList(group.rows)}</div>
+              </section>
+            ))}
+            <section className="shortcut-section" aria-label="视角与系统">
+              <h3>视角与系统</h3><div className="shortcut-list">{keyList(s.system)}</div>
+            </section>
             <p className="sr-only">{t("cameraNote")}</p>
+          </footer>
+          {f("performanceOpen") && <section id="performancePanel" className="performance-panel workspace-performance-panel" aria-label="性能诊断"
+            onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();flag('performanceOpen',false);}}}>
+            <div className="performance-window-heading"><span>性能</span>{btn("performanceClose",<Icon name="x" size={14}/>,"plain-icon",{"aria-label":"关闭性能面板",onClick:()=>flag('performanceOpen',false)})}</div>
+            <Pacing/>
+          </section>}
+          <footer className="workspace-statusbar" aria-label="场景状态与操作提示">
+            <div className="statusbar-subject"><span className="status-dot"/><span>{t("activeName", "人物动作训练")}</span><span className="statusbar-divider"/><LiveText id="stateValue" fallback="载入中"/></div>
+            {s.interaction && <div className="statusbar-interaction" id="interaction"><Hint value={s.interaction}/></div>}
+            <span className="statusbar-hint">{t("bottomHint")}</span>
+            <span className="statusbar-configuration">{s.configurationDirty ? "配置有未导出修改" : "项目配置已锁定"}</span>
           </footer>
         </main>
         {s.viewport && createPortal(hud, s.viewport)}
@@ -521,6 +546,7 @@ export function mountShell(host: HTMLElement) {
         <Dialog open={!!f("loading")}>
           <DialogContent
             className="loading-card"
+            overlayClassName="loading-overlay"
             showCloseButton={false}
             onCloseAutoFocus={(event) => { event.preventDefault(); action("viewportFocus"); }}
             onEscapeKeyDown={(e) => e.preventDefault()}

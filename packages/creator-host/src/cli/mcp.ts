@@ -15,7 +15,7 @@ import { AUTHORING_TOPICS } from '../discovery/authoring-schema.js';
 import { BINDING_EXAMPLE_TOPICS } from '../discovery/binding-examples.js';
 import { CREATOR_QUALITY_SUMMARY } from '../discovery/quality-guidance.js';
 import { WORLD_COMMAND_SCHEMA } from '../schema/command-schema.js';
-import type { AssetPolicyOptions } from '../compiler/compiler.js';
+import type { CompilerOptions } from '../compiler/compiler.js';
 const string = { type: 'string', minLength: 1 };
 export const THREE_CREATOR_TOOLS = [
   { name: 'creator_describe_environment', description: 'Read the selected Three raw/SDK profile, actual capabilities and limitations. Call first.', inputSchema: objectSchema({}) },
@@ -77,7 +77,7 @@ export async function toolContent(service: ThreeCreatorTools, result: any) {
   }
   return content;
 }
-export async function serveThreeCreatorMcp(workspace: string, profile: CreatorProfile, policyOptions:AssetPolicyOptions={}) {
+export async function serveThreeCreatorMcp(workspace: string, profile: CreatorProfile, policyOptions:CompilerOptions={}) {
   const service = new ThreeCreatorTools(workspace, profile, policyOptions);
   const server = new Server({ name: 'worldkit_three_creator', version: THREE_CREATOR_VERSION }, { capabilities: { tools: {} }, instructions: `Use ordinary Three scene code in the selected raw/SDK profile. Read environment and relevant schema/examples. ${CREATOR_QUALITY_SUMMARY} Inspect real screenshots and input playtests, repair the same project, and preserve external task goals. Long tools return operation IDs. Delivery technical success is separate from semantic/reference review.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: THREE_CREATOR_TOOLS }));
@@ -90,5 +90,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const policyIndex=process.argv.indexOf('--asset-policy-snapshot'),hashIndex=process.argv.indexOf('--asset-policy-sha256');
   if((policyIndex>=0&&!process.argv[policyIndex+1])||(hashIndex>=0&&!process.argv[hashIndex+1]))throw new Error('THREE_ASSET_POLICY_PIN_REQUIRED');
   await serveThreeCreatorMcp(workspaceIndex < 0 ? process.cwd() : process.argv[workspaceIndex + 1]!, profileFrom(profileIndex < 0 ? undefined : process.argv[profileIndex + 1]),
-   {...(policyIndex<0?{}:{assetPolicySnapshotPath:process.argv[policyIndex+1]!}),...(hashIndex<0?{}:{assetPolicySha256:process.argv[hashIndex+1]!})});
+   {debugTools:process.argv.includes('--debug-tools'),...(policyIndex<0?{}:{assetPolicySnapshotPath:process.argv[policyIndex+1]!}),...(hashIndex<0?{}:{assetPolicySha256:process.argv[hashIndex+1]!})});
 }

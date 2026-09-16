@@ -17,11 +17,12 @@ function PerformanceDetails() {
   </div>;
 }
 export function FramePacingView({
-  reading,
+  reading, panels,
 }: {
+  panels?:import('./panel-state').PanelStateStore;
   reading: FrameRateReading | null;
 }) {
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(()=>panels?.read('performance').detailsOpen??false);
   const r = reading,
     canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -77,7 +78,7 @@ export function FramePacingView({
       <div className="pace-note" title="近 1 秒浏览器动画回调频率，每 0.5 秒更新；不代表屏幕实际呈现帧率">
         FPS: {r ? r.fps.toFixed(0) : "—"}
       </div>
-      <button className="performance-details-toggle" type="button" aria-expanded={detailsOpen} aria-controls="performanceDetails" onClick={() => setDetailsOpen(open => !open)}>
+      <button className="performance-details-toggle" type="button" aria-expanded={detailsOpen} aria-controls="performanceDetails" onClick={() => {setDetailsOpen(!detailsOpen);panels?.update('performance',{detailsOpen:!detailsOpen});}}>
         {detailsOpen ? '▾' : '▸'} 详细信息
       </button>
       {detailsOpen && <div id="performanceDetails"><PerformanceDetails/></div>}

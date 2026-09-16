@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import Ajv from 'ajv';
-import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assertNoSymlinks, type Candidate, type AssetPolicyOptions } from '../compiler/compiler.js';
+import { ThreeCompiler, REPOSITORY_ROOT, hashTree, verifyFiles, isWithin, assertNoSymlinks, type Candidate, type CompilerOptions } from '../compiler/compiler.js';
 import { EPISODE_SCHEMA, THREE_CREATOR_VERSION, episodeStepBudget, type CreatorProfile, type Episode, errorMessage, sha256 } from '../contracts.js';
 import { humanoid, RoadVehicleRouteController, roadVehicleBrakeInput, type WorldInput, type WorldCommand } from '@worldkit/three';
 import { AUTHORING_TOPICS, type AuthoringTopic } from '../discovery/authoring-schema.js';
@@ -113,7 +113,7 @@ export class ThreeCreatorTools {
   private playtestEvidence?: Evidence;
   private readonly recordedPlaytests = new Map<string, Evidence>();
   private captureEvidence?: Evidence;
-  constructor(workspace: string, readonly profile: CreatorProfile, policyOptions:AssetPolicyOptions = {}) {
+  constructor(workspace: string, readonly profile: CreatorProfile, policyOptions:CompilerOptions = {}) {
     this.compiler = new ThreeCompiler(workspace, profile, policyOptions); this.compiler.assetPolicy(); this.discovery = new CreatorDiscovery(this.compiler); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
   }
   async environment() {
@@ -531,6 +531,7 @@ export class ThreeCreatorTools {
     return report;
   }
   async submit() {
+    if(this.compiler.debugTools)throw new Error('THREE_DEBUG_BUILD_NOT_DELIVERABLE: rebuild without --debug-tools and record the production artifact before submitting.');
     const candidate = await this.compiler.prepare(), episode = await this.episode(), played = this.playtestEvidence;
     const readiness = playtestSubmissionReadiness(played?.report, { worldBuildHash: candidate.worldBuildHash, episodeHash: episode.hash });
     if (!played || !readiness.eligible) throw new Error(`THREE_SUBMIT_PLAYTEST_REQUIRED: ${JSON.stringify(readiness)}. Keep this MCP session; resolve the listed source/episode or recording issue before submitting again.`);

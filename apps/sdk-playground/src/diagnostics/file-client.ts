@@ -1,5 +1,5 @@
-export interface DebugSourceIdentity {readonly head:string;readonly sourceHash:string;readonly serverId:string;readonly revision:number}
-export interface DebugBundleFiles {readonly id:string;readonly directory:string;readonly files:Record<string,{path:string;sha256:string;bytes:number}>}
+import type {DebugSourceIdentity,DebugBundleFiles} from '@worldkit/three/debug';
+export type {DebugSourceIdentity,DebugBundleFiles} from '@worldkit/three/debug';
 export function createDebugFileClient(transport:typeof fetch=fetch){
  let session:Promise<string>|undefined;
  const request=async<T>(route:string,value:unknown):Promise<T>=>{

@@ -21,7 +21,8 @@ const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs'
 export type AssetCatalogEntry = Record<string, any> & { id: string; uri: string; sha256: string; byteLength: number; sourcePath: string };
 export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; runtimeSourceHash: string | null; assetPolicySha256: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
 export type AssetPolicyOptions = { assetPolicySnapshotPath?: string; assetPolicySha256?: string };
-export type PrebuiltRuntimeManifest = { schemaVersion: 1; profile: CreatorProfile; cacheIdentity: string; runtimeHash: string; files: Record<string, string> };
+export type CompilerOptions = AssetPolicyOptions & {debugTools?:boolean};
+export type PrebuiltRuntimeManifest = { schemaVersion: 1; profile: CreatorProfile; debugTools?:boolean; cacheIdentity: string; runtimeHash: string; files: Record<string, string> };
 export function isWithin(root: string, file: string): boolean { const relative = path.relative(root, file); return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative); }
 export async function hashTree(root: string): Promise<Record<string, string>> {
   const files: Record<string, string> = {};
@@ -61,6 +62,7 @@ async function copyTree(from: string, to: string) {
   }
 }
 export class ThreeCompiler {
+  readonly debugTools:boolean;
   readonly workspace: string;
   readonly outputRoot: string;
   private candidates = new Map<string, Candidate>();
@@ -68,7 +70,9 @@ export class ThreeCompiler {
   private addons = new Map<string, string>();
   private policyContext?: { snapshot:AssetPolicySnapshot; catalog:AssetCatalogEntry[]; hash:string };
   private readonly policyOptions: AssetPolicyOptions;
-  constructor(workspace: string, readonly profile: CreatorProfile, options: AssetPolicyOptions = {}) {
+  constructor(workspace: string, readonly profile: CreatorProfile, options: CompilerOptions = {}) {
+    this.debugTools=options.debugTools===true;
+    if(this.debugTools&&profile!=='three-sdk')throw new Error('THREE_DEBUG_TOOLS_REQUIRE_SDK');
     this.workspace = realpathSync(path.resolve(workspace)); this.outputRoot = path.join(this.workspace, '.three-creator');
     this.policyOptions={...options};
   }
@@ -140,7 +144,7 @@ export class ThreeCompiler {
     for (const key of Object.keys(sharedCameraFiles)) if (key.endsWith('.test.ts')) delete sharedCameraFiles[key];
     const bridge = await readFile(path.join(REPOSITORY_ROOT, 'packages/creator-host/src/browser/bridge.ts'));
     const versions = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'package.json'), 'utf8'));
-    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, workspaceRuntimeSourceHash: workspaceRuntime?.sourceHash??null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))), workspaceRuntimeCompiler:sha256(await readFile(new URL('./workspace-runtime.ts',import.meta.url))) }));
+    const cacheIdentity = sha256(JSON.stringify({ profile: this.profile, debugTools:this.debugTools, debugBootstrap:this.debugTools?sha256(await readFile(path.join(REPOSITORY_ROOT,'packages/creator-host/src/browser/debug-tools.ts'))):null, workspaceRuntimeSourceHash: workspaceRuntime?.sourceHash??null, three: versions.dependencies.three, esbuild: versions.devDependencies.esbuild, sdkFiles, sharedCameraFiles, sdkManifest: this.profile === 'three-sdk' ? sha256(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/package.json'))) : null, bridge: sha256(bridge), compiler: sha256(await readFile(fileURLToPath(import.meta.url))), workspaceRuntimeCompiler:sha256(await readFile(new URL('./workspace-runtime.ts',import.meta.url))) }));
     const root = path.join(this.outputRoot, 'runtime', cacheIdentity);
     const sealed = this.runtimes.get(cacheIdentity);
     if (sealed) { await verifyFiles(root, sealed.files); return { root, hash: sealed.hash, hit: true, cacheIdentity }; }
@@ -149,7 +153,7 @@ export class ThreeCompiler {
       const bytes = await readFile(path.join(prebuilt, 'runtime-manifest.json'));
       if (sha256(bytes) !== process.env.WORLDKIT_THREE_PREBUILT_RUNTIME_MANIFEST_SHA256) throw new Error('THREE_PREBUILT_MANIFEST_HASH_MISMATCH');
       const manifest = JSON.parse(bytes.toString()) as PrebuiltRuntimeManifest;
-      if (manifest.schemaVersion !== 1 || manifest.profile !== this.profile || manifest.cacheIdentity !== cacheIdentity || sha256(JSON.stringify(manifest.files)) !== manifest.runtimeHash) throw new Error('THREE_PREBUILT_RUNTIME_IDENTITY_MISMATCH');
+      if (manifest.schemaVersion !== 1 || manifest.profile !== this.profile || (manifest.debugTools??false)!==this.debugTools || manifest.cacheIdentity !== cacheIdentity || sha256(JSON.stringify(manifest.files)) !== manifest.runtimeHash) throw new Error('THREE_PREBUILT_RUNTIME_IDENTITY_MISMATCH');
       await verifyFiles(path.join(prebuilt, 'runtime'), manifest.files); await rm(root, { recursive: true, force: true }); await copyTree(path.join(prebuilt, 'runtime'), root);
       this.runtimes.set(cacheIdentity, { files: manifest.files, hash: manifest.runtimeHash }); return { root, hash: manifest.runtimeHash, hit: true, cacheIdentity };
     }
@@ -163,6 +167,13 @@ export class ThreeCompiler {
       plugins: [...(workspaceRuntime?[workspaceRuntime.plugin]:[]), { name: 'shared-three-only', setup: plugin => {
         plugin.onResolve({ filter: /^three$/ }, args => ({ path: args.path, external: true }));
       } }], outfile: path.join(root, 'worldkit-three.js') });
+    if(this.debugTools){
+      const debugEntry=path.join(path.dirname(workspaceRuntime?.entry??path.join(REPOSITORY_ROOT,'packages/three-world/src/index.ts')),'debug/index.ts');
+      const debugBuild=await build({...base,entryPoints:[debugEntry],external:['three','@worldkit/three'],plugins:workspaceRuntime?[workspaceRuntime.plugin]:[],metafile:true,outfile:path.join(root,'worldkit-debug.js')});
+      const debugExports=Object.values(debugBuild.metafile!.outputs).flatMap(output=>output.exports);
+      if(!['mountDebugPanel','createBrowserDebugStore'].every(name=>debugExports.includes(name)))throw new Error('THREE_DEBUG_RUNTIME_CAPABILITY_MISSING');
+      await build({...base,entryPoints:[path.join(REPOSITORY_ROOT,'packages/creator-host/src/browser/debug-tools.ts')],external:['three','@worldkit/three','@worldkit/three/debug'],outfile:path.join(root,'debug-tools.js')});
+    }
     const files = await hashTree(root), hash = sha256(JSON.stringify(files));
     this.runtimes.set(cacheIdentity, { files, hash });
     return { root, hash, hit: false, cacheIdentity };
@@ -200,6 +211,7 @@ export class ThreeCompiler {
     await writeFile(path.join(playableRoot, 'asset-policy.json'), JSON.stringify(this.assetPolicy(), null, 2));
     const imports: Record<string, string> = { three: './runtime/three.js' };
     if (this.profile === 'three-sdk') imports['@worldkit/three'] = './runtime/worldkit-three.js';
+    if(this.debugTools)imports['@worldkit/three/debug']='./runtime/worldkit-debug.js';
     const addonImports = new Set<string>();
     const boundary: Plugin = { name: 'three-author-boundary', setup: plugin => {
       plugin.onLoad({ filter: /.*/ }, async args => {
@@ -208,7 +220,7 @@ export class ThreeCompiler {
       });
       plugin.onResolve({ filter: /.*/ }, async args => {
         if (args.kind === 'entry-point') return;
-        if (args.path === 'three' || (args.path === '@worldkit/three' && this.profile === 'three-sdk')) return { path: args.path, external: true };
+        if (args.path === 'three' || ((args.path === '@worldkit/three'||this.debugTools&&args.path==='@worldkit/three/debug') && this.profile === 'three-sdk')) return { path: args.path, external: true };
         if (/^three\/(addons|examples\/jsm)\/.+\.js$/.test(args.path) && !args.path.includes('..')) { addonImports.add(args.path); return { path: args.path, external: true }; }
         if (!args.path.startsWith('.')) throw new Error(`THREE_IMPORT_NOT_ALLOWED: ${args.path}; use local files, three/addons, or the selected SDK profile`);
         const candidate = path.resolve(args.resolveDir, args.path);
@@ -246,7 +258,8 @@ export class ThreeCompiler {
       }
       await copyFile(cache, path.join(playableRoot, 'runtime', filename)); imports[specifier] = `./runtime/${filename}`;
     }
-    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>`;
+    const debugInjection=this.debugTools?`<script id="worldkit-debug-identity" type="application/json">${JSON.stringify({sourceHash,runtimeHash:runtime.hash,worldBuildHash}).replace(/</g,'\\u003c')}</script><script type="module" src="./runtime/debug-tools.js"></script>`:'';
+    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>${debugInjection}`;
     html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, value => value + injected) : injected + html;
     await writeFile(path.join(playableRoot, 'index.html'), html);
     const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, runtimeSourceHash:workspaceRuntime?.sourceHash??null, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ThreeCompiler, isWithin } from '../compiler/compiler.js';
 const workspace=path.resolve(process.argv[2]??'examples/three-creator/custom-vehicle');
 const port=Number(process.argv[3]??5175);
-const compiler=new ThreeCompiler(workspace,'three-sdk');
+const compiler=new ThreeCompiler(workspace,'three-sdk',{debugTools:process.argv.includes('--debug-tools')});
 const candidate=await compiler.prepare();
 const mime:Record<string,string>={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf'};
 const server=createServer(async(req,res)=>{try{

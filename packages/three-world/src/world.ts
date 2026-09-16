@@ -780,6 +780,10 @@ export class ThreeWorld implements API.World {
  snapshot():API.WorldSnapshot{
   const engine=this.engine.snapshot();return {...(this.engine.controlledHumanoid?{humanoid:this.engine.controlledHumanoid.snapshot()}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:engine.simulationTick,simulationSeconds:engine.simulationSeconds,isRunning:engine.isRunning,...(engine.controlledEntityId?{controlledEntityId:engine.controlledEntityId}:{}),camera:this.engine.cameraSnapshot(),entities:[...this.entries.keys()].map(id=>this.getEntityState(id)),errors:[...this.errors,...engine.errors.map(error=>runtimeError(error.diagnostic??error.message,error.code,error.entityId?[error.entityId]:[]))]};
  }
+ inspectCollisionGeometry(maximumSegments=20000):API.CollisionGeometrySample{
+  this.alive();if(!Number.isInteger(maximumSegments)||maximumSegments<1||maximumSegments>100000)throw failure('DEBUG_COLLISION_LIMIT_INVALID');
+  return {source:'committed-physics',simulationTick:this.simulationTick,...this.engine.physics.collisionGeometry(maximumSegments)};
+ }
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
   const observer:API.WorldObservation={withPresentation:(work,options)=>world.engine.withPresentation(work,1,options?.view),ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
@@ -788,6 +792,7 @@ export class ThreeWorld implements API.World {
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
    startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),inspectVehicles:query=>world.inspectVehicles(query),inspectCamera:()=>world.inspectCamera(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
+  Object.defineProperty(observer,'world',{value:world,enumerable:false});
   const target=window as unknown as Record<string,unknown>;target.__WORLDKIT_EVAL__=observer;target.__WORLDKIT_CREATOR__=observer;this.observer=observer;
  }
  private episodePort():EpisodeRuntimePort{

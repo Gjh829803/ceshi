@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Group, Vector3 } from 'three';
 import { createHumanoidCameraDocument, createWorld, type CommandReceipt, type ThreeWorld } from '@worldkit/three';
-import { createPlaygroundDebugControls, DEBUG_CONTROL_SCHEMAS, type DebugControlsPort } from './debug-controls';
+import { createDebugControls, DEBUG_CONTROL_SCHEMAS, type DebugControlsPort } from '@worldkit/three/debug';
 
 const retained: ThreeWorld[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const world of retained.splice(0)) world.dispose(); });
@@ -18,7 +18,7 @@ async function fixture() {
   const setCameraOrbit = vi.fn((input: Parameters<ThreeWorld['setCameraOrbit']>[0]) => world.setCameraOrbit(input));
   const port: DebugControlsPort = { getWorld: () => world, isReady: () => ready, isPaused: () => paused,
     setPaused, clearInput, render, setCameraOrbit };
-  return { world, controls: createPlaygroundDebugControls(port), setPaused, clearInput, render, setCameraOrbit,
+  return { world, controls: createDebugControls(port), setPaused, clearInput, render, setCameraOrbit,
     pauseState: () => paused, setReady: (value: boolean) => { ready = value; } };
 }
 

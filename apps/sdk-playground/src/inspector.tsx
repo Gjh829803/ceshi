@@ -59,6 +59,7 @@ export type InspectorMovement = {
   grounded: boolean;
 };
 export type InspectorOptions = {
+  panels?:import('./panel-state').PanelStateStore;
   cameraEditor?():CameraEditorBinding;
   getAssetId(): string;
   getSubject(): InspectorSubject;
@@ -234,7 +235,7 @@ function Inspector({
   refresh(): void;
 }) {
   const { assetId, subject, profile, movement, camera, telemetry } = snapshot;
-  const [tab, setTab] = useState<InspectorTab>("movement");
+  const [tab, setTab] = useState<InspectorTab>(()=>options.panels?.read('inspector').tab??'movement');
   const interact = useCallback(() => options.onInteract?.(), [options]);
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
   const person = assetId === "person",
@@ -340,7 +341,7 @@ function Inspector({
         <Tabs
           value={tab}
           onValueChange={(value) => {
-            setTab(value as InspectorTab);
+            setTab(value as InspectorTab);options.panels?.update('inspector',{tab:value as InspectorTab});
             options.onInteract?.();
           }}
         >
