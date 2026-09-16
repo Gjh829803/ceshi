@@ -13,7 +13,7 @@ export function createCameraDisplay(options:{source:T.Camera;mount:HTMLElement;c
   const controls=new OrbitControls(worldCamera,surface);controls.enableDamping=false;controls.enabled=false;controls.minDistance=.5;controls.maxDistance=5000;controls.panSpeed=2.4;controls.zoomSpeed=2;
   controls.mouseButtons={LEFT:T.MOUSE.ROTATE,MIDDLE:T.MOUSE.PAN,RIGHT:T.MOUSE.PAN};
   let enabled=false,framed=false,drawing=false,following=false;
-  const previousSource=new T.Vector3();
+  const previousFollowPosition=new T.Vector3(),followPosition=new T.Vector3(),followDelta=new T.Vector3();
   // 在原 SDK 输入面上聚焦，保持键盘归属；仅拦截鼠标事件，避免同时转动游玩镜头。
   surface.addEventListener('pointerdown',event=>{options.focusGameplay();event.stopPropagation();});
   // 拖动事件继续到 document，让 OrbitControls 收到移动与释放；SDK 未收到按下，不会启动镜头拖动。
@@ -55,9 +55,11 @@ export function createCameraDisplay(options:{source:T.Camera;mount:HTMLElement;c
   return {
     get camera(){return worldCamera;},
     locate(){if(!enabled)return;framed=false;options.redraw();},
-    setFollowing(value:boolean){following=value;options.source.getWorldPosition(previousSource);},
+    // Keep the last displayed anchor. Reading the root here (between renders)
+    // would read the restored fixed pose and reintroduce a one-frame jump.
+    setFollowing(value:boolean){following=value;},
     setEnabled(value:boolean){if(enabled===value)return;enabled=value;surface.hidden=!value;controls.enabled=value;framed=false;if(value){if(surface.ownerDocument.pointerLockElement)surface.ownerDocument.exitPointerLock();}},
-    render(scene:T.Scene,view:T.Camera,settings:CameraSettings,subjects:readonly T.Object3D[],width:number,height:number,draw:(camera:T.Camera,helper:T.Object3D)=>void){
+    render(scene:T.Scene,view:T.Camera,settings:CameraSettings,subjects:readonly T.Object3D[],width:number,height:number,draw:(camera:T.Camera,helper:T.Object3D)=>void,followTarget=subjects[0]??options.source){
       const cameras=new Set<SceneCamera>();
       if(options.source instanceof T.PerspectiveCamera||options.source instanceof T.OrthographicCamera)cameras.add(options.source);
       scene.traverseVisible(node=>{if(node instanceof T.PerspectiveCamera||node instanceof T.OrthographicCamera)cameras.add(node);});
@@ -70,6 +72,7 @@ export function createCameraDisplay(options:{source:T.Camera;mount:HTMLElement;c
       worldCamera.aspect=Math.max(.01,width/height);worldCamera.updateProjectionMatrix();
       drawing=true;
       try{
+        followTarget.getWorldPosition(followPosition);
         if(!framed){
           const bounds=new T.Box3(),entry=entries.get(options.source as SceneCamera);
           if(entry)bounds.setFromObject(entry.group.getObjectByName('camera-model')!);
@@ -81,11 +84,12 @@ export function createCameraDisplay(options:{source:T.Camera;mount:HTMLElement;c
           worldCamera.position.copy(sphere.center).addScaledVector(offset,Math.max(5,sphere.radius/Math.sin(angle)*1.15));
           worldCamera.lookAt(controls.target);controls.update();framed=true;
         }else if(following){
-          // 只继承世界位移，保留手动环绕角度与距离，不继承游玩镜头旋转。
-          const delta=options.source.getWorldPosition(new T.Vector3()).sub(previousSource);
-          worldCamera.position.add(delta);controls.target.add(delta);controls.update();
+          // Follow the displayed subject, not the orbiting gameplay camera.
+          // Turning, recentering and collision pull-in must not drag this view.
+          followDelta.subVectors(followPosition,previousFollowPosition);
+          worldCamera.position.add(followDelta);controls.target.add(followDelta);controls.update();
         }
-        options.source.getWorldPosition(previousSource);
+        previousFollowPosition.copy(followPosition);
         probes.update(options.collisionDiagnostics?.(),options.source.getWorldPosition(new T.Vector3()),settings.colliders==='all',settings.opacity);
         scene.add(root);draw(worldCamera,root);
       }finally{root.removeFromParent();drawing=false;}

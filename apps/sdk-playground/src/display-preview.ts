@@ -10,7 +10,9 @@ export function createDisplayPreview(options: {
   scene: T.Scene; camera: T.Camera; source: T.WebGLRenderer; mount: HTMLElement;
   collisionDiagnostics?():CameraProbeSample|undefined;
   /** SDK render completion, after its camera/body display transaction restores. */
-  onRender?(callback:()=>void):()=>void;
+  onRender?(callback:(interpolationAlpha:number)=>void):()=>void;
+  /** SDK-owned display resampling with full subject visibility for the world observer. */
+  withPresentation?(draw:()=>void,interpolationAlpha:number):void;
   inputSurface?:HTMLElement; focusGameplay?():void;
   context(): DisplayContext; overlay?: DisplayOverlay; onError(error: unknown): void;
 }) {
@@ -19,6 +21,7 @@ export function createDisplayPreview(options: {
   const cameraDisplay = createCameraDisplay({collisionDiagnostics:()=>options.collisionDiagnostics?.(),source:camera,mount:options.inputSurface??options.mount,focusGameplay:()=>options.focusGameplay?.(),redraw:()=>draw()});
   const monitor=createCameraMonitor(source.domElement,options.inputSurface??options.mount,()=>options.focusGameplay?.(),{locate:()=>cameraDisplay.locate(),setFollowing:value=>cameraDisplay.setFollowing(value)});
   let renderer: T.WebGLRenderer | undefined, settings = defaultDisplaySettings(), failed = false, disposed = false;
+  let interpolationAlpha=1;
   const previous = scene.onAfterRender;
   const size = new T.Vector2();
   function draw() {
@@ -57,7 +60,20 @@ export function createDisplayPreview(options: {
           },allHelpers);}finally{if(cameraHelper)cameraHelper.visible=helperVisible!;}
         }
       };
-      if(renderSettings.cameras)cameraDisplay.render(scene,camera,renderSettings,context.subjects??[],size.x,size.y,drawScene);
+      if(renderSettings.cameras){
+        const drawWorld=()=>cameraDisplay.render(scene,camera,renderSettings,context.subjects??[],size.x,size.y,drawScene,context.followTarget);
+        // The source camera keeps its interpolated pose after SDK restoration,
+        // but subject roots do not. Resample both at that frame's alpha, retaining
+        // full bodies rather than first-person clipping or gameplay camera fade.
+        if(options.withPresentation){
+          // Renderer/helper failures stay local; let the SDK restore successfully
+          // before reporting them, rather than stopping its gameplay clock.
+          let failure:{error:unknown}|undefined;
+          options.withPresentation(()=>{try{drawWorld();}catch(error){failure={error};}},interpolationAlpha);
+          if(failure)throw failure.error;
+        }
+        else drawWorld();
+      }
       else drawScene(camera);
     } catch (error) {
       cameraDisplay.setEnabled(false);monitor.setEnabled(false);failed = true; if (renderer) renderer.domElement.hidden = true;
@@ -71,14 +87,14 @@ export function createDisplayPreview(options: {
     if (renderedBy === source && renderedCamera === camera && source.getRenderTarget() === null) {
       monitor.copyFrame();
       // Picture overlays stay aligned with the source's display sample. The world
-      // observer waits for SDK restoration so first-person clipping and subject
-      // fading never leak into its committed subjects. The source camera retains
+      // observer waits for SDK restoration, then resamples with full bodies so
+      // first-person clipping and subject fading never leak. The source camera retains
       // its actual display pose, which also identifies the displayed probe sample.
       if(!resolveDisplaySettings(settings).cameras||!options.onRender)draw();
     }
   };
   scene.onAfterRender = afterRender;
-  const releaseRender=options.onRender?.(()=>{if(resolveDisplaySettings(settings).cameras)draw();});
+  const releaseRender=options.onRender?.(alpha=>{interpolationAlpha=alpha;if(resolveDisplaySettings(settings).cameras)draw();});
   function setSettings(next:DisplaySettings){
     settings=structuredClone(next);failed=false;cameraDisplay.setEnabled(resolveDisplaySettings(settings).cameras);
     monitor.setEnabled(resolveDisplaySettings(settings).cameras);

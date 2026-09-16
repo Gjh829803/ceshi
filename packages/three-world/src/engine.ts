@@ -106,7 +106,7 @@ export class WorldEngine {
   private readonly locomotionAnimations = new Map<string, LocomotionAnimation>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
   private readonly inputRouter: WorldInputRouter;
-  private readonly renders = new Set<() => void>();
+  private readonly renders = new Set<(interpolationAlpha:number) => void>();
   private readonly frameTimings = new Set<(sample:WorldFrameTiming)=>void>();
   private controlled: string | undefined;
   private tick = 0;
@@ -290,7 +290,7 @@ export class WorldEngine {
   }
   bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
   focusInput():void {this.inputRouter.focus();}
-  onRender(callback:()=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}
+  onRender(callback:(interpolationAlpha:number)=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}
   onFrameTiming(callback:(sample:WorldFrameTiming)=>void):()=>void {this.frameTimings.add(callback);return()=>{this.frameTimings.delete(callback);};}
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
   onAfterUpdate(callback:()=>void):()=>void {this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
@@ -769,10 +769,11 @@ export class WorldEngine {
       this.renderer?.render(this.scene,this.camera);
     },alpha);
     if(sample)this.emitRuntimeSample(sample);
-    try { for(const callback of this.renders)callback(); }
+    try { for(const callback of this.renders)callback(alpha); }
     catch(error){this.recordError('WORLD_FRAME_FAILED',error);this.stop();throw error;}
   }
   withPresentation<T>(callback:()=>T,alpha=1,view:'world'|'object'='world'):T {
+    if(!Number.isFinite(alpha)||alpha<0||alpha>1)throw new Error('WORLD_PRESENTATION_ALPHA_INVALID');
     this.alive();if(this.fixedTransaction||this.displayTransaction)throw new Error('WORLD_TRANSACTION_REENTRY');this.displayTransaction=true;
     let restore:(()=>void)|undefined;
     let restoreSubjectVisibility:(()=>void)|undefined;

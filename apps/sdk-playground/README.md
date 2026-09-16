@@ -141,8 +141,13 @@ and projection; the distance setting only caps their visual length. A live camer
 preview appears at the lower right of the world viewport; **放大 / 还原** changes
 its size without pausing or changing control. **定位摄像机** immediately reframes
 the current camera and subject, resetting the orbit centre. **跟随位置** (off by
-default) translates the world view with the gameplay camera while retaining the
-manually chosen viewing angle and distance. It does not inherit camera rotation.
+default) translates the world view with the displayed vehicle root when mounted,
+or the character root on foot, while retaining the manually chosen viewing angle
+and distance. Gameplay camera orbit, turn recentering, view switching and collision
+pull-in do not translate or rotate the observer.
+The observer resamples subjects through the SDK at the source frame's interpolation
+alpha, including mouse-only redraws. Vehicle bodies and the followed camera therefore
+share one display time; source-only body clipping/fading is omitted from this view.
 World-view pan and zoom respond faster; their scale remains distance-dependent. It copies the original gameplay
 frame at full source resolution, preserves its aspect ratio, follows V camera
 changes and disappears when camera display is disabled. It is UI only and is
@@ -151,11 +156,11 @@ With camera display and all-type colliders enabled together, cyan spheres and
 lines show the recorded camera sweep radius/path, orange marks blocked sweeps,
 and red marks returned surface contacts/normals. These are actual query samples,
 not added physics bodies. The world observer draws after the SDK restores its
-display transaction and shows committed subjects without gameplay body clipping
+display transaction and resamples displayed subjects without gameplay body clipping
 or fade. The camera model follows the actual displayed camera pose and uses the
 presentation sample from `world.inspectCamera().collisionQueries`, falling back
 to fixed only before a presentation sample exists. The live monitor copies the actual interpolated gameplay frame;
-the observer's committed subject poses may differ by up to one fixed tick.
+the observer uses that same interpolation alpha for its subjects.
 Each sample carries its source,
 simulation tick and sequence; first-person views without sweeps show no stale probe. Source captures
 omit these guides, and turning inspection off stops query recording.

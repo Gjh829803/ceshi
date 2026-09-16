@@ -19,12 +19,16 @@ describe('diagnostic preview and clean source pixels', () => {
       const holeTexture=new T.DataTexture(new Uint8Array([0,255,0,0]),1,1);holeTexture.needsUpdate=true;
       const hole=new T.Mesh(new T.PlaneGeometry(2,2),new T.MeshBasicMaterial({map:holeTexture,transparent:true,depthWrite:false}));hole.position.z=2;scene.add(hole);
       const originalMaterial=mesh.material, before=camera.position.toArray();
-      const renderListeners=new Set();let sourceHidden=false;
-      function renderSource(){const visible=mesh.visible;if(sourceHidden)mesh.visible=false;try{source.render(scene,camera);}finally{mesh.visible=visible;}for(const callback of renderListeners)callback();}
+      const renderListeners=new Set();let sourceHidden=false,displayX=null,observedX=null;
+      function withSubjectSample(work){const x=mesh.position.x;if(displayX!==null)mesh.position.x=displayX;try{return work();}finally{mesh.position.x=x;mesh.updateMatrixWorld(true);}}
+      function renderSource(){const visible=mesh.visible;if(sourceHidden)mesh.visible=false;try{withSubjectSample(()=>source.render(scene,camera));}finally{mesh.visible=visible;}for(const callback of renderListeners)callback(.5);}
       const presentation=new ThreePresentation({canvas:source.domElement,camera,render:()=>renderSource(),stamp:()=>({simulationTick:7,worldRevision:3}),object:()=>mesh,onRender:()=>()=>{},onChange:()=>()=>{},bindInput:()=>()=>{},focus:()=>{},released:()=>{}},{});
-      const preview=createDisplayPreview({scene,camera,source,mount,onRender:callback=>{renderListeners.add(callback);return ()=>renderListeners.delete(callback);},inputSurface:presentation.inputSurface,collisionDiagnostics:()=>({sampleId:1,source:'fixed',simulationTick:7,probes:[{from:[0,0,5],to:[0,0,0],radius:.2,hit:{distanceMeters:2,colliderEntityId:'wall',normalWorldXYZ:[0,0,1],hitPositionWorldMetersXYZ:[0,0,2.8]}}],droppedProbes:0}),context:()=>({roots:[{object:mesh,type:'person'}],subjects:[mesh]}),onError:e=>{throw e;}});
+      const preview=createDisplayPreview({scene,camera,source,mount,withPresentation:withSubjectSample,onRender:callback=>{renderListeners.add(callback);return ()=>renderListeners.delete(callback);},inputSurface:presentation.inputSurface,collisionDiagnostics:()=>({sampleId:1,source:'fixed',simulationTick:7,probes:[{from:[0,0,5],to:[0,0,0],radius:.2,hit:{distanceMeters:2,colliderEntityId:'wall',normalWorldXYZ:[0,0,1],hitPositionWorldMetersXYZ:[0,0,2.8]}}],droppedProbes:0}),context:()=>({roots:[{object:mesh,type:'person'}],subjects:[mesh]}),onError:e=>{throw e;}});
       function pixel(canvas){const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d');ctx.drawImage(canvas,0,0,128,128);return [...ctx.getImageData(64,64,1,1).data];}
+      // Host resamples through the SDK after source-only clipping is restored.
+      // In the fixture only the subject transform is interpolated.
       window.testPreview={
+        interpolatedFrame(x){displayX=x;mesh.position.x=Math.ceil(x);camera.position.x=x;scene.onBeforeRender=(renderer)=>{if(renderer!==source)observedX=mesh.position.x;};renderSource();return {displayX,observedX,committedX:mesh.position.x,world:preview.worldCamera.position.toArray()};},
         foreground(){glass.visible=true;preview.setSettings({...defaultDisplaySettings(),mode:'semantic'});renderSource();const result=pixel(preview.canvas);glass.visible=false;return result;},
         async draw(mode){preview.setSettings({...defaultDisplaySettings(),mode:mode==='collision'||mode==='wireframe'?'material':mode,helperOnly:mode==='collision'||mode==='wireframe'?mode:'none',depthFar:10});renderSource();const p=preview.canvas;const frame=await presentation.modelInput.captureFrame();const captured=pixel(frame.image);frame.image.close();return {source:pixel(source.domElement),preview:p?pixel(p):null,captured,tick:frame.source.simulationTick,materialRestored:mesh.material===originalMaterial,camera:camera.position.toArray(),before,visible:mesh.visible};},
         async cameraDisplay(addOther=false,showProbes=false,hideSubject=false){
@@ -38,6 +42,7 @@ describe('diagnostic preview and clean source pixels', () => {
           sourceHidden=false;return {observerSubjectVisible,probeVertices,monitor:pixel(mount.querySelector("[data-camera-monitor-frame]")),world:preview.worldCamera.position.toArray(),worldDistance:preview.worldCamera.position.distanceTo(camera.position),audit,previewDiff:preview.canvas.toDataURL()!==source.domElement.toDataURL(),source:pixel(source.domElement),captured,tick:frame.source.simulationTick,helperLeaked:!!scene.getObjectByName('display-camera'),initial,after:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),projection:camera.projectionMatrix.toArray(),far:camera.far}};
         },
         moveRig(dx,rotate=0){camera.position.x+=dx;mesh.position.x+=dx;camera.rotation.y+=rotate;renderSource();return this.readView();},
+        turnRig(angle,x,z,distance=5){mesh.position.set(x,0,z);mesh.rotation.y=angle;camera.position.set(x+Math.sin(angle)*distance,0,z+Math.cos(angle)*distance);camera.lookAt(mesh.position);renderSource();return this.readView();},
         readView(){return {world:preview.worldCamera.position.toArray(),orientation:preview.worldCamera.quaternion.toArray(),source:camera.position.toArray()};},
         moveOther(){scene.getObjectByName('scene-camera').position.x=2.5;},
         removeOther(){scene.getObjectByName('scene-camera').removeFromParent();},
@@ -48,6 +53,50 @@ describe('diagnostic preview and clean source pixels', () => {
     browser = await launchChromiumWithSystemFallback();
   }, 60000);
   afterAll(async () => { await browser?.close(); });
+  it('follows subject translation without copying camera orbit, recentering or distance changes during turns',async()=>{
+    const page=await browser.newPage();
+    try{
+      await page.setContent('<body></body>');await page.addScriptTag({content:script});
+      await page.evaluate(()=>(window as any).testPreview.cameraDisplay());
+      const initial=await page.evaluate(()=>(window as any).testPreview.readView());
+      const following=page.getByRole('switch',{name:'跟随位置',exact:true});
+      await following.evaluate((el:HTMLButtonElement)=>el.click());
+      for(let step=1;step<=12;step++){
+        const x=step*.2,z=step*.1,angle=step*Math.PI/12;
+        const view=await page.evaluate(({angle,x,z})=>(window as any).testPreview.turnRig(angle,x,z),{angle,x,z});
+        expect(view.world[0]-initial.world[0]).toBeCloseTo(x,8);
+        expect(view.world[2]-initial.world[2]).toBeCloseTo(z,8);
+        view.orientation.forEach((n:number,i:number)=>expect(n).toBeCloseTo(initial.orientation[i],8));
+      }
+      const before=await page.evaluate(()=>(window as any).testPreview.readView());
+      // Camera-only movement (orbit, first-person switch or collision pull-in)
+      // must not move a stationary subject around the observer's screen.
+      const view=await page.evaluate(()=>(window as any).testPreview.turnRig(-.8,2.4,1.2,.5));
+      view.world.forEach((n:number,i:number)=>expect(n).toBeCloseTo(before.world[i],8));
+      await following.evaluate((el:HTMLButtonElement)=>el.click());
+      const stopped=await page.evaluate(()=>(window as any).testPreview.turnRig(1,3,2));
+      expect(stopped.world).toEqual(view.world);
+      await page.evaluate(()=>(window as any).testPreview.dispose());
+    }finally{await page.close();}
+  },30000);
+  it('keeps moving subjects and the following world view on the same displayed sample',async()=>{
+    const page=await browser.newPage();
+    try {
+      await page.setContent('<body></body>');await page.addScriptTag({content:script});
+      await page.evaluate(()=>(window as any).testPreview.cameraDisplay());
+      await page.getByRole('switch',{name:'跟随位置',exact:true}).evaluate((el:HTMLButtonElement)=>el.click());
+      const offsets:number[]=[];
+      for(const x of [.2,.7,1.2,1.7,2.2]){
+        const frame=await page.evaluate(x=>(window as any).testPreview.interpolatedFrame(x),x);
+        expect(frame.observedX).toBeCloseTo(x,8);
+        expect(frame.committedX).toBe(Math.ceil(x));
+        offsets.push(frame.observedX-frame.world[0]);
+      }
+      expect(Math.max(...offsets)-Math.min(...offsets)).toBeLessThan(1e-8);
+      await page.getByRole('button',{name:'定位摄像机',exact:true}).evaluate((el:HTMLButtonElement)=>el.click());
+      await page.evaluate(()=>(window as any).testPreview.dispose());
+    }finally{await page.close();}
+  },30000);
   it('switches to a world viewport while retaining the real gameplay camera and clean capture',async()=>{
     const page=await browser.newPage();
     try {
