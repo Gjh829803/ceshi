@@ -134,6 +134,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/three-world/src/humanoid-runtime/humanoid-camera-opening.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
   { path: "packages/three-world/src/humanoid-runtime/humanoid/actors.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/humanoid/shared-interactions.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/humanoid-runtime/humanoid/traversal-composite.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/jetski.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/kayak.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/humanoid-runtime/map-validation.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },

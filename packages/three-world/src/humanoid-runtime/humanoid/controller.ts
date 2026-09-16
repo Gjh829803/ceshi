@@ -23,7 +23,7 @@ export const CROUCH_HALF = .38;
 export interface AnimationEvent { id:number; kind:'jump'|'land'|'start'|'stop'|'turn'|'pivot'; elapsed:number; turn:number; heavy:boolean; moving:boolean; speed?:number; strength?:number }
 export type Kind = 'vault' | 'mantle' | 'climb' | 'blocked';
 export interface Block extends LevelBox { collider?: RAPIER.Collider|undefined }
-export interface Probe { kind: Kind; height: number; heightKnown: boolean; depth: number; reason: string; front: Vector3; top: Vector3; normal: Vector3; end: Vector3; collider: RAPIER.Collider; distance: number }
+export interface Probe { kind: Kind; height: number; heightKnown: boolean; depth: number; reason: string; front: Vector3; top: Vector3; normal: Vector3; end: Vector3; collider: RAPIER.Collider; topCollider?: RAPIER.Collider; distance: number }
 export interface Traversal { probe: Probe; start: Vector3; elapsed: number; duration: number; progress: number; phase: string; motion:MotionPlan; safePositions:Vector3[]; entryVelocity?:Vector3; airborne?:boolean }
 const UP = new Vector3(0,1,0);
 const ROT = {x:0,y:0,z:0,w:1};
@@ -352,14 +352,22 @@ export class HumanoidController {
     if(this.queries.isBoundaryCollider(obstacle))return {kind:'blocked',height:0,heightKnown:false,depth:0,
       reason:'场地空气边界不可翻越或攀爬',front,top:front.clone(),normal,end:this.position.clone(),collider:obstacle,distance};
     const sample=front.clone().addScaledVector(normal,-.15); sample.y=this.position.y+2.95;
-    const down=this.ray(sample,new Vector3(0,-1,0),2.95,c=>c.handle===obstacle.handle);
+    let topCollider=obstacle;
+    // A low face can belong to a thin supporting wall beneath a separate slab.
+    // Only combine a top hit that physically touches that face's collider;
+    // floating ceilings, actors and dynamic props remain independent obstacles.
+    const upper=this.ray(sample,new Vector3(0,-1,0),2.95);
+    if(upper&&upper.normal.y>.7&&upper.collider.handle!==obstacle.handle
+      &&!upper.collider.parent()?.isDynamic()&&!this.queries.isActorCollider(upper.collider)
+      &&!this.queries.isBoundaryCollider(upper.collider)&&upper.collider.contactCollider(obstacle,.01))topCollider=upper.collider;
+    const down=this.ray(sample,new Vector3(0,-1,0),2.95,c=>c.handle===topCollider.handle);
     const heightKnown=!!down&&down.normal.y>.7&&down.timeOfImpact>.0001;
     const top=sample.clone(); top.y=heightKnown? sample.y-down!.timeOfImpact:this.position.y+2.95;
     const height=top.y-this.position.y;
     // March downward probes over the top surface to estimate usable depth.
     let depth=0;
     for(let d=.05;d<=3.1;d+=.1){const o=front.clone().addScaledVector(normal,-d);o.y=top.y+.08;
-      const r=this.ray(o,new Vector3(0,-1,0),.15,c=>c.handle===obstacle.handle);
+      const r=this.ray(o,new Vector3(0,-1,0),.15,c=>c.handle===topCollider.handle);
       if(!r || r.normal.y<.7) break; depth=d+.05;
     }
     let kind=heightKnown?classify(height,depth):'blocked' as Kind;
@@ -381,12 +389,12 @@ export class HumanoidController {
       const tangent=new Vector3(normal.z,0,-normal.x);
       const handsFit=[-.24,.24].every(side=>{
         const o=front.clone().addScaledVector(normal,-.13).addScaledVector(tangent,side);o.y=top.y+.1;
-        const support=this.ray(o,new Vector3(0,-1,0),.2,c=>c.handle===obstacle.handle);
+        const support=this.ray(o,new Vector3(0,-1,0),.2,c=>c.handle===topCollider.handle);
         return support!==null&&support.normal.y>.7;
       });
       if(occupied || !handsFit){kind='blocked';reason=occupied?'落点胶囊空间被占用':'墙沿不足以支撑双手';}
     }
-    return {kind,height,heightKnown,depth,reason,front,top,normal,end,collider:obstacle,distance};
+    return {kind,height,heightKnown,depth,reason,front,top,normal,end,collider:obstacle,topCollider,distance};
   }
   begin(probe:Probe,airborne=false){
     if(this.queries.isBoundaryCollider(probe.collider)){this.lastResult='场地空气边界不可翻越或攀爬';return false;}
@@ -411,14 +419,14 @@ export class HumanoidController {
     }
     catch{this.lastResult='没有适合当前距离的原始动作';probe.kind='blocked';probe.reason=this.lastResult;this.cooldown=.2;return false;}
     // The standing capsule cannot represent a horizontal vault pose. Only the
-    // selected obstacle is excluded during the authored traversal; all other
+    // selected face and its verified contacting top are excluded during traversal; other
     // geometry is checked along the whole root path and on every movement tick.
     const shape=new RAPIER.Capsule(HALF,RADIUS);
     const count=Math.ceil(motion.duration/FIXED_DT);
     let previous=motion.sample(0).position.clone().addScaledVector(UP,CENTER);
     for(let i=1;i<=count;i++){
       const next=motion.sample(motion.duration*i/count).position.clone().addScaledVector(UP,CENTER);
-      const hit=this.world.castShape(previous,ROT,next.clone().sub(previous),shape,0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,this.capsule,undefined,c=>c.handle!==probe.collider.handle);
+      const hit=this.world.castShape(previous,ROT,next.clone().sub(previous),shape,0,1,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,this.capsule,undefined,c=>c.handle!==probe.collider.handle&&c.handle!==probe.topCollider?.handle);
       if(hit){this.lastResult='动画路径被其他障碍阻挡';probe.kind='blocked';probe.reason=this.lastResult;this.cooldown=.2;return false;}
       previous=next;
     }
@@ -474,7 +482,7 @@ export class HumanoidController {
       const next=sample.position;
       const current=this.body.translation();
       const delta=next.clone().addScaledVector(UP,CENTER).sub(new Vector3(current.x,current.y,current.z));
-      this.controller.computeColliderMovement(this.capsule,delta,undefined,undefined,c=>c.handle!==tr.probe.collider.handle);
+      this.controller.computeColliderMovement(this.capsule,delta,undefined,undefined,c=>c.handle!==tr.probe.collider.handle&&c.handle!==tr.probe.topCollider?.handle);
       const movement=this.controller.computedMovement();
       this.body.setNextKinematicTranslation({x:current.x+movement.x,y:current.y+movement.y,z:current.z+movement.z});
       this.speed=Math.hypot(movement.x,movement.z)/dt;this.collisions=this.controller.numComputedCollisions();
