@@ -2,7 +2,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { readFile } from 'node:fs/promises';
 import { ThreeCreatorTools } from '../tools/tools.js';
-import { executeThreeCreatorTool } from './mcp.js';
+import { executeThreeCreatorTool } from '../tools/tool-dispatch.js';
 import { creatorToolErrorResponse } from '../tools/tool-errors.js';
 import { profileFrom } from '../contracts.js';
 

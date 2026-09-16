@@ -69,6 +69,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/creator-host/tests/integration/vehicle-families.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/creator-host/tests/integration/vehicle-seating.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
   { path: "packages/creator-host/tests/tools/capture-plan.test.ts", lane: "contract" },
+  { path: "packages/creator-host/tests/tools/operation-queue.test.ts", lane: "contract" },
   { path: "packages/creator-host/tests/tools/playtest-summary.test.ts", lane: "contract" },
   { path: "packages/creator-host/tests/tools/tools.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/creator-host/tests/tools/water-feedback.test.ts", lane: "contract" },

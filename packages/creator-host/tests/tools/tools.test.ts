@@ -341,7 +341,10 @@ describe('Three tool operations and truthful submission', () => {
     const first = service.start('first', () => new Promise(resolve => { release = () => resolve('ok'); }));
     const second = service.start('second', async () => { queuedRan = true; return 'bad'; });
     await new Promise(resolve => setTimeout(resolve, 10)); await service.cancel(second.operationId); release();
-    expect((await service.getOperation(first.operationId, 1)).status).toBe('succeeded'); expect((await service.getOperation(second.operationId, 1)).status).toBe('cancelled'); expect(queuedRan).toBe(false); await service.close();
+    expect((await service.getOperation(first.operationId, 1)).status).toBe('succeeded'); expect((await service.getOperation(second.operationId, 1)).status).toBe('cancelled'); expect(queuedRan).toBe(false);
+    await expect.poll(async () => JSON.parse(await readFile(path.join(service.evidenceRoot, 'operations', `${second.operationId}.json`), 'utf8')))
+      .toMatchObject({id: second.operationId, type: 'second', status: 'cancelled'});
+    await service.close();
   });
   it('refuses fabricated disk playtest receipts in a fresh service', async () => {
     const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 1 }], targets: [] }));

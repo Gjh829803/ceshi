@@ -1,5 +1,6 @@
 import type {CommandReceipt, OperationStatus} from '@worldkit/three';
-import type {Operation, ThreeCreatorTools} from './tools.js';
+import type {ThreeCreatorTools} from './tools.js';
+import type {Operation} from './operation-queue.js';
 
 type OperationReply = Pick<Operation, 'id' | 'status'> & Partial<Operation>;
 type NextQuery = {tool: 'operations_get' | 'world_get_operation'; arguments: Record<string, string | number>};

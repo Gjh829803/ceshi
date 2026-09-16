@@ -15,7 +15,8 @@ import { humanoid, RoadVehicleRouteController, roadVehicleBrakeInput, type World
 import { AUTHORING_TOPICS, type AuthoringTopic } from '../discovery/authoring-schema.js';
 import { readRuntimeGuidance } from '../discovery/runtime-guidance.js';
 import { CreatorDiscovery, type SchemaSection } from '../discovery/creator-discovery.js';
-import { creatorToolDiagnostic, type CreatorToolDiagnostic } from './tool-errors.js';
+import { CreatorOperationQueue } from './operation-queue.js';
+export type { Operation } from './operation-queue.js';
 import { browserDiagnosticsScript, HostDiagnosticError, serializeDiagnostic, type HostDiagnosticContext, type SerializedDiagnostic } from './diagnostic-serialization.js';
 import { WORLD_COMMAND_SCHEMA } from '../schema/command-schema.js';
 import type { ExampleTopic } from '../discovery/example-files.js';
@@ -33,7 +34,6 @@ const checkEpisode = new Ajv({ allErrors: true, strict: false, strictNumbers: tr
 const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(WORLD_COMMAND_SCHEMA);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const json = async (file: string, value: unknown) => { await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${randomUUID()}.tmp`; await writeFile(temporary, JSON.stringify(value, null, 2)); await rename(temporary, file); };
-export type Operation = { id: string; type: string; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; createdAt: string; updatedAt: string; result?: any; error?: string; errorDetails?: CreatorToolDiagnostic; progress?: unknown };
 type Session = { candidate: Candidate; browser: Browser; context: BrowserContext; page: Page; server: Server; errors: string[]; networkErrors: string[]; collectionError?: SerializedDiagnostic; close: () => Promise<void> };
 type Evidence = { root: string; files: Record<string, string>; report: any };
 export async function withStageDeadline<T>(work: () => Promise<T>, milliseconds: number, errorCode: string, onTimeout: () => Promise<void>): Promise<T> {
@@ -105,16 +105,17 @@ export class ThreeCreatorTools {
   private readonly discovery: CreatorDiscovery;
   readonly evidenceRoot: string;
   readonly workspace: string;
-  private operations = new Map<string, Operation>();
-  private cancelled = new Set<string>();
-  private queue: Promise<unknown> = Promise.resolve();
-  private activeOperationId?: string;
+  private readonly operationQueue: CreatorOperationQueue;
   private session?: Session;
   private playtestEvidence?: Evidence;
   private readonly recordedPlaytests = new Map<string, Evidence>();
   private captureEvidence?: Evidence;
   constructor(workspace: string, readonly profile: CreatorProfile, policyOptions:CompilerOptions = {}) {
     this.compiler = new ThreeCompiler(workspace, profile, policyOptions); this.compiler.assetPolicy(); this.discovery = new CreatorDiscovery(this.compiler); this.workspace = this.compiler.workspace; this.evidenceRoot = path.join(this.compiler.outputRoot, 'evidence');
+    this.operationQueue = new CreatorOperationQueue({
+      persist: operation => json(path.join(this.evidenceRoot, 'operations', `${operation.id}.json`), operation),
+      cancelActive: () => this.closeSession(),
+    });
   }
   async environment() {
     const snapshot=this.compiler.assetPolicy();
@@ -146,24 +147,9 @@ export class ThreeCreatorTools {
   assets(query = '', assetId?: string) { return this.discovery.assets(query, assetId); }
   searchAssets(query?: string, limit?: number, offset?: number) { return this.discovery.searchAssets(query, limit, offset); }
   describeAsset(assetId: string) { return this.discovery.describeAsset(assetId); }
-  start(type: string, run: (id: string) => Promise<unknown>) {
-    const now = new Date().toISOString(), id = randomUUID(); const operation: Operation = { id, type, status: 'queued', createdAt: now, updatedAt: now }; this.operations.set(id, operation);
-    this.queue = this.queue.then(async () => {
-      if (this.cancelled.has(id)) { operation.status = 'cancelled'; return; }
-      this.activeOperationId = id; operation.status = 'running'; operation.updatedAt = new Date().toISOString();
-      try { operation.result = await run(id); operation.status = this.cancelled.has(id) ? 'cancelled' : 'succeeded'; }
-      catch (error) { operation.status = this.cancelled.has(id) ? 'cancelled' : 'failed'; operation.errorDetails = creatorToolDiagnostic(error); operation.error = operation.errorDetails.message; }
-      finally { operation.updatedAt = new Date().toISOString(); delete this.activeOperationId; await json(path.join(this.evidenceRoot, 'operations', `${id}.json`), operation); }
-    }).catch(() => { /* Every operation owns its own diagnostic result; a failed persistence write does not poison the serial queue. */ });
-    return { operationId: id, status: operation.status };
-  }
-  async getOperation(id: string, waitSeconds = 0) {
-    if (!Number.isFinite(waitSeconds) || waitSeconds < 0 || waitSeconds > 25) throw new Error('THREE_WAIT_INVALID');
-    const operation = this.operations.get(id); if (!operation) throw new Error('THREE_OPERATION_UNKNOWN: only operations created in this service session are trusted');
-    const until = Date.now() + waitSeconds * 1000; while ((operation.status === 'queued' || operation.status === 'running') && Date.now() < until) await sleep(Math.min(100, until - Date.now()));
-    return structuredClone(operation);
-  }
-  async cancel(id: string) { const operation = this.operations.get(id); if (!operation) throw new Error('THREE_OPERATION_UNKNOWN'); if (operation.status === 'queued' || operation.status === 'running') { this.cancelled.add(id); if (id === this.activeOperationId) await this.closeSession(); } return this.getOperation(id); }
+  start(type: string, run: (id: string) => Promise<unknown>) { return this.operationQueue.start(type, run); }
+  getOperation(id: string, waitSeconds = 0) { return this.operationQueue.get(id, waitSeconds); }
+  cancel(id: string) { return this.operationQueue.cancel(id); }
   async readPlaytest(operationId: string, query: PlaytestTraceQuery = {}) {
     validatePlaytestTraceQuery(query);
     const operation = await this.getOperation(operationId);
@@ -187,8 +173,8 @@ export class ThreeCreatorTools {
       return {...identity, traceSha256:evidence.files['trace.json'], ...summarizePlaytestTrace(JSON.parse(bytes.toString()), query)};
     } catch { return {...identity,status:'unavailable',reason:'RECORDED_TRACE_UNREADABLE'}; }
   }
-  private assertActive(id: string) { if (this.cancelled.has(id)) throw new Error('THREE_OPERATION_CANCELLED'); }
-  async close() { for (const operation of this.operations.values()) if (['queued', 'running'].includes(operation.status)) this.cancelled.add(operation.id); await this.closeSession(); }
+  private assertActive(id: string) { this.operationQueue.assertActive(id); }
+  async close() { this.operationQueue.cancelAll(); await this.closeSession(); }
   private async closeSession() { const session = this.session; delete this.session; if (session) await session.close(); }
   private async open(candidate: Candidate, recordRoot?: string): Promise<Session> {
     if (this.session?.candidate.worldBuildHash === candidate.worldBuildHash && !recordRoot) return this.session;
@@ -433,7 +419,7 @@ export class ThreeCreatorTools {
               const serialized=JSON.stringify(decision.input);
               if(serialized!==previousInput){await sendRoadInput(decision.input.humanoid);result.appliedInputCount++;previousInput=serialized;}
               if(decision.status==='arrived'){result.status='arrived';break;}
-              const operation=this.operations.get(operationId);if(operation)operation.progress={phase:'road-route',stepIndex:index,elapsedSeconds:elapsed(),requestedSeconds,currentState:state,roadRoute:decision};
+              this.operationQueue.updateProgress(operationId, {phase:'road-route',stepIndex:index,elapsedSeconds:elapsed(),requestedSeconds,currentState:state,roadRoute:decision});
               if(session.errors.length)throw new Error(`THREE_PLAYTEST_PAGE_ERROR: ${session.errors.join('\n')}`);
               if(elapsed()>=nextOperationPoll){await observeWorldOperations();nextOperationPoll=elapsed()+1;}
               await captureKeyframe();
@@ -471,7 +457,7 @@ export class ThreeCreatorTools {
           if (currentState.errors?.length) throw new Error(`THREE_PLAYTEST_RUNTIME_ERRORS: ${JSON.stringify(currentState.errors)}`);
           if (elapsed() >= nextOperationPoll) { await observeWorldOperations(); nextOperationPoll = elapsed() + 1; }
           await captureKeyframe();
-          const operation = this.operations.get(operationId); if (operation) operation.progress = { phase: 'real-browser-keyboard', stepIndex: index, elapsedSeconds: elapsed(), requestedSeconds, currentState };
+          this.operationQueue.updateProgress(operationId, { phase: 'real-browser-keyboard', stepIndex: index, elapsedSeconds: elapsed(), requestedSeconds, currentState });
           if (session.errors.length) throw new Error(`THREE_PLAYTEST_PAGE_ERROR: ${session.errors.join('\n')}`);
           await sleep(Math.max(0, Math.min(200, (until - elapsed()) * 1000)));
         }
