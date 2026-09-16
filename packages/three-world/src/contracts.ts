@@ -459,13 +459,15 @@ export interface World {
  defineParameter<const S extends ScalarSchema>(definition:ParameterDefinition<S>):ParameterHandle<ScalarValue<S>>;
  registerAction<const S extends ObjectSchema>(definition:ActionDefinition<S>):void;
  onInteract(entityId:string,plan:()=>WorldCommand|readonly WorldCommand[]):()=>void;
- /** Direct Three writes are for visual descendants; managed root channels use execute(). */
+ /** Subscribe while alive; returns an idempotent unsubscribe. Direct Three writes are for visual descendants; managed root channels use execute(). */
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
  /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
  /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */
  onRender(callback:()=>void):()=>void;
+ /** Subscribe while alive; reset preserves registrations until unsubscribed or disposed. */
  onReset(callback:()=>void):()=>void;
+ /** Subscribe while alive; called once at world cleanup, then released. Unsubscribe remains safe after disposal. */
  onDispose(callback:()=>void):()=>void;
  execute(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;
  runTask<T>(task:(scope:TaskScope)=>Promise<T>):Promise<T>;

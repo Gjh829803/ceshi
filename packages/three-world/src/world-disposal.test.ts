@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createWorld, type ThreeWorld} from './world';
+import {setObjectColor} from './object-color';
 import {createWorld as createEngine, type WorldEngine} from './engine';
 import type {WorldAssets} from './assets-library';
 import type {AssetDefinition} from './engine-contracts';
@@ -233,5 +234,52 @@ describe('disposal failure recovery', () => {
       expect(physics).toHaveBeenCalledOnce(); expect(engine.snapshot().entities).toEqual([]);
       expect(() => engine.dispose()).not.toThrow(); expect(dispose).toHaveBeenCalledOnce();
     } finally {engine.dispose();}
+  });
+});
+
+describe('World-owned callback lifetime', () => {
+  it.each(['world', 'engine'] as const)('rejects subscriptions to a disposed %s and keeps old unsubscriptions safe', async kind => {
+    const world = await createWorld({navigation: false, assetDefinitions: {}}), engine = engineOf(world);
+    const owner = kind === 'world' ? world : engine;
+    const subscribe = [() => owner.onUpdate(() => {}), () => owner.onReset(() => {}), () => owner.onDispose(() => {}),
+      () => owner.onRender(() => {}), () => owner.onRuntimeSample(() => {}), () => owner.onFrameTiming(() => {})];
+    const releases = subscribe.map(register => register());
+    world.dispose();
+    for (const register of subscribe) expect(register).toThrow('WORLD_DISPOSED');
+    for (const release of releases) {expect(release).not.toThrow(); expect(release).not.toThrow();}
+    if (kind === 'engine') expect(() => engine.onAfterUpdate(() => {})).toThrow('WORLD_DISPOSED');
+  });
+  it('drains public callback captures, including when a dispose callback fails', async () => {
+    const world = await createWorld({navigation: false, assetDefinitions: {}});
+    world.onUpdate(() => {}); world.onReset(() => {});
+    const forbidden = vi.fn(), second = vi.fn();
+    world.onDispose(() => {
+      try {world.onDispose(forbidden);} catch { /* Registration must be rejected after invalidation. */ }
+      throw new Error('MODULE_CLEANUP_FAILURE');
+    });
+    world.onDispose(second); world.dispose();
+    expect(forbidden).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledOnce();
+    // Observe retained registrations directly, without nondeterministic GC timing.
+    const registrations = world as unknown as {updating: Set<unknown>; resets: Set<unknown>; disposals: Set<unknown>};
+    expect([registrations.updating.size, registrations.resets.size, registrations.disposals.size]).toEqual([0,0,0]);
+  });
+  it('keeps existing init/update/reset/dispose ownership for a real material binding', async () => {
+    const world = await createWorld({navigation: false, assetDefinitions: {}});
+    const original = new THREE.MeshStandardMaterial({color: '#ffffff'}), geometry = new THREE.BoxGeometry();
+    const mesh = new THREE.Mesh(geometry, original); world.addEntity({id:'colored', object:mesh, role:'decoration'});
+    const coloring = setObjectColor(mesh, '#ff0000'), installed = mesh.material;
+    const released = vi.spyOn(installed, 'dispose');
+    const releaseUpdate = world.onUpdate(() => coloring.setColor('#0000ff'));
+    const releaseReset = world.onReset(() => coloring.setColor('#ff0000'));
+    const releaseDispose = world.onDispose(() => {releaseUpdate(); releaseReset(); coloring.dispose(); releaseDispose();});
+    try {
+      await world.start(); world.stop();
+      expect(coloring.color).toBe('#ff0000');
+      world.step({}, 1); expect(coloring.color).toBe('#0000ff');
+      await world.reset(); expect(coloring.color).toBe('#ff0000');
+      releaseUpdate(); world.step({}, 1); expect(coloring.color).toBe('#ff0000');
+      world.dispose(); expect(mesh.material).toBe(original); expect(released).toHaveBeenCalledOnce();
+      world.dispose(); expect(released).toHaveBeenCalledOnce();
+    } finally {world.dispose(); coloring.dispose(); released.mockRestore(); original.dispose(); geometry.dispose();}
   });
 });

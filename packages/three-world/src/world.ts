@@ -216,9 +216,9 @@ export class ThreeWorld implements API.World {
  onRuntimeSample(callback:(sample:API.RuntimeSample)=>void):()=>void{this.alive();return this.engine.onRuntimeSample(callback);}
  /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
  onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
- onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.updating.add(callback);return()=>{this.updating.delete(callback);};}
- onReset(callback:()=>void):()=>void{this.resets.add(callback);return()=>{this.resets.delete(callback);};}
- onDispose(callback:()=>void):()=>void{this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}
+ onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.alive();this.updating.add(callback);return()=>{this.updating.delete(callback);};}
+ onReset(callback:()=>void):()=>void{this.alive();this.resets.add(callback);return()=>{this.resets.delete(callback);};}
+ onDispose(callback:()=>void):()=>void{this.alive();this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}
  onInteract(id:string,plan:()=>API.WorldCommand|readonly API.WorldCommand[]):()=>void{
   this.entity(id);return this.engine.onInteract(id,()=>{
    try{const result=this.guarded(()=>synchronous(plan));const commands=Array.isArray(result)?result:[result];void this.executePlan(commands,{},this.episodeLease).catch(error=>this.fault(error,'interaction'));}
@@ -920,6 +920,7 @@ export class ThreeWorld implements API.World {
   this.operations.cancelAll();
   release(()=>this.presentation?.dispose());this.changes.clear();release(()=>this.restoreRendererShadows?.());release(()=>this.engine.dispose());release(()=>this.assets.dispose());for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
+  this.updating.clear();this.resets.clear();this.disposals.clear();
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
   if(failed)throw firstError;
  }

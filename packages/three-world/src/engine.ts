@@ -268,9 +268,9 @@ export class WorldEngine {
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
   private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>this.controlledHumanoid?.simulation.controlledActor.vehicle?.spec.mode:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
-  onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
-  onReset(callback: () => void): () => void { this.resets.add(callback); return () => { this.resets.delete(callback); }; }
-  onDispose(callback: () => void): () => void { this.disposals.add(callback); return () => { this.disposals.delete(callback); }; }
+  onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.alive(); this.updates.add(callback); return () => { this.updates.delete(callback); }; }
+  onReset(callback: () => void): () => void { this.alive(); this.resets.add(callback); return () => { this.resets.delete(callback); }; }
+  onDispose(callback: () => void): () => void { this.alive(); this.disposals.add(callback); return () => { this.disposals.delete(callback); }; }
   onInteract(id: string, callback: (context: { world: WorldEngine; entityId: string; actorEntityId?: string }) => void): () => void {
     this.entity(id); const handlers = this.interactions.get(id) ?? new Set(); handlers.add(callback); this.interactions.set(id, handlers); return () => { handlers.delete(callback); };
   }
@@ -294,10 +294,10 @@ export class WorldEngine {
   }
   bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
   focusInput():void {this.inputRouter.focus();}
-  onRender(callback:()=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}
-  onFrameTiming(callback:(sample:WorldFrameTiming)=>void):()=>void {this.frameTimings.add(callback);return()=>{this.frameTimings.delete(callback);};}
+  onRender(callback:()=>void):()=>void {this.alive();this.renders.add(callback);return()=>{this.renders.delete(callback);};}
+  onFrameTiming(callback:(sample:WorldFrameTiming)=>void):()=>void {this.alive();this.frameTimings.add(callback);return()=>{this.frameTimings.delete(callback);};}
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
-  onAfterUpdate(callback:()=>void):()=>void {this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
+  onAfterUpdate(callback:()=>void):()=>void {this.alive();this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
   setDriveProvider(provider:NonNullable<WorldEngine['driveProvider']>):void {this.driveProvider=provider;}
   entityOptions(id:string):EntityOptions {return this.entity(id).options;}
   actorTaskState(id:string):{status:'running'|'succeeded'|'failed';error?:string}|undefined {return this.taskResults.get(id);}

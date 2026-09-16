@@ -302,7 +302,13 @@ simulation cost. Worlds without a renderer skip GPU preparation.
 `stop()` pauses; `await world.reset()` restores the baseline and preserves the
 previous running/paused state. Use `onReset` for author-owned visual state and
 `onDispose` for external cleanup; `dispose()` releases the world. Each hook returns
-an unsubscribe function.
+an idempotent unsubscribe function. Subscribe while the world is alive; new
+subscriptions during or after disposal reject with `WORLD_DISPOSED`. Disposal
+releases callback registrations; an existing unsubscribe stays safe afterward.
+Module construction and optional enable/disable stay with each module. Pausing
+the world does not destroy modules or unsubscribe them; explicit manual steps
+while paused still run registered updates. See the
+[lifecycle ownership boundary](../../docs/world-lifecycle-maintenance.md).
 For synchronous headless checks, the first `world.step(input,ticks)` also seals
 both entity metadata and runtime state, even for zero ticks. Finish registration
 first. If resources or parameters need initialization, await `world.start()` and
