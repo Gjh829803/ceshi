@@ -1,3 +1,4 @@
+import {WorldTaskScopes} from './world-task-scopes';
 import {validateInteractionSlots,INTERACTION_SLOT_SCHEMA} from './interaction-contracts';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
@@ -68,7 +69,7 @@ export class ThreeWorld implements API.World {
  private readonly disabled=new Map<string,API.RuntimeError>();private readonly owners=new Map<string,string>();private readonly errors:API.RuntimeError[]=[];
  private readonly updating=new Set<(context:API.UpdateContext)=>void>();private readonly resets=new Set<()=>void>();private readonly disposals=new Set<()=>void>();
  private readonly autonomies=new Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>();
- private readonly pending=new Set<Promise<unknown>>();private readonly scopes=new Set<AbortController>();
+ private readonly pending=new Set<Promise<unknown>>();private readonly scopes=new WorldTaskScopes();
  private readonly activities=new Map<string,Activity>();private readonly tweens:Tween[]=[];private readonly queued:Queued[]=[];
  private readonly requests=new Map<string,{body:string;promise:Promise<API.CommandReceipt>}>();
  private readonly ownedResources=new Set<THREE.BufferGeometry|THREE.Material>();
@@ -628,7 +629,7 @@ export class ThreeWorld implements API.World {
  }
  private simulationReplaced(reason:'map'|'reset'):void{
   this.epoch++;this.startGeneration++;this.starting=undefined;
-  for(const scope of this.scopes)scope.abort();this.scopes.clear();
+  this.scopes.abortAll();this.scopes.clear();
   this.retireHumanoidActivities();
   for(const item of this.queued.splice(0)){
    this.releasePreparedSpawns(item.prepared.spawned);this.operations.update(item.operationId,{status:'cancelled',phase:'simulation-replaced'});
@@ -682,7 +683,7 @@ export class ThreeWorld implements API.World {
   if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.resetState();
  }
  private async resetState():Promise<void>{
-  this.engine.assertLifecycleMutationAllowed();this.alive();if(this.humanoid&&this.baseline)this.validateMapEntities(this.humanoid.environment.map,this.baseline.entries);this.epoch++;this.starting=undefined;this.presentation?.reset();for(const scope of this.scopes)scope.abort();this.scopes.clear();this.retireHumanoidActivities();
+  this.engine.assertLifecycleMutationAllowed();this.alive();if(this.humanoid&&this.baseline)this.validateMapEntities(this.humanoid.environment.map,this.baseline.entries);this.epoch++;this.starting=undefined;this.presentation?.reset();this.scopes.abortAll();this.scopes.clear();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('STALE_TASK')});}
   this.operations.cancelAll();
   const wasRunning=this.engine.isRunning;this.engine.stop();if(!this.baseline)await this.initialise();
@@ -701,7 +702,7 @@ export class ThreeWorld implements API.World {
   for(const callback of this.resets)this.guarded(()=>synchronous(callback));this.captureObservation();this.engine.render();if(wasRunning)await this.start();
  }
  async runTask<T>(task:(scope:API.TaskScope)=>Promise<T>):Promise<T>{
-  this.alive();const epoch=this.epoch;const abort=new AbortController();this.scopes.add(abort);
+  this.alive();const epoch=this.epoch;const abort=this.scopes.begin();
   const check=()=>{if(abort.signal.aborted||epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');};
   const created=new Set<API.AssetInstance>();
   const scope:API.TaskScope={signal:abort.signal,
@@ -714,7 +715,7 @@ export class ThreeWorld implements API.World {
    execute:async command=>{check();const receipt=await this.execute(command);check();return receipt;},
   };
   try{const result=await task(scope);check();return result;}
-  finally{this.scopes.delete(abort);for(const asset of created)this.assets.release(asset);}
+  finally{this.scopes.end(abort);for(const asset of created)this.assets.release(asset);}
  }
  getEntityState(id:string):API.EntityState{
   const entry=this.entity(id);const physics=this.engine.physics.state(id);let parentEntityId:string|undefined;for(let parent=entry.object.parent;parent;parent=parent.parent){const found=[...this.entries].find(([,candidate])=>candidate.object===parent);if(found){parentEntityId=found[0];break;}}
@@ -903,7 +904,7 @@ export class ThreeWorld implements API.World {
  render(interpolationAlpha=1):void{this.engine.render(interpolationAlpha);}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
-  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.retireHumanoidActivities();
+  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;this.scopes.abortAll();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
   this.operations.cancelAll();
   this.presentation?.dispose();this.changes.clear();this.restoreRendererShadows?.();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
