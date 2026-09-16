@@ -1,5 +1,6 @@
 import {actorResources,FULL_BODY_RESOURCES,type ActorResources} from '../../actor-resources';
 import RAPIER from '@dimforge/rapier3d-compat';
+import {contactColliderVolume} from '../../physics-box';
 import { Vector3 } from 'three';
 import {type EnvironmentQueries,type HumanoidRig,type QueryBody} from '../environment/queries';
 import {humanoidLevel,type HumanoidLevel,type LevelBox} from './level-adapter';
@@ -359,7 +360,7 @@ export class HumanoidController {
     const upper=this.ray(sample,new Vector3(0,-1,0),2.95);
     if(upper&&upper.normal.y>.7&&upper.collider.handle!==obstacle.handle
       &&!upper.collider.parent()?.isDynamic()&&!this.queries.isActorCollider(upper.collider)
-      &&!this.queries.isBoundaryCollider(upper.collider)&&upper.collider.contactCollider(obstacle,.01))topCollider=upper.collider;
+      &&!this.queries.isBoundaryCollider(upper.collider)&&contactColliderVolume(upper.collider,obstacle.shape,obstacle.translation(),obstacle.rotation(),.01))topCollider=upper.collider;
     const down=this.ray(sample,new Vector3(0,-1,0),2.95,c=>c.handle===topCollider.handle);
     const heightKnown=!!down&&down.normal.y>.7&&down.timeOfImpact>.0001;
     const top=sample.clone(); top.y=heightKnown? sample.y-down!.timeOfImpact:this.position.y+2.95;

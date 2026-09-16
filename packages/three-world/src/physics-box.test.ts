@@ -151,3 +151,13 @@ it('preserves the box volume and camera penetration after arbitrary rotation and
   expect(world.intersectionWithShape(at,turn,capsule)?.handle).toBe(collider.handle);expect(contact!.distance).toBeLessThan(-.5);
  }finally{factory.dispose();world.free();}
 });
+
+it.each([[false,true],[true,false],[true,true]])('queries adjoining exact volumes with voxel sides %s / %s',(firstVoxel,secondVoxel)=>{
+ const world=new RAPIER.World({x:0,y:0,z:0}),factory=new FixedBoxColliderFactory(world);
+ try{
+  const a=factory.create([firstVoxel?3:1,.5,1],desc=>desc),b=factory.create([secondVoxel?3:1,.5,1],desc=>desc.setTranslation(0,1,0));factory.dispose();
+  const contact=contactColliderVolume(a,b.shape,b.translation(),b.rotation(),.01);
+  expect(contact).not.toBeNull();expect(contact!.distance).toBeCloseTo(0,5);
+  b.setTranslation({x:0,y:1.1,z:0});expect(contactColliderVolume(a,b.shape,b.translation(),b.rotation(),.01)).toBeNull();
+ }finally{factory.dispose();world.free();}
+});

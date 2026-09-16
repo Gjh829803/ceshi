@@ -37,7 +37,8 @@ export function exactBoxHalfExtents(shape:RAPIER.Shape):Vec3|undefined{
 /** Discrete contact of this same box volume. Rapier's voxel contact() is unsupported. */
 export function contactColliderVolume(collider:RAPIER.Collider,shape:RAPIER.Shape,position:RAPIER.Vector,rotation:RAPIER.Rotation,prediction:number):RAPIER.ShapeContact|null{
  const geometry=collider.shape;
- return geometry instanceof ExactBoxShape?geometry.contactVolume.contactShape(collider.translation(),collider.rotation(),shape,position,rotation,prediction):collider.contactShape(shape,position,rotation,prediction);
+ const target=shape instanceof ExactBoxShape?shape.contactVolume:shape;
+ return geometry instanceof ExactBoxShape?geometry.contactVolume.contactShape(collider.translation(),collider.rotation(),target,position,rotation,prediction):collider.contactShape(target,position,rotation,prediction);
 }
 
 /** Construction-scoped sharing. Every native source is a real map collider. */
