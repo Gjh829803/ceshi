@@ -1,3 +1,4 @@
+import { WorldLifecycle } from './world-lifecycle';
 import type {RuntimeSample} from "./contracts";
 import { CameraSubjectVisibility } from "./camera/subject-visibility";
 import { cameraControlForward } from "./camera/control-basis";
@@ -111,12 +112,15 @@ export class WorldEngine {
   private controlled: string | undefined;
   private tick = 0;
   private revision = 0;
-  private running = false;
-  private disposed = false;
+  private readonly lifecycle = new WorldLifecycle({
+    prepareStart: () => this.sealInitialState(),
+    activate: () => { this.keyboard.enabled = true; },
+    deactivate: () => { this.clearInput(); this.keyboard.enabled = false; this.accumulatorSeconds = 0; },
+    frame: elapsed => this.runFrame(elapsed),
+  });
+  private get running(): boolean { return this.lifecycle.running; }
+  private get disposed(): boolean { return this.lifecycle.disposed; }
   private accumulatorSeconds = 0;
-  private lastFrameTime = 0;
-  private frameId = 0;
-  private frameGeneration = 0;
   private renderPreparation: Promise<unknown> | undefined;
   private pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{} as Record<string,boolean>};
   private previousJump = false;
@@ -226,7 +230,7 @@ export class WorldEngine {
   }
   cameraTargetRemoved(id:string,generation:number):void{const current=this.inspectCamera().current;const identity=current?.logicalTargetId===id?{id:current.resolvedSubjectId,generation:current.subjectGeneration}:{id,generation};this.cameraController.targetRemoved(identity,this.cameraFrame());if(this.cameraMode==='authored')this.cameraSubjects.clear();}
   useAuthoredCamera():THREE.Camera{this.cameraMutation();this.cameraController.useAuthored();this.cameraSubjects.clear();this.cameraBasis=undefined;this.inputRouter.releasePointerLock();return this.camera;}
-  private alive(): void { if (this.disposed) throw new Error('WORLD_DISPOSED'); }
+  private alive(): void { this.lifecycle.assertAlive(); }
   private entity(id: string): Entity { const entity = this.entities.get(id); if (!entity) throw new Error(`WORLD_ENTITY_NOT_FOUND: ${id}`); return entity; }
   getObject(id: string): THREE.Object3D { return this.entity(id).object; }
   addEntity(options: EntityOptions): THREE.Object3D { return this.register(options); }
@@ -731,28 +735,19 @@ export class WorldEngine {
     }
     return this.renderPreparation;
   }
-  start(): void {
-    this.alive(); if (this.running) return; this.sealInitialState(); this.running = true; this.keyboard.enabled = true;
-    const generation = ++this.frameGeneration;
-    if (typeof requestAnimationFrame === 'undefined') return;
-    // rAF timestamps belong to the browser's frame clock. Its first timestamp
-    // can precede performance.now() sampled while that frame is being prepared.
-    this.lastFrameTime = 0;
-    const frame = (time: number) => { if (!this.running || this.disposed || generation !== this.frameGeneration) return; const elapsed = this.lastFrameTime ? Math.max(0, (time - this.lastFrameTime) / 1000) : 0; this.lastFrameTime = time;
-      const measured = this.frameTimings.size > 0;
-      const started = measured ? performance.now() : 0;
-      let updateFinished = 0;
-      try { this.advance(elapsed); updateFinished = measured ? performance.now() : 0; this.render(Math.min(1,Math.max(0,this.accumulatorSeconds/this.fixedTimeStepSeconds))); } catch (error) { this.recordError('WORLD_FRAME_FAILED', error); this.stop(); return; }
-      if(measured){
-        const sample:WorldFrameTiming=Object.freeze({source:'realtime',simulationTick:this.tick,sampledAtMilliseconds:updateFinished,cpuUpdateMilliseconds:updateFinished-started});
-        // Optional diagnostics cannot stop the simulation or prevent other observers.
-        for(const callback of this.frameTimings)try{callback(sample);}catch{/* observer failure stays local */}
-      }
-      if (this.running && generation === this.frameGeneration) this.frameId = requestAnimationFrame(frame);
-    };
-    this.frameId = requestAnimationFrame(frame);
+  start(): void { this.lifecycle.start(); }
+  stop(): void { this.lifecycle.stop(); }
+  private runFrame(elapsed: number): void {
+    const measured = this.frameTimings.size > 0;
+    const started = measured ? performance.now() : 0;
+    let updateFinished = 0;
+    try { this.advance(elapsed); updateFinished = measured ? performance.now() : 0; this.render(Math.min(1,Math.max(0,this.accumulatorSeconds/this.fixedTimeStepSeconds))); } catch (error) { this.recordError('WORLD_FRAME_FAILED', error); this.stop(); return; }
+    if(measured){
+      const sample:WorldFrameTiming=Object.freeze({source:'realtime',simulationTick:this.tick,sampledAtMilliseconds:updateFinished,cpuUpdateMilliseconds:updateFinished-started});
+      // Optional diagnostics cannot stop the simulation or prevent other observers.
+      for(const callback of this.frameTimings)try{callback(sample);}catch{/* observer failure stays local */}
+    }
   }
-  stop(): void { this.running = false; this.clearInput(); this.frameGeneration += 1; this.keyboard.enabled = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(alpha=1): void {
     if(this.disposed)return;
     if(!Number.isFinite(alpha)||alpha<0||alpha>1)throw new Error('WORLD_PRESENTATION_ALPHA_INVALID');
@@ -873,7 +868,7 @@ export class WorldEngine {
     this.failures.push({code,message:diagnostic.message,simulationTick:this.tick,...(entityId?{entityId}:{}),diagnostic});
   }
   dispose(): void {
-    if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.cameraSubjectVisibility.dispose(); this.keyboard.detach(); this.renders.clear();this.frameTimings.clear();this.releaseViewport?.();
+    if (!this.lifecycle.beginDisposal()) return; this.inputRouter.dispose(); this.cameraSubjectVisibility.dispose(); this.keyboard.detach(); this.renders.clear();this.frameTimings.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
     const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).runtimeActor?.animation;return binding?[binding]:[];}));
