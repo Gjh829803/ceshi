@@ -335,10 +335,15 @@ function refreshDisplayMetadata(force=false) {
 const displayPreview = createDisplayPreview({
   collisionDiagnostics:()=>selectDisplayCameraProbeSample(sdk.inspectCamera().collisionQueries,'presentation'),
   onRender:callback=>sdk.onRender(callback),
+  withPresentation:(draw,interpolationAlpha)=>sdk.withPresentation(draw,{interpolationAlpha,view:'object'}),
   inputSurface:sdkPresentation.inputSurface,
   focusGameplay:()=>{if(ready&&!paused&&!panelOpen)sdkPresentation.focus();},
   scene, camera, source: renderer, mount: canvas.parentElement!,
-  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[sim.controlledActor.vehicleIndex]!.root]:[controlledCharacter().root]}),
+  context: () => {
+    const person=controlledCharacter().root;
+    const vehicle=sim.controlledActor.vehicleIndex>=0?visuals[sim.controlledActor.vehicleIndex]!.root:undefined;
+    return {...displayCatalog.context,subjects:vehicle?[person,vehicle]:[person],followTarget:vehicle??person};
+  },
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
     targets:displaySettings.anchors&&displaySettings.helperOnly==='none'?readDisplayTargets():[],colliderId:displayColliderId,
     colliderDistance:(handle,centers)=>{const c=sim.controlledActor.controller?.world.getCollider(handle);if(!c)return Infinity;

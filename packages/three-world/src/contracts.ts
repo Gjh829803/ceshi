@@ -463,8 +463,12 @@ export interface World {
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
  /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
- /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */
- onRender(callback:()=>void):()=>void;
+ /** After temporary presentation restores; supplies the rendered interpolation alpha (0–1). */
+ onRender(callback:(interpolationAlpha:number)=>void):()=>void;
+ /** Synchronous auxiliary display transaction; defaults to the current fixed sample.
+  * Reuse onRender's alpha for a matching frame. Object views retain the complete body.
+  * Does not render or advance simulation; the callback must not mutate world state. */
+ withPresentation<T>(work:()=>T,options?:{readonly interpolationAlpha?:number;readonly view?:'world'|'object'}):T;
  onReset(callback:()=>void):()=>void;
  onDispose(callback:()=>void):()=>void;
  execute(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;

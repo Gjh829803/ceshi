@@ -63,6 +63,13 @@ contract. Subject-specific perspectives retain their visibility policy and use t
 shared [collision solver](../camera-collision/README.md). Display interpolation and
 repeated captures do not advance collision recovery; fallback positions come from fixed snapshots.
 
+For an auxiliary same-scene view, `world.onRender(alpha => ...)` reports the source
+frame's interpolation alpha after its temporary presentation is restored. Inside
+that callback, `world.withPresentation(draw, {interpolationAlpha: alpha, view: 'object'})`
+temporarily resamples bodies and the camera together, with complete subject visibility.
+The synchronous `draw` callback may render but must not step or mutate world state.
+Omitting the alpha uses the current fixed sample, as existing capture transactions do.
+
 Positions and dimensions use metres, with **+Y** up. Ordinary actor/capture semantic
 front defaults to local **-Z**; Humanoid map headings, vehicles and interaction yaw use **+Z**.
 Keep the supplied skeleton orientation unchanged when connecting these conventions.

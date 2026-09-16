@@ -211,7 +211,11 @@ export class ThreeWorld implements API.World {
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  /** Observes a completed render after presentation materials are restored; observers must not advance simulation. */
- onRender(callback:()=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ onRender(callback:(interpolationAlpha:number)=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ /** Synchronous auxiliary view of the same SDK display sample; never advances simulation. */
+ withPresentation<T>(work:()=>T,options?:{readonly interpolationAlpha?:number;readonly view?:'world'|'object'}):T{
+  this.alive();return this.engine.withPresentation(work,options?.interpolationAlpha??1,options?.view);
+ }
  onRuntimeSample(callback:(sample:API.RuntimeSample)=>void):()=>void{this.alive();return this.engine.onRuntimeSample(callback);}
  /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
  onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
