@@ -904,13 +904,20 @@ export class ThreeWorld implements API.World {
  render(interpolationAlpha=1):void{this.engine.render(interpolationAlpha);}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
-  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;this.scopes.abortAll();this.retireHumanoidActivities();
-  for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
-  this.operations.cancelAll();
+  if(this.disposed)return;
+  // Invalidate before calling borrowed renderer code: viewport restoration can
+  // synchronously re-enter dispose. Independent owners must still be released.
+  this.epoch++;this.disposed=true;
+  const lease=this.episodeLease;this.episodeLease=undefined;
   // Finish independent owners in their existing order, then preserve the first
   // propagated failure. Resource/callback errors retain their recorded contract.
   let failed=false,firstError:unknown;
   const release=(cleanup:()=>void)=>{try{cleanup();}catch(error){if(!failed){failed=true;firstError=error;}this.errors.push(runtimeError(error,'dispose'));}};
+  if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);
+  release(()=>lease?.releaseCameraSelection());release(()=>lease?.restoreViewport());
+  this.scopes.abortAll();this.retireHumanoidActivities();
+  for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
+  this.operations.cancelAll();
   release(()=>this.presentation?.dispose());this.changes.clear();release(()=>this.restoreRendererShadows?.());release(()=>this.engine.dispose());release(()=>this.assets.dispose());for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
