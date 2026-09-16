@@ -100,7 +100,16 @@ input reproduction, not a claim that any live physical state can be restored.
 The **性能** panel stays open during gameplay until its button is toggled again.
 It floats above the bottom status bar, or above the shortcut window while that
 window is expanded. Its open/detail state is persisted with the other panels.
-Its FPS and interval graph measure browser animation callback cadence, not screen
+It contains the application's only FPS readout, **游戏实时 FPS**, labeled
+**主画面渲染计数 · 自动检测**. Sampling starts with the game and continues while
+the panel is closed, with no measurement button, on-canvas marker or native helper.
+FPS averages recent main-view render intervals over approximately one second and
+updates every 0.5 seconds, in both development and static production builds.
+Its FPS and render interval graph sample completed SDK realtime render cycles using
+`onFrameTiming` and a monotonic wall clock, excluding manual renders and captures.
+The graph publishes every 0.5 seconds and retains five seconds.
+Pausing clears the reading; missing realtime frames expire it after
+1–1.5 seconds. This measures game render submissions, not GPU completion or screen
 presentation. Expand **详细信息** for actual drawing-buffer resolution, renderer
 pixel ratio, mean CPU update and main-view render-submission times over each
 0.5-second reporting window, and the latest valid asynchronous GPU timer result.

@@ -374,13 +374,26 @@ shell.on('displayChange', value => setDisplaySettings(JSON.parse(value!) as Disp
 shell.on('displayOpen', value => {clearInput();if(value==='true')refreshDisplayMetadata(true);});
 shell.on('displayPin', value => {shell.update({displayPinned:value==='true'});clearInput();});
 const fpsMeter = new FrameRateMeter();
-let pacingFrame = 0;
-function resetFPS(state: string) {
+let lastRenderedAt = 0;
+function resetFramePacing() {
+  lastRenderedAt = 0;
   fpsMeter.reset();
   shell.update({ pacing: null });
-  setText("fpsReadout", `渲染回调 —/s · ${state}`);
-  shell.flag("fpsSlow", false);
 }
+// The SDK emits this only after a successful realtime update/render cycle.
+// Manual renders/captures and unrelated browser callbacks are not game frames.
+const releaseFramePacing = sdk.onFrameTiming(() => {
+  if (paused || panelOpen || document.hidden || renderer.getContext().isContextLost()) return;
+  lastRenderedAt = performance.now();
+  const reading = fpsMeter.sample(lastRenderedAt);
+  if (reading) {
+    shell.update({ pacing: reading });
+  }
+});
+// Expire a frozen reading even when the SDK stops emitting frames after an error.
+const pacingExpiry = setInterval(() => {
+  if (lastRenderedAt && performance.now() - lastRenderedAt > 1000) resetFramePacing();
+}, 500);
 function input() {
   return panelOpen
     ? emptyInput()
@@ -461,7 +474,7 @@ function pause(value = !paused, showOverlay = true) {
 function updatePausePresentation(value: boolean, showOverlay: boolean) {
   paused = value;
   visuals.forEach(resetVehicleWheels);
-  resetFPS(value ? "已暂停" : ready ? "采样中" : "加载中");
+  resetFramePacing();
   clearInput();
   shell.flag("paused", value && showOverlay);
   shell.text("pauseButton", value ? "继续" : "暂停");
@@ -585,7 +598,7 @@ const onPanelChange = (open: boolean) => {
   if (open) sdk.stop();
   else if (ready && !preparingRender && !paused) void sdk.start();
   clearInput();
-  resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
+  resetFramePacing();
 };
 const onModalPanelChange=(id:typeof modalPanelIds[number],open:boolean)=>{
   if(open)for(const other of modalPanelIds)if(other!==id)panelState.update(other,{open:false});
@@ -643,7 +656,7 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
   }else prepareCourse(sim, map, regionId, assetId);
   pause(false, false);
   syncTeleport();
-  resetFPS("采样中");
+  resetFramePacing();
 }
 function humanoidState() {
   const h = sim.controlledActor.controller;
@@ -990,7 +1003,8 @@ window.addEventListener(
     visuals.forEach((v) => v.creature?.dispose());
     library.dispose();
     workbench.dispose();
-    cancelAnimationFrame(pacingFrame);
+    releaseFramePacing();
+    clearInterval(pacingExpiry);
     performanceDetails.dispose();
     session.dispose();
     shell.dispose();
@@ -1462,19 +1476,6 @@ try {
   throw error;
 }
 window.addEventListener("hashchange", restoreMapFromHash, pageEventOptions);
-// Read-only browser callback cadence; no simulation, animation or camera writes.
-const observePacing = (now: number) => {
-  if (!paused && !panelOpen) {
-    const reading = fpsMeter.sample(now);
-    if (reading) {
-      shell.update({ pacing: reading });
-      setText("fpsReadout", `渲染回调 ${reading.fps.toFixed(0)}/s`);
-      shell.flag("fpsSlow", reading.fps < 45);
-    }
-  }
-  pacingFrame = requestAnimationFrame(observePacing);
-};
-pacingFrame = requestAnimationFrame(observePacing);
 // 太空深链接只选择太空实例；进入仍使用主项目 F 操作。
 const requestedSpace=new URLSearchParams(location.search).get('space');
 if(requestedSpace&&['spacecraft','survey-spacecraft'].includes(requestedSpace)&&session.map.regions.some(r=>r.modes.includes('spacecraft')))visit(SPECS.findIndex(s=>s.id===requestedSpace));

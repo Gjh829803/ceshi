@@ -514,16 +514,6 @@ kbd {
   font-size: 10px;
   color: #cee5b9;
 }
-.header-live-status #fpsReadout {
-  font: 10px/1.5 Consolas,"Segoe UI",sans-serif;
-  color: #92c4aa;
-  white-space: nowrap;
-  text-align: right;
-  min-width: 138px;
-}
-.header-live-status #fpsReadout[data-slow] {
-  color: #e5ba82;
-}
 .performance-panel {
   width: 260px;
   background: #0b2732f7;
@@ -973,10 +963,6 @@ kbd {
   .camera-mode-button {
     padding: 4px 6px;
   }
-  .header-live-status #fpsReadout {
-    font-size: 9px;
-    min-width: 125px;
-  }
   .minimap.expanded {
     width: 75%;
     left: 12px;
@@ -1278,11 +1264,9 @@ button svg {
 
 .header-live-status { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .header-live-status .camera-mode-button { min-height:28px; height:28px; padding:3px 8px; font-size:11px; }
-.header-live-status #fpsReadout { min-width:112px; font-size:10px; font-variant-numeric:tabular-nums; }
 @media(max-width:1000px) and (min-width:721px) {
   .header-live-status { flex-direction:column; gap:1px; }
   .header-live-status .camera-mode-button { min-height:23px; height:23px; }
-  .header-live-status #fpsReadout { font-size:9px; line-height:12px; text-align:center; }
 }
 @media(max-width:720px) {
   :root { --header:80px; }

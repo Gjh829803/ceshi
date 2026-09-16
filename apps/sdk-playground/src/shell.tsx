@@ -41,7 +41,6 @@ type Flags =
   | "paused"
   | "loading"
   | "contributionOpen"
-  | "fpsSlow"
   | "debugActive";
 export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanelStateStore()) {
   const libraryState=panels.read('assetLibrary'),inspectorState=panels.read('inspector'),displayState=panels.read('display');
@@ -139,11 +138,11 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
   const subscribe=(fn:()=>void)=>{listeners.add(fn);return ()=>{listeners.delete(fn);};};
   // Speed and frame diagnostics update independently of the menus/dialogs.
   // Building the entire Radix tree on every telemetry sample caused long frames.
-  const liveTexts=new Set(['fpsReadout','speed','height','heightLabel','stateValue']);
+  const liveTexts=new Set(['speed','height','heightLabel','stateValue']);
   let layout:typeof state|undefined;
   const layoutSnapshot=()=>{
     const texts=Object.fromEntries(Object.entries(state.texts).filter(([key])=>!liveTexts.has(key)));
-    const flags={...state.flags,fpsSlow:false};
+    const flags={...state.flags};
     if(!layout||Object.keys(texts).length!==Object.keys(layout.texts).length||Object.keys(texts).some(k=>texts[k]!==layout!.texts[k])
       ||Object.keys(flags).some(k=>flags[k as Flags]!==layout!.flags[k as Flags])
       ||Object.keys(state).some(k=>!['texts','flags','pacing','drivetrain'].includes(k)&&state[k as keyof typeof state]!==layout![k as keyof typeof state]))
@@ -154,7 +153,6 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
     return useSyncExternalStore(subscribe,()=>state.texts[id]??fallback);
   }
   function Pacing(){const reading=useSyncExternalStore(subscribe,()=>state.pacing);return <FramePacingView reading={reading} panels={panels}/>;}
-  function FPS(){const slow=useSyncExternalStore(subscribe,()=>state.flags.fpsSlow);return <output id="fpsReadout" aria-label="渲染回调频率" aria-live="off" data-slow={slow||undefined}><LiveText id="fpsReadout" fallback="渲染回调 —/s"/></output>;}
   function Drivetrain(){
     const d=useSyncExternalStore(subscribe,()=>state.drivetrain);
     if(!d)return null;
@@ -409,9 +407,8 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
               Creator界面
             </a>
             <div className="header-spacer" />
-            <div className="header-live-status" aria-label="相机与渲染状态">
+            <div className="header-live-status" aria-label="相机状态">
               {btn("cameraButton", t("cameraButton", "相机 · 跟随"), "camera-mode-button")}
-              <FPS/>
             </div>
             {btn(
               "contributeButton",

@@ -55,13 +55,13 @@ describe('Shell render isolation',()=>{
    const w=window as any,before=w.shellRenderCount;
    for(let n=1;n<=10;n++){
     w.shellTest.update({controls:[['W','Forward']],system:[['Esc','Pause']],drivetrain:{kind:'engine',gear:'D',rpm:1000+n,maxRpm:6000,cadence:0,speed:n,throttle:n,shifting:false}});
-    w.shellTest.text('stateValue',`Moving ${n}`);w.shellTest.text('fpsReadout',`FPS ${n}`);
+    w.shellTest.text('stateValue',`Moving ${n}`);
     await new Promise(resolve=>setTimeout(resolve,130));
    }
    return {before,after:w.shellRenderCount};
   });
   expect(await page.locator('.powertrain-hud').innerText()).toContain('10 km/h');
-  expect(await page.locator('#fpsReadout').innerText()).toBe('FPS 10');
+  expect(await page.locator('#fpsReadout').count()).toBe(0);
   expect(await page.getByLabel('场景状态与操作提示',{exact:true}).innerText()).toContain('Moving 10');
   expect(counts.after).toBe(counts.before);
  });

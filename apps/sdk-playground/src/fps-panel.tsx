@@ -57,7 +57,7 @@ export function FramePacingView({
       data-spike={(!!r && r.over33ms > 0) || undefined}
     >
       <div className="pace-heading">
-        回调间隔 <span>近 5 秒</span>
+        渲染帧间隔 <span>近 5 秒</span>
       </div>
       <div className="pace-row">
         P95 <b>{r ? `${r.p95.toFixed(1)} ms` : "—"}</b>
@@ -72,11 +72,12 @@ export function FramePacingView({
         ref={canvas}
         width="320"
         height="60"
-        aria-label="最近五秒回调间隔曲线，越高代表等待越久，图表上限100毫秒"
+        aria-label="最近五秒游戏渲染帧间隔曲线，越高代表等待越久，图表上限100毫秒"
       />
       <div className="pace-caption">曲线 0–100 ms · 越低越均匀</div>
-      <div className="pace-note" title="近 1 秒浏览器动画回调频率，每 0.5 秒更新；不代表屏幕实际呈现帧率">
-        FPS: {r ? r.fps.toFixed(0) : "—"}
+      <div className="pace-note" title="随游戏自动统计主画面实时渲染帧，近 1 秒平均，每 0.5 秒更新；不代表 GPU 完成或屏幕最终呈现帧率。">
+        <div className="pace-row"><strong>游戏实时 FPS</strong><b data-game-fps>{r ? r.fps.toFixed(0) : "—"}</b></div>
+        <div className="pace-caption">主画面渲染计数 · 自动检测</div>
       </div>
       <button className="performance-details-toggle" type="button" aria-expanded={detailsOpen} aria-controls="performanceDetails" onClick={() => {setDetailsOpen(!detailsOpen);panels?.update('performance',{detailsOpen:!detailsOpen});}}>
         {detailsOpen ? '▾' : '▸'} 详细信息
