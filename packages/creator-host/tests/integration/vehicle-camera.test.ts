@@ -202,7 +202,7 @@ describe('example-local whitebox materials', () => {
   });
 });
 
-it('runs the self-drawn car and preset humanoid with native T cycling, F mounting and reset', async () => {
+it('runs the self-drawn car and preset humanoid with native V cycling, F mounting and reset', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vehicle-camera-browser-'));
   const service = new ThreeCreatorTools(root, 'three-sdk');
   try {
@@ -255,7 +255,7 @@ presentation.focus();`);
     expect(visual.view).toMatchObject({defaultViewId:'third-person',input:{cycleViewIds:['third-person','first-person','shoulder']}});
     expect(await mode()).toBe('third-person');
     for (const next of ['first-person','shoulder','third-person']) {
-      await page.keyboard.press('t');
+      await page.keyboard.press('v');
       await page.waitForFunction(expected => window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind === expected, next);
     }
     await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().entities.some(entity => entity.id === 'person' && entity.motion?.isGrounded));
@@ -264,7 +264,7 @@ presentation.focus();`);
       const state = window.__WORLDKIT_EVAL__!.snapshot!().humanoid!;
       return state.mountedInstanceId === 'rover' && state.transition.remainingSeconds === 0;
     });
-    await page.keyboard.press('t');
+    await page.keyboard.press('v');
     await page.waitForFunction(() => window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind === 'first-person');
     await page.keyboard.press('f');
     await page.waitForFunction(() => {
@@ -323,9 +323,9 @@ await world.start(); presentation.focus();`);
     // Compare framing against measured subject displacement; ground settling is real movement.
     for(let axis=0;axis<3;axis++)expect(playing.pose[axis]-beforeInput.pose[axis]).toBeCloseTo(playing.subjectPosition[axis]!-beforeInput.subjectPosition[axis]!,5);
     await page.evaluate(async()=>{const {world,presentation}=(window as any).__openingTest;await world.start();presentation.focus();});
-    // After the authored third-person opening activates, explicit T switching uses the SDK input owner.
-    await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).__openingTest.world.snapshot().camera.viewKind==='first-person');
-    await page.keyboard.press('t');await page.waitForFunction(()=>(window as any).__openingTest.world.snapshot().camera.viewKind==='shoulder');
+    // After the authored third-person opening activates, explicit V switching uses the SDK input owner.
+    await page.keyboard.press('v');await page.waitForFunction(()=>(window as any).__openingTest.world.snapshot().camera.viewKind==='first-person');
+    await page.keyboard.press('v');await page.waitForFunction(()=>(window as any).__openingTest.world.snapshot().camera.viewKind==='shoulder');
     await service.preview('opening');const reset=await read();expect(reset).toMatchObject({mode:'follow-pending',pose:initial.pose,orientation:initial.orientation,fov:43,tick:0});
     // Creator semantic command uses the same public camera owner while paused.
     const receipt=await page.evaluate(()=>(window as any).__openingTest.world.setCameraView('third-person'));

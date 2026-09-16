@@ -147,11 +147,11 @@ function stepMount(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries)
     const raised=q.move(old,start.clone().sub(old),body,v.rotation);
     if(raised.position.distanceToSquared(start)>1e-6)return;
     for(let n=1;n<=4;n++)if(q.overlaps(start,body,v.rotation.clone().slerp(attitude,n/4)))return;
-    const wasGrounded=v.grounded;
-    const fallSpeed=wasGrounded?0:(v.motion.creature!.mountFallSpeed??Math.min(0,v.velocity.y))-18*dt;
+    const jumping=v.grounded&&i.jump,wasGrounded=v.grounded&&!jumping;
+    const fallSpeed=jumping?v.spec.jumpSpeed:wasGrounded?0:(v.motion.creature!.mountFallSpeed??Math.min(0,v.velocity.y))-18*dt;
     const vertical=wasGrounded?-1:fallSpeed;
     v.velocity.copy(direction).multiplyScalar(speed);v.velocity.y=vertical;
-    let moved=moveBody(start,v.velocity.clone().multiplyScalar(dt),body,yaw,true,q,{massKg:vehicleImpactMass(v.spec),dt},attitude);
+    let moved=moveBody(start,v.velocity.clone().multiplyScalar(dt),body,yaw,wasGrounded,q,{massKg:vehicleImpactMass(v.spec),dt},attitude);
     // 在原有接地状态附近重新扫掠脚下；不能靠远处地面的射线维持悬空接地。
     if(wasGrounded&&!moved.grounded&&!moved.normals.some(n=>n.y>.5)){
       const supported=q.move(moved.position,new Vector3(0,-.12,0),body,attitude);
@@ -170,7 +170,7 @@ function stepMount(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries)
     }
     v.velocity.copy(v.position).sub(old).divideScalar(dt);v.grounded=moved.grounded||moved.normals.some(n=>n.y>.5);
     // 对外速度仍报告实际位移，下一步重力只使用独立的腾空速度。
-    v.motion.creature!.mountFallSpeed=v.grounded?0:fallSpeed;
+    v.motion.creature!.mountFallSpeed=v.grounded?0:moved.normals.some(n=>n.y<-.5)?Math.min(0,fallSpeed):fallSpeed;
 }
 function stepCarriage(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
     const state = v.motion.creature!, oldCart = v.position.clone(), oldLead = state.leadPosition!.clone(), oldCartYaw = v.yaw, oldLeadYaw = state.leadYaw!;

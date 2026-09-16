@@ -46,6 +46,22 @@ it('uses real camera collision for an absolute orbit cut without moving the acto
  }finally{world.dispose();}
 });
 
+it('turns the actual camera sight left and right in all character views',async()=>{
+ const world=await fixture();try{
+  world.setCameraFollow({configuration:document()});
+  for(const view of ['third','first','shoulder'])for(const [key,direction] of [['ArrowLeft',-1],['ArrowRight',1]] as const){
+   world.setCameraView(view);world.step({},30);
+   const right=new THREE.Vector3(1,0,0).applyQuaternion(world.camera.quaternion);
+   const before=world.camera.getWorldDirection(new THREE.Vector3());
+   const e=engine(world);e.keyboard.enabled=true;e.keyboard.keyDown(key);
+   for(let n=0;n<15;n++)e.advance(1/60);
+   e.keyboard.keyUp(key);
+   const turn=world.camera.getWorldDirection(new THREE.Vector3()).sub(before).dot(right);
+   expect(turn*direction,view+' '+key).toBeGreaterThan(.02);
+  }
+ }finally{world.dispose();}
+});
+
 it.each(['ordinary','humanoid'] as const)('moves the %s character along an off-axis opening view on first input and after reset',async kind=>{
  const world=kind==='humanoid'?await fixture():await createWorld({navigation:false});
  try{

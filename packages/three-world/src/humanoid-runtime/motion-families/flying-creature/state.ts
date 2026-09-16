@@ -82,6 +82,8 @@ export const FLYING_CREATURE_ABILITIES_V1 = Object.freeze({
 });
 
 export interface FlyingCreatureCommandV1 {
+  forwardRatio: number;
+  liftRatio: number;
   pitchRatio: number;
   turnRatio: number;
   boostRequested: boolean;

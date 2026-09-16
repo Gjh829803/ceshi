@@ -160,8 +160,8 @@ acceptance does not mean the rider has dismounted. Observe
 `landing`, `grounded`, `takeoff`) and `groundFailure`. Once grounded, `vehicle.exit`
 starts the dismount transition; `vehicle.enter` requires proximity and a clear route.
 The rider stays mounted until dismount completes, then its walking capsule resumes.
-Grounded `input.humanoid.jump` or `brake` requests takeoff; airborne `brake` remains
-glide. Unsupported, wet, steep or narrow landing sites and blocked boarding routes
+Grounded `input.humanoid.jump` or positive `lift` requests takeoff; airborne `brake`
+remains programmatic glide without a keyboard binding. Unsupported, wet, steep or narrow landing sites and blocked boarding routes
 are rejected. The supplied dragon training bindings include all eleven ground
 profiles, their own ground clips and a retractable saddle ladder; this currently
 supports flat-ground parking, not ground locomotion or per-foot terrain IK.
@@ -506,20 +506,22 @@ example and inspect runtime state before requesting an action.
 | Ability | Trigger | Character and scene requirements / result |
 | --- | --- | --- |
 | Walk, run, jump, land | WASD, Shift, Space | Real supporting collision. Start/stop/turn/fall/landing clips follow motion automatically. |
-| Crouch | C or Ctrl | Enter low stance; standing requires headroom. |
+| Slow walk | Hold Ctrl + WASD | Walk slowly without changing stance; takes precedence over Shift sprint. Release Ctrl to restore ordinary movement or held Shift sprint. |
+| Crouch | C | Enter low stance; standing requires headroom. |
 | Roll | Q; `roll` | Grounded, standing, empty hands, no conflicting action, cooldown clear. Collision can stop displacement. |
-| Slide | Shift + new C/Ctrl press; `slide` | Grounded, standing, empty hands, free action/cooldown, speed ≥2.5 m/s. See the complete card below. |
-| Pickup and carry | E; `pickup` with `targetId` | Pickup anchor, clear approach/path, empty hands, supported ground, object ≤8 kg; grasp position must fit the supplied table-height pickup. |
-| Put down | G; `putDown` | Carrying, supported ground and a valid clear placement on a supporting surface. No dedicated put-down clip. |
-| Sit / stand | E; `sit` / `standUp`; Space to stand | Seat anchor and its collider IDs, clear approach; standing requires headroom. |
+| Slide | Shift + new C press; `slide` | Grounded, standing, empty hands, free action/cooldown, speed ≥2.5 m/s. See the complete card below. |
+| Pickup and carry | F; `pickup` with `targetId` | Pickup anchor, clear approach/path, empty hands, supported ground, object ≤8 kg; grasp position must fit the supplied table-height pickup. |
+| Put down | F; `putDown` | Carrying, supported ground and a valid clear placement on a supporting surface. No dedicated put-down clip. F is the shared interaction edge. |
+| Sit / stand | F; `sit` / `standUp`; Space to stand | Seat anchor and its collider IDs, clear approach; standing requires headroom. |
 | Prone and crawl | Z, then WASD | Space for the low capsule and a clear route. Standing requires headroom. |
-| Wall / ladder | E to attach, WASD to climb, Space to attempt top, C/Ctrl to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
+| Wall / ladder | F to attach, WASD to climb, Space to attempt top, C to release | `map.climbSurfaces` references actual collider IDs; valid proximity/orientation and space. |
 | Hurdle / mantle / high climb | Move toward obstacle + Space | Real obstacle probe, supported height/path/top and adequate headroom; controller chooses the applicable traversal. |
 | Swim / dive | Automatic deep-water entry; see Water below for vertical input | `map.water` and real pool-bottom/shore colliders. |
 
 **Slide `slide`** — useful on open ground or through a low opening. A tunnel is
-not required to start. The user holds Shift while moving and newly presses C or
-Ctrl; pressing crouch during ordinary movement keeps the crouch intent. The Agent
+not required to start. The user holds Shift while moving and newly presses C;
+pressing C during ordinary movement keeps the crouch intent. Ctrl is held slow
+walking, not a crouch or slide edge. The Agent
 can directly request `slide`, after accelerating to at least 2.5 m/s. Provide
 run-up distance and actual colliders for a low opening. The character gradually
 lowers its capsule to approximately 0.9 m; collision limits actual travel. At
@@ -789,27 +791,48 @@ children after the SDK places actors, without writing roots, mixer or camera.
 | --- | --- |
 | WASD | Movement; climbing directions |
 | Mouse drag | Camera orbit, including while mounted |
-| Arrow keys | Camera orbit; spacecraft reserves all arrows for pitch/strafe, tank reserves up/down for gun elevation |
+| Arrow keys | Camera observation only, in every movement mode |
 | Shift held | Sprint / acceleration |
-| Space | Jump / traverse / stand; climbing top attempt |
-| C or Ctrl | Crouch / stand; release climbing |
-| Shift + C/Ctrl | Slide after run-up |
-| Z | Prone / stand |
-| Q | Roll |
-| E | Focused interaction / climb attachment |
-| G | Put down |
-| F | Enter / exit vehicle or mount |
+| Space | On foot: jump / traverse / stand; climbing top attempt. Dragon, submarine, powered fixed-wing and spacecraft: pitch up. Soaring: special action |
+| C | On foot: crouch / stand; release climbing. Same pitch-capable vehicles: pitch down. Soaring: airbrake |
+| Ctrl (held) | On foot: slow walk without changing stance, overriding Shift. Mounted: slow / brake |
+| Shift + C | Slide after run-up |
+| Q / E | On foot: Q roll. Dragon, submarine, rotorcraft, balloon and spacecraft: ascend/descend. Powered fixed-wing and soaring: unused |
+| Z / X | On foot: Z prone/stand. Spacecraft: roll; rotorcraft: bank-induced lateral movement; tank: turret; hovercraft: strafe; dragon: Z evade |
+| F | One contextual interaction: pickup/put down, scene/climb or enter/exit vehicle/mount |
+| V | Cycle configured camera views (press edge) |
+| Backspace held | Mounted reset through the existing reset callback after 0.8 simulation seconds |
 
 Transition clips need no key. Swimming style is a secondary menu/input choice.
 Keyboard routing uses the controlled actor's current vehicle mode, independently
-of the camera target. Unreserved axes remain camera inputs and do not also drive
-the vehicle. Rebound camera keys follow the same rule. For initial framing and
+of the camera target. Observation keys never generate vehicle pitch, and Space/C pitch
+does not inject camera orbit. Flying objects and submarines retain their calibrated
+20% vertical observation rate (except balloon), but no additional ±10° limit:
+keyboard, mouse and explicit camera input use the document's normal pitch range.
+Rotorcraft/tiltrotor and soaring aircraft have no separate keyboard pitch; W/S
+requests travel speed or airspeed trim. Fixed-wing and soaring aircraft retain
+A/D coordinated bank without manual Z/X roll; submarine Z/X is unused.
+`fixedWingPitchDown` / `fixedWingPitchUp` use Q/E on powered fixed-wing/pusher aircraft;
+Space is their ground wheel brake and C is unused. `pitchUp` / `pitchDown` use Space/C
+on dragon, submarine and spacecraft; `ascend` /
+`descend` use Q/E in vertically controlled contexts. The separate soaring
+`airbrake` action retains C. Foot/mount `jump` remains Space; dragon takeoff uses
+the `ascend` press edge. Rotorcraft and balloon Space/C are inactive.
+Glider W initiates finite tow, then W/S trims airspeed; released tow cannot restart
+in flight. Paraglider W runs off the launch platform. Neither requires Shift.
+Wingsuits can be equipped with F near grounded gear, including on level ground.
+Equipped ground WASD, Shift, Ctrl and Space use ordinary movement, optional sprint,
+slow walk and jump. Sustained descent beyond 3 m of clearance hands off to flight;
+ordinary jumps do not. Space needs a fresh press to open the canopy, then holding
+it brakes under canopy. Landing and stowing automatically unequip the suit at the
+landing site; ground F also unequips. Re-equipping clears the previous flight state.
+Rebound keys follow the same context rules. For initial framing and
 mount handoffs, follow the [camera setup guide](../creator-host/docs/agent/programming.md#initial-state-and-camera).
 HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
-roll:['KeyR']})` rebinds semantic actions and rejects duplicate/invalid codes.
+roll:['KeyR']})` rebinds semantic actions and rejects same-context duplicate/invalid codes.
 `humanoid.controlHints(bindings)` formats current labels. Esc belongs to the
-application menu; reset is an explicit menu/button action. Use semantic
+application menu; reset also remains available through menus/buttons. Use semantic
 inputs/commands for Agent actions; key remapping need not change a plan.
 Presentation UI focus releases held gameplay keys. Programmatic
 `world.humanoid.setInput(input)` returns a release callback scoped to that
@@ -819,9 +842,12 @@ action edges execute once in a multi-tick step.
 Read `world.describe().humanoid.inputGuide` for the active control family, or
 `humanoid.HUMANOID_INPUT_GUIDES` when authoring a vehicle. Start with
 `emptyHumanoidInput()` and change only relevant channels. For example, `boost`
-increases car speed, adjusts plane throttle, launches a glider, and brakes a
-spaceship or submarine. Aircraft pitch uses `forward`; spaceship pitch uses
-`pitch`. Omitted guide channels are ignored and should stay neutral.
+increases car speed, assists powered aircraft, or launches a glider. Spaceship and
+submarine braking uses `slow`. All flying pitch uses `pitch`; fixed-wing throttle
+uses `forward`, rotorcraft vertical demand and balloon heating/venting use `lift`.
+The old `vehicle` key binding is merged into `interact` (F); T changes to V.
+Shooting/aiming, seat switching and HUD redesign are deferred; legacy static hints
+are not the input contract. Omitted guide channels should stay neutral.
 Camera angular deltas use radians and distance deltas change the nominal arm in
 meters; collision response, speed pullback and smoothing still affect the final view.
 
@@ -876,7 +902,7 @@ Install a complete, parsed CameraDocument with `world.setCameraFollow({configura
 ordered list of declared IDs; an empty list disables keyboard cycling without
 blocking `world.setCameraView(viewId)`. Native defaults declare third-person,
 first-person and shoulder, with keyboard cycling disabled. Playground and examples
-that enable T do so in their project documents. Held repeats, pause and focused UI
+that enable V do so in their project documents. Held repeats, pause and focused UI
 do not toggle. Explicitly switching to another view restores its calibrated initial orbit;
 automatic state changes preserve the current orbit heading while adopting the new
 view's framing. Both use the configured transition, except first-person cuts;
@@ -1631,8 +1657,9 @@ or scaling the root does not change that solver. Movement parameters remain
 configurable. Use the ordered wheel groups with `onVisualUpdate` and
 `updateVehicleWheels` for suspension, steering and spin.
 
-Shift increases persistent throttle, Ctrl decreases it, W/S pitch down/up, A/D
-request coordinated turns, Q/E add bank, and Space brakes on the ground. The SDK
+W/S increases/decreases persistent throttle, Shift assists and Ctrl decreases it
+(braking takes priority). Q pitches down, E pitches up, A/D requests coordinated turns,
+and Space/Ctrl brake on the ground. C and Z/X are unused; arrows only observe. The SDK
 owns thrust, lift/drag, stall and landing physics. This factory does not supply
 rotorcraft/VTOL, propeller RPM/dynamics or automatic aerial navigation.
 

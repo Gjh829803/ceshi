@@ -33,12 +33,14 @@ export function aircraftCollisionBoxes(subtype:AircraftSubtype){
 }
 
 export const SOARING={
+ targetSpeed:{glider:28,canopy:8,wingsuit:20},speedDemandRatio:.3,speedTrimRadians:.18,
  glider:{mass:850,area:22,cl0:.25,liftSlope:4.7,drag:.017,induced:.035,trim:.045},
  paraglider:{mass:110,area:25,cl0:.45,liftSlope:2.8,drag:.10,induced:.13,trim:.12},
  // Training preset: effective low-speed lifting area; not a certified wingsuit model.
  wingsuit:{mass:95,area:3.2,cl0:.55,liftSlope:3.0,drag:.09,induced:.09,trim:.15},
  balloon:{mass:300,volume:1200,ambientKelvin:288.15,maxKelvin:410,heating:20,cooling:.025,ventCooling:10,fuelSeconds:180,dragArea:120},
  towSeconds:8,towAcceleration:10,canopySeconds:2,
+ wingsuitLaunchClearanceMeters:3,wingsuitLaunchFallSeconds:.15,
 } as const;
 
 /** 动力飞机训练小类的航迹转向响应；教练机及其他飞机继续使用各自原有配置。 */

@@ -296,7 +296,47 @@ it('places wearable ground shoes at the support in fixed and interpolated presen
   expect(rider.sourceCharacter!.weights.run).toBeGreaterThan(.5);
   // 离地后恢复原飞行挂点；不改装备飞行物理或骨架比例。
   v.grounded=false;v.position.y+=10;
+  // Ordinary jumps still use the walking attachment; only the committed flight handoff uses the seat.
+  expect(runtime.logicalPose(actor.id)!.position.distanceTo(v.position)).toBeLessThan(1e-6);
+  v.motion.aircraft!.wearable!.groundLocomotion=false;
   const expected=v.position.clone().add(new Vector3(...spec.seat).applyQuaternion(v.rotation));
   expect(runtime.logicalPose(actor.id)!.position.distanceTo(expected)).toBeLessThan(1e-6);
  }finally{world?.dispose();if(!world)rider.dispose();loader.mockRestore();transport.mockRestore();}
 });
+
+it('keeps the actual paraglider rider above the floor while steering through touchdown and automatic dismount',async()=>{
+ const {readFile}=await import('node:fs/promises'),{fileURLToPath}=await import('node:url');
+ const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+ const {parseFixtureGlb}=await import('./textured-glb-fixture');
+ const {SkinnedMesh,PerspectiveCamera}=await import('three');
+ const {createWorld}=await import('../world');
+ const {SPECS}=await import('@worldkit/preset-content/config');
+ const {getMap}=await import('@worldkit/preset-content/environment/maps');
+ const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>parseFixtureGlb(await readFile(fileURLToPath(url))));
+ const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
+ try{for(const steer of [-1,1]){
+  const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
+  try{
+   await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+   const spec={...SPECS.find(s=>s.id==='paraglider')!,spawn:[0,25,0] as [number,number,number],yaw:0};
+   const map={...getMap('aircraft-training'),spawns:[{id:'canopy-descent',name:'Canopy descent',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'airfield'}]};
+   world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:spec.id,assetId:spec.id,spec,object:new Group()}]}});
+   const runtime=world.humanoid!,actor=runtime.simulation.controlledActor,v=runtime.simulation.vehicles[0]!;
+   v.grounded=false;v.velocity.set(0,-2,8);actor.commitMountedStart(0);
+   const point=new Vector3(),engine=engineOf(world);let touched=false,samples=0,minHeight=Infinity;
+   for(let n=0;n<1800&&actor.vehicle;n++){
+    world.step({humanoid:{...emptyInput(),steer:touched||v.position.y<6?steer:0}});
+    if(v.grounded)touched=true;
+    if(touched)for(const alpha of [0,.5,1])engine.withPresentation(()=>{
+     let low=Infinity;rider.root.updateWorldMatrix(true,true);
+     rider.root.traverse(mesh=>{if(mesh instanceof SkinnedMesh){mesh.skeleton.update();for(let i=0;i<mesh.geometry.getAttribute('position').count;i++){mesh.getVertexPosition(i,point).applyMatrix4(mesh.matrixWorld);low=Math.min(low,point.y);}}});
+     minHeight=Math.min(minHeight,low);samples++;
+     expect(new Vector3(0,1,0).applyQuaternion(rider.root.quaternion).y).toBeGreaterThan(.85);
+    },alpha);
+   }
+   expect(samples).toBeGreaterThan(60);expect(minHeight,`steer=${steer}, lowest rider vertex`).toBeGreaterThan(-.12);
+   expect(actor.vehicle,actor.message).toBeUndefined();world.step({},60);
+   expect(actor.controller.grounded).toBe(true);expect(actor.controller.position.y).toBeGreaterThan(-.04);
+  }finally{world?.dispose();if(!world)rider.dispose();}
+ }}finally{loader.mockRestore();transport.mockRestore();}
+},15000);

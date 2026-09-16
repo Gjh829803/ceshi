@@ -35,8 +35,8 @@ export {ACTION_TUNING} from '../../config/actions';
 export const SKILL_DEFINITIONS = [
   {id:'roll',label:'翻滚',key:HUMANOID_BINDINGS.roll.key,requires:['grounded','emptyHands','notBusy'],effect:'向当前移动方向翻滚；碰撞可截断位移'},
   {id:'slide',label:'滑铲',key:HUMANOID_BINDINGS.slide.key,requires:['grounded',`speed>=${ACTION_TUNING.slideMinimumSpeedMetersPerSecond}m/s`,'emptyHands','notBusy'],effect:'收低胶囊并减速滑行；出口不足保持低姿态'},
-  {id:'pickup',label:'拾取并搬运',key:'E',requires:['grounded','emptyHands','target.kind=pickup','approachWithin0.9m','pathClear'],effect:'对齐后播放拾取，在接触帧附着目标，再进入搬运'},
-  {id:'putDown',label:'放下',key:'G',requires:['carrying','grounded','placementClear'],effect:'将物件放回可承托位置；没有专用放下动画'},
+  {id:'pickup',label:'拾取并搬运',key:HUMANOID_BINDINGS.interact.key,requires:['grounded','emptyHands','target.kind=pickup','approachWithin0.9m','pathClear'],effect:'对齐后播放拾取，在接触帧附着目标，再进入搬运'},
+  {id:'putDown',label:'放下',key:HUMANOID_BINDINGS.interact.key,requires:['carrying','grounded','placementClear'],effect:'将物件放回可承托位置；没有专用放下动画'},
   {id:'sit',label:'坐下',key:'E',requires:['grounded','emptyHands','target.kind=seat','approachWithin0.9m','pathClear'],effect:'对齐座位，播放进入，然后保持真实坐姿循环'},
   {id:'standUp',label:'起身',key:'E / Space',requires:['seated','headroomClear'],effect:'播放起身并恢复行走'},
 ] as const;

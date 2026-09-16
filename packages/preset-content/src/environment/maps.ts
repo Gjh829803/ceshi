@@ -17,7 +17,7 @@ const regions:MapRegion[]=[
  {id:'grades',name:'03 / 地形测试',description:'5° / 12° / 22° 梯度、横坡与台阶',center:[35,0,170],size:[140,100],color:'#d49d7c',modes:groundModes},
  {id:'water',name:'04 / 水域实验场',description:'浅滩、码头桩、水下顶棚与深水',center:[324,-2,0],size:[308,490],color:'#5cafbb',modes:['character','paddled_boat','boat','submarine','hover']},
  {id:'airfield',name:'05 / 航空跑道',description:'宽门机库、起飞、空中门框',center:[-285,0,0],size:[46,620],color:'#e4a17f',modes:['plane','glider','hover','dragon']},
- {id:'launch',name:'06 / 滑翔高台',description:'电梯自动上台 / 折返坡道 · F 穿戴 · Shift 助跑离场',center:[-130,120,-155],size:[32,90],color:'#b3c8d5',modes:['character','plane','glider']},
+ {id:'launch',name:'06 / 滑翔高台',description:'电梯自动上台 / 折返坡道 · F 穿戴 · W 前进离台',center:[-130,120,-155],size:[32,90],color:'#b3c8d5',modes:['character','plane','glider']},
  {id:'six-dof',name:'07 / 六向空间',description:'垂直、横移、俯仰与滚转框架',center:[-84,0,-70],size:[50,65],color:'#b9ace1',modes:['spacecraft','hover','dragon']},
  {id:'circuit',name:'08 / 环道与绕桩',description:'高速转向、刹车与低速绕桩',center:[-28,0,73],size:[300,300],color:'#96bfa5',modes:groundModes},
  {id:'creatures',name:'09 / 生物骑乘场',description:'骑马步态 · 马车牵引 · 飞龙起降',center:[60,0,35],size:[90,70],color:'#a6b57f',modes:['character','mount','carriage','dragon']},

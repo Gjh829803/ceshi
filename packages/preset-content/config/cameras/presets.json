@@ -200,7 +200,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -242,7 +243,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.rover",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "rover.first-person": {
@@ -393,7 +394,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -435,7 +437,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.racer",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "racer.first-person": {
@@ -586,7 +588,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -628,7 +631,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.motorcycle",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "motorcycle.first-person": {
@@ -779,7 +782,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -821,7 +825,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.skateboard",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "skateboard.first-person": {
@@ -972,7 +976,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -1014,7 +1019,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.hovercraft",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "hovercraft.first-person": {
@@ -1165,7 +1170,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -1207,7 +1213,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.boat",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "boat.first-person": {
@@ -1359,7 +1365,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -1401,7 +1408,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.submarine",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "submarine.first-person": {
@@ -1553,7 +1560,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -1596,7 +1604,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.glider",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "glider.first-person": {
@@ -1748,7 +1756,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -1790,7 +1799,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.plane",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "plane.first-person": {
@@ -1943,7 +1952,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         },
         "upHalfLifeSeconds": 0.13862943611198905,
         "inheritSubjectYaw": false
@@ -1987,7 +1997,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.spacecraft",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "spacecraft.first-person": {
@@ -2137,7 +2147,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -2179,7 +2190,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.trail-rover",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "trail-rover.first-person": {
@@ -2330,7 +2341,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -2372,7 +2384,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.touring-motorcycle",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "touring-motorcycle.first-person": {
@@ -2522,7 +2534,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -2564,7 +2577,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.rescue-hovercraft",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "rescue-hovercraft.first-person": {
@@ -2715,7 +2728,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -2757,7 +2771,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.patrol-boat",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "patrol-boat.first-person": {
@@ -2909,7 +2923,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -2951,7 +2966,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.trainer-plane",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "trainer-plane.first-person": {
@@ -3104,7 +3119,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         },
         "upHalfLifeSeconds": 0.13862943611198905,
         "inheritSubjectYaw": false
@@ -3148,7 +3164,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.survey-spacecraft",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "survey-spacecraft.first-person": {
@@ -3299,7 +3315,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -3341,7 +3358,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.supercar",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "supercar.first-person": {
@@ -3492,7 +3509,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -3534,7 +3552,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.kart",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "kart.first-person": {
@@ -3685,7 +3703,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -3727,7 +3746,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.horse",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "horse.first-person": {
@@ -3878,7 +3897,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -3920,7 +3940,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.carriage",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "carriage.first-person": {
@@ -4072,7 +4092,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -4114,7 +4135,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.dragon",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "dragon.first-person": {
@@ -4265,7 +4286,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -4307,7 +4329,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.unicycle",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "unicycle.first-person": {
@@ -4459,7 +4481,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -4501,7 +4524,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.observation-submarine",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "observation-submarine.first-person": {
@@ -4652,7 +4675,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -4694,7 +4718,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.canoe",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "canoe.first-person": {
@@ -4845,7 +4869,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -4887,7 +4912,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.kayak",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "kayak.first-person": {
@@ -5038,7 +5063,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -5080,7 +5106,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.raft",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "raft.first-person": {
@@ -5231,7 +5257,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -5273,7 +5300,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.jetski",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "jetski.first-person": {
@@ -5425,7 +5452,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -5467,7 +5495,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.atv",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "atv.first-person": {
@@ -5619,7 +5647,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -5661,7 +5690,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.ski",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "ski.first-person": {
@@ -5812,7 +5841,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -5854,7 +5884,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.sled",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "sled.first-person": {
@@ -6005,7 +6035,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -6047,7 +6078,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.tank",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "tank.first-person": {
@@ -6198,7 +6229,8 @@
           "pitch": {
             "targetRadians": 0.28,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -6240,7 +6272,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.bus",
-      "version": "285246867"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "bus.first-person": {
@@ -6392,7 +6424,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -6434,7 +6467,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.pusher-plane",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "pusher-plane.first-person": {
@@ -6588,7 +6621,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -6630,7 +6664,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.helicopter",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "helicopter.first-person": {
@@ -6784,7 +6818,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -6826,7 +6861,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.multirotor",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "multirotor.first-person": {
@@ -6980,7 +7015,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -7022,7 +7058,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.tiltrotor",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "tiltrotor.first-person": {
@@ -7177,7 +7213,8 @@
             "targetRadians": 0.25,
             "halfLifeSeconds": 0.5776226504666211,
             "targetSource": "subject"
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -7220,7 +7257,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.paraglider",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "paraglider.first-person": {
@@ -7375,7 +7412,8 @@
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211,
             "targetSource": "subject"
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -7418,7 +7456,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.wingsuit",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "wingsuit.first-person": {
@@ -7572,7 +7610,8 @@
           "pitch": {
             "targetRadians": 0.2,
             "halfLifeSeconds": 0.5776226504666211
-          }
+          },
+          "minimumSpeedMetersPerSecond": 0
         }
       },
       "zoom": {
@@ -7615,7 +7654,7 @@
     },
     "sourceIdentity": {
       "id": "calibration.balloon",
-      "version": "pr240-camera-migration-20260914"
+      "version": "vehicle-recenter-20260916"
     }
   },
   "balloon.first-person": {

@@ -7,7 +7,6 @@ import type { CameraPointerInput } from './input.js';
 
 type TestWorld = {
   sample(): WorldInput;
-  nativeHumanoid():void;
   events: CameraPointerInput[];
   releases: number;
   resets: number;
@@ -15,6 +14,7 @@ type TestWorld = {
   canZoom: boolean;
   firstPerson: boolean;
   focus(): void;
+  useHumanoid(): void;
   bind(id: string): number;
   release(index: number): void;
   dispose(): void;
@@ -42,7 +42,7 @@ describe('world input follows the presented surface and UI focus', () => {
           const releases = [router.bind(document.getElementById('world' + index), document.getElementById('ui' + index))];
           return Object.assign(state, {
             sample: () => keyboard.sample(), focus: () => router.focus(),
-            nativeHumanoid: () => keyboard.setHumanoidMode(() => undefined),
+            useHumanoid: () => keyboard.setHumanoidContext(() => undefined),
             bind: id => releases.push(router.bind(document.getElementById(id))) - 1,
             release: index => releases[index](),
             dispose: () => { router.dispose(); keyboard.detach(); }
@@ -74,6 +74,20 @@ describe('world input follows the presented surface and UI focus', () => {
   });
   afterEach(async () => { await page.close(); });
   afterAll(async () => { await browser?.close(); });
+
+  it('holds Ctrl for humanoid walking and clears it on UI focus without crouching',async()=>{
+    await page.evaluate(()=>{const world=window.inputTest.worlds[0]!;world.useHumanoid();world.focus();});
+    const sample=()=>page.evaluate(()=>window.inputTest.worlds[0]!.sample().humanoid);
+    await page.keyboard.down('Control');await page.keyboard.down('w');
+    expect(await sample()).toMatchObject({forward:1,slow:true,actions:{}});
+    await page.keyboard.down('Shift');expect(await sample()).toMatchObject({slow:true,boost:true,actions:{}});
+    await page.keyboard.up('Control');expect(await sample()).toMatchObject({slow:false,boost:true,actions:{}});
+    await page.keyboard.down('Control');await page.locator('#prompt').focus();
+    expect(await sample()).toMatchObject({forward:0,slow:false,boost:false,actions:{}});
+    await page.keyboard.up('Control');await page.keyboard.up('Shift');await page.keyboard.up('w');
+    await page.evaluate(()=>window.inputTest.worlds[0]!.focus());await page.keyboard.press('c');
+    expect(await sample()).toMatchObject({slow:false,actions:{toggleCrouch:true}});
+  });
 
   it('zooms the actual Player camera through wheel events, preserving first-person, UI and authored-camera boundaries',async()=>{
     const compiled=await build({stdin:{resolveDir:process.cwd(),contents:`
@@ -114,13 +128,15 @@ describe('world input follows the presented surface and UI focus', () => {
   },30000);
 
   it('keeps native swim lift held while consuming jump/crouch edges and clears lift on blur',async()=>{
-    await page.evaluate(()=>window.inputTest.worlds[0]!.nativeHumanoid());
+    await page.evaluate(()=>window.inputTest.worlds[0]!.useHumanoid());
     await page.mouse.click(150,155);
     const sample=()=>page.evaluate(()=>window.inputTest.worlds[0]!.sample().humanoid);
-    await page.keyboard.down('ControlLeft');
-    expect(await sample()).toMatchObject({lift:-1,actions:{toggleCrouch:true}});
+    await page.keyboard.down('KeyC');
+    expect(await sample()).toMatchObject({lift:-1,slow:false,actions:{toggleCrouch:true}});
     expect(await sample()).toMatchObject({lift:-1,actions:{}});
-    await page.keyboard.up('ControlLeft');expect((await sample())!.lift).toBe(0);
+    await page.keyboard.up('KeyC');expect((await sample())!.lift).toBe(0);
+    await page.keyboard.down('ControlLeft');expect(await sample()).toMatchObject({lift:0,slow:true,actions:{}});
+    await page.keyboard.up('ControlLeft');
     await page.keyboard.down('Space');expect(await sample()).toMatchObject({lift:1,jump:true});
     expect(await sample()).toMatchObject({lift:1,jump:false});
     await page.evaluate(()=>window.dispatchEvent(new Event('blur')));

@@ -1,5 +1,8 @@
 import type {Mode} from '../humanoid-runtime/config';
 
+/** Independent Space/C demand as a proportion of a flying creature's cruise speed. */
+export const CREATURE_VERTICAL_SPEED_RATIO = .3;
+
 /** Speeds: m/s; accelerations: m/s²; exponential response/damping: 1/s. */
 const range=(minimum:number,maximum:number)=>Object.freeze([minimum,maximum] as const);
 export const CONTROL_RANGES=Object.freeze({
