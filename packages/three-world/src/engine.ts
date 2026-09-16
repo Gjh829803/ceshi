@@ -868,17 +868,25 @@ export class WorldEngine {
     this.failures.push({code,message:diagnostic.message,simulationTick:this.tick,...(entityId?{entityId}:{}),diagnostic});
   }
   dispose(): void {
-    if (!this.lifecycle.beginDisposal()) return; this.inputRouter.dispose(); this.cameraSubjectVisibility.dispose(); this.keyboard.detach(); this.renders.clear();this.frameTimings.clear();this.releaseViewport?.();
+    if (!this.lifecycle.beginDisposal()) return;
+    // Keep owner order and the original thrown value; a failed owner must not
+    // strand later independent owners. Existing callback errors remain recorded.
+    let failed=false, firstError:unknown;
+    const release=(cleanup:()=>void)=>{try{cleanup();}catch(error){if(!failed){failed=true;firstError=error;}this.recordError('WORLD_DISPOSE_FAILED',error);}};
+    release(()=>this.inputRouter.dispose()); release(()=>this.cameraSubjectVisibility.dispose()); release(()=>this.keyboard.detach());
+    this.renders.clear();this.frameTimings.clear();release(()=>this.releaseViewport?.());
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
-    for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
+    for (const entity of [...this.entities.values(), ...this.retired]) release(()=>setEntityBoundary(entity.object, false));
     const humanoids=new Set([...this.entities.values(),...this.retired].flatMap(e=>{const binding=(e.options as CharacterEntityOptions).runtimeActor?.animation;return binding?[binding]:[];}));
     for(const character of humanoids)try{character.dispose();}catch(error){this.recordError('WORLD_DISPOSE_FAILED',error);}
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
     for (const callback of this.disposals) try { callback(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
-    for(const entity of [...this.entities.values(),...this.retired])entity.releaseHumanoid?.();
-    this.cameraController.dispose();this.cameraSubjects.clear();this.navigation?.dispose(); this.physics.dispose();this.manualActions.clear();this.resources.clear(); if (this.ownsRenderer) this.renderer?.dispose();
-    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.runtimeObservers.clear();this.locomotionAnimations.clear();this.jumped.clear();
+    for(const entity of [...this.entities.values(),...this.retired])release(()=>entity.releaseHumanoid?.());
+    release(()=>this.cameraController.dispose());this.cameraSubjects.clear();release(()=>this.navigation?.dispose());release(()=>this.physics.dispose());
+    this.manualActions.clear();release(()=>this.resources.clear());if(this.ownsRenderer)release(()=>this.renderer?.dispose());
+    this.entities.clear(); this.retired.clear(); this.baseline?.clear(); this.prototypes.clear(); for(const id of [...this.goals.keys()])release(()=>this.clearGoal(id)); this.updates.clear(); this.resets.clear(); this.disposals.clear(); this.interactions.clear();this.afterUpdates.clear();this.runtimeObservers.clear();this.locomotionAnimations.clear();this.jumped.clear();
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }
+    if(failed)throw firstError;
   }
 }
 export async function createWorld(options: WorldOptions = {}): Promise<WorldEngine> { return WorldEngine.create(options); }

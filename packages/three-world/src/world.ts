@@ -907,9 +907,14 @@ export class ThreeWorld implements API.World {
   if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;if(this.humanoid&&!humanoidHost(this.humanoid).isDisposed())humanoidHost(this.humanoid).setEpisodeOwned(false);lease?.releaseCameraSelection();lease?.restoreViewport();this.epoch++;this.disposed=true;this.scopes.abortAll();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
   this.operations.cancelAll();
-  this.presentation?.dispose();this.changes.clear();this.restoreRendererShadows?.();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
+  // Finish independent owners in their existing order, then preserve the first
+  // propagated failure. Resource/callback errors retain their recorded contract.
+  let failed=false,firstError:unknown;
+  const release=(cleanup:()=>void)=>{try{cleanup();}catch(error){if(!failed){failed=true;firstError=error;}this.errors.push(runtimeError(error,'dispose'));}};
+  release(()=>this.presentation?.dispose());this.changes.clear();release(()=>this.restoreRendererShadows?.());release(()=>this.engine.dispose());release(()=>this.assets.dispose());for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
+  if(failed)throw firstError;
  }
 }
 export async function createWorld(options:WorldOptions={}):Promise<ThreeWorld>{return ThreeWorld.create(options);}
