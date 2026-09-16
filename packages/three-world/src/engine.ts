@@ -115,7 +115,7 @@ export class WorldEngine {
   private readonly lifecycle = new WorldLifecycle({
     prepareStart: () => this.sealInitialState(),
     activate: () => { this.keyboard.enabled = true; },
-    deactivate: () => { this.clearInput(); this.keyboard.enabled = false; this.accumulatorSeconds = 0; },
+    deactivate: () => { try { this.clearInput(); } finally { this.keyboard.enabled = false; this.accumulatorSeconds = 0; } },
     frame: elapsed => this.runFrame(elapsed),
   });
   private get running(): boolean { return this.lifecycle.running; }
@@ -264,7 +264,7 @@ export class WorldEngine {
     return options.object;
   }
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
-  clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
+  clearInput():void{try{this.inputRouter.clear();}finally{this.clearPendingInput();}}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
   private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>this.controlledHumanoid?.simulation.controlledActor.vehicle?.spec.mode:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
@@ -868,11 +868,12 @@ export class WorldEngine {
     this.failures.push({code,message:diagnostic.message,simulationTick:this.tick,...(entityId?{entityId}:{}),diagnostic});
   }
   dispose(): void {
-    if (!this.lifecycle.beginDisposal()) return;
+    if (this.lifecycle.disposed) return;
     // Keep owner order and the original thrown value; a failed owner must not
     // strand later independent owners. Existing callback errors remain recorded.
     let failed=false, firstError:unknown;
     const release=(cleanup:()=>void)=>{try{cleanup();}catch(error){if(!failed){failed=true;firstError=error;}this.recordError('WORLD_DISPOSE_FAILED',error);}};
+    release(()=>this.lifecycle.beginDisposal());
     release(()=>this.inputRouter.dispose()); release(()=>this.cameraSubjectVisibility.dispose()); release(()=>this.keyboard.detach());
     this.renders.clear();this.frameTimings.clear();release(()=>this.releaseViewport?.());
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));

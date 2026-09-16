@@ -105,3 +105,68 @@ describe('World lifecycle compatibility', () => {
     } finally {world.dispose();}
   });
 });
+// Fault injection is limited to the host-owned DOM boundary. The engine, input
+// router, keyboard, camera, physics and frame-generation handling remain real.
+function lockedInput(world: Awaited<ReturnType<typeof fixture>>) {
+  const documentTarget = Object.assign(new EventTarget(), {
+    defaultView: new EventTarget(), activeElement: null,
+    pointerLockElement: null as EventTarget | null, exitPointerLock: vi.fn(),
+  });
+  const attributes = new Map<string, string>(), styles = new Map<string, string>();
+  const surface = Object.assign(new EventTarget(), {
+    ownerDocument: documentTarget,
+    getAttribute: (name: string) => attributes.get(name) ?? null,
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+    removeAttribute: (name: string) => attributes.delete(name),
+    style: {getPropertyValue: (name: string) => styles.get(name) ?? '', getPropertyPriority: () => '',
+      setProperty: (name: string, value: string) => styles.set(name, value), removeProperty: (name: string) => styles.delete(name)},
+  });
+  const release = world.bindInput(surface as unknown as HTMLElement, new EventTarget() as HTMLElement);
+  documentTarget.pointerLockElement = surface;
+  documentTarget.exitPointerLock.mockImplementation(() => {documentTarget.pointerLockElement = null;});
+  return {documentTarget, release, styles};
+}
+describe('Lifecycle teardown at the host input boundary', () => {
+  it('cancels scheduled frames and held input even when releasing pointer lock fails', async () => {
+    const clock = frames(), world = await fixture(), input = lockedInput(world);
+    try {
+      world.start(); clock.fire(1000); world.keyboard.keyDown('KeyW');
+      const stale = [...clock.pending.values()][0]!, fault = new Error('HOST_INPUT_RELEASE_FAILED');
+      input.documentTarget.exitPointerLock.mockImplementationOnce(() => {throw fault;});
+      expect(() => world.stop()).toThrow(fault);
+      expect(world.isRunning).toBe(false); expect(clock.pending.size).toBe(0);
+      expect(world.keyboard.enabled).toBe(false); expect(world.keyboard.held.size).toBe(0);
+      world.start(); stale(1020); expect(clock.pending.size).toBe(1); expect(world.simulationTick).toBe(0);
+      clock.fire(2000); clock.fire(2020);
+      expect(world.simulationTick).toBe(1); expect(world.keyboard.sample().moveZRatio).toBe(0);
+    } finally {input.documentTarget.pointerLockElement = null; input.release(); world.dispose();}
+  });
+  it('disposes later owners and detaches input listeners after persistent pointer-lock failure', async () => {
+    const clock = frames(), world = await fixture(), input = lockedInput(world), disposed = vi.fn();
+    const physics = vi.spyOn(world.physics, 'dispose'); world.onDispose(disposed);
+    try {
+      world.start(); world.keyboard.keyDown('KeyW');
+      const fault = new Error('HOST_INPUT_RELEASE_FAILED');
+      input.documentTarget.exitPointerLock.mockImplementation(() => {throw fault;});
+      expect(() => world.dispose()).toThrow(fault);
+      expect(clock.pending.size).toBe(0); expect(world.keyboard.enabled).toBe(false);
+      expect(world.keyboard.held.size).toBe(0); expect(physics).toHaveBeenCalledOnce(); expect(disposed).toHaveBeenCalledOnce();
+      expect(input.styles.has('touch-action')).toBe(false);
+      expect(() => world.start()).toThrow('WORLD_DISPOSED');
+      const calls = input.documentTarget.exitPointerLock.mock.calls.length;
+      input.documentTarget.defaultView.dispatchEvent(new Event('blur'));
+      expect(input.documentTarget.exitPointerLock).toHaveBeenCalledTimes(calls);
+      expect(() => world.dispose()).not.toThrow(); expect(disposed).toHaveBeenCalledOnce();
+    } finally {input.documentTarget.pointerLockElement = null; input.release(); world.dispose(); physics.mockRestore();}
+  });
+  it('rejects disposal re-entry from a host pointer-lock callback', async () => {
+    const clock = frames(), world = await fixture(), input = lockedInput(world), disposed = vi.fn();
+    world.onDispose(disposed);
+    input.documentTarget.exitPointerLock.mockImplementationOnce(() => {world.dispose(); input.documentTarget.pointerLockElement = null;});
+    try {
+      world.start(); world.dispose();
+      expect(input.documentTarget.exitPointerLock).toHaveBeenCalledOnce();
+      expect(disposed).toHaveBeenCalledOnce(); expect(clock.pending.size).toBe(0);
+    } finally {input.documentTarget.pointerLockElement = null; input.release(); world.dispose();}
+  });
+});

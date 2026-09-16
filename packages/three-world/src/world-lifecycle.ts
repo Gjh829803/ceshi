@@ -42,17 +42,20 @@ export class WorldLifecycle {
 
   stop(): void {
     if (!this.disposed) this.state = 'stopped';
-    this.hooks.deactivate();
-    this.frameGeneration += 1;
-    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId);
-    this.frameId = 0;
+    try { this.hooks.deactivate(); }
+    finally {
+      // Host input release can throw; cancelled generations must not survive it.
+      this.frameGeneration += 1;
+      const frameId = this.frameId; this.frameId = 0;
+      if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(frameId);
+    }
   }
 
   /** Mark disposal before subsystem cleanup so re-entrant calls cannot repeat it. */
   beginDisposal(): boolean {
     if (this.disposed) return false;
-    this.stop();
     this.state = 'disposed';
+    this.stop();
     return true;
   }
 }
