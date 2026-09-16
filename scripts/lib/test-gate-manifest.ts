@@ -74,6 +74,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/creator-host/tests/tools/tools.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/creator-host/tests/tools/water-feedback.test.ts", lane: "contract" },
   { path: "packages/episode-pipeline/tests/capture/capture.test.ts", lane: "contract" },
+  { path: "packages/episode-pipeline/tests/capture/test-task-files.test.ts", lane: "contract" },
   { path: "packages/episode-pipeline/tests/cli/mcp.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"], suites: ["camera"] },
   { path: "packages/episode-pipeline/tests/integration/adapter.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-rapier"], suites: ["camera"] },
   { path: "packages/episode-pipeline/tests/integration/contracts.test.ts", lane: "contract", suites: ["camera"] },

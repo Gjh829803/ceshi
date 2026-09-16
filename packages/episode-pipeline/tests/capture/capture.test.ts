@@ -1,8 +1,8 @@
+import {TestTaskFiles} from '../fixtures/test-task-files';
 import {openEpisodeBrowser} from '../../src/capture/browser.js';
 import {writeFixtureAssetPolicy} from '../fixtures/asset-policy';
-import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { Matrix4, Euler } from 'three';
@@ -13,8 +13,19 @@ import { frameSimulationTick, runCaptureSegments, normalizeCaptureForVisuals } f
 import type { EpisodePlan } from '../../src/contracts.js';
 import { createRenderedFrameEncoder, inspectRenderedVideo } from '@worldkit/browser-capture/video';
 
-const tempRoots: string[] = [];
-afterEach(async () => { await Promise.all(tempRoots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+const testFiles = new Map<string, TestTaskFiles>();
+function captureTest(name: string, work: (files: TestTaskFiles) => void | Promise<void>, timeout?: number) {
+  it(name, context => {
+    const files = new TestTaskFiles();
+    testFiles.set(context.task.id, files);
+    return files.run(() => work(files));
+  }, timeout);
+}
+afterEach(async context => {
+  const files = testFiles.get(context.task.id);
+  try { await files?.cleanup(); }
+  finally { testFiles.delete(context.task.id); }
+});
 const cameraIdentity={viewId:'explore',viewKind:'third-person',documentHash:'fixture-camera',configurationRevision:1,cameraCommitRevision:1,lifecycleGeneration:1,logicalTargetId:'actor',resolvedSubjectId:'actor',subjectGeneration:1,transition:{kind:'none',configuredDurationSeconds:0,effectiveDurationSeconds:0}} as const;
 const capabilities: EpisodeCapabilities = { schemaVersion: 2, controlledEntityId: 'actor', fixedTimeStepSeconds: 1 / 60,
   worldBounds: { minimumWorldMetersXYZ: [-30, 0, -600], maximumWorldMetersXYZ: [100, 20, 100] },
@@ -51,8 +62,8 @@ function fakeSession(options: { shouldFail?: boolean } = {}) {
   };
   return { session, advances, selectView(id:string){viewId=id;yaw=0;pitch=id==='aim'?.8:0;return snapshot();},get preparations() { return preparations; } };
 }
-async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'three-episode-capture-test-')); tempRoots.push(root);
+async function fixture(files: TestTaskFiles) {
+  const root = await files.createRoot();
   const playableRoot = path.join(root, 'playable'), outputRoot = path.join(root, 'capture'); await mkdir(playableRoot);
   await writeFile(path.join(playableRoot, 'index.html'), '<canvas></canvas>');
   const assetPolicySha256=await writeFixtureAssetPolicy(playableRoot);
@@ -68,8 +79,8 @@ async function fixture() {
 }
 
 describe('Three episode deterministic production capture', () => {
-  it('observes chained view changes during paused action frames before resuming route look input',async()=>{
-    const setup=await fixture(),session=setup.fake.session,segment=setup.plan.segments[0]!;
+  captureTest('observes chained view changes during paused action frames before resuming route look input',async(files)=>{
+    const setup=await fixture(files),session=setup.fake.session,segment=setup.plan.segments[0]!;
     segment.waypoints=[{positionWorldMetersXYZ:[-3,0,-3],gait:'walk'},{positionWorldMetersXYZ:[0,0,-500],gait:'walk'}];
     segment.actionGoals=['aim','explore'].map(viewId=>({id:`view-${viewId}`,trigger:{waypointIndex:0,radiusMeters:.6},intent:{kind:'view',viewId},completion:{kind:'settled',holdSeconds:.2},timeoutSeconds:4}));
     session.execute=async command=>{
@@ -88,15 +99,15 @@ describe('Three episode deterministic production capture', () => {
     expect(resumed.decision.input.cameraYawRatio).toBeCloseTo(0,9);
     expect(resumed.decision.input.cameraPitchRatio).toBeCloseTo(0,9);
   });
-  it('schedules exactly 1800 real simulation ticks into 720 unique sample times', () => {
+  captureTest('schedules exactly 1800 real simulation ticks into 720 unique sample times', () => {
     const samples = Array.from({ length: 721 }, (_, index) => frameSimulationTick(index, 1 / 60));
     expect(samples[0]).toBe(0); expect(samples[720]).toBe(1800);
     expect(new Set(samples).size).toBe(721);
     expect(new Set(samples.slice(1).map((value, index) => value - samples[index]!))).toEqual(new Set([2, 3]));
     expect(() => frameSimulationTick(0, 1 / 30)).toThrow('FIXED_STEP_UNSUPPORTED');
   });
-  it('records on the first execution, preserves opening/terminal ticks, and reuses an intact segment after another route changes', async () => {
-    const setup = await fixture();
+  captureTest('records on the first execution, preserves opening/terminal ticks, and reuses an intact segment after another route changes', async (files) => {
+    const setup = await fixture(files);
     const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
     expect(result.status).toBe('completed'); expect(setup.encoded).toBe(720);
     const health=JSON.parse(await readFile(path.join(result.segments[0]!.outputRoot,'health.json'),'utf8'));
@@ -112,16 +123,16 @@ describe('Three episode deterministic production capture', () => {
     const cached = await runCaptureSegments({ ...setup.options, plan: updated, segmentIds: ['segment-00'] });
     expect(cached.segments[0]!.cacheHit).toBe(true); expect(setup.openBrowser).toHaveBeenCalledOnce();
   });
-  it('rejects a modified cached video and captures only the selected segment again', async () => {
-    const setup = await fixture();
+  captureTest('rejects a modified cached video and captures only the selected segment again', async (files) => {
+    const setup = await fixture(files);
     const first = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
     await writeFile(path.join(first.segments[0]!.outputRoot, 'video.mp4'), 'tampered');
     const second = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
     expect(second.segments[0]!.cacheHit).toBe(false); expect(setup.openBrowser).toHaveBeenCalledTimes(2);
     expect(setup.fake.preparations).toBe(2);
   });
-  it('keeps failure telemetry and keyframes, aborts encoding, and closes the isolated browser', async () => {
-    const setup = await fixture(), failing = fakeSession({ shouldFail: true });
+  captureTest('keeps failure telemetry and keyframes, aborts encoding, and closes the isolated browser', async (files) => {
+    const setup = await fixture(files), failing = fakeSession({ shouldFail: true });
     const result = await runCaptureSegments({ ...setup.options, openBrowser: async () => failing.session, segmentIds: ['segment-00'] });
     expect(result.status).toBe('failed'); expect(result.segments[0]!.failure?.code).toBe('EPISODE_RUNTIME_ERROR');
     expect(result.segments[0]!.frameCount).toBeLessThan(720); expect(setup.abort).toHaveBeenCalledOnce();
@@ -129,13 +140,13 @@ describe('Three episode deterministic production capture', () => {
     expect(result.segments[0]!.artifacts.some(file => file.path.startsWith('failure-window/'))).toBe(true);
     expect(failing.session.release).toHaveBeenCalledOnce(); expect(failing.session.close).toHaveBeenCalledOnce();
   });
-  it('does not accept a short stopped route as a 30-second gameplay video', async () => {
-    const setup = await fixture(); setup.plan.segments[0]!.waypoints[0]!.positionWorldMetersXYZ = [0, 0, -1];
+  captureTest('does not accept a short stopped route as a 30-second gameplay video', async (files) => {
+    const setup = await fixture(files); setup.plan.segments[0]!.waypoints[0]!.positionWorldMetersXYZ = [0, 0, -1];
     const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00'] });
     expect(result.segments[0]!.failure?.code).toBe('EPISODE_ROUTE_TOO_SHORT'); expect(result.segments[0]!.status).toBe('failed');
   });
-  it('captures a seated action and a same-waypoint stand-up through real advancing ticks', async () => {
-    const setup = await fixture(), session = setup.fake.session;
+  captureTest('captures a seated action and a same-waypoint stand-up through real advancing ticks', async (files) => {
+    const setup = await fixture(files), session = setup.fake.session;
     const segment = setup.plan.segments[0]!;
     segment.waypoints = [{ positionWorldMetersXYZ: [0, 0, 0], gait: 'walk' }];
     segment.actionGoals = [
@@ -174,13 +185,13 @@ describe('Three episode deterministic production capture', () => {
     expect(evidence.actionTimeline[0].stateChanges.some((item: any) => item.tick === 30 && item.state.character.seated === 'chair')).toBe(true);
     expect(evidence.actionTimeline[1].startTick).toBeGreaterThanOrEqual(90);
   });
-  it('shares a single initialized world across all requested segment resets', async () => {
-    const setup = await fixture();
+  captureTest('shares a single initialized world across all requested segment resets', async (files) => {
+    const setup = await fixture(files);
     const result = await runCaptureSegments({ ...setup.options, segmentIds: ['segment-00', 'segment-01'] });
     expect(result.status).toBe('completed'); expect(setup.openBrowser).toHaveBeenCalledOnce(); expect(setup.fake.preparations).toBe(2);
   });
-  it('normalizes only six completed disk-verified recordings and cannot replace their provenance with caller values', async () => {
-    const setup = await fixture(), runtimeHash = 'b'.repeat(64);
+  captureTest('normalizes only six completed disk-verified recordings and cannot replace their provenance with caller values', async (files) => {
+    const setup = await fixture(files), runtimeHash = 'b'.repeat(64);
     const summary = await runCaptureSegments({ ...setup.options, runtimeHash });
     const expected = { worldBuildHash: setup.plan.worldBuildHash, runtimeHash };
     const input = await normalizeCaptureForVisuals(summary, expected);
@@ -190,8 +201,8 @@ describe('Three episode deterministic production capture', () => {
     await writeFile(input.segments[2]!.firstFrame.path, 'changed');
     await expect(normalizeCaptureForVisuals(summary, expected)).rejects.toThrow('RECEIPT_INVALID');
   });
-  it('pipes each rendered JPEG once into a real silent H264 stream without resizing or extending its timeline', async () => {
-    const setup = await fixture(), outputPath = path.join(setup.root, 'real-encoder.mp4');
+  captureTest('pipes each rendered JPEG once into a real silent H264 stream without resizing or extending its timeline', async (files) => {
+    const setup = await fixture(files), outputPath = path.join(setup.root, 'real-encoder.mp4');
     const encoder = createRenderedFrameEncoder({ outputPath, frameRate: 24, frameCount: 3 });
     try {
       for (const color of ['red', 'green', 'blue']) {
@@ -204,8 +215,8 @@ describe('Three episode deterministic production capture', () => {
   });
 });
 
-it('resumes an admitted six-clip boundary without a planner or GPU job and rejects corrupted media',async()=>{
- const setup=await fixture(),runtimeHash='b'.repeat(64),{canonicalHash,PRE_SEEDANCE_PROFILE}=await import('../../src/contracts.js');
+captureTest('resumes an admitted six-clip boundary without a planner or GPU job and rejects corrupted media',async(files)=>{
+ const setup=await fixture(files),runtimeHash='b'.repeat(64),{canonicalHash,PRE_SEEDANCE_PROFILE}=await import('../../src/contracts.js');
  const {runEpisodeWorkflow}=await import('../../src/workflow/workflow.js'),{saveEpisodeSource}=await import('../../src/source/source.js'),{hashTree}=await import('@worldkit/creator-host/compiler');
  const {createHash}=await import('node:crypto');const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
  setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);setup.options.outputRoot=path.join(setup.root,'capture');
@@ -236,8 +247,8 @@ it('resumes an admitted six-clip boundary without a planner or GPU job and rejec
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
 });
 
-it('rejects a prior-route candidate from another source before dispatching the cloud Agent',async()=>{
- const setup=await fixture(),{runEpisodeWorkflow}=await import('../../src/workflow/workflow.js'),{saveEpisodeSource}=await import('../../src/source/source.js'),{hashTree}=await import('@worldkit/creator-host/compiler'),{createHash}=await import('node:crypto');
+captureTest('rejects a prior-route candidate from another source before dispatching the cloud Agent',async(files)=>{
+ const setup=await fixture(files),{runEpisodeWorkflow}=await import('../../src/workflow/workflow.js'),{saveEpisodeSource}=await import('../../src/source/source.js'),{hashTree}=await import('@worldkit/creator-host/compiler'),{createHash}=await import('node:crypto');
  const hash=(value:string)=>createHash('sha256').update(value).digest('hex');setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);
  const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'unchanged author source');
  const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
@@ -250,22 +261,22 @@ it('rejects a prior-route candidate from another source before dispatching the c
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');expect(runCodex).not.toHaveBeenCalled();expect(capture).not.toHaveBeenCalled();
 });
 
-it('rejects v1 capabilities before probing or preparing the frozen runtime',async()=>{
- const setup=await fixture();
+captureTest('rejects v1 capabilities before probing or preparing the frozen runtime',async(files)=>{
+ const setup=await fixture(files);
  setup.fake.session.capabilities=async()=>({...capabilities,schemaVersion:1}) as unknown as EpisodeCapabilities;
  await expect(runCaptureSegments({...setup.options,segmentIds:['segment-00']})).rejects.toThrow('EPISODE_CAMERA_PROTOCOL_UNSUPPORTED');
  expect(setup.fake.preparations).toBe(0);
 });
-it('rejects a prepared named view mismatch before recording',async()=>{
- const setup=await fixture();setup.plan.segments[0]!.start={...setup.plan.segments[0]!.start,cameraViewId:'aim'};
+captureTest('rejects a prepared named view mismatch before recording',async(files)=>{
+ const setup=await fixture(files);setup.plan.segments[0]!.start={...setup.plan.segments[0]!.start,cameraViewId:'aim'};
  const prepare=setup.fake.session.prepareSegment;
  setup.fake.session.prepareSegment=(start,viewport)=>prepare({...start,cameraViewId:'explore'},viewport);
  const result=await runCaptureSegments({...setup.options,segmentIds:['segment-00']});
  expect(result.status).not.toBe('completed');expect(setup.encoded).toBe(0);
 });
 
-it('admits port v2 over real browser transport and rejects a mismatched prepared response',async()=>{
- const root=await mkdtemp(path.join(os.tmpdir(),'episode-protocol-browser-'));tempRoots.push(root);
+captureTest('admits port v2 over real browser transport and rejects a mismatched prepared response',async(files)=>{
+ const root=await files.createRoot();
  const html=(version:number|undefined,capabilityVersion:number|undefined=2)=>`<script>window.__WORLDKIT_EVAL__={ready:true,stopLive:async()=>{},episode:{schemaVersion:${String(version)},capabilities:()=>(${JSON.stringify({...capabilities,schemaVersion:capabilityVersion})}),prepareSegment:async()=>({camera:${JSON.stringify(capabilities.camera.current)}}),execute:async()=>{},operation:()=>{},release:()=>{window.released=true}}};</script>`;
  for(const [version,capabilityVersion] of [[1,2],[undefined,2],[2,1]] as const){
   await writeFile(path.join(root,'index.html'),html(version,capabilityVersion));
