@@ -175,6 +175,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   {path:"packages/three-world/src/runtime-observation.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"],suites:["camera"]},
   { path: "packages/three-world/src/shared-physics.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/world-disposal.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/world-entity-lifecycle.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
   { path: "packages/three-world/src/world-integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
   { path: "packages/three-world/src/world-lifecycle.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
   { path: "packages/three-world/src/world-task-scopes.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"], suites: ["camera"] },
