@@ -1,6 +1,6 @@
 import type {SolverSample} from '../../solver-sample';
 import {Euler,Vector3} from 'three';
-import {AIRCRAFT as C,POWERED_PLANE_TURN,ROTOR_FLIGHT as R,aircraftCollisionBoxes,type AircraftSubtype} from '../../../config/aircraft';
+import {AIRCRAFT as C,DEFAULT_AIRCRAFT_FLIGHT,POWERED_PLANE_TURN,ROTOR_FLIGHT as R,aircraftCollisionBoxes,type AircraftSubtype} from '../../../config/aircraft';
 import {createWearableFlight,wearableFlight,type WearableFlightState} from './wearable-flight';
 import {stepSoaring} from './soaring';
 import {rotorForces} from './rotorcraft';
@@ -29,6 +29,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   a.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
   const forward=new Vector3(0,0,1).applyQuaternion(v.rotation),up=new Vector3(0,1,0).applyQuaternion(v.rotation),right=new Vector3(1,0,0).applyQuaternion(v.rotation);
   const com=new Vector3(...C.center).applyQuaternion(v.rotation).add(v.position),force=new Vector3(),torque=new Vector3();
+  const tuning=v.spec.aircraftFlight??DEFAULT_AIRCRAFT_FLIGHT;
   const speed=v.velocity.length(),along=v.velocity.dot(forward),qS=.5*C.density*speed*speed*C.area;
   const alpha=Math.atan2(-v.velocity.dot(up),Math.max(.1,along))+.045;
   const cl=(.25+4.7*clamp(alpha,-.25,.25))*Math.exp(-Math.max(0,Math.abs(alpha)-.25)*5);
@@ -85,9 +86,9 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   const pitchTarget=v.grounded?-pitchInput*.27:clamp(flightPath+trim-pitchInput*.27,-.5,.6);
   const rateX=a.angularVelocity.dot(right),rateY=a.angularVelocity.dot(up),rateZ=a.angularVelocity.dot(forward);
   const yawRate=v.grounded?0:-9.81*Math.tan(v.roll)/Math.max(speed,16);
-  torque.addScaledVector(right,C.inertia[0]*clamp((v.pitch-pitchTarget)*9-(rateX-yawRate*right.y)*5,-3,3)*authority);
-  torque.addScaledVector(forward,C.inertia[2]*clamp((rollTarget-v.roll)*14-(rateZ-yawRate*forward.y)*6,-4,4)*authority);
-  if(!v.grounded)torque.addScaledVector(up,C.inertia[1]*(yawRate*up.y-rateY)*4*authority);
+  torque.addScaledVector(right,C.inertia[0]*clamp((v.pitch-pitchTarget)*tuning.pitchGain-(rateX-yawRate*right.y)*tuning.pitchRateDamping,-3,3)*authority);
+  torque.addScaledVector(forward,C.inertia[2]*clamp((rollTarget-v.roll)*tuning.rollGain-(rateZ-yawRate*forward.y)*tuning.rollRateDamping,-4,4)*authority);
+  if(!v.grounded)torque.addScaledVector(up,C.inertia[1]*(yawRate*up.y-rateY)*tuning.yawRateDamping*authority);
   body.resetForces(false);body.resetTorques(false);body.addForce(force,true);body.addTorque(torque,true);
   a.airspeedMetersPerSecond=speed;a.angleOfAttackRadians=alpha;a.loadFactor=(rotary?a.loadFactor:0)+lift/(C.mass*9.81);a.stalled=wing>.5&&speed>8&&Math.abs(alpha)>.25;
  };

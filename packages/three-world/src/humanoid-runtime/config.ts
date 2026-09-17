@@ -1,4 +1,5 @@
 import type {AircraftSubtype} from '../config/aircraft';
+import type {AircraftFlightTuning} from '../config/aircraft';
 import {familyImpactMass} from './motion-families/registry';
 import type {WheelPhysicsConfig} from './motion-families/ground-vehicle/wheel-physics';
 import type {BodyPhysicsConfig} from './vehicle-dynamics';
@@ -10,6 +11,8 @@ export interface CollisionEnvelope { kind: 'box'; halfExtents: [number, number, 
 import type {ExtendedControl} from '../config/control';
 export interface VehicleSpec extends Partial<ExtendedControl> {
   aircraftSubtype?:AircraftSubtype;
+  /** Fixed-wing/transition attitude tuning; omitted values use SDK defaults. */
+  aircraftFlight?:AircraftFlightTuning;
   /** 太空大类专用标定；只由 space 家族消费。 */
   spaceFlight?:import('./motion-families/space/config').SpaceFlightConfig;
   /** 原生动力飞行标定；缺省时保留现有地面起降坐骑。 */

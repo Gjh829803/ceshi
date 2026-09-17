@@ -1,4 +1,9 @@
 /** 轻型固定翼标定，米、千克、秒；维护者参数与运行算法分离。 */
+export interface AircraftFlightTuning {
+ pitchGain:number;rollGain:number;pitchRateDamping:number;rollRateDamping:number;yawRateDamping:number;
+}
+/** Fixed-wing attitude defaults. VehicleSpec.aircraftFlight may override these per aircraft. */
+export const DEFAULT_AIRCRAFT_FLIGHT:Readonly<AircraftFlightTuning>=Object.freeze({pitchGain:9,rollGain:14,pitchRateDamping:5,rollRateDamping:6,yawRateDamping:4});
 export const AIRCRAFT = {
  turnRate:.32, maxBank:1.0, turnResponse:8, verticalResponse:.8,
  mass:850, area:16.2, density:1.225, center:[0,1.1,.35] as const,

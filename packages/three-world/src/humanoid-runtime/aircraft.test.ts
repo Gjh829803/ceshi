@@ -1,4 +1,5 @@
 import {buildVehicle} from '@worldkit/preset-content/models';
+import {humanoid} from '@worldkit/three';
 import {PresentationState} from './presentation';
 import {isCameraVisualEffect} from './camera-visual-effects';
 import {createWorld} from '../world';
@@ -69,6 +70,11 @@ it('rotorcraft keeps collective independent from horizontal speed, pitch and Ctr
 it('rests on three spring contacts and brakes after landing',()=>{const {q,v,step}=fixture();try{step({},300);expect(v.grounded).toBe(true);expect(v.motion.aircraft!.wheels.filter(w=>w.load>100).length).toBe(3);expect(v.velocity.length()).toBeLessThan(.1);v.position.y=2;v.velocity.set(0,-2,12);step({slow:true},1200);expect(v.grounded).toBe(true);expect(v.velocity.length()).toBeLessThan(.3);expect(v.position.y).toBeGreaterThan(-.15);}finally{q.dispose();}});
 it('takes off and turns through torque without teleporting orientation',()=>{const {q,v,step}=fixture();try{step({boost:true},300);expect(v.speed).toBeGreaterThan(22);const before=v.rotation.clone();step({pitch:-.5},1);expect(before.angleTo(v.rotation)).toBeLessThan(.03);step({pitch:-.5},360);expect(v.grounded).toBe(false);expect(v.position.y).toBeGreaterThan(5);step({steer:1},180);expect(v.roll).toBeGreaterThan(.15);step({},180);expect(Math.abs(v.roll)).toBeLessThan(.15);}finally{q.dispose();}});
 it('keeps velocity independent from heading and resets angular state',()=>{const {q,v,step}=fixture();try{v.position.y=100;v.velocity.set(8,0,35);step({steer:1},1);expect(v.velocity.x).toBeGreaterThan(7);expect(createVehicle(v.spec).motion.aircraft!.angularVelocity.length()).toBe(0);}finally{q.dispose();}});
+it('uses per-aircraft attitude tuning for fixed-wing torque response',()=>{
+ const run=(pitchGain:number,rollGain:number)=>{const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[]}),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,100,0],aircraftFlight:{...humanoid.DEFAULT_AIRCRAFT_FLIGHT,pitchGain,rollGain}});
+  try{v.grounded=false;v.velocity.set(0,0,35);for(let n=0;n<90;n++){stepVehicle(v,{...emptyInput(),pitch:-.35,steer:.35},1/60,0,q);q.stepPhysics(1/60);}return {pitch:v.pitch,roll:v.roll};}finally{q.dispose();}};
+ const soft=run(2,3),firm=run(18,28);expect(Math.abs(firm.pitch)).toBeGreaterThan(Math.abs(soft.pitch)+.02);expect(Math.abs(firm.roll)).toBeGreaterThan(Math.abs(soft.roll)+.02);
+});
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});
 
 it('responds to asymmetric wheel support rather than flattening the whole aircraft',()=>{const f=fixture();f.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[...getMap('aircraft-training').boxes,{id:'bump',position:[1.1,.05,0],size:[.7,.1,.8]}]});try{for(let i=0;i<300;i++){stepVehicle(f.v,{...emptyInput(),brake:true},1/60,0,q);q.stepPhysics(1/60);}expect(Math.abs(f.v.roll)).toBeGreaterThan(.015);expect(Math.abs(f.v.roll)).toBeLessThan(.15);expect(f.v.motion.aircraft!.wheels.filter(w=>w.load>0).length).toBe(3);}finally{q.dispose();}});

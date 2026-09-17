@@ -76,7 +76,8 @@ export {
 
 export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';
-export {AIRCRAFT,SOARING} from '../config/aircraft';
+export {AIRCRAFT,DEFAULT_AIRCRAFT_FLIGHT,SOARING} from '../config/aircraft';
+export type {AircraftFlightTuning} from '../config/aircraft';
 
 export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-families/flying-creature/visual';
 export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';
