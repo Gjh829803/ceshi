@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { createWorld } from './engine.js';
+import { createWorldEngine } from './engine.js';
 import type { AssetInstance, Vec3 } from './engine-contracts.js';
 
-type World = Awaited<ReturnType<typeof createWorld>>;
+type World = Awaited<ReturnType<typeof createWorldEngine>>;
 
 // Substitute animation loading only. Episode relocation, camera control,
 // fixed stepping, support, gravity and jumping use the real engine and Rapier.
@@ -32,7 +32,7 @@ async function fixture(hz = 60, parentedCamera = false, followCamera = false) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, .05, 100);
   camera.position.set(3, 4, 6); camera.lookAt(0, 1, 0);
-  const world = await createWorld({ scene, camera, navigation: false, fixedTimeStepSeconds: 1 / hz });
+  const world = await createWorldEngine({ scene, camera, navigation: false, fixedTimeStepSeconds: 1 / hz });
   const floor = new THREE.Mesh(new THREE.BoxGeometry(80, 1, 40));
   floor.position.y = -.5;
   world.addEntity({ id: 'floor', object: floor, role: 'terrain' });

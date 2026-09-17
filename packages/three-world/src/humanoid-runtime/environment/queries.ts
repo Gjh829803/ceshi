@@ -8,7 +8,6 @@ import {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {BorrowedPhysicsWorld} from '../../physics-host';
 import {DYNAMIC_PROP_COLLISION_GROUPS,DEFAULT_CHARACTER_OPTIONS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import { Box3,Euler,Quaternion,Vector3 } from 'three';
 import type { Vec3 } from '../../contracts';
 import { probeHumanoidCamera } from '../camera-queries';
@@ -588,10 +587,6 @@ export class EnvironmentQueries {
     // Preserve the vehicle query's historical 0.002 of the swept segment margin.
     const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
     return {...hit,...(hit.colliderEntityId?{colliderEntityId:this.colliderId(Number(hit.colliderEntityId))}:{}),distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};
-  }
-  cameraCast(from:Vector3,to:Vector3,radius=.25):Vector3 {
-    const solver=new CameraCollisionSolver((a,b,r)=>this.cameraProbe(a,b,r));
-    return new Vector3(...solver.project({target:from.toArray(),eye:to.toArray(),current:to.toArray(),radius,armClearance:0}).position);
   }
 }
 export const createQueries=(map:EnvironmentDefinition)=>new EnvironmentQueries(map);

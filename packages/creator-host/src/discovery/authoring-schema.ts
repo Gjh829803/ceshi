@@ -130,7 +130,7 @@ export function runtimeContractSource(source:string):string {
   const color=character.members.find((member):member is ts.GetAccessorDeclaration=>ts.isGetAccessorDeclaration(member)&&member.name.getText(file)==='color');
   if(color&&methods.length)declarations.push(`/** Color methods of Character (exported as HumanoidCharacter). */\nexport declare class Character { readonly color: ${color.type?.getText(file)}; ${methods.join('\n')} }`);
  }
- if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setCameraFollow','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
+ if(runtime){const allowed=new Set(['createCharacter','characterCapabilities','snapshot','prepare','approach','enter','exit','interact','prepareCharacter','switchMap','setInput','clearInput','applyProfile','exportProfile','inspectConfiguration','inspectBoarding','inspectControls','inputGuide','onVisualUpdate']);
   const signatures=publicMethods(runtime.members,allowed).map(method=>methodDeclarationOrUnavailable(method,file,checker,'HumanoidRuntime'));
   declarations.push(`export interface HumanoidRuntime {\n${signatures.join('\n')}\n}`);}
  const horse=file.statements.find((node):node is ts.ClassDeclaration=>ts.isClassDeclaration(node)&&node.name?.text==='HorseVisual');
