@@ -86,6 +86,23 @@ it('applies and exports specialized fixed-wing profile tuning',async()=>{
   expect(readEditableProfile(runtime,getDefaultProfile('plane')!).aircraftFlight?.pitchGain).toBe(12);
  }finally{world.dispose();}
 });
+it('applies an asset profile to all matching instances and isolates instance overrides',async()=>{
+ const spec=SPECS.find(s=>s.id==='plane')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[
+  {instanceId:'plane-01',assetId:'vehicle.plane',spec,object:new Group()},
+  {instanceId:'plane-02',assetId:'vehicle.plane',spec:{...spec,spawn:[10,0,0]},object:new Group()},
+ ]}});
+ try{
+  const runtime=world.humanoid!,profile=getDefaultProfile('plane')!;
+  profile.aircraftFlight!.pitchGain=11;applyControlProfile(runtime,profile);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-01']?.pitchGain).toBe(11);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-02']?.pitchGain).toBe(11);
+  const override={...profile,instanceId:'plane-01',aircraftFlight:{...profile.aircraftFlight!,pitchGain:17}};
+  applyControlProfile(runtime,override);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-01']?.pitchGain).toBe(17);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-02']?.pitchGain).toBe(11);
+  expect(readEditableProfile(runtime,{...getDefaultProfile('plane')!,instanceId:'plane-01'}).aircraftFlight?.pitchGain).toBe(17);
+ }finally{world.dispose();}
+});
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});
 
 it('responds to asymmetric wheel support rather than flattening the whole aircraft',()=>{const f=fixture();f.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[...getMap('aircraft-training').boxes,{id:'bump',position:[1.1,.05,0],size:[.7,.1,.8]}]});try{for(let i=0;i<300;i++){stepVehicle(f.v,{...emptyInput(),brake:true},1/60,0,q);q.stepPhysics(1/60);}expect(Math.abs(f.v.roll)).toBeGreaterThan(.015);expect(Math.abs(f.v.roll)).toBeLessThan(.15);expect(f.v.motion.aircraft!.wheels.filter(w=>w.load>0).length).toBe(3);}finally{q.dispose();}});

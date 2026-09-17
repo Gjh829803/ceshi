@@ -11,6 +11,13 @@ describe('asset aircraft profiles',()=>{
   saveAssetProfile(storage,profile);
   expect(loadAssetProfile(storage,'plane')!.aircraftFlight).toMatchObject({pitchGain:12,rollGain:14});
  });
+ it('keeps instance overrides in separate storage scopes',()=>{
+  const profile=getDefaultProfile('plane')!,values=new Map<string,string>(),storage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);},removeItem:(key:string)=>{values.delete(key);}};
+  profile.instanceId='plane-01';profile.aircraftFlight!.pitchGain=12;saveAssetProfile(storage,profile);
+  expect(loadAssetProfile(storage,'plane','plane-01')).toMatchObject({instanceId:'plane-01',aircraftFlight:{pitchGain:12}});
+  expect(loadAssetProfile(storage,'plane','plane-02')).toBeUndefined();
+  expect(loadAssetProfile(storage,'plane')).toBeUndefined();
+ });
  it('rejects specialized tuning on soaring profiles and incomplete tuning',()=>{
   const glider=getDefaultProfile('glider')!;
   expect(glider).not.toHaveProperty('aircraftFlight');
