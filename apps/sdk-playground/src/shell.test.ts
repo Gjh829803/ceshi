@@ -10,9 +10,15 @@ describe('Shell render isolation',()=>{
   const bundle=await build({stdin:{resolveDir:process.cwd(),contents:`
    import {mountShell} from './apps/sdk-playground/src/shell.tsx';
    import {controlsFor,systemControlsFor} from '@worldkit/preset-content/ui/shortcuts';
-   import {humanoid} from '@worldkit/three';
+   import {humanoid,createWorld} from '@worldkit/three';
+   import {WebGLRenderer} from 'three';
    window.shellRenderCount=0;
    window.shellTest=mountShell(document.body);
+   window.mountShellPresentation=async()=>{
+    window.shellRenderer=new WebGLRenderer({canvas:document.getElementById('viewport')});
+    window.shellWorld=await createWorld({renderer:window.shellRenderer,navigation:false,assetDefinitions:{}});
+    window.shellTest.attachViewport(window.shellWorld.createPresentation());
+   };
    window.showControls=(subject,overrides={})=>{const bindings=humanoid.createKeyBindings(overrides),controls=controlsFor(subject,bindings);window.shellTest.update({controls,controlGroups:[{title:subject?'载具操作':'人物操作',rows:controls}],system:systemControlsFor(subject,bindings)});window.shellTest.flush();};
   `},plugins:[{name:'count-shell-renders',setup(builder){
    // Count the actual component invocation, not DOM mutations (React can render
@@ -30,7 +36,7 @@ describe('Shell render isolation',()=>{
   await page.waitForFunction(()=>(window as any).shellRenderCount>0);
   await page.evaluate(()=>{const s=(window as any).shellTest;s.attachViewport({ui:{mount:(node:HTMLElement)=>document.body.append(node)}});s.update({controls:[['W','Forward']],system:[['Esc','Pause']]});s.flush();});
  });
- afterEach(async()=>{await page?.evaluate(()=>(window as any).shellTest?.dispose());await page?.close();});
+ afterEach(async()=>{await page?.evaluate(()=>{const w=window as any;w.shellWorld?.dispose();w.shellRenderer?.dispose();w.shellTest?.dispose();});await page?.close();});
  afterAll(async()=>{await browser?.close();});
  it('preserves other display sections through the shell while resetting helpers and picture',async()=>{
   page.setDefaultTimeout(4000);
@@ -132,7 +138,34 @@ describe('Shell render isolation',()=>{
   });
   expect(await page.getByLabel('场景暂停提示').innerText()).toContain('场景已暂停');
   expect(await page.getByRole('dialog').count()).toBe(0);
-  await page.getByRole('button',{name:'继续游玩',exact:true}).click();
+  await page.getByLabel('场景暂停提示').getByRole('button',{name:'继续游玩',exact:true}).click();
+  expect(await page.getByLabel('场景暂停提示').count()).toBe(0);
+ });
+ it.each(['floating','pinned','collapsed'])('keeps pause controls inside the real canvas with %s shortcuts in a short viewport',async controlsLayout=>{
+  page.setDefaultTimeout(4000);
+  await page.setViewportSize({width:720,height:500});
+  await page.addStyleTag({path:'apps/sdk-playground/src/styles/workspace.css'});
+  await page.evaluate(async layout=>{
+   const w=window as any,s=w.shellTest;
+   w.showControls(undefined);s.update({controlsLayout:layout});
+   s.flag('loading',false);s.flag('paused',true);s.flag('inspectorClosed',true);
+   s.on('resumeButton',()=>s.flag('paused',false));s.flush();
+   const footer=document.getElementById('shortcutFooter')!;
+   document.documentElement.style.setProperty('--footer',`${footer.offsetHeight}px`);
+   // Use the SDK's actual clipped presentation and canvas-relative UI mount.
+   await w.mountShellPresentation();
+  },controlsLayout);
+  const bounds=await page.evaluate(()=>{
+   const stage=document.getElementById('stage')!.getBoundingClientRect();
+   const footer=document.getElementById('shortcutFooter')!;
+   const pause=document.querySelector('.workspace-pause-status')!.getBoundingClientRect();
+   return {stage:stage.toJSON(),pause:pause.toJSON(),bottomLimit:footer.offsetHeight?footer.getBoundingClientRect().top:stage.bottom};
+  });
+  expect(bounds.pause.top).toBeGreaterThanOrEqual(bounds.stage.top);
+  expect(bounds.pause.bottom).toBeLessThanOrEqual(bounds.stage.bottom);
+  expect(bounds.bottomLimit-bounds.pause.bottom).toBeGreaterThanOrEqual(8);
+  expect(bounds.bottomLimit-bounds.pause.bottom).toBeLessThanOrEqual(32);
+  await page.getByLabel('场景暂停提示').getByRole('button',{name:'继续游玩',exact:true}).click();
   expect(await page.getByLabel('场景暂停提示').count()).toBe(0);
  });
 });

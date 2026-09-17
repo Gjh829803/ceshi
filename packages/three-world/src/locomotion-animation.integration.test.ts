@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { createWorld } from './engine.js';
+import { createWorldEngine } from './engine.js';
 import type { AssetInstance } from './engine-contracts.js';
 
-type World = Awaited<ReturnType<typeof createWorld>>;
+type World = Awaited<ReturnType<typeof createWorldEngine>>;
 
 function box(x: number, y: number, z: number, width: number, height: number, depth: number) {
   const object = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth));
@@ -34,7 +34,7 @@ function animatedActor(world: World, id: string, height: number, z = 0, x = 0) {
 async function fixture(height: number, hz = 60) {
   const camera = new THREE.PerspectiveCamera(50, 1, .05, 100);
   camera.position.set(0, 4, 6); camera.lookAt(0, 1, 0);
-  const world = await createWorld({ scene: new THREE.Scene(), camera, navigation: false, fixedTimeStepSeconds: 1 / hz });
+  const world = await createWorldEngine({ scene: new THREE.Scene(), camera, navigation: false, fixedTimeStepSeconds: 1 / hz });
   world.addEntity({ id: 'ground', object: box(0, -.5, 0, 100, 1, 40), role: 'terrain' });
   world.addEntity({ id: 'platform', object: box(0, height - .5, 0, 4, 1, 4), role: 'terrain' });
   const asset = animatedActor(world, 'player', height);

@@ -390,6 +390,7 @@ describe('v2 command and discovery boundary', () => {
         if(topic==='mounted-interaction'){
           const declarations=selected.humanoidSourceContracts['humanoid-runtime/runtime.ts'];
           for(const method of ['inspectBoarding','inspectControls','inputGuide'])expect(declarations).toContain(`${method}(`);
+          expect(declarations).not.toContain('setCameraFollow');
         }
       }
       for(const args of [{},{topic:'custom-vehicle',variant:'car',files:[]}]){

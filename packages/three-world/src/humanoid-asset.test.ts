@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
 import { loadAsset, cloneAsset, playLocomotion } from './assets';
-import { createWorld } from './engine';
+import { createWorldEngine } from './engine';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const instances: AssetInstance[] = [];
@@ -63,7 +63,7 @@ it.each(['walk','run'] as const)('animates %s without root drift or frozen loops
 it('uses real Rapier movement, jump/landing, reset and independent Episode starts', async () => {
   const asset = await preset();
   const camera = new THREE.PerspectiveCamera(); camera.position.set(0,3,6); camera.lookAt(0,1,0);
-  const world = await createWorld({ scene:new THREE.Scene(), camera, navigation:false });
+  const world = await createWorldEngine({ scene:new THREE.Scene(), camera, navigation:false });
   try {
     const floor = new THREE.Mesh(new THREE.BoxGeometry(100,1,100)); floor.position.y=-.5;
     world.addEntity({id:'floor',object:floor,role:'terrain'});

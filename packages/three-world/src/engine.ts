@@ -888,4 +888,5 @@ export class WorldEngine {
     if (typeof window !== 'undefined') { const target = window as unknown as Record<string, unknown>; if (target.__WORLDKIT_EVAL__ === this.observer) delete target.__WORLDKIT_EVAL__; if (target.__WORLDKIT_CREATOR__ === this.observer) delete target.__WORLDKIT_CREATOR__; }
   }
 }
-export async function createWorld(options: WorldOptions = {}): Promise<WorldEngine> { return WorldEngine.create(options); }
+/** Internal engine factory. Public authors use `createWorld` from `world.ts`. */
+export async function createWorldEngine(options: WorldOptions = {}): Promise<WorldEngine> { return WorldEngine.create(options); }
