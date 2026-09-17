@@ -88,6 +88,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/episode-pipeline/tests/workflow/workflow.test.ts", lane: "contract" },
   { path: "packages/preset-content/src/assets/camera-presets.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/preset-content/src/environment/maps.test.ts", lane: "contract" },
+  { path: "packages/preset-content/src/profiles/profiles.test.ts", lane: "contract" },
   { path: "packages/preset-content/src/ui/shortcuts.test.ts", lane: "contract" },
   { path: "packages/preset-content/src/vehicles/shared/instanced-parts.test.ts", lane: "contract" },
   { path: "packages/three-world/src/asset-textures.test.ts", lane: "contract" },
