@@ -40,6 +40,13 @@ their 12 m/s recovery limit and zero deadband. Other views keep their own tuning
 The historical exporter and migration report still describe the original conversion;
 rerunning that one-time exporter does not preserve subsequent content calibration.
 
+The later `vehicle-recenter-20260916` snapshots set third-person vehicle/mount
+`orientation.recenter.minimumSpeedMetersPerSecond` to zero, including all eleven
+dragon variants and all three Playground project snapshots. They retain the
+1.5-second observation delay, smoothing and recovery values above. Rest/hover
+can therefore return behind the subject after observing; person, first-person
+and shoulder presets remain unchanged.
+
 The seven additional aircraft subjects have explicit presets. Wearable views use
 the native subject's dynamic follow pivot and preferred recenter pitch where their
 configuration requests them; those measured anchors are not frozen preset values.

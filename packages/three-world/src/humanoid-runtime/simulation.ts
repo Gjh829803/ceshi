@@ -112,7 +112,7 @@ export class Simulation {
   removeActor(id:string):void{const actor=this.actors.get(id);if(actor){this.actors.delete(id);actor.dispose();}}
   dispose():void{for(const id of this.actors.keys())this.removeActor(id);for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
-  syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v))&&this.available(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));}
+  syncActorBodies(){const vehicles=this.vehicles.filter(v=>this.available(v)&&!v.motion.aircraft?.wearable?.groundLocomotion);this.environment.retainVehicleRigs(new Set(vehicles.filter(v=>v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(vehicles.flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));}
   summonDragon(id?:string,actorId:string=this.controlledActor.id):boolean{return this.actor(actorId).summonDragon(id);}
   reset():void{
     const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
@@ -122,7 +122,7 @@ export class Simulation {
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
-    const carry=this.environment.stepLifts(dt,[...this.actors.values()].filter(actor=>!actor.vehicle).map(actor=>({id:actor.id,feet:actor.controller.position,grounded:actor.controller.grounded})));
+    const carry=this.environment.stepLifts(dt,[...this.actors.values()].filter(actor=>!actor.vehicle||actor.wingsuitGroundControl).map(actor=>({id:actor.id,feet:actor.controller.position,grounded:actor.controller.grounded})));
     for(const [id,delta] of carry)this.actor(id).controller.carryPlatform(delta);
     const incidents=new Map([...this.actors].map(([id,actor])=>[id,actor.recoveryTrigger()]));
     this.environment.interactions.syncPhysicalState();this.time+=dt;for(const actor of this.actors.values()){if(inputs.get(actor.id)?.input.actions?.summonDragon)actor.summonDragon();actor.beginStep(dt);}this.syncActorBodies();
@@ -132,6 +132,7 @@ export class Simulation {
     this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();for(const actor of this.actors.values()){actor.finishStep();actor.recoverBoundary(incidents.get(actor.id)??actor.recoveryTrigger());}
   }
   private stepVehicle(v:VehicleState,driver:HumanoidActor|undefined,i:Input,dt:number):void{
+    if(driver?.wingsuitGroundControl)return;
     const vehicle=driver?.vehicle;
     const unoccupied=familyUnoccupiedPhysics(v.spec);
     if(!driver&&unoccupied&&this.available(v)){stepUnoccupiedBody(v,unoccupied,this.environment);return;}

@@ -10,7 +10,7 @@ const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 export interface AircraftState {
  sample?:SolverSample;
  wearable?:WearableFlightState;
- temperatureKelvin:number;fuel:number;canopy:number;towSeconds:number;
+ temperatureKelvin:number;fuel:number;canopy:number;towSeconds:number;towReleased?:boolean;
  subtype:AircraftSubtype;rotorSpeedFraction:number;collective:number;tilt:number;rotorPhases:number[];rotorThrusts:number[];motorThrusts:number[];
  angularVelocity:Vector3;airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;
  stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;
@@ -33,7 +33,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   const wing=rotary?(a.subtype==='tiltrotor'?a.tilt:0):1;
   const lift=qS*cl*wing,drag=qS*(.023+.055*cl*cl)+C.mass*(v.spec.drag+speed*speed*v.spec.dragQuadratic+Math.max(0,speed-v.spec.speed)*1.5);
   const liftAxis=up.clone();if(speed>.1)liftAxis.addScaledVector(v.velocity,-up.dot(v.velocity)/(speed*speed)).normalize();
-  v.throttle=clamp(v.throttle+(Number(input.boost)-Number(input.slow))*v.spec.throttleResponse*h,0,1);
+  v.throttle=clamp(v.throttle+(rotary?input.lift:input.slow?-1:input.forward+Number(input.boost))*v.spec.throttleResponse*h,0,1);
   v.steering+=(input.steer-v.steering)*(1-Math.exp(-(v.grounded?(input.steer?v.spec.steeringResponse:v.spec.steeringReturn):C.turnResponse)*h));
   force.addScaledVector(liftAxis,lift);
   if(!rotary){
@@ -73,7 +73,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   // 由实际侧倾补偿垂直升力损失；手动俯仰时淡出垂直速度反馈，避免与升降指令对抗。
   // Rotorcraft forward input commands translation. During nacelle transition it
   // must not also become the fixed-wing nose-down command and disable climb trim.
-  const pitchInput=rotary?0:input.forward;
+  const pitchInput=rotary?input.pitch*a.tilt:input.pitch;
   const verticalAcceleration=-v.velocity.y*C.verticalResponse*(1-Math.min(1,Math.abs(pitchInput)*2));
   const requiredLift=C.mass*clamp(9.81+verticalAcceleration,3,20)/Math.max(.5,up.y);
   const trim=clamp((requiredLift/Math.max(qS,1)-.25)/4.7,-.03,.23)-.045;

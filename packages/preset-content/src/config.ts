@@ -55,6 +55,7 @@ for(const [n,variant] of ([
  hint:variant.aircraftSubtype==='pusher'?planeBaseline.hint:'Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾'+(variant.aircraftSubtype==='tiltrotor'?' · 前飞加速自动倾转，减速恢复悬停':''),
  envelope:{kind:'box',halfExtents:[4.5,1.4,variant.aircraftSubtype==='helicopter'?4.1:3.6],offset:[0,1.4,0]}});
 // 无动力小类共用注册入口；原旧滑翔机预设迁入新的飞机动力学。
+// 复用飞控但不复用动力飞机的停放点，给 11 米翼展留出独立净空。
 Object.assign(SPECS.find(s=>s.id==='glider')!,{...structuredClone(planeBaseline),id:'glider',name:'无动力滑翔机',en:'SOAR',aircraftSubtype:'glider',spawn:[-302,0,-205],color:'#e2e8eb',hint:'Shift 牵引起飞（最多 8 秒） · S 拉起 / W 低头 · A/D 转弯 · Ctrl 扰流板 · Space 地面刹车'});
 for(const [n,variant] of ([
  {id:'paraglider',name:'滑翔伞',en:'CANOPY',aircraftSubtype:'paraglider',characterPose:'paraglider',color:'#e3b958'},

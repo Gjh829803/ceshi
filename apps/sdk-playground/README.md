@@ -146,7 +146,7 @@ The camera checkbox switches the main viewport to an external world camera and
 frames the current subject with the actual gameplay camera model. Frustum length
 does not push the world view farther away.
 Left-drag orbits, right/middle-drag pans and the wheel zooms this world view.
-Clicking the viewport retains keyboard gameplay: movement, mounting and T camera
+Clicking the viewport retains keyboard gameplay: movement, mounting and V camera
 switching still go to the SDK. Simulation continues; there is no observer toolbar
 or separate input mode. The world view shows full characters even when the gameplay
 camera uses first person. Unchecking restores the current gameplay view without
@@ -167,7 +167,7 @@ alpha, including mouse-only redraws. Vehicle bodies and the followed camera ther
 share one display time; source-only body clipping/fading is omitted from this view.
 World-view pan and zoom respond faster; their scale remains distance-dependent.
 The monitor renders a camera copy during the same SDK display sample, preserves
-the gameplay aspect ratio and first-person visibility, follows T camera
+the gameplay aspect ratio and first-person visibility, follows V camera
 changes and disappears when camera display is disabled. It is UI only and is
 absent from model-input captures.
 With camera display and all-type colliders enabled together, cyan spheres and
@@ -307,7 +307,7 @@ The scene selector opens aircraft, flying-creature and space training in the sam
 SDK session. Deep links use `/#/scenes/flying-creature-training` and
 `/#/scenes/space-training`. The dragon scene starts with the supplied humanoid on
 the ground: **H** summons the existing dragon, **F** boards after it lands,
-**Space** takes off, and **F** requests landing before dismounting on the ground.
+**Q** takes off/ascends, **E** descends, and **F** requests landing before dismounting on the ground.
 The dragon selector uses the native D01–D11 model and animation variants. A variant
 change reloads the same scene route and preserves the unmounted person's position
 when the SDK validates it. `?dragon=D02#/scenes/flying-creature-training` selects a
@@ -322,7 +322,44 @@ pnpm verify:dragon-training -- http://127.0.0.1:5178
 ```
 
 This browser case exercises ground start, real summon/boarding/takeoff inputs,
-flight and flame, native variant loading, map/reset/reload and history navigation.
+flight, deferred keyboard flame input, native variant loading, map/reset/reload and history navigation.
+
+### Current input hints
+
+The local HUD reads current SDK bindings and the actual vehicle/aircraft subtype.
+On foot, hold Ctrl + WASD to walk slowly without crouching; release Ctrl to restore
+ordinary movement or held Shift sprint. Ctrl takes precedence when both are held.
+C still toggles crouching and Shift + C still requests a slide; mounted Ctrl is unchanged.
+Fixed-wing and pusher aircraft show W/S throttle, Q/E pitch down/up, Space ground brake, Ctrl throttle
+reduction/ground braking, and Shift as an additional throttle assist; Z/X is unused.
+Rotorcraft use Z/X bank-induced lateral movement, with W/S travel speed and Q/E
+vertical demand; Space/C is unused. Soaring aircraft use W/S airspeed trim without Q/E or Z/X,
+retaining Space special actions and C airbrake. Glider W starts finite tow and paraglider W starts
+run-up; Shift is not required. Wingsuit ground HUD instead shows WASD walking, optional Shift
+running, Ctrl slow walking, Space jump and F unequip. A real platform departure switches to flight;
+ordinary jumps do not, and a held jump cannot open the canopy without a new press. Landing
+automatically drops the suit flat; F can equip it again on level ground without returning to the platform.
+Balloons use Q/E heat/vent, not Space/C.
+Dragon, submarine and spacecraft use Space/C pitch up/down and Q/E vertical movement; Z evades on dragons, Z/X rolls
+spacecraft, and submarine Z/X is unused. Tank/hovercraft use Z/X turret/strafe.
+All arrows only observe, without the old additional ±10° limit; document pitch
+bounds and collision safety remain. Vertical observation speed is unchanged.
+Third-person vehicle recentering begins 1.5 seconds after observation input stops,
+including at rest/hover. Continuous aircraft heading corrects against actual forward
+direction so combined pitch/bank manoeuvres cannot accumulate a permanent yaw offset.
+Existing horizon/roll settings and person/first-person/shoulder calibration remain unchanged. Camera
+cycling uses the configured key (V by default); Backspace is a mounted, long-held
+scene reset, not vehicle-only recovery. The 1–6 shortcut is still local debug
+travel, not an equipment-slot implementation.
+
+Vehicle changes and rebinding refresh both control strips. Current flight prompts
+do not reuse legacy asset hint strings; offline catalog hints and mobile virtual
+buttons are outside this HUD update. Verify all 14 affected vehicle presets,
+actual keyboard routing, camera range and HUD with:
+
+```sh
+pnpm exec tsx apps/sdk-playground/scripts/input-hud-smoke.ts http://127.0.0.1:5178
+```
 
 ## Local camera configuration files
 

@@ -23,9 +23,24 @@ describe('player family route input',()=>{
   const space=vehicleDirectionInput('spacecraft',[0,0,0],[0,0,0],[0,0,0],[8,8,0]).humanoid!;
   expect(space.strafe).toBe(-1);expect(space.lift).toBe(1);expect(space.forward).toBe(0);
  });
- it('uses elevator input and throttle for aircraft instead of ground walking',()=>{
+ it('separates fixed-wing elevator from throttle input',()=>{
   const plane=vehicleDirectionInput('plane',[0,20,0],[0,0,0],[0,0,10],[0,40,50]).humanoid!;
-  expect(plane.forward).toBeLessThan(0);expect(plane.boost).toBe(true);
+  expect(plane.pitch).toBeLessThan(0);
+  expect(plane.forward).toBeGreaterThan(0);
+  expect(plane.boost).toBe(false);
+ });
+ it('uses glider pitch for altitude and forward for airspeed trim',()=>{
+  const glider=vehicleDirectionInput('glider',[0,20,0],[0,0,0],[0,0,30],[0,40,50]).humanoid!;
+  expect(glider.pitch).toBeLessThan(0);
+  expect(glider.forward).toBeLessThan(0);
+  expect(glider.boost).toBe(false);
+ });
+ it('uses rotor lift for altitude instead of boost or slow',()=>{
+  const rotor=vehicleDirectionInput('plane',[0,20,0],[0,0,0],[0,0,0],[0,23,25],{subtype:'helicopter',throttle:.5}).humanoid!;
+  expect(rotor.lift).toBeGreaterThan(0);
+  expect(rotor.forward).toBeGreaterThan(0);
+  expect(rotor.boost).toBe(false);
+  expect(rotor.slow).toBe(false);
  });
 });
 

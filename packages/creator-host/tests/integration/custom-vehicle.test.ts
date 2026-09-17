@@ -48,18 +48,18 @@ it('uses configured first-person defaults and SDK keyboard toggles in a generate
   const initial=await service.inspect();expect(initial.observation.snapshot.camera.viewKind).toBe('first-person');
   const page=(service as unknown as {session:{page:Page}}).session.page;
   const mode=()=>page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind);
-  await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='shoulder');
-  await page.keyboard.down('t');expect(await mode()).toBe('shoulder');await page.keyboard.up('t');
-  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='third-person');
-  await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='first-person');
+  await page.keyboard.down('v');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='shoulder');
+  await page.keyboard.down('v');expect(await mode()).toBe('shoulder');await page.keyboard.up('v');
+  await page.keyboard.press('v');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='third-person');
+  await page.keyboard.press('v');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='first-person');
   await page.evaluate(()=>{const input=document.createElement('input');input.id='focus-fixture';document.body.append(input);input.focus();});
-  await page.keyboard.press('t');expect(await mode()).toBe('first-person');
+  await page.keyboard.press('v');expect(await mode()).toBe('first-person');
   await page.evaluate(()=>document.getElementById('focus-fixture')!.remove());await page.mouse.click(20,20);
   await page.evaluate(()=>{const world=(window as unknown as {cameraTestWorld:import('@worldkit/three').ThreeWorld}).cameraTestWorld;world.setCameraFollow({configuration:{...world.inspectCamera().document!,input:{cycleViewIds:[]}}});});
-  await page.keyboard.press('t');expect(await mode()).toBe('first-person');
+  await page.keyboard.press('v');expect(await mode()).toBe('first-person');
   await page.evaluate(()=>(window as unknown as {cameraTestWorld:import('@worldkit/three').ThreeWorld}).cameraTestWorld.setCameraView('third-person'));expect(await mode()).toBe('third-person');
   await page.evaluate(async()=>{await window.__THREE_CREATOR_HOST__!.reset();});expect(await mode()).toBe('first-person');
-  await page.keyboard.press('t');expect(await mode()).toBe('first-person');
+  await page.keyboard.press('v');expect(await mode()).toBe('first-person');
   const result=await service.inspect();expect(result.pageErrors).toEqual([]);
   expect(result.feedback.characterContinuity.issues).toEqual([]);
  }finally{await service.close();await rm(root,{recursive:true,force:true});}

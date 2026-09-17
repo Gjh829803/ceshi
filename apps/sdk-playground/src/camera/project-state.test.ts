@@ -32,6 +32,7 @@ it.each(Object.keys(CAMERA_PROJECT_FILES))('binds every current vehicle to the s
    expect(document.binding.subjectOverrides?.[spec.id]?.views[viewId]?.presetId).toBe(presetId);
    expect(document.presets?.[presetId]).toEqual(cameraPresets[presetId as keyof typeof cameraPresets]);
    expect(resolveCameraConfiguration(document,{...context,subjectId:spec.id,viewId}).viewId).toBe(viewId);
+   if(viewId==='third-person')expect(resolveCameraConfiguration(document,{...context,subjectId:spec.id,viewId}).values.orientation.recenter).toMatchObject({enabled:true,minimumSpeedMetersPerSecond:0,delaySeconds:1.5});
   }
 });
 
@@ -45,6 +46,13 @@ it.each(Object.keys(CAMERA_PROJECT_FILES))('uses the maintained on-foot fade sna
   const reloaded=createCameraProjectState(cameraConfigurationId(configurationId),custom,'D01');
   expect(resolveCameraConfiguration(reloaded.document,{...context,viewId}).values).toMatchObject({subjectFade:{enabled:false}});
  }
+});
+
+it.each(['D01','D02','D03','D04','D05','D06','D07','D08','D09','D10','D11'])('recenters stationary dragon %s without changing on-foot camera behavior',variantId=>{
+ const {document}=calibrationProject('campus',variantId);
+ const context={subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat','shoulder-eye','follow-pivot'] as const,headingAvailable:true};
+ expect(resolveCameraConfiguration(document,{...context,subjectId:'dragon'}).values.orientation.recenter.minimumSpeedMetersPerSecond).toBe(0);
+ expect(resolveCameraConfiguration(document,{...context,subjectId:'person',body:{minimumHeightMeters:0,maximumHeightMeters:1.68}}).values.orientation.recenter.enabled).toBe(false);
 });
 
 it('resolves source archetype pitch and creature-state anchor calibrations',()=>{const {savedDocument:document}=calibrationProject('campus','D01');const context={subjectGeneration:0,subjectKind:'vehicle',availableAnchors:['eye','seat','shoulder-eye','follow-pivot'] as const,headingAvailable:true};for(const subjectId of ['atv','jetski'])expect(resolveCameraConfiguration(document,{...context,subjectId,viewId:'first-person'}).values.orientation.initialPitchRadians).toBe(.34);for(const [subjectId,height] of [['horse',2.25],['carriage',2.05]] as const)expect(resolveCameraConfiguration(document,{...context,subjectId}).values.position.anchorOffset.offsetMetersXYZ[1]).toBeCloseTo(height);});

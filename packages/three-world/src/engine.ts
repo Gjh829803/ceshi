@@ -262,7 +262,7 @@ export class WorldEngine {
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
   clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
-  private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>this.controlledHumanoid?.simulation.controlledActor.vehicle?.spec.mode:undefined);}
+  private updateKeyboardOwner():void{this.keyboard.setHumanoidContext(this.controlledHumanoid?()=>{const actor=this.controlledHumanoid?.simulation.controlledActor,v=actor?.vehicle;return v?{mode:v.spec.mode,aircraftSubtype:v.spec.aircraftSubtype,instanceId:v.spec.id,groundLocomotion:actor.wingsuitGroundControl,canopyDeployed:(v.motion.aircraft?.canopy??0)>0}:undefined;}:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.updates.add(callback); return () => { this.updates.delete(callback); }; }
   onReset(callback: () => void): () => void { this.resets.add(callback); return () => { this.resets.delete(callback); }; }
@@ -719,6 +719,7 @@ export class WorldEngine {
         this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};
       }
       this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
+      if(input===undefined&&this.keyboard.advanceReset(this.fixedTimeStepSeconds))break;
     }
   }
   /** Seal the opening and compile its materials without starting or stepping the clock. */

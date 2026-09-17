@@ -28,7 +28,7 @@ describe.each([KAYAK_SPEC,CANOE_SPEC])('$id keyboard and visible paddle directio
   try{
    f.run(2);
    for(const key of ['KeyA','KeyD']){
-    const input=readControls(new Set([key,...(travel==='forward'?['KeyW']:travel==='reverse'?['KeyS']:[])]),true,false,{},undefined,'paddled_boat');
+    const input=readControls(new Set([key,...(travel==='forward'?['KeyW']:travel==='reverse'?['KeyS']:[])]),true,false,{},undefined,{mode:'paddled_boat'});
     const sign=key==='KeyA'?-1:1;
     expect(input.steer).toBe(sign);
     const initialForward=new Vector3(0,0,1).applyQuaternion(f.v.rotation);

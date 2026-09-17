@@ -96,7 +96,7 @@ describe('per-wheel road vehicle',()=>{
  });
  it.each(['rover','racer','trail-rover','atv','bus'])('holds S to brake into reverse, then W to drive forward again: %s',id=>{
   const f=fixture([],4000);f.v=createVehicle({...playgroundVehicles.find(v=>v.id===id)!,spawn:[0,0,0],yaw:0});
-  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.enabled=true;keyboard.setHumanoidMode(()=>f.v.spec.mode);
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.enabled=true;keyboard.setHumanoidContext(()=>({mode:f.v.spec.mode}));
   const held=(frames:number)=>{for(let n=0;n<frames;n++)run(f,1,keyboard.sample().humanoid!);};
   try{
    held(180);keyboard.keyDown('KeyW');held(180);keyboard.keyUp('KeyW');const speed=f.v.velocity.z;

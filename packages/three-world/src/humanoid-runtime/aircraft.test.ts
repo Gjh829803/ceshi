@@ -10,10 +10,64 @@ import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {SPECS} from '@worldkit/preset-content/config';
 import {getMap} from '@worldkit/preset-content/environment/maps';
+import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
 function fixture(){const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,0,0]});const step=(input:Partial<Input>,n:number)=>{for(let i=0;i<n;i++){stepVehicle(v,{...emptyInput(),...input},1/60,i/60,q);q.stepPhysics(1/60);}};return {q,v,step};}
+it.each(['helicopter','multirotor','tiltrotor'] as const)('%s Z/X produces opposite lateral travel and levels after release',subtype=>{
+ for(const [key,sign] of [['KeyZ',-1],['KeyX',1]] as const){
+  const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype===subtype)!,spawn:[0,100,0],yaw:0});
+  const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+  try{v.throttle=.5;step([key],240);expect(v.roll*sign).toBeGreaterThan(.1);expect(v.position.x*sign).toBeLessThan(-1);
+   step([],360);expect(Math.abs(v.roll)).toBeLessThan(.1);expect(v.throttle).toBe(.5);
+  }finally{q.dispose();}
+ }
+});
+it.each(['ControlLeft','KeyS'])('tiltrotor keyboard accelerates through transition, uses %s to return to rotor flight and descends without independent pitch',slowKey=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype==='tiltrotor')!,spawn:[0,150,0],yaw:0});
+ const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);expect(input.pitch).toBe(0);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{v.throttle=.5;step(['KeyW'],1800);expect(v.motion.aircraft!.tilt).toBeGreaterThan(.65);expect(v.grounded).toBe(false);
+  const speed=v.speed;step([slowKey],1200);expect(v.speed).toBeLessThan(speed*(slowKey==='ControlLeft'?.5:1));expect(v.motion.aircraft!.tilt).toBeLessThan(.25);expect(v.grounded).toBe(false);
+  if(slowKey==='KeyS')expect(v.velocity.dot(new Vector3(0,0,1).applyQuaternion(v.rotation))).toBeLessThan(-1);
+  const height=v.position.y;step(['KeyE'],60);step([],240);expect(v.position.y).toBeLessThan(height-1);
+ }finally{q.dispose();}
+});
+it('glider takes off with W alone, trims speed with W/S and lands without manual pitch or roll',()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,0,0],yaw:0});
+ const step=(keys:string[],n:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);expect(input.pitch).toBe(0);expect(input.roll).toBe(0);for(let k=0;k<n;k++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{step(['KeyW'],480);expect(v.position.y,'keyboard tow launch').toBeGreaterThan(1);expect(v.grounded).toBe(false);
+  const tow=v.motion.aircraft!.towSeconds;step(['KeyW','KeyD'],120);expect(v.roll).toBeGreaterThan(.1);expect(v.motion.aircraft!.towSeconds).toBe(tow);expect(v.throttle).toBe(0);
+  step(['KeyS'],120);step(['KeyC','ControlLeft','Space'],2400);expect(v.grounded).toBe(true);expect(v.speed).toBeLessThan(1);
+ }finally{q.dispose();}
+});
+it('separates throttle from pitch and gives Ctrl priority over held W/Shift',()=>{
+ const f=fixture();try{
+  f.step({forward:1},90);expect(f.v.throttle).toBeGreaterThan(.4);
+  const throttle=f.v.throttle;f.step({pitch:-1},30);expect(f.v.throttle).toBe(throttle);
+  f.step({forward:1,boost:true,slow:true},90);expect(f.v.throttle).toBeCloseTo(0,12);
+ }finally{f.q.dispose();}
+});
+it('glider braking cancels W tow and a released airborne tow cannot restart',()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,0,0],yaw:0});
+ const step=(keys:string[],ticks:number)=>{const input=readControls(new Set(keys),true,false,{},undefined,v.spec);for(let n=0;n<ticks;n++){stepVehicle(v,input,1/60,0,q);q.stepPhysics(1/60);}};
+ try{
+  for(const brake of ['Space','ControlLeft','KeyS']){step(['KeyW',brake],60);expect(v.motion.aircraft!.towSeconds).toBe(0);expect(v.speed).toBeLessThan(.2);}
+  step(['KeyW'],60);expect(v.motion.aircraft!.towSeconds).toBeGreaterThan(0);
+  v.position.y=10;v.grounded=false;v.launched=true;step([],1);const tow=v.motion.aircraft!.towSeconds;
+  expect(v.motion.aircraft!.towReleased).toBe(true);step(['KeyW'],60);expect(v.motion.aircraft!.towSeconds).toBe(tow);
+ }finally{q.dispose();}
+});
+it('rotorcraft keeps collective independent from horizontal speed, pitch and Ctrl',()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype==='helicopter')!,spawn:[0,100,0]});
+ const step=(input:Partial<Input>,n:number)=>{for(let k=0;k<n;k++){stepVehicle(v,{...emptyInput(),...input},1/60,0,q);q.stepPhysics(1/60);}};
+ try{
+  v.throttle=.5;step({forward:-1},240);expect(v.velocity.z).toBeLessThan(-2);expect(v.throttle).toBe(.5);
+  const speed=Math.abs(v.velocity.z);step({slow:true,forward:-1},240);expect(Math.abs(v.velocity.z)).toBeLessThan(speed*.6);expect(v.throttle).toBe(.5);
+  step({pitch:-1},30);expect(v.throttle).toBe(.5);
+  step({lift:1},30);expect(v.throttle).toBeGreaterThan(.5);step({lift:-1},60);expect(v.throttle).toBeLessThan(.5);
+ }finally{q.dispose();}
+});
 it('rests on three spring contacts and brakes after landing',()=>{const {q,v,step}=fixture();try{step({},300);expect(v.grounded).toBe(true);expect(v.motion.aircraft!.wheels.filter(w=>w.load>100).length).toBe(3);expect(v.velocity.length()).toBeLessThan(.1);v.position.y=2;v.velocity.set(0,-2,12);step({slow:true},1200);expect(v.grounded).toBe(true);expect(v.velocity.length()).toBeLessThan(.3);expect(v.position.y).toBeGreaterThan(-.15);}finally{q.dispose();}});
-it('takes off and turns through torque without teleporting orientation',()=>{const {q,v,step}=fixture();try{step({boost:true},300);expect(v.speed).toBeGreaterThan(22);const before=v.rotation.clone();step({forward:-.5},1);expect(before.angleTo(v.rotation)).toBeLessThan(.03);step({forward:-.5},360);expect(v.grounded).toBe(false);expect(v.position.y).toBeGreaterThan(5);step({steer:1},180);expect(v.roll).toBeGreaterThan(.15);step({},180);expect(Math.abs(v.roll)).toBeLessThan(.15);}finally{q.dispose();}});
+it('takes off and turns through torque without teleporting orientation',()=>{const {q,v,step}=fixture();try{step({boost:true},300);expect(v.speed).toBeGreaterThan(22);const before=v.rotation.clone();step({pitch:-.5},1);expect(before.angleTo(v.rotation)).toBeLessThan(.03);step({pitch:-.5},360);expect(v.grounded).toBe(false);expect(v.position.y).toBeGreaterThan(5);step({steer:1},180);expect(v.roll).toBeGreaterThan(.15);step({},180);expect(Math.abs(v.roll)).toBeLessThan(.15);}finally{q.dispose();}});
 it('keeps velocity independent from heading and resets angular state',()=>{const {q,v,step}=fixture();try{v.position.y=100;v.velocity.set(8,0,35);step({steer:1},1);expect(v.velocity.x).toBeGreaterThan(7);expect(createVehicle(v.spec).motion.aircraft!.angularVelocity.length()).toBe(0);}finally{q.dispose();}});
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});
 
@@ -40,7 +94,7 @@ for(const subtype of ['helicopter','multirotor','tiltrotor'] as const)it(`${subt
 });
 it('pusher retains fixed-wing takeoff and tiltrotor transitions with airspeed',()=>{
  for(const subtype of ['pusher','tiltrotor'] as const){const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.aircraftSubtype===subtype)!,spawn:[0,0,0]});
- try{for(let i=0;i<1800;i++){stepVehicle(v,{...emptyInput(),boost:i<180,forward:subtype==='pusher'?(i>300?-.3:0):(i>400?1:0)},1/60,0,q);q.stepPhysics(1/60);}
+ try{for(let i=0;i<1800;i++){stepVehicle(v,{...emptyInput(),forward:subtype==='pusher'&&i<180?1:subtype==='tiltrotor'&&i>400?1:0,lift:subtype==='tiltrotor'&&i<180?1:0,pitch:subtype==='pusher'&&i>300?-.3:0},1/60,0,q);q.stepPhysics(1/60);}
  expect(v.position.y,subtype).toBeGreaterThan(5);if(subtype==='tiltrotor')expect(v.motion.aircraft!.tilt,'transition').toBeGreaterThan(.65);
  }finally{q.dispose();}}
 });
@@ -59,10 +113,10 @@ for(const kind of ['glider','paraglider','wingsuit','balloon'] as const)it(`${ki
  const step=(input:Partial<Input>,n:number)=>{for(let j=0;j<n;j++){stepVehicle(v,{...emptyInput(),...input},1/60,0,q);q.stepPhysics(1/60);}};
  try{
  if(kind==='balloon'){
-  step({},180);expect(v.grounded).toBe(true);step({boost:true},720);expect(v.position.y,'balloon rise').toBeGreaterThan(3);const temp=v.motion.aircraft!.temperatureKelvin;
-  step({slow:true},1800);expect(v.motion.aircraft!.temperatureKelvin).toBeLessThan(temp);expect(v.grounded,'balloon land').toBe(true);expect(v.position.x).toBeGreaterThan(1);
+  step({},180);expect(v.grounded).toBe(true);step({lift:1},720);expect(v.position.y,'balloon rise').toBeGreaterThan(3);const temp=v.motion.aircraft!.temperatureKelvin;
+  step({lift:-1},1800);expect(v.motion.aircraft!.temperatureKelvin).toBeLessThan(temp);expect(v.grounded,'balloon land').toBe(true);expect(v.position.x).toBeGreaterThan(1);
  }else if(kind==='glider'){
-  step({boost:true,forward:-.5},480);expect(v.position.y,'glider tow launch').toBeGreaterThan(1);const power=v.motion.aircraft!.towSeconds;step({},180);expect(v.motion.aircraft!.towSeconds).toBe(power);expect(v.throttle).toBe(0);
+  step({boost:true,pitch:-.5},480);expect(v.position.y,'glider tow launch').toBeGreaterThan(1);const power=v.motion.aircraft!.towSeconds;step({},180);expect(v.motion.aircraft!.towSeconds).toBe(power);expect(v.throttle).toBe(0);
  }else{
   v.position.set(0,200,0);v.velocity.set(0,0,kind==='wingsuit'?20:10);v.grounded=false;step({},180);expect(v.position.y).toBeLessThan(200);expect(v.speed).toBeGreaterThan(3);
   const yaw=v.yaw;step({steer:1},180);expect(Math.abs(v.yaw-yaw)).toBeGreaterThan(.1);
@@ -131,6 +185,24 @@ for(const subtype of ['wingsuit','paraglider'])it(subtype+' settles, stows and h
  }finally{q.dispose();}
 });
 
+for(const subtype of ['paraglider','wingsuit'])for(const steer of [-1,1])for(const approach of [false,true])it(`${subtype} landing steering ${steer}, approach=${approach} keeps the rider upright through stowing`,()=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id===subtype)!,spawn:[0,25,0]});
+ v.velocity.set(0,-2,8);v.grounded=false;if(subtype==='wingsuit')v.motion.aircraft!.canopy=1;
+ let touched=false,groundTicks=0,minUp=1,maxHeight=0;
+ try{
+  for(let n=0;n<3600;n++){
+   stepVehicle(v,{...emptyInput(),steer:touched||approach&&v.position.y<6?steer:0},1/60,0,q);q.stepPhysics(1/60);
+   if(v.grounded)touched=true;
+   if(touched){groundTicks++;minUp=Math.min(minUp,new Vector3(0,1,0).applyQuaternion(v.rotation).y);maxHeight=Math.max(maxHeight,v.position.y);}
+   if(groundTicks>=240)break;
+  }
+  const diagnostic=JSON.stringify({minUp,maxHeight,position:v.position.toArray(),rotation:v.rotation.toArray(),angular:v.motion.aircraft!.angularVelocity.toArray(),wear:v.motion.aircraft!.wearable});
+  expect(touched,diagnostic).toBe(true);expect(minUp,diagnostic).toBeGreaterThan(.85);
+  expect(maxHeight,diagnostic).toBeLessThan(.65);expect(v.motion.aircraft!.wearable!.phase,diagnostic).toBe('stowed');
+  expect(v.grounded).toBe(true);expect(v.speed).toBeLessThan(.5);
+ }finally{q.dispose();}
+});
+
 for(const subtype of ['wingsuit','paraglider'])it(subtype+' banks both ways and levels after release',()=>{
  const q=new EnvironmentQueries(getMap('aircraft-training')),v=createVehicle({...SPECS.find(s=>s.id===subtype)!,spawn:[0,300,0]});
  v.velocity.set(0,0,subtype==='wingsuit'?18:9);v.grounded=false;
@@ -158,7 +230,7 @@ it('semantic aircraft actions match real fixed-wing input trajectories and rejec
    const actions:import('./motion-families/aircraft/actions').AircraftActionRequest[]=[{action:'increaseThrottle'}];
    if(n>=300)actions.push({action:'pitchUp',strength:.5});
    semantic.step(aircraftActionInput(semantic.v,actions),1);
-   legacy.step({boost:true,forward:n>=300?-.5:0},1);
+   legacy.step({forward:1,pitch:n>=300?-.5:0},1);
   }
   expect(semantic.v.position.distanceTo(legacy.v.position)).toBe(0);
   expect(semantic.v.position.y).toBeGreaterThan(5);
@@ -172,15 +244,15 @@ it('semantic runtime expires, supersedes, cancels on prepare and does not leak a
   sim.controlledActor.vehicleIndex=0;sim.controlledActor.transition=0;
   const old=rt.setAircraftActions([{action:'increaseThrottle'}],.1);
   rt.setAircraftActions([{action:'pitchUp',strength:.5}],.1);old();
-  world.step({},1);expect(rt.inspectControls().lastApplied?.input.forward).toBe(-.5);
+  world.step({},1);expect(rt.inspectControls().lastApplied?.input.pitch).toBe(-.5);
   expect(rt.inspectControls().lastApplied?.source).toBe('aircraft-actions');
-  world.step({},20);expect(rt.inspectControls().lastApplied?.input.forward).toBeCloseTo(0);
+  world.step({},20);expect(rt.inspectControls().lastApplied?.input.pitch).toBeCloseTo(0);
   rt.setAircraftActions([{action:'increaseThrottle'}],10);
-  sim.controlledActor.teleportRevision++;world.step({},1);expect(rt.inspectControls().lastApplied?.input.boost).toBe(false);
+  sim.controlledActor.teleportRevision++;world.step({},1);expect(rt.inspectControls().lastApplied?.input.forward).toBeCloseTo(0);
   rt.setAircraftActions([{action:'increaseThrottle'}],10);
-  rt.setInput(emptyInput());world.step({},1);expect(rt.inspectControls().lastApplied?.input.boost).toBe(false);
+  rt.setInput(emptyInput());world.step({},1);expect(rt.inspectControls().lastApplied?.input.forward).toBeCloseTo(0);
   rt.setInput(undefined);rt.setAircraftActions([{action:'increaseThrottle'}],10);
-  sim.controlledActor.vehicleIndex=-1;world.step({},1);expect(rt.inspectControls().lastApplied?.input.boost).toBe(false);
+  sim.controlledActor.vehicleIndex=-1;world.step({},1);expect(rt.inspectControls().lastApplied?.input.forward).toBeCloseTo(0);
  }finally{world.dispose();}
 });
 it('canopy semantic trigger is distinct from sustained canopy braking',async()=>{
@@ -223,16 +295,16 @@ it.each([{speed:8,pull:-1},{speed:12,pull:0}])('glider rolls on damped gear with
  const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'floor',position:[0,-.5,0],size:[400,1,400]}]}),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,.03,0],yaw:0});
  const step=(input:Partial<Input>={})=>{stepVehicle(v,{...emptyInput(),...input},1/60,0,q);q.stepPhysics(1/60);};
  try{for(let n=0;n<180;n++)step();v.velocity.z=speed;let maxHeight=0,maxImpulse=0;const previous=v.velocity.clone();
-  for(let n=0;n<600;n++){step({forward:pull});maxHeight=Math.max(maxHeight,v.position.y);maxImpulse=Math.max(maxImpulse,v.velocity.distanceTo(previous));previous.copy(v.velocity);expect(v.position.y).toBeGreaterThan(-.03);}
+  for(let n=0;n<600;n++){step({pitch:pull});maxHeight=Math.max(maxHeight,v.position.y);maxImpulse=Math.max(maxImpulse,v.velocity.distanceTo(previous));previous.copy(v.velocity);expect(v.position.y).toBeGreaterThan(-.03);}
   expect(maxHeight).toBeLessThan(.04);expect(maxImpulse).toBeLessThan(.1);expect(v.motion.aircraft!.wheels.filter(w=>w.contact).length).toBeGreaterThan(1);
  }finally{q.dispose();}
 });
 it('glider hits an obstacle, settles and can be braked without repeated pitch impulses',()=>{
  const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'floor',position:[0,-.5,0],size:[400,1,400]},{id:'wall',position:[0,3,22],size:[20,6,1]}]}),v=createVehicle({...SPECS.find(s=>s.id==='glider')!,spawn:[0,.03,0],yaw:0});
  const step=(input:Partial<Input>={})=>{stepVehicle(v,{...emptyInput(),...input},1/60,0,q);q.stepPhysics(1/60);};
- try{for(let n=0;n<180;n++)step();v.velocity.z=8;for(let n=0;n<600;n++)step({forward:-1});
+ try{for(let n=0;n<180;n++)step();v.velocity.z=8;for(let n=0;n<600;n++)step({pitch:-1});
   expect(v.position.z).toBeLessThan(19);expect(v.position.z).toBeGreaterThan(17);const settled=v.position.clone();
-  for(let n=0;n<180;n++){step({forward:-1,brake:true});expect(v.motion.aircraft!.angularVelocity.length()).toBeLessThan(.03);expect(v.position.distanceTo(settled)).toBeLessThan(.03);}
+  for(let n=0;n<180;n++){step({pitch:-1,brake:true});expect(v.motion.aircraft!.angularVelocity.length()).toBeLessThan(.03);expect(v.position.distanceTo(settled)).toBeLessThan(.03);}
  }finally{q.dispose();}
 });
 it.each(['plane','trainer-plane'])('%s returns directly to an upright third-person view from an inverted cockpit',async id=>{

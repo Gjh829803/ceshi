@@ -23,18 +23,18 @@ function stepVehicleControls(v: VehicleState, i: Input, dt: number, _time: numbe
     {
         v.yaw -= v.steering * s.steer * dt;
         v.roll += i.roll * dt;
-        v.pitch = damp(v.pitch, i.lift * .25, s.pitchResponse, dt);
+        v.pitch = damp(v.pitch, -i.pitch * .25, s.pitchResponse, dt);
         forward.set(Math.sin(v.yaw) * Math.cos(v.pitch), Math.sin(v.pitch), Math.cos(v.yaw) * Math.cos(v.pitch));
-        v.velocity.addScaledVector(forward, i.forward * s.accel * dt);
+        v.velocity.addScaledVector(forward, (i.slow?0:i.forward) * s.accel * (i.boost?1.25:1) * dt);
         v.velocity.y += i.lift * s.verticalAcceleration * dt;
         right.set(Math.cos(v.yaw), 0, -Math.sin(v.yaw));
         v.velocity.addScaledVector(right, -v.velocity.dot(right) * (1 - Math.exp(-s.grip * dt)));
         v.velocity.x *= Math.exp(-(Math.abs(i.forward) < .01 ? s.linearDamping : s.drag) * dt);
         v.velocity.z *= Math.exp(-(Math.abs(i.forward) < .01 ? s.linearDamping : s.drag) * dt);
         v.velocity.y *= Math.exp(-(Math.abs(i.lift) < .01 ? s.verticalDamping : .35) * dt);
-        if (i.boost)
+        if (i.slow)
             v.velocity.multiplyScalar(Math.exp(-s.brakeDamping * dt));
-        v.velocity.clampLength(0, s.speed);
+        v.velocity.clampLength(0, i.boost?s.maxSpeed:s.speed);
         v.position.addScaledVector(v.velocity, dt);
         if (!footprintWet(v.position.x, v.position.z, s.radius)) {
             v.position.x = old.x;

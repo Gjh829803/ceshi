@@ -11,7 +11,7 @@ export function spaceForces(v:VehicleState,i:Input,c:SpaceFlightConfig,mass:numb
  if(v.motion.family!=='space')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
  const inverse=v.rotation.clone().invert(),velocity=v.velocity.clone().applyQuaternion(inverse),omega=v.motion.body.angularVelocity.clone().applyQuaternion(inverse);
  const translation=new Vector3(-i.strafe,i.lift,i.forward),rotation=new Vector3(i.pitch,-i.steer,i.roll);
- const force=new Vector3(),torque=new Vector3(),inertia=spaceInertia(v,c,mass),brake=i.boost;
+ const force=new Vector3(),torque=new Vector3(),inertia=spaceInertia(v,c,mass),brake=i.slow;
  for(let axis=0;axis<3;axis++){
   const f=c.thrustNewtonsXYZ[axis]!,input=translation.getComponent(axis),speed=velocity.getComponent(axis);
   const assisted=!!targets||brake||v.motion.driveMode==='assisted';

@@ -8,7 +8,7 @@ const clamp = (n: number, limit: number) => Math.max(-limit, Math.min(limit, n))
 export function motionForces(v: VehicleState, input: Input, h: number, time: number, q: EnvironmentQueries, mass: number, intent: MotionIntent) {
     const s = v.spec, mode = s.mode;
     const draft: VehicleState = { ...v, position: v.position.clone(), rotation: v.rotation.clone(), velocity: v.velocity.clone(), motion: { ...v.motion } };
-    const driven = v.motion.body!.riderMounted || [input.forward, input.steer, input.lift, input.roll, input.pitch, input.strafe].some(n => Math.abs(n) > .01) || input.boost || input.jump;
+    const driven = v.motion.body!.riderMounted || [input.forward, input.steer, input.lift, input.roll, input.pitch, input.strafe].some(n => Math.abs(n) > .01) || input.boost || input.slow || input.brake || input.jump;
     if (!driven && mode === 'plane')
         draft.throttle = 0;
     q.withoutContactImpulses(() => intent(draft, input, h, time, q));

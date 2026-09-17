@@ -21,18 +21,18 @@ export function stepSubmersible(v:VehicleState,i:Input,dt:number,q:EnvironmentQu
  const wetDrive=k.immersion>.08&&wet>=2;
  const f=new Vector3(Math.sin(v.yaw),0,Math.cos(v.yaw)),r=new Vector3(f.z,0,-f.x);
  let speed=v.velocity.dot(f),side=v.velocity.dot(r);
- v.throttle+=((wetDrive?i.forward:0)-v.throttle)*(1-Math.exp(-s.throttleResponse*dt));
- speed+=v.throttle*s.accel*dt;
+ v.throttle+=((wetDrive&&!i.slow?i.forward:0)-v.throttle)*(1-Math.exp(-s.throttleResponse*dt));
+ speed+=v.throttle*s.accel*(i.boost?1.25:1)*dt;
  speed*=Math.exp(-(wetDrive?(Math.abs(i.forward)<.01?s.linearDamping:s.drag)+Math.abs(speed)*s.dragQuadratic:v.grounded?5:0)*dt);
  side*=Math.exp(-(wetDrive?s.grip:v.grounded?7:0)*dt);
- if(i.boost){speed*=Math.exp(-s.brakeDamping*dt);side*=Math.exp(-s.brakeDamping*dt);}
- speed=Math.max(-s.reverseSpeed,Math.min(s.speed,speed));
+ if(i.slow){speed*=Math.exp(-s.brakeDamping*dt);side*=Math.exp(-s.brakeDamping*dt);}
+ speed=Math.max(-s.reverseSpeed,Math.min(i.boost?s.maxSpeed:s.speed,speed));
  v.yaw-=wetDrive?v.steering*s.steer*dt:0;
  // Vertical thrusters work from rest; releasing controls leaves buoyancy and drag.
  const lift=wetDrive&&(i.lift<0||k.depth>.15)?i.lift*s.verticalAcceleration:0;
  v.velocity.set(f.x*speed+r.x*side,v.velocity.y+(k.buoyancy-9.81+lift-s.verticalDamping*k.immersion*v.velocity.y)*dt,f.z*speed+r.z*side);
- if(i.boost)v.velocity.y*=Math.exp(-s.brakeDamping*dt);
- v.pitch+=((wetDrive?i.lift*.10:0)-v.pitch)*(1-Math.exp(-s.pitchResponse*dt));
+ if(i.slow)v.velocity.y*=Math.exp(-s.brakeDamping*dt);
+ v.pitch+=((wetDrive?-i.pitch*.25:0)-v.pitch)*(1-Math.exp(-s.pitchResponse*dt));
  v.roll+=((wetDrive?i.roll*.25:0)-v.roll)*(1-Math.exp(-s.rollResponse*dt));
  v.rotation.setFromEuler(new Euler(-v.pitch,v.yaw,v.roll,'YXZ'));v.position.addScaledVector(v.velocity,dt);
  v.speed=v.velocity.length();v.submerged=!!w&&v.position.y<w.surface-.65;

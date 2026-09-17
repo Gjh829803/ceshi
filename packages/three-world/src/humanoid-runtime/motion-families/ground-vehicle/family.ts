@@ -11,4 +11,6 @@ export const groundVehicleFamily:MotionFamilyModule={unoccupiedPhysics:s=>horseU
   subtype('ground-vehicle','bus','客车','客车轮组与动力配置。'),subtype('ground-vehicle','tank','履带车辆','左右履带差速。'),subtype('ground-vehicle','motorcycle','摩托车','转向与侧倾。'),
   subtype('ground-vehicle','skateboard','滑板','平面滑行与摩擦。'),subtype('ground-vehicle','sled','雪橇','坡面重力、蹬地和制动。'),subtype('ground-vehicle','ski','滑雪','沿坡面滑行。'),
   subtype('ground-vehicle','hover','悬浮载具','近地高度与平移。'),subtype('ground-vehicle','mount','陆地坐骑','保留独立步态与骑乘算法，不使用轮式动力。'),subtype('ground-vehicle','carriage','马车','牵引和车体组合。'),
-],step(v,i,dt,time,q){if(v.motion.family!=='ground-vehicle'||!["wheeled","bus","tank","motorcycle","unicycle","skateboard","sled","ski","hover","mount","carriage"].includes(v.spec.mode))throw Error('MOTION_PHYSICS_OWNER_MISMATCH');if(v.motion.wheelPhysics){stepWheelVehicle(v,i,dt,q);return;}if(v.motion.body){stepBodyVehicle(v,i,dt,time,q);return;}if(v.motion.creature){stepCreature(v,i,dt,q);return;}stepFamilyIntent(v,i,dt,time,q);}};
+],step(v,i,dt,time,q){if(v.motion.family!=='ground-vehicle'||!["wheeled","bus","tank","motorcycle","unicycle","skateboard","sled","ski","hover","mount","carriage"].includes(v.spec.mode))throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
+  if(i.slow&&!v.motion.creature)i={...i,forward:0,boost:false,brake:true};
+  if(v.motion.wheelPhysics){stepWheelVehicle(v,i,dt,q);return;}if(v.motion.body){stepBodyVehicle(v,i,dt,time,q);return;}if(v.motion.creature){stepCreature(v,i,dt,q);return;}stepFamilyIntent(v,i,dt,time,q);}};

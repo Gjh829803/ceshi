@@ -15,7 +15,8 @@ const deepPool = ():EnvironmentDefinition => pool({
 });
 
 it('uses held and rebound native keys for signed swim lift without repeating the jump edge',()=>{
-  expect(readControls(new Set(['ControlLeft']),false,false,{}).lift).toBe(-1);
+  expect(readControls(new Set(['KeyC']),false,false,{})).toMatchObject({lift:-1,slow:false});
+  for(const key of ['ControlLeft','ControlRight'])expect(readControls(new Set([key]),false,false,{})).toMatchObject({lift:0,slow:true});
   expect(readControls(new Set(['Space']),false,false,{})).toMatchObject({lift:1,jump:false});
   expect(readControls(new Set(['Space','KeyC']),false,false,{}).lift).toBe(0);
   const bindings=createKeyBindings({jump:['KeyU'],crouch:['KeyJ']});

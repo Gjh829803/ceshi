@@ -73,7 +73,7 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
         if (state.powertrain && c.powertrain) {
             const pivot = 0;
             const roadOmega = (speed + pivot * Math.abs(state.angularVelocity.y) * TANK_GEOMETRY.trackHalfSpacing) / (c.driveRadius!);
-            stepPowertrain(state.powertrain, c.powertrain, { pedal: engineActive ? (pivot || input.forward) : 0, brake: input.brake || input.boost, boost: input.boost && c.kind !== 'submersible', speed, wheelOmega: roadOmega, roadWheelOmega: roadOmega, grounded: engineActive, slipping: false, speedLimit: input.forward < 0 ? s.reverseSpeed : input.boost ? s.maxSpeed : s.speed }, h);
+            stepPowertrain(state.powertrain, c.powertrain, { pedal: engineActive && !input.slow ? (pivot || input.forward) : 0, brake: input.brake || input.slow, boost: input.boost && !input.slow, speed, wheelOmega: roadOmega, roadWheelOmega: roadOmega, grounded: engineActive, slipping: false, speedLimit: input.forward < 0 ? s.reverseSpeed : input.boost ? s.maxSpeed : s.speed }, h);
             driveForce = engineActive ? state.powertrain.axleTorque / c.driveRadius! : 0;
             if (pivot)
                 driveForce = 0;
@@ -87,7 +87,7 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
         const resist = (deceleration: number) => -Math.sign(speed) * Math.min(Math.abs(speed) / h, Math.max(0, deceleration)) * mass;
         let lateral = c.water ? immersion > 0 ? s.grip : v.grounded ? 7 : 0 : dryGround ? s.grip : 0;
         {
-            const brake = input.brake || state.powertrain!.directionBraking || input.boost;
+            const brake = input.brake || state.powertrain!.directionBraking || input.slow;
             const drag = Math.abs(speed) * ((Math.abs(input.forward) < .01 ? s.linearDamping : s.drag) + Math.abs(speed) * s.dragQuadratic);
             driveForce += resist(immersion > 0 ? (brake ? s.brakeDeceleration : drag) : v.grounded ? 6 : 0);
             if (v.motion.submersible) {
@@ -95,11 +95,11 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
                 k.immersion = immersion;
                 k.buoyancy = buoyancy;
                 yawTarget = engineActive ? -v.steering * s.steer : 0;
-                pitch = engineActive ? input.lift * .1 : 0;
+                pitch = engineActive ? -input.pitch * .25 : 0;
                 roll = engineActive ? input.roll * .25 : 0;
                 if (engineActive && (input.lift < 0 || k.depth > .15))
                     force.y += mass * input.lift * s.verticalAcceleration;
-                if (input.boost)
+                if (input.slow)
                     force.y -= mass * v.velocity.y * s.brakeDamping;
                 k.power = engineActive ? Math.min(1, Math.abs(v.throttle) + Math.abs(input.lift) * .7 + Math.abs(v.steering) * .35) : 0;
                 k.rotorPhase += k.power * 28 * h;
@@ -116,7 +116,7 @@ export function stepBodyVehicle(v: VehicleState, input: Input, dt: number, time:
             side.addScaledVector(normal, -side.dot(normal)).normalize();
         }
         force.addScaledVector(tangent, driveForce).addScaledVector(side, -mass * v.velocity.dot(side) * Math.min(lateral, 1 / h));
-        const holding = input.brake;
+        const holding = input.brake || input.slow;
         if (normal && holding && Math.abs(speed) < .15) {
             const gravityTangent = new Vector3(0, -9.81, 0).addScaledVector(normal, 9.81 * normal.y);
             force.addScaledVector(gravityTangent, -mass);

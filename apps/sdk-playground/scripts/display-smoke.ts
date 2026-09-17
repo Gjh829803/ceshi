@@ -107,7 +107,7 @@ try {
   await page.getByRole('button',{name:'还原取景窗口',exact:true}).click();
   await page.evaluate(()=>window.__WORLDKIT_EVAL__!.startLive());
   const viewBefore=(await state()).camera.viewId;
-  await page.keyboard.press('t');
+  await page.keyboard.press('v');
   await page.waitForFunction(view=>(window as any).playground.getState().camera.viewId!==view,viewBefore);
   const movementBefore=(await state()).position;
   await page.keyboard.down('w');
