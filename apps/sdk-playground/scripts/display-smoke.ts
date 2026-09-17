@@ -101,8 +101,9 @@ try {
   assert.deepEqual(await capture(),baseline);assert.deepEqual(await state(),before);
   assert(await page.evaluate(()=>{
     const source=document.querySelector<HTMLCanvasElement>('#viewport')!,monitor=document.querySelector<HTMLCanvasElement>('[data-camera-monitor-frame]')!;
-    return monitor.width===source.width&&monitor.height===source.height;
-  }),'monitor retains full source resolution');
+    return monitor.width>0&&monitor.width<=source.width&&monitor.height<=source.height
+      &&Math.abs(monitor.height-monitor.width*source.height/source.width)<=1;
+  }),'range monitor retains source aspect ratio at its own pixel size');
   await page.getByRole('button',{name:'还原取景窗口',exact:true}).click();
   await page.evaluate(()=>window.__WORLDKIT_EVAL__!.startLive());
   const viewBefore=(await state()).camera.viewId;

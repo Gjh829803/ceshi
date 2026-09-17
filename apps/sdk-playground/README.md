@@ -151,7 +151,10 @@ switching still go to the SDK. Simulation continues; there is no observer toolba
 or separate input mode. The world view shows full characters even when the gameplay
 camera uses first person. Unchecking restores the current gameplay view without
 resetting its mode or the controlled actor. Camera guides follow real camera poses
-and projection; the distance setting only caps their visual length. A live camera
+and projection. **取景范围显示距离 / 米** caps both the guide length and the live
+monitor's far clipping plane; objects beyond it disappear from the monitor without
+changing gameplay FOV or clipping. The monitor title shows its effective range.
+A live camera
 preview appears at the lower right of the world viewport; **放大 / 还原** changes
 its size without pausing or changing control. **定位摄像机** immediately reframes
 the current camera and subject, resetting the orbit centre. **跟随位置** (off by
@@ -162,8 +165,9 @@ pull-in do not translate or rotate the observer.
 The observer resamples subjects through the SDK at the source frame's interpolation
 alpha, including mouse-only redraws. Vehicle bodies and the followed camera therefore
 share one display time; source-only body clipping/fading is omitted from this view.
-World-view pan and zoom respond faster; their scale remains distance-dependent. It copies the original gameplay
-frame at full source resolution, preserves its aspect ratio, follows V camera
+World-view pan and zoom respond faster; their scale remains distance-dependent.
+The monitor renders a camera copy during the same SDK display sample, preserves
+the gameplay aspect ratio and first-person visibility, follows V camera
 changes and disappears when camera display is disabled. It is UI only and is
 absent from model-input captures.
 With camera display and all-type colliders enabled together, cyan spheres and
@@ -173,7 +177,7 @@ not added physics bodies. The world observer draws after the SDK restores its
 display transaction and resamples displayed subjects without gameplay body clipping
 or fade. The camera model follows the actual displayed camera pose and uses the
 presentation sample from `world.inspectCamera().collisionQueries`, falling back
-to fixed only before a presentation sample exists. The live monitor copies the actual interpolated gameplay frame;
+to fixed only before a presentation sample exists. The live monitor uses the actual interpolated gameplay pose;
 the observer uses that same interpolation alpha for its subjects.
 Each sample carries its source,
 simulation tick and sequence; first-person views without sweeps show no stale probe. Source captures
@@ -201,7 +205,9 @@ isolation while retaining picture and helper choices. The optional diagnostic re
 shares the current scene and draws after source frames or world-view mouse changes.
 It never steps the SDK or writes the gameplay camera. Its canvas sits
 below Presentation UI/output. Original source pixels, model-input captures and
-streams remain unchanged. Temporary visibility, materials and lighting are restored
+streams remain unchanged. The range monitor reuses the diagnostic renderer at its
+window's pixel size before the world-observer pass; it adds no renderer or clock.
+Temporary visibility, materials and lighting are restored
 even on errors. Diagnostic passes omit source shadows to avoid rewriting shadow
 resources owned by the source renderer. Returning to defaults shows the original
 renderer directly. Map changes release cached diagnostic materials; disposal
