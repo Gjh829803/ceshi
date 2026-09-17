@@ -813,6 +813,10 @@ function movementState() {
     grounded: v?.grounded ?? sim.controlledActor.player.grounded,
   };
 }
+function scopeInspectorProfile(profile: AssetProfile): AssetProfile {
+  const instanceId=sim.controlledActor.vehicle?.spec.id;
+  return profile.assetId==='person'||instanceId===undefined ? profile : {...profile,instanceId};
+}
 const inspector = mountInspector(el("inspectorHost"), {
   panels:panelState,
   cameraEditor:getCameraEditor,
@@ -825,9 +829,9 @@ const inspector = mountInspector(el("inspectorHost"), {
     state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : controlledCharacter().clipLabel,
     color: sim.controlledActor.vehicle?.spec.color ?? "#b4d7c2",
   }),
-  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
+  getProfile: (id) => readEditableProfile(runtime, scopeInspectorProfile(profiles.get(id)!)),
   applyProfile: (value, tab) => {
-    const profile = parseAssetProfile(value);
+    const profile = scopeInspectorProfile(parseAssetProfile(value));
     if (tab === "movement") applyControlProfile(runtime, profile);
 
     profiles.set(profile.assetId, profile);
@@ -837,7 +841,7 @@ const inspector = mountInspector(el("inspectorHost"), {
     saveAssetProfile(localStorage, profile);
   },
   resetProfile: (id, tab) => {
-    const profile = structuredClone(profiles.get(id)!),
+    const profile = scopeInspectorProfile(structuredClone(profiles.get(id)!)),
       defaults = getDefaultProfile(id)!;
     if (tab === "movement") {
       profile.control = defaults.control;
