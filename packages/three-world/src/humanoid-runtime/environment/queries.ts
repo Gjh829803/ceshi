@@ -200,9 +200,18 @@ export class EnvironmentQueries {
   }
   wheelSweep(origin:Vector3,rotation:Quaternion,direction:Vector3,radius:number,width:number,distance:number){
     this.assertLive();
-    const hit=this.world.castShape(origin,rotation,direction,new RAPIER.Cylinder(width/2,radius),0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
-    if(!hit)return null;
-    return {distance:hit.time_of_impact,normal:new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z),point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z),friction:hit.collider.friction()};
+    const wheel=new RAPIER.Cylinder(width/2,radius),rejected=new Set<number>();
+    // A side wall may overlap the tire before its downward sweep reaches ground.
+    // Reject it as suspension support, then keep looking; chassis collisions are
+    // unchanged. Each retry excludes a distinct collider from this query only.
+    const filter=(collider:RAPIER.Collider)=>!rejected.has(collider.handle)&&this.environmentFilter(collider);
+    for(;;){
+      const hit=this.world.castShape(origin,rotation,direction,wheel,0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,filter);
+      if(!hit)return null;
+      const normal=new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z);
+      if(normal.dot(direction)<-.3)return {distance:hit.time_of_impact,normal,point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z),friction:hit.collider.friction()};
+      rejected.add(hit.collider.handle);
+    }
   }
   raycast(origin:Vector3,direction:Vector3,distance:number){
     this.assertLive();const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,direction),distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);

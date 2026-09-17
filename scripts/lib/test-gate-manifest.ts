@@ -23,6 +23,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   {path:"apps/sdk-playground/server/diagnostics.test.ts",lane:"resource-heavy",reasonCodes:["browser-or-server-process"],suites:["camera"]},
   { path: "apps/sdk-playground/src/camera/editor-state.test.ts", lane: "contract", suites: ["camera"] },
   {path:"apps/sdk-playground/src/camera/project-state.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"], suites: ["camera"] },
+  { path: "apps/sdk-playground/src/diagnostics/recording-controls.test.ts", lane: "contract" },
   { path: "apps/sdk-playground/src/display-camera-probes.test.ts", lane: "contract", suites: ["camera"] },
   { path: "apps/sdk-playground/src/display-panel.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"], suites: ["camera"] },
   { path: "apps/sdk-playground/src/display-preview.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"], suites: ["camera"] },

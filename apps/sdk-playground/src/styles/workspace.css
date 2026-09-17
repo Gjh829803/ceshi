@@ -22,6 +22,8 @@ body {
   margin: 0;
   overflow: hidden;
 }
+/* Defaults stay below component utilities; variants own their colors and type. */
+@layer base {
 button,input {
   font: inherit;
 }
@@ -45,8 +47,9 @@ button,input {
 button {
   transition: background .14s,border-color .14s;
 }
-button:hover {
+button:not([data-slot="button"]):hover {
   filter: brightness(1.12);
+}
 }
 [hidden] {
   display: none!important;
@@ -219,6 +222,16 @@ button:hover {
   outline: none;
   touch-action: none;
 }
+.workspace-stage > :is(canvas#viewport, canvas[data-display-preview]) {
+  filter:grayscale(0);
+  transition:filter 220ms ease;
+}
+.workspace-stage[data-paused] > :is(canvas#viewport, canvas[data-display-preview]) {
+  filter:grayscale(.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-stage > :is(canvas#viewport, canvas[data-display-preview]) { transition:none; }
+}
 
 
 
@@ -230,11 +243,13 @@ button:hover {
   align-items: center;
   gap: 5px;
 }
+@layer components {
+  .subtle-button { background:var(--color-secondary); }
+}
 .subtle-button {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #0e2c33e8;
   border: 1px solid #afc7c43d;
   border-radius: 5px;
   font-size: 11px;
@@ -589,20 +604,6 @@ kbd {
   height: 3px;
   background: #c5e2aa;
   animation: load 1s infinite alternate;
-}
-.pause-card {
-  width: min(440px,90vw);
-  padding: 30px;
-  text-align: center;
-}
-.pause-card h2 {
-  font-size: 25px;
-  font-weight: 500;
-}
-.pause-card p {
-  font-size: 13px;
-  line-height: 1.9;
-  color: #afc9bd;
 }
 .primary {
   border: 0;
@@ -1289,3 +1290,14 @@ button svg {
 .workspace-performance-panel { position:absolute; left:calc(var(--rail) + 12px); bottom:var(--panel-bottom-gap); z-index:9; width:min(260px,calc(100vw - var(--rail) - 24px)); max-height:calc(100% - var(--header) - var(--panel-bottom-gap) - 12px); overflow-y:auto; scrollbar-width:thin; border:1px solid var(--line); border-radius:10px; background:#0b252df5; box-shadow:0 6px 24px #031e2744; }
 .performance-window-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; color:#b4cbc2; font-size:11px; }
 .performance-window-heading .plain-icon { width:22px; height:22px; min-height:22px; padding:0; }
+
+.recording-tools { display:flex; gap:6px; position:relative; align-items:center; pointer-events:auto; }
+.recording-tools > button { height:36px; min-height:36px; padding:0 10px; }
+.recording-status { position:absolute; right:0; top:calc(100% + 7px); display:flex; gap:8px; align-items:center; max-width:min(430px,80vw); padding:5px 9px; border-radius:6px; background:#102d32e8; color:#e5eddd; font-size:11px; line-height:1.5; pointer-events:none; }
+.recording-time { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.recording-start-dialog p { font-size:13px; line-height:1.7; }
+.recording-dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:8px; }
+.workspace-pause-status { position:absolute; left:50%; bottom:32px; transform:translateX(-50%); z-index:8; display:flex; align-items:center; gap:20px; width:max-content; max-width:calc(100% - 32px); padding:14px 18px; border:1px solid #d5c48b; border-radius:10px; background:#102d32f5; box-shadow:0 6px 24px #031e2744; color:#f5f0dd; pointer-events:auto; }
+.workspace-pause-status strong { display:block; margin-bottom:4px; font-size:16px; color:#f1d590; }
+.workspace-pause-status span { display:block; font-size:12px; line-height:1.5; }
+.workspace-pause-status button { flex-shrink:0; }

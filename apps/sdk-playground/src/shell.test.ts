@@ -102,4 +102,37 @@ describe('Shell render isolation',()=>{
   expect(await footer.innerText()).toContain('放热下降');
   expect(await footer.innerText()).not.toContain('增加油门');
  });
+ it('renders separate recording and snapshot controls, reset confirmation and isolated timer updates',async()=>{
+  page.setDefaultTimeout(4000);
+  // The fixture bundles JS only; use the same hit-testing rule as workspace.css.
+  await page.addStyleTag({content:'.recording-tools {pointer-events:auto}'});
+  await page.evaluate(()=>{
+   const w=window as any,s=w.shellTest;w.recordingActions=[];
+   s.update({debugRecording:{busy:false,confirmStart:false,recordLabel:'开始录制',recording:false,saved:false,elapsedSeconds:0,maximumSeconds:120,status:'完整录制包含起点和操作轨迹',error:'',historyEnabled:false,hasFrame:false}});
+   for(const id of ['debugRecordButton','debugRecordingStart','debugRecordingCancel','debugSnapshotButton'])s.on(id,()=>{w.recordingActions.push(id);if(id==='debugRecordButton')s.update({debugRecording:{...s.get().debugRecording,confirmStart:true}});if(id==='debugRecordingCancel')s.update({debugRecording:{...s.get().debugRecording,confirmStart:false}});});s.flush();
+  });
+  expect(await page.getByRole('button',{name:'开启快照缓存',exact:true}).isEnabled()).toBe(true);
+  expect(await page.getByLabel('录制状态').count()).toBe(0);
+  await page.getByRole('button',{name:'开始录制',exact:true}).click();
+  expect(await page.getByRole('dialog').innerText()).toContain('将重置场景中的车辆和物件');
+  await page.getByRole('button',{name:'取消',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).recordingActions)).toEqual(['debugRecordButton','debugRecordingCancel']);
+  const counts=await page.evaluate(()=>{
+   const w=window as any,s=w.shellTest,before=w.shellRenderCount;
+   s.update({debugRecording:{...s.get().debugRecording,recordLabel:'停止并保存',recording:true,elapsedSeconds:61,historyEnabled:true,hasFrame:false}});s.flush();
+   return {before,after:w.shellRenderCount};
+  });
+  expect(counts.after).toBe(counts.before);expect(await page.getByLabel('录制状态').innerText()).toContain('01:01 / 02:00');
+  expect(await page.getByRole('button',{name:'停止并保存',exact:true}).isEnabled()).toBe(true);
+  expect(await page.getByRole('button',{name:'保存现场快照',exact:true}).isEnabled()).toBe(false);
+  await page.addStyleTag({content:'.workspace-pause-status {pointer-events:auto}'});
+  await page.evaluate(()=>{
+   const s=(window as any).shellTest;s.flag('loading',false);s.flag('paused',true);
+   s.on('resumeButton',()=>s.flag('paused',false));s.flush();
+  });
+  expect(await page.getByLabel('场景暂停提示').innerText()).toContain('场景已暂停');
+  expect(await page.getByRole('dialog').count()).toBe(0);
+  await page.getByRole('button',{name:'继续游玩',exact:true}).click();
+  expect(await page.getByLabel('场景暂停提示').count()).toBe(0);
+ });
 });
