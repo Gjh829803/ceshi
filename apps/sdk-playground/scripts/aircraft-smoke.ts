@@ -20,9 +20,9 @@ try{
  await page.screenshot({path:path.join(output,'cockpit-ground.png')});
  await page.locator('[data-worldkit-surface]').click();await page.keyboard.down('w');
  await page.waitForFunction(()=>(window as any).playground.getState().speed>27,{},{timeout:30000});
- await page.keyboard.up('w');await page.keyboard.down('ArrowUp');
+ await page.keyboard.up('w');await page.keyboard.down('e');
  await page.waitForFunction(()=>{const s=(window as any).playground.getState();return !s.flight.grounded&&s.position[1]>15;},{},{timeout:20000});
- await page.keyboard.up('ArrowUp');const airborne=await state();
+ await page.keyboard.up('e');const airborne=await state();
  await page.screenshot({path:path.join(output,'cockpit-flight.png')});
  await page.keyboard.down('a');await page.waitForTimeout(1600);await page.keyboard.up('a');
  const banked=await state();assert(Math.abs(banked.vehicleRotation[2])>.03);

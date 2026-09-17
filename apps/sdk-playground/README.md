@@ -259,6 +259,8 @@ camera/render status stays in the header and contextual hints in the slim footer
 Form focus releases driving input. Modal panels pause through the SDK callback;
 closing restores focus and the previous paused state. Configurations still need
 explicit export to `profiles.json` for delivery; local storage is a debug override.
+Aircraft profile scope and automatic active-instance binding are documented in
+[`docs/aircraft-flight-profile-scope.md`](../../docs/aircraft-flight-profile-scope.md).
 
 All editor popups use shadcn/Radix Dialog, Popover and Tooltip; transient
 notifications use the shadcn Sonner Toaster. No native dialogs or HTML title

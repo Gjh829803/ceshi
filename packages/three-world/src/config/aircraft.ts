@@ -1,4 +1,9 @@
 /** 轻型固定翼标定，米、千克、秒；维护者参数与运行算法分离。 */
+export interface AircraftFlightTuning {
+ pitchGain:number;rollGain:number;pitchRateDamping:number;rollRateDamping:number;yawRateDamping:number;
+}
+/** Fixed-wing attitude defaults. VehicleSpec.aircraftFlight may override these per aircraft. */
+export const DEFAULT_AIRCRAFT_FLIGHT:Readonly<AircraftFlightTuning>=Object.freeze({pitchGain:9,rollGain:14,pitchRateDamping:5,rollRateDamping:6,yawRateDamping:4});
 export const AIRCRAFT = {
  turnRate:.32, maxBank:1.0, turnResponse:8, verticalResponse:.8,
  mass:850, area:16.2, density:1.225, center:[0,1.1,.35] as const,
@@ -14,7 +19,7 @@ export const AIRCRAFT = {
 export const AIRCRAFT_SUBTYPES=['fixed-wing','pusher','helicopter','multirotor','tiltrotor','glider','paraglider','wingsuit','balloon'] as const;
 export type AircraftSubtype=typeof AIRCRAFT_SUBTYPES[number];
 export const ROTOR_FLIGHT={
- governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70,
+  governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70, releaseDamping:1.8,
  climbSpeed:8, verticalResponse:1.8, maxLift:2.1, pitchLimit:.32, bankLimit:.38,
  attitudeGain:8, rateDamping:4, yawRate:.65, drag:.12,
  transitionStart:12, transitionEnd:32, tiltRate:.22,

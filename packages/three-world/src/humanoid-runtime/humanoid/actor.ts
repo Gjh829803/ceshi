@@ -236,6 +236,10 @@ export class HumanoidActor {
     v.motion.flyingCreature!.summon=plan;v.motion.flyingCreature!.groundFailure='';this.message=plan.message;return true;
   }
   nearest():number {let best=-1,d=Infinity;this.vehicles.forEach((v,n)=>{const ds=v.position.distanceTo(this.player.position),body=vehicleBody(v.spec),range=body.kind==='box'?Math.max(5.3,body.halfExtents[0]+2):Math.max(5.3,v.motion.creature?v.spec.radius+1.6:0);if(this.world.available(v)&&ds<range&&ds<d&&v.velocity.length()<3){d=ds;best=n;}});return best;}
+  recoveryCandidate():VehicleState|undefined {
+    const nearby=this.nearest(),target=this.vehicle??(nearby>=0?this.vehicles[nearby]:undefined);
+    return target&&this.world.vehicleCondition(target).recoveryAvailable?target:undefined;
+  }
   private boardingPoint(v:VehicleState):Vector3|null {
     if(v.motion.flyingCreature)return dragonStandingPoint(this.mountContext(),v,1)??dragonStandingPoint(this.mountContext(),v,-1);
     const q=this.environment;const body=vehicleBody(v.spec);
@@ -445,20 +449,24 @@ export class HumanoidActor {
     if(!this.controller.setMounted(false,pt,v.yaw))return false;
     this.releaseWalkingWingsuit();this.vehicleIndex=-1;this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.player.position.copy(pt);this.player.velocity.set(0,0,0);Object.assign(this.player,{yaw:v.yaw,grounded:false,swimming:!!this.environment.waterAt(pt),coyote:0,jumpBuffer:0,landTimer:0,animation:'Idle_Loop'});return true;
   }
-    recoverVehicle():boolean {
-      const v=this.vehicle,q=this.environment;
-      if(!v||!['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode)){this.message='请先进入地面车辆，再使用原地扶正';return false;}
+    recoverVehicle(targetId?:string):boolean {
+      const mounted=this.vehicle, v=mounted??(targetId?this.vehicles.find(vehicle=>vehicle.spec.id===targetId):this.vehicles[this.nearest()]),q=this.environment;
+      if(!v||!this.world.available(v)){this.message='附近没有可回正的载具';return false;}
+      if(mounted&&v!==mounted){this.message='当前驾驶中的载具无法回正目标载具';return false;}
       const forward=new Vector3(0,0,1).applyQuaternion(v.rotation);
-      const yaw=Math.hypot(forward.x,forward.z)>.05?Math.atan2(forward.x,forward.z):v.yaw;
-      const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),yaw),body=vehicleBody(v.spec);
-      const support=q.support(v.position,4,.5);
-      if(!support||support.normal.y<.65||(q.waterAt(v.position)?.surface??-Infinity)>support.height+.1){this.message='附近没有适合扶正的地面，请落地后重试或返回起点';return false;}
+      let yaw=Math.hypot(forward.x,forward.z)>.05?Math.atan2(forward.x,forward.z):v.yaw;
+      let rotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),yaw),body=vehicleBody(v.spec);
+      const condition=this.world.vehicleCondition(v),trapped=condition.condition==='stuck'||condition.recoveryReason==='blocked'||condition.recoveryReason==='flipped-and-blocked';
+      // A vehicle embedded in a building may be far above the nearest support. Use
+      // the wider read-only probe only for dislodging; ordinary rollover recovery
+      // keeps the old local-ground behavior.
+      const support=q.support(v.position,trapped?100:4,.5);
       const width=body.kind==='box'?body.halfExtents[0]:body.radius,length=body.kind==='box'?body.halfExtents[2]:body.radius;
       const offsets=[new Vector3()];
       // 从原点向外逐圈寻找；覆盖整个底盘及边沿余量，不能只检测车身中心。
       for(let radius=.5;radius<=6;radius+=.5)for(let n=0;n<24;n++)offsets.push(new Vector3(Math.cos(n*Math.PI/12)*radius,0,Math.sin(n*Math.PI/12)*radius));
       let safe:Vector3|undefined;
-      for(const offset of offsets){
+      if(support&&support.normal.y>=.65&&(q.waterAt(v.position)?.surface??-Infinity)<=support.height+.1)for(const offset of offsets){
         const candidate=v.position.clone().add(offset),heights:number[]=[];let supported=true;
         for(const x of [-width-.3,0,width+.3])for(const z of [-length-.3,0,length+.3]){
           const point=new Vector3(x,0,z).applyQuaternion(rotation).add(candidate);point.y=support.height+.5;
@@ -475,13 +483,34 @@ export class HumanoidActor {
         if(!placed||q.bodyOverlap({position:placed,rotation,body},{excludedActorIds:new Set([v.spec.id])}))continue;
         safe=placed;break;
       }
-      if(!safe){this.message='附近 6 米内没有稳定且有净空的落点，请使用返回起点';return false;}
+      let fallback=false;
+      if(!safe&&trapped){
+        // A penetrated aircraft/vehicle can have no valid ray to a nearby floor.
+        // Reuse an authored/prepared spawn as a checked escape destination instead
+        // of teleporting to an arbitrary point or leaving F with no effect.
+        const spawn=this.world.preparedVehicleSpawns.get(v.spec.id)
+          ??q.map.spawns.find(candidate=>candidate.vehicleId===v.spec.id)
+          ??{id:`recovery-${v.spec.id}`,name:v.spec.name,vehicleId:v.spec.id,regionId:q.map.regions.find(region=>region.modes.includes(v.spec.mode))?.id??'',position:v.spec.spawn,yaw:v.spec.yaw};
+        if(spawn?.position){
+          const candidate=new Vector3(...spawn.position),fallbackRotation=new Quaternion().setFromAxisAngle(new Vector3(0,1,0),spawn.yaw);
+          const placed=q.safeSpawn(candidate,body,fallbackRotation);
+          const fallbackSupport=q.support(candidate,12,.5);
+          const requiresGround=v.motion.family==='ground-vehicle';
+          const groundOk=!requiresGround||!!fallbackSupport&&fallbackSupport.normal.y>=.65;
+          const water=q.waterAt(candidate);
+          if(placed&&groundOk&&(!water||water.surface<=placed.y+.1)&&!q.bodyOverlap({position:placed,rotation:fallbackRotation,body},{excludedActorIds:new Set([v.spec.id])})){
+            safe=placed;rotation=fallbackRotation;yaw=spawn.yaw;fallback=true;
+          }
+        }
+      }
+      if(!safe){this.message=trapped?'当前位置没有安全脱困点，安全出生点也不可用，请使用场景复位':'附近 6 米内没有稳定且有净空的落点，请使用返回起点';return false;}
       const relocated=Math.hypot(safe.x-v.position.x,safe.z-v.position.z)>.01;
       // 找到稳定支撑并验证净空后才替换；保留驾驶关系、配置和当前测试点。
       q.releaseVehicleRig(v.spec.id);this.world.noteVehicleRelocation(v.spec.id);v.position.copy(safe);v.rotation.copy(rotation);v.yaw=yaw;v.pitch=v.roll=0;
       v.velocity.set(0,0,0);v.speed=v.steering=v.throttle=0;v.grounded=false;v.submerged=false;
       resetFamilyRigidState(v);
-      this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;
-      this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
+      this.world.resetVehicleCondition(v);
+      if(mounted){this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;}
+      this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=fallback?'车辆已脱困并返回安全停放点 · 可以继续驾驶':relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
     }
 }

@@ -1,4 +1,5 @@
 import {buildVehicle} from '@worldkit/preset-content/models';
+import {humanoid} from '@worldkit/three';
 import {PresentationState} from './presentation';
 import {isCameraVisualEffect} from './camera-visual-effects';
 import {createWorld} from '../world';
@@ -9,6 +10,8 @@ import {createHumanoidCameraDocument} from '../config/camera/index';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {SPECS} from '@worldkit/preset-content/config';
+import {applyControlProfile,readEditableProfile} from '@worldkit/preset-content/platform/profile-runtime';
+import {getDefaultProfile} from '@worldkit/preset-content/platform/profiles';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
@@ -66,9 +69,59 @@ it('rotorcraft keeps collective independent from horizontal speed, pitch and Ctr
   step({lift:1},30);expect(v.throttle).toBeGreaterThan(.5);step({lift:-1},60);expect(v.throttle).toBeLessThan(.5);
  }finally{q.dispose();}
 });
+it.each(['helicopter','multirotor','tiltrotor'] as const)('%s releases powered lift after losing its driver',(subtype)=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),spec=SPECS.find(s=>s.aircraftSubtype===subtype)!,sim=new Simulation(q,[spec]);
+ try{
+  const v=sim.vehicles[0]!;v.position.set(0,100,0);v.velocity.set(0,2,0);v.grounded=false;v.throttle=.7;
+  const start=v.position.y;
+  for(let n=0;n<120;n++)sim.step(1/60);
+  expect(v.throttle).toBeLessThan(.05);
+  expect(v.velocity.y).toBeLessThan(1);
+  expect(v.position.y).toBeLessThan(start+2);
+  v.position.set(0,0,0);v.velocity.set(0,0,0);v.grounded=true;v.throttle=.7;v.motion.aircraft!.rotorSpeedFraction=0;
+  let maxGroundHeight=v.position.y;
+  for(let n=0;n<120;n++){sim.step(1/60);maxGroundHeight=Math.max(maxGroundHeight,v.position.y);}
+  expect(maxGroundHeight).toBeLessThan(.4);
+ }finally{sim.dispose();q.dispose();}
+});
 it('rests on three spring contacts and brakes after landing',()=>{const {q,v,step}=fixture();try{step({},300);expect(v.grounded).toBe(true);expect(v.motion.aircraft!.wheels.filter(w=>w.load>100).length).toBe(3);expect(v.velocity.length()).toBeLessThan(.1);v.position.y=2;v.velocity.set(0,-2,12);step({slow:true},1200);expect(v.grounded).toBe(true);expect(v.velocity.length()).toBeLessThan(.3);expect(v.position.y).toBeGreaterThan(-.15);}finally{q.dispose();}});
 it('takes off and turns through torque without teleporting orientation',()=>{const {q,v,step}=fixture();try{step({boost:true},300);expect(v.speed).toBeGreaterThan(22);const before=v.rotation.clone();step({pitch:-.5},1);expect(before.angleTo(v.rotation)).toBeLessThan(.03);step({pitch:-.5},360);expect(v.grounded).toBe(false);expect(v.position.y).toBeGreaterThan(5);step({steer:1},180);expect(v.roll).toBeGreaterThan(.15);step({},180);expect(Math.abs(v.roll)).toBeLessThan(.15);}finally{q.dispose();}});
 it('keeps velocity independent from heading and resets angular state',()=>{const {q,v,step}=fixture();try{v.position.y=100;v.velocity.set(8,0,35);step({steer:1},1);expect(v.velocity.x).toBeGreaterThan(7);expect(createVehicle(v.spec).motion.aircraft!.angularVelocity.length()).toBe(0);}finally{q.dispose();}});
+it('uses per-aircraft attitude tuning for fixed-wing torque response',()=>{
+ const run=(pitchGain:number,rollGain:number)=>{const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[]}),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,100,0],aircraftFlight:{...humanoid.DEFAULT_AIRCRAFT_FLIGHT,pitchGain,rollGain}});
+  try{v.grounded=false;v.velocity.set(0,0,35);for(let n=0;n<90;n++){stepVehicle(v,{...emptyInput(),pitch:-.35,steer:.35},1/60,0,q);q.stepPhysics(1/60);}return {pitch:v.pitch,roll:v.roll};}finally{q.dispose();}};
+ const soft=run(2,3),firm=run(18,28);expect(Math.abs(firm.pitch)).toBeGreaterThan(Math.abs(soft.pitch)+.02);expect(Math.abs(firm.roll)).toBeGreaterThan(Math.abs(soft.roll)+.02);
+});
+it('applies and exports specialized fixed-wing profile tuning',async()=>{
+ const spec=SPECS.find(s=>s.id==='plane')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'plane',assetId:'plane',spec,object:new Group()}]}});
+ try{
+  const runtime=world.humanoid!,profile=getDefaultProfile('plane')!;runtime.simulation.controlledActor.vehicleIndex=0;runtime.simulation.controlledActor.transition=0;profile.aircraftFlight!.pitchGain=12;applyControlProfile(runtime,profile);
+  expect(runtime.exportProfile().aircraftFlight?.plane?.pitchGain).toBe(12);
+  expect(runtime.inspectConfiguration().effective.aircraftFlight?.pitchGain).toBe(12);
+  expect(readEditableProfile(runtime,getDefaultProfile('plane')!).aircraftFlight?.pitchGain).toBe(12);
+ }finally{world.dispose();}
+});
+it('applies an asset profile to all matching instances and isolates instance overrides',async()=>{
+ const spec=SPECS.find(s=>s.id==='plane')!,helicopter=SPECS.find(s=>s.aircraftSubtype==='helicopter')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[
+  {instanceId:'plane-01',assetId:'vehicle.plane',spec,object:new Group()},
+  {instanceId:'plane-02',assetId:'vehicle.plane',spec:{...spec,spawn:[10,0,0]},object:new Group()},
+  {instanceId:'helicopter-01',assetId:'vehicle.helicopter',spec:helicopter,object:new Group()},
+ ]}});
+ try{
+  const runtime=world.humanoid!,profile=getDefaultProfile('plane')!;
+  profile.aircraftFlight!.pitchGain=11;applyControlProfile(runtime,profile);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-01']?.pitchGain).toBe(11);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-02']?.pitchGain).toBe(11);
+  const override={...profile,instanceId:'plane-01',aircraftFlight:{...profile.aircraftFlight!,pitchGain:17}};
+  applyControlProfile(runtime,override);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-01']?.pitchGain).toBe(17);
+  expect(runtime.exportProfile().aircraftFlight?.['plane-02']?.pitchGain).toBe(11);
+  expect(readEditableProfile(runtime,{...getDefaultProfile('plane')!,instanceId:'plane-01'}).aircraftFlight?.pitchGain).toBe(17);
+  const helicopterBefore=structuredClone(runtime.exportProfile().aircraftFlight?.['helicopter-01']);
+  expect(()=>applyControlProfile(runtime,{...profile,instanceId:'helicopter-01'})).toThrow('profile instance asset mismatch: helicopter-01');
+  expect(runtime.exportProfile().aircraftFlight?.['helicopter-01']).toEqual(helicopterBefore);
+ }finally{world.dispose();}
+});
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});
 
 it('responds to asymmetric wheel support rather than flattening the whole aircraft',()=>{const f=fixture();f.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[...getMap('aircraft-training').boxes,{id:'bump',position:[1.1,.05,0],size:[.7,.1,.8]}]});try{for(let i=0;i<300;i++){stepVehicle(f.v,{...emptyInput(),brake:true},1/60,0,q);q.stepPhysics(1/60);}expect(Math.abs(f.v.roll)).toBeGreaterThan(.015);expect(Math.abs(f.v.roll)).toBeLessThan(.15);expect(f.v.motion.aircraft!.wheels.filter(w=>w.load>0).length).toBe(3);}finally{q.dispose();}});
