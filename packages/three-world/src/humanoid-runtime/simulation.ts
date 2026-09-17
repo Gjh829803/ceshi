@@ -126,6 +126,7 @@ export class Simulation {
   dispose():void{for(const id of this.actors.keys())this.removeActor(id);this.vehicleConditions.clear();for(const v of this.vehicles)this.environment.releaseVehicleRig(v.spec.id);}
   available(v:VehicleState){return this.environment.map.regions.some(r=>r.modes.includes(v.spec.mode));}
   vehicleCondition(v:VehicleState):VehicleConditionObservation{return this.vehicleConditions.inspect(v,this.environment);}
+  resetVehicleCondition(v:VehicleState):void{this.vehicleConditions.reset(v);}
   syncActorBodies(){const vehicles=this.vehicles.filter(v=>this.available(v)&&!v.motion.aircraft?.wearable?.groundLocomotion);this.environment.retainVehicleRigs(new Set(vehicles.filter(v=>v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(vehicles.flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));}
   summonDragon(id?:string,actorId:string=this.controlledActor.id):boolean{return this.actor(actorId).summonDragon(id);}
   reset():void{

@@ -135,6 +135,11 @@ export class VehicleConditionTracker {
     return classify(v, q, this.memory.get(v.spec.id)?.blockedSeconds ?? 0);
   }
 
+  /** A successful recovery establishes a new baseline; stale obstruction time must not win the next F press. */
+  reset(v: VehicleState): void {
+    this.memory.delete(v.spec.id);
+  }
+
   clear(): void {
     this.memory.clear();
   }

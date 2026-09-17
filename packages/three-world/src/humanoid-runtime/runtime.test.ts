@@ -159,9 +159,12 @@ describe('SDK humanoid runtime',()=>{
    expect(r.snapshot().mountedInstanceId).toBeNull();expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
    engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);
    expect(r.snapshot().mountedInstanceId).toBe('car-1');
+   r.simulation.controlledActor.transition=0;engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);
+   expect(r.snapshot().mountedInstanceId).toBeNull();
+   expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
    v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.grounded=false;
    engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);
-   expect(r.snapshot().mountedInstanceId).toBe('car-1');expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
+   expect(r.snapshot().mountedInstanceId).toBeNull();expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
   }finally{world.dispose();}
  });
  it('reports sustained wall obstruction as stuck but leaves a parked vehicle normal',async()=>{
@@ -190,6 +193,7 @@ describe('SDK humanoid runtime',()=>{
    const tracker=new VehicleConditionTracker();
    for(let i=0;i<6;i++)tracker.update(v,{...emptyInput(),forward:1},.1,q);
    expect(tracker.inspect(v,q)).toMatchObject({condition:'stuck',recoveryReason:'blocked',recoveryAvailable:true});
+   tracker.reset(v);expect(tracker.inspect(v,q)).toMatchObject({condition:'airborne',recoveryAvailable:false});
   }finally{sim.dispose();q.dispose();}
  });
  it('commits the reset hold only after live fixed ticks, not observations or explicit Episode-style input',async()=>{

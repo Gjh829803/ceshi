@@ -31,12 +31,12 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   const forward=new Vector3(0,0,1).applyQuaternion(v.rotation),up=new Vector3(0,1,0).applyQuaternion(v.rotation),right=new Vector3(1,0,0).applyQuaternion(v.rotation);
   const com=new Vector3(...C.center).applyQuaternion(v.rotation).add(v.position),force=new Vector3(),torque=new Vector3();
   const tuning=v.spec.aircraftFlight??DEFAULT_AIRCRAFT_FLIGHT;
-  const speed=v.velocity.length(),along=v.velocity.dot(forward),qS=.5*C.density*speed*speed*C.area;
+  const speed=v.velocity.length(),along=v.velocity.dot(forward),dynamicPressure=.5*C.density*speed*speed,qS=dynamicPressure*C.area;
   const alpha=Math.atan2(-v.velocity.dot(up),Math.max(.1,along))+.045;
   const cl=(.25+4.7*clamp(alpha,-.25,.25))*Math.exp(-Math.max(0,Math.abs(alpha)-.25)*5);
   const wing=rotary?(a.subtype==='tiltrotor'?a.tilt:0):1;
   const lift=qS*cl*wing,drag=qS*(.023+.055*cl*cl)+C.mass*(v.spec.drag+speed*speed*v.spec.dragQuadratic+Math.max(0,speed-v.spec.speed)*1.5);
-  a.dynamicPressurePascals=qS;a.liftNewtons=lift;a.dragNewtons=drag*wing;a.controlAuthority=clamp(qS/(C.mass*9.81),0,1.5)*wing;
+  a.dynamicPressurePascals=dynamicPressure;a.liftNewtons=lift;a.dragNewtons=drag*wing;a.controlAuthority=clamp(qS/(C.mass*9.81),0,1.5)*wing;
   a.desiredLiftNewtons=0;a.totalRotorThrustNewtons=0;a.transitionFactor=rotary?wing:0;
   const liftAxis=up.clone();if(speed>.1)liftAxis.addScaledVector(v.velocity,-up.dot(v.velocity)/(speed*speed)).normalize();
   v.throttle=clamp(v.throttle+(rotary?input.lift:input.slow?-1:input.forward+Number(input.boost))*v.spec.throttleResponse*h,0,1);

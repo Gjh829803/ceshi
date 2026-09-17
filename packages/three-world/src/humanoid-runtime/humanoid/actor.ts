@@ -509,6 +509,7 @@ export class HumanoidActor {
       q.releaseVehicleRig(v.spec.id);this.world.noteVehicleRelocation(v.spec.id);v.position.copy(safe);v.rotation.copy(rotation);v.yaw=yaw;v.pitch=v.roll=0;
       v.velocity.set(0,0,0);v.speed=v.steering=v.throttle=0;v.grounded=false;v.submerged=false;
       resetFamilyRigidState(v);
+      this.world.resetVehicleCondition(v);
       if(mounted){this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;}
       this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=fallback?'车辆已脱困并返回安全停放点 · 可以继续驾驶':relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
     }

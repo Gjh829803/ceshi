@@ -37,6 +37,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   {path:"apps/sdk-playground/src/panel-state.test.ts",lane:"contract"},
   { path: "apps/sdk-playground/src/panels.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "apps/sdk-playground/src/performance-details.test.ts", lane: "contract" },
+  { path: "apps/sdk-playground/src/profile-scopes.test.ts", lane: "contract" },
   { path: "apps/sdk-playground/src/render-warmup.test.ts", lane: "contract" },
   { path: "apps/sdk-playground/src/shell.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "packages/browser-capture/tests/playwright-browser-launch.test.ts", lane: "contract" },

@@ -3,13 +3,21 @@ type Runtime=humanoid.HumanoidRuntime;
 
 import { parseAssetProfile, type AssetProfile } from './profiles';
 
+function matchesProfileAsset(assetId: string, vehicle: ReturnType<Runtime['snapshot']>['vehicles'][number]): boolean {
+  return vehicle.assetId===assetId
+    || vehicle.assetId===`vehicle.${assetId}`
+    || assetId==='dragon'&&vehicle.assetId.startsWith('creature.dragon');
+}
+
 function targetInstances(runtime: Runtime, profile: AssetProfile): string[] {
   const vehicles=runtime.snapshot().vehicles;
   if(profile.instanceId!==undefined){
-    if(!vehicles.some(vehicle=>vehicle.instanceId===profile.instanceId))throw new Error(`profile instance not found: ${profile.instanceId}`);
+    const vehicle=vehicles.find(vehicle=>vehicle.instanceId===profile.instanceId);
+    if(!vehicle)throw new Error(`profile instance not found: ${profile.instanceId}`);
+    if(!matchesProfileAsset(profile.assetId,vehicle))throw new Error(`profile instance asset mismatch: ${profile.instanceId}`);
     return [profile.instanceId];
   }
-  const targets=vehicles.filter(vehicle=>vehicle.instanceId===profile.assetId||vehicle.assetId===profile.assetId||vehicle.assetId===`vehicle.${profile.assetId}`).map(vehicle=>vehicle.instanceId);
+  const targets=vehicles.filter(vehicle=>matchesProfileAsset(profile.assetId,vehicle)).map(vehicle=>vehicle.instanceId);
   if(!targets.length)throw new Error(`profile asset not present: ${profile.assetId}`);
   return targets;
 }

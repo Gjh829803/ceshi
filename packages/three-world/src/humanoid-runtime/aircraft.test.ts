@@ -102,9 +102,10 @@ it('applies and exports specialized fixed-wing profile tuning',async()=>{
  }finally{world.dispose();}
 });
 it('applies an asset profile to all matching instances and isolates instance overrides',async()=>{
- const spec=SPECS.find(s=>s.id==='plane')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[
+ const spec=SPECS.find(s=>s.id==='plane')!,helicopter=SPECS.find(s=>s.aircraftSubtype==='helicopter')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[
   {instanceId:'plane-01',assetId:'vehicle.plane',spec,object:new Group()},
   {instanceId:'plane-02',assetId:'vehicle.plane',spec:{...spec,spawn:[10,0,0]},object:new Group()},
+  {instanceId:'helicopter-01',assetId:'vehicle.helicopter',spec:helicopter,object:new Group()},
  ]}});
  try{
   const runtime=world.humanoid!,profile=getDefaultProfile('plane')!;
@@ -116,6 +117,9 @@ it('applies an asset profile to all matching instances and isolates instance ove
   expect(runtime.exportProfile().aircraftFlight?.['plane-01']?.pitchGain).toBe(17);
   expect(runtime.exportProfile().aircraftFlight?.['plane-02']?.pitchGain).toBe(11);
   expect(readEditableProfile(runtime,{...getDefaultProfile('plane')!,instanceId:'plane-01'}).aircraftFlight?.pitchGain).toBe(17);
+  const helicopterBefore=structuredClone(runtime.exportProfile().aircraftFlight?.['helicopter-01']);
+  expect(()=>applyControlProfile(runtime,{...profile,instanceId:'helicopter-01'})).toThrow('profile instance asset mismatch: helicopter-01');
+  expect(runtime.exportProfile().aircraftFlight?.['helicopter-01']).toEqual(helicopterBefore);
  }finally{world.dispose();}
 });
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});

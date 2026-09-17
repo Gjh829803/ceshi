@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {getDefaultProfile,loadAssetProfile,parseAssetProfile,saveAssetProfile} from './profiles';
+import {clearAssetProfile,getDefaultProfile,loadAssetProfile,parseAssetProfile,saveAssetProfile} from './profiles';
 import {humanoid} from '@worldkit/three';
 
 describe('asset aircraft profiles',()=>{
@@ -17,6 +17,10 @@ describe('asset aircraft profiles',()=>{
   expect(loadAssetProfile(storage,'plane','plane-01')).toMatchObject({instanceId:'plane-01',aircraftFlight:{pitchGain:12}});
   expect(loadAssetProfile(storage,'plane','plane-02')).toBeUndefined();
   expect(loadAssetProfile(storage,'plane')).toBeUndefined();
+  const second={...getDefaultProfile('plane')!,instanceId:'plane-02',aircraftFlight:{...getDefaultProfile('plane')!.aircraftFlight!,pitchGain:15}};
+  saveAssetProfile(storage,second);clearAssetProfile(storage,'plane','plane-01');
+  expect(loadAssetProfile(storage,'plane','plane-01')).toBeUndefined();
+  expect(loadAssetProfile(storage,'plane','plane-02')?.aircraftFlight?.pitchGain).toBe(15);
  });
  it('rejects specialized tuning on soaring profiles and incomplete tuning',()=>{
   const glider=getDefaultProfile('glider')!;
