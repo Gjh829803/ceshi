@@ -50,6 +50,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/creator-host/tests/compiler/compiler.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   {path:"packages/creator-host/tests/compiler/debug-tools.test.ts",lane:"resource-heavy",reasonCodes:["browser-or-server-process"]},
   { path: "packages/creator-host/tests/compiler/workspace-runtime.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
+  { path: "packages/creator-host/tests/compiler/workspace-test-files.test.ts", lane: "contract" },
   { path: "packages/creator-host/tests/discovery/authoring-schema.test.ts", lane: "contract", suites: ["camera"] },
   { path: "packages/creator-host/tests/discovery/camera-configuration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"], suites: ["camera"] },
   {path:"packages/creator-host/tests/discovery/camera-presets.test.ts",lane:"resource-heavy",reasonCodes:["native-rapier"], suites: ["camera"] },

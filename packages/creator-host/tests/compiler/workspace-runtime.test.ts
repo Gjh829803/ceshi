@@ -1,17 +1,27 @@
-import {afterEach,expect,it,vi} from 'vitest';
-import {mkdtemp,writeFile,readFile,rm,symlink,mkdir,cp} from 'node:fs/promises';
+import {afterEach,expect,it,vi,type TestContext} from 'vitest';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {WorkspaceTestFiles} from './workspace-test-files';
+import {writeFile,readFile,symlink,mkdir,cp} from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import {ThreeCompiler,REPOSITORY_ROOT} from '../../src/compiler/compiler';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {executeThreeCreatorTool} from '../../src/cli/mcp';
-const roots:string[]=[];
-async function fixture(){const root=await mkdtemp(path.join(os.tmpdir(),'workspace-sdk-'));roots.push(root);
+const scopes=new AsyncLocalStorage<WorkspaceTestFiles>();
+const testFiles=new Map<string,WorkspaceTestFiles>();
+function runWorkspaceTest(context:TestContext,work:()=>Promise<void>){
+ const files=new WorkspaceTestFiles();testFiles.set(context.task.id,files);
+ return scopes.run(files,()=>files.run(work));
+}
+function workspaceTest(name:string,work:()=>Promise<void>){it(name,context=>runWorkspaceTest(context,work));}
+async function fixture(){const files=scopes.getStore();if(!files)throw Error('WORKSPACE_TEST_SCOPE_REQUIRED');const root=await files.createRoot();
  await writeFile(path.join(root,'index.html'),'<html><script type="module" src="./main.ts"></script></html>');
  await writeFile(path.join(root,'main.ts'),"import {createWorld} from '@worldkit/three'; window.createWorld=createWorld;");return root;}
-afterEach(async()=>{vi.unstubAllEnvs();await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
+afterEach(async context=>{
+ try{await testFiles.get(context.task.id)?.cleanup();}
+ finally{testFiles.delete(context.task.id);vi.unstubAllEnvs();}
+});
 
-it('materializes only runtime sources, compiles edits and packages the exact source identity',async()=>{
+workspaceTest('materializes only runtime sources, compiles edits and packages the exact source identity',async()=>{
  const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
  try{
   const result:any=await executeThreeCreatorTool(service,'creator_materialize_runtime',{});
@@ -37,7 +47,7 @@ it('materializes only runtime sources, compiles edits and packages the exact sou
  }finally{await service.close();}
 });
 
-it('uses explicit workspace SDK source despite an unrelated host prebuilt cache and never runs author configuration',async()=>{
+workspaceTest('uses explicit workspace SDK source despite an unrelated host prebuilt cache and never runs author configuration',async()=>{
  const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');await compiler.materializeRuntime();
  vi.stubEnv('WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT','/not-a-runtime-cache');
  await writeFile(path.join(root,'esbuild.config.js'),"throw new Error('AUTHOR_CONFIG_EXECUTED');");
@@ -45,31 +55,32 @@ it('uses explicit workspace SDK source despite an unrelated host prebuilt cache 
  await expect(compiler.prepare()).resolves.toHaveProperty('runtimeSourceHash');
 });
 
-it.each(["import fs from 'node:fs'; console.log(fs);", "import x from '../../../main.ts'; console.log(x);", "import x from 'unlisted-package'; console.log(x);"])(
- 'rejects out-of-bound workspace SDK imports: %s',async source=>{
+for(const source of ["import fs from 'node:fs'; console.log(fs);", "import x from '../../../main.ts'; console.log(x);", "import x from 'unlisted-package'; console.log(x);"]){
+ workspaceTest(`rejects out-of-bound workspace SDK imports: ${source}`,async()=>{
  const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');await compiler.materializeRuntime();
  await writeFile(path.join(root,'sdk/three-world/src/index.ts'),source+'\nexport const createWorld=()=>{};');
  await expect(compiler.prepare()).rejects.toThrow(/THREE_RUNTIME_IMPORT/);
-});
-it('rejects changed dependency pins and symlinked SDK source',async()=>{
+ });
+}
+workspaceTest('rejects changed dependency pins and symlinked SDK source',async()=>{
  const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');await compiler.materializeRuntime();
  const manifest=path.join(root,'sdk/runtime.json'),bytes=await readFile(manifest);const value=JSON.parse(bytes.toString());value.dependencyIdentity='0'.repeat(64);await writeFile(manifest,JSON.stringify(value));
  await expect(compiler.prepare()).rejects.toThrow('THREE_RUNTIME_DEPENDENCY_IDENTITY_MISMATCH');
  await writeFile(manifest,bytes);await symlink(path.join(REPOSITORY_ROOT,'package.json'),path.join(root,'sdk/linked.json'));
  await expect(compiler.prepare()).rejects.toThrow(/SYMLINK/);
 });
-it('does not allow sdk root symlinks or direct author imports that duplicate runtime ownership',async()=>{
+workspaceTest('does not allow sdk root symlinks or direct author imports that duplicate runtime ownership',async()=>{
  const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');await compiler.materializeRuntime();
  await writeFile(path.join(root,'main.ts'),"import {createWorld} from './sdk/three-world/src/index'; window.createWorld=createWorld;");
  await expect(compiler.prepare()).rejects.toThrow('THREE_RUNTIME_IMPORT_USE_PUBLIC_PACKAGE');
  const linked=await fixture();await symlink(path.join(root,'sdk'),path.join(linked,'sdk'));
  await expect(new ThreeCompiler(linked,'three-sdk').materializeRuntime()).rejects.toThrow('THREE_RUNTIME_SOURCE_SYMLINK');
 });
-it('requires the SDK profile before materialization',async()=>{
+workspaceTest('requires the SDK profile before materialization',async()=>{
  const compiler=new ThreeCompiler(await fixture(),'three-raw');await expect(compiler.materializeRuntime()).rejects.toThrow('THREE_RUNTIME_SOURCE_REQUIRES_SDK');
 });
 
-it('builds identical browser bytes from the same workspace SDK source in separate directories',async()=>{
+workspaceTest('builds identical browser bytes from the same workspace SDK source in separate directories',async()=>{
  const first=await fixture(),second=await fixture(),a=new ThreeCompiler(first,'three-sdk'),b=new ThreeCompiler(second,'three-sdk');
  await a.materializeRuntime();await cp(path.join(first,'sdk'),path.join(second,'sdk'),{recursive:true});
  const one=await a.prepare(),two=await b.prepare();
@@ -77,7 +88,7 @@ it('builds identical browser bytes from the same workspace SDK source in separat
  const browser=await readFile(path.join(one.playableRoot,'runtime/worldkit-three.js'),'utf8');expect(browser).not.toContain(first);
 });
 
-it('includes the actual migrated camera snapshot bytes in Creator source and build identity',async()=>{
+workspaceTest('includes the actual migrated camera snapshot bytes in Creator source and build identity',async()=>{
  const root=await fixture(),compiler=new ThreeCompiler(root,'three-sdk');
  await mkdir(path.join(root,'config'));
  const cameraBytes=await readFile(path.join(REPOSITORY_ROOT,'apps/sdk-playground/config/camera.json'),'utf8');
