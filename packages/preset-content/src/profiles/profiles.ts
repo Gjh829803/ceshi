@@ -4,7 +4,7 @@ import { humanoid } from '@worldkit/three';
 export const PROFILE_VERSION = 2 as const;
 export type ControlTuning = humanoid.MovementSettings;
 export type ProfileEnvelope = CollisionEnvelope | { kind: 'capsule'; radius: number; halfHeight: number; offset: [number, number, number] };
-export interface AssetProfile { version: typeof PROFILE_VERSION; assetId: string; control: ControlTuning; envelope: ProfileEnvelope }
+export interface AssetProfile { version: typeof PROFILE_VERSION; assetId: string; control: ControlTuning; aircraftFlight?: humanoid.AircraftFlightTuning; envelope: ProfileEnvelope }
 export interface ProfileStorage { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void }
 
 const person: AssetProfile = {
@@ -22,11 +22,13 @@ for (const spec of SPECS) records[spec.id] = {
     Object.fromEntries(humanoid.controlKeys.filter(key=>Object.hasOwn(spec,key)).map(key=>[key,spec[key]])),
     humanoid.defaultMovementSettings(spec.mode,spec),
   ),
+  ...(spec.aircraftFlight?{aircraftFlight:structuredClone(spec.aircraftFlight)}:{}),
   envelope: structuredClone(spec.envelope),
 };
 
 function deepFreeze(profile: AssetProfile): Readonly<AssetProfile> {
   Object.freeze(profile.control); Object.freeze(profile.envelope.offset);
+  if(profile.aircraftFlight)Object.freeze(profile.aircraftFlight);
   if (profile.envelope.kind === 'box') Object.freeze(profile.envelope.halfExtents);
   Object.freeze(profile.envelope); return Object.freeze(profile);
 }
@@ -47,17 +49,26 @@ const vector = (value: unknown, name: string, min: number, max: number): [number
   if (!Array.isArray(value) || value.length !== 3) throw new Error(`${name} must have three values`);
   return [finite(value[0], `${name}[0]`, min, max), finite(value[1], `${name}[1]`, min, max), finite(value[2], `${name}[2]`, min, max)];
 };
+const parseAircraftFlight = (value: unknown): humanoid.AircraftFlightTuning => {
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('aircraftFlight must be an object');
+  const source=value as Record<string,unknown>,keys=['pitchGain','rollGain','pitchRateDamping','rollRateDamping','yawRateDamping'] as const;
+  if(Object.keys(source).some(key=>!keys.includes(key as typeof keys[number]))||keys.some(key=>!Object.hasOwn(source,key)))throw new Error('complete aircraftFlight profile required');
+  return {pitchGain:finite(source.pitchGain,'aircraftFlight.pitchGain',0,100),rollGain:finite(source.rollGain,'aircraftFlight.rollGain',0,100),pitchRateDamping:finite(source.pitchRateDamping,'aircraftFlight.pitchRateDamping',0,100),rollRateDamping:finite(source.rollRateDamping,'aircraftFlight.rollRateDamping',0,100),yawRateDamping:finite(source.yawRateDamping,'aircraftFlight.yawRateDamping',0,100)};
+};
 
 export function parseAssetProfile(input: unknown, expectedAssetId?: string): AssetProfile {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('profile must be an object');
   const value = input as Record<string, unknown>;
   if (value.version !== PROFILE_VERSION) throw new Error('unsupported profile version');
-  if(Object.keys(value).some(key=>!['version','assetId','control','envelope'].includes(key)))throw new Error('unknown profile field');
+  if(Object.keys(value).some(key=>!['version','assetId','control','aircraftFlight','envelope'].includes(key)))throw new Error('unknown profile field');
   if (typeof value.assetId !== 'string' || !DEFAULT_PROFILES[value.assetId]) throw new Error('unknown assetId');
   if (expectedAssetId && value.assetId !== expectedAssetId) throw new Error('profile assetId mismatch');
   if (!value.control || typeof value.control !== 'object' || Array.isArray(value.control)) throw new Error('control must be an object');
   const control = value.control as Record<string, unknown>;
   if(Object.keys(humanoid.CONTROL_RANGES).some(key=>!Object.hasOwn(control,key)))throw new Error('complete control profile required');
+  const spec=SPECS.find(s=>s.id===value.assetId);
+  const aircraftFlight=value.aircraftFlight===undefined?undefined:parseAircraftFlight(value.aircraftFlight);
+  if(aircraftFlight&&(!spec?.mode||spec.mode!=='plane'||['glider','paraglider','wingsuit','balloon'].includes(spec.aircraftSubtype??'')))throw new Error('aircraftFlight unsupported for asset');
   if (!value.envelope || typeof value.envelope !== 'object' || Array.isArray(value.envelope)) throw new Error('envelope must be an object');
   const envelope = value.envelope as Record<string, unknown>, offset = vector(envelope.offset, 'envelope.offset', -20, 20);
   let parsedEnvelope: ProfileEnvelope;
@@ -69,6 +80,7 @@ export function parseAssetProfile(input: unknown, expectedAssetId?: string): Ass
     version: PROFILE_VERSION,
     assetId: value.assetId,
     control: humanoid.parseMovementSettings(control,humanoid.defaultMovementSettings(value.assetId==='person'?'character':SPECS.find(s=>s.id===value.assetId)!.mode,{speed:finite(control.speed,'control.speed',0,200),accel:finite(control.accel,'control.accel',0,100),grip:finite(control.grip,'control.grip',0,100),steer:finite(control.steer,'control.steer',0,30)})),
+    ...(aircraftFlight?{aircraftFlight}:{}),
     envelope: parsedEnvelope,
   };
 }

@@ -5,7 +5,7 @@ import { parseAssetProfile, type AssetProfile } from './profiles';
 
 export function applyControlProfile(runtime: Runtime, profile: AssetProfile) {
   const parsed = parseAssetProfile(profile);
-  runtime.applyProfile(parsed.assetId==='person'?{character:parsed.control}:{vehicles:{[parsed.assetId]:{...parsed.control}}});
+  runtime.applyProfile(parsed.assetId==='person'?{character:parsed.control}:{vehicles:{[parsed.assetId]:{...parsed.control}},...(parsed.aircraftFlight?{aircraftFlight:{[parsed.assetId]:parsed.aircraftFlight}}:{})});
 }
 /** Read controls from their SDK owner; cameras belong to CameraDocument. */
 export function readEditableProfile(runtime: Runtime, profile: AssetProfile): AssetProfile {
@@ -14,6 +14,8 @@ export function readEditableProfile(runtime: Runtime, profile: AssetProfile): As
   else {
     const control=effective.vehicles?.[parsed.assetId]??{};
     parsed.control=humanoid.parseMovementSettings(control,parsed.control);
+    const aircraftFlight=effective.aircraftFlight?.[parsed.assetId];
+    if(aircraftFlight)parsed.aircraftFlight={...humanoid.DEFAULT_AIRCRAFT_FLIGHT,...aircraftFlight};
   }
   return parsed;
 }

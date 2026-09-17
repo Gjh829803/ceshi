@@ -10,6 +10,8 @@ import {createHumanoidCameraDocument} from '../config/camera/index';
 import {EnvironmentQueries,initEnvironmentQueries} from './environment/queries';
 import {Simulation,createVehicle,emptyInput,stepVehicle,type Input} from './simulation';
 import {SPECS} from '@worldkit/preset-content/config';
+import {applyControlProfile,readEditableProfile} from '@worldkit/preset-content/platform/profile-runtime';
+import {getDefaultProfile} from '@worldkit/preset-content/platform/profiles';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readControls} from './input';
 beforeAll(initEnvironmentQueries);
@@ -74,6 +76,15 @@ it('uses per-aircraft attitude tuning for fixed-wing torque response',()=>{
  const run=(pitchGain:number,rollGain:number)=>{const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[]}),v=createVehicle({...SPECS.find(s=>s.id==='plane')!,spawn:[0,100,0],aircraftFlight:{...humanoid.DEFAULT_AIRCRAFT_FLIGHT,pitchGain,rollGain}});
   try{v.grounded=false;v.velocity.set(0,0,35);for(let n=0;n<90;n++){stepVehicle(v,{...emptyInput(),pitch:-.35,steer:.35},1/60,0,q);q.stepPhysics(1/60);}return {pitch:v.pitch,roll:v.roll};}finally{q.dispose();}};
  const soft=run(2,3),firm=run(18,28);expect(Math.abs(firm.pitch)).toBeGreaterThan(Math.abs(soft.pitch)+.02);expect(Math.abs(firm.roll)).toBeGreaterThan(Math.abs(soft.roll)+.02);
+});
+it('applies and exports specialized fixed-wing profile tuning',async()=>{
+ const spec=SPECS.find(s=>s.id==='plane')!,world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('aircraft-training'),character:{instanceId:'person',object:new Group()},vehicles:[{instanceId:'plane',assetId:'plane',spec,object:new Group()}]}});
+ try{
+  const runtime=world.humanoid!,profile=getDefaultProfile('plane')!;runtime.simulation.controlledActor.vehicleIndex=0;runtime.simulation.controlledActor.transition=0;profile.aircraftFlight!.pitchGain=12;applyControlProfile(runtime,profile);
+  expect(runtime.exportProfile().aircraftFlight?.plane?.pitchGain).toBe(12);
+  expect(runtime.inspectConfiguration().effective.aircraftFlight?.pitchGain).toBe(12);
+  expect(readEditableProfile(runtime,getDefaultProfile('plane')!).aircraftFlight?.pitchGain).toBe(12);
+ }finally{world.dispose();}
 });
 it('collides with a wall at cruise speed',()=>{const initial=fixture(),v=initial.v;initial.q.dispose();const q=new EnvironmentQueries({...getMap('aircraft-training'),boxes:[{id:'wall',position:[0,20,15],size:[100,40,1]}]});try{v.position.set(0,10,0);v.velocity.set(0,0,55);for(let i=0;i<60;i++){stepVehicle(v,emptyInput(),1/60,0,q);q.stepPhysics(1/60);}expect(v.position.z).toBeLessThan(15);}finally{q.dispose();}});
 

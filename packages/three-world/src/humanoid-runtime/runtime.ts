@@ -62,6 +62,7 @@ type AtvState,
 } from './motion-families/ground-vehicle/atv';
 
 import * as THREE from 'three';
+import { DEFAULT_AIRCRAFT_FLIGHT, type AircraftFlightTuning } from '../config/aircraft';
 import type { CameraPointerInput } from '../input';
 import { CONTROL_RANGES,parseMovementSettings,readMovementSettings,type MovementSettings } from '../config/control';
 import { DEFAULT_CHARACTER_OPTIONS } from '../config/physics';
@@ -122,6 +123,8 @@ export interface HumanoidRuntimeOptions {
 export interface HumanoidProfile {
   readonly character?:Partial<MovementSettings>;
   readonly vehicles?:Readonly<Record<string,Partial<MovementSettings>>>;
+  /** Specialized aircraft attitude tuning, keyed by vehicle instance id. */
+  readonly aircraftFlight?:Readonly<Record<string,Partial<AircraftFlightTuning>>>;
 }
 /** Replayable profile and the active controller's resolved settings. Observation only. */
 export interface HumanoidConfiguration {
@@ -130,6 +133,7 @@ export interface HumanoidConfiguration {
     readonly subjectId:string;
     readonly family:VehicleSpec['mode']|'character';
     readonly control:Partial<MovementSettings>;
+    readonly aircraftFlight:Readonly<AircraftFlightTuning>|null;
   };
 }
 export interface BoardingObservation {
@@ -344,7 +348,8 @@ export class HumanoidRuntime implements PhysicsPort {
     const guide=this.inputGuide(id);
     const meaning=(key:string)=>guide.fields[key as keyof Input]??'Ignored for this control family; leave neutral.';
     const input=object(Object.fromEntries([...['forward','steer','lift','roll','pitch','strafe'].map(k=>[k,{type:'number',minimum:-1,maximum:1,description:meaning(k)}]),...['boost','brake','jump','slow','primary','secondary'].map(k=>[k,{type:'boolean',description:meaning(k)}]),['actions',object(Object.fromEntries(HUMANOID_ACTION_INPUT_FIELDS.map(key=>[key,{type:'boolean'}])),[])]]) as Record<string,import('../contracts').JsonValue>,['forward','steer','lift','roll','pitch','strafe','boost','brake','jump','slow']);
-    const profile=object({character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object(controlSchemaForFamily(vehicle.motion.flyingCreature?'flying-creature':vehicle.spec.mode,!!(vehicle.motion.wheelPhysics||vehicle.motion.body?.powertrain)),[])])),[])},[]);
+    const aircraftFlight=Object.fromEntries(this.simulation.vehicles.filter(v=>v.motion.aircraft&&!['glider','paraglider','wingsuit','balloon'].includes(v.motion.aircraft.subtype)).map(v=>[v.spec.id,object({pitchGain:{type:'number',minimum:0,maximum:100},rollGain:{type:'number',minimum:0,maximum:100},pitchRateDamping:{type:'number',minimum:0,maximum:100},rollRateDamping:{type:'number',minimum:0,maximum:100},yawRateDamping:{type:'number',minimum:0,maximum:100}},[])]));
+    const profile=object({character:object(controlSchemaForFamily('character'),[]),vehicles:object(Object.fromEntries(this.simulation.vehicles.map(vehicle=>[vehicle.spec.id,object(controlSchemaForFamily(vehicle.motion.flyingCreature?'flying-creature':vehicle.spec.mode,!!(vehicle.motion.wheelPhysics||vehicle.motion.body?.powertrain)),[])])),[]),aircraftFlight:object(aircraftFlight,[])},[]);
     const vehicle=this.simulation.actor(id).vehicle;
     return [...(vehicle?.motion.family==='space'?[create('space.set-drive-mode',{actorId:{const:id},mode:{enum:['assisted','inertial']}}),create('space.dock',{actorId:{const:id},portId:{enum:[null,...(vehicle.spec.spaceFlight!.dockingPorts?.map(p=>p.id)??[])]}})]:[]),...[create('vehicle.exit',{actorId:{const:id}}),create('vehicle.recover',{actorId:{const:id}})],create('humanoid.set-input',{actorId:{const:id},input:{anyOf:[input,{type:'null'}]}}),create('humanoid.apply-profile',{profile}),create('humanoid.perform-action',{actorId:{const:id},request:object({requestId:{type:'string'},action:{enum:['roll','slide','pickup','putDown','sit','standUp']},targetId:{type:'string'},slotId:{type:'string'}},['requestId','action'])})];
   }
@@ -450,23 +455,30 @@ export class HumanoidRuntime implements PhysicsPort {
     const actor=this.simulation.actor(actorId),ok=actor.prepareCharacter(new THREE.Vector3(...position),yaw);
     if(ok){if(actorId===this.options.character.instanceId)this.characterFacingPrepared=true;this.actorInputs.delete(actorId);this.actorLastInputs.delete(actorId);this.sync(0);}return ok;
   }
-  private prepareProfile(profile:HumanoidProfile):HumanoidProfile & {character:MovementSettings;vehicles:Record<string,MovementSettings>}{
+  private prepareProfile(profile:HumanoidProfile):HumanoidProfile & {character:MovementSettings;vehicles:Record<string,MovementSettings>;aircraftFlight:Record<string,AircraftFlightTuning>}{
     const object=(value:unknown)=>!!value&&typeof value==='object'&&!Array.isArray(value);
-    if(!object(profile)||Object.keys(profile).some(k=>!['character','vehicles'].includes(k)))throw new Error('HUMANOID_PROFILE_INVALID');
+    if(!object(profile)||Object.keys(profile).some(k=>!['character','vehicles','aircraftFlight'].includes(k)))throw new Error('HUMANOID_PROFILE_INVALID');
     for(const section of [profile.character,profile.vehicles])if(section!==undefined&&!object(section))throw new Error('HUMANOID_PROFILE_INVALID');
     for(const [id,values] of Object.entries(profile.vehicles??{})){this.index(id);if(!object(values)||Object.keys(values).some(k=>!Object.hasOwn(CONTROL_RANGES,k)))throw new Error('HUMANOID_PROFILE_INVALID');}
+    const flightRanges:Record<keyof AircraftFlightTuning,readonly [number,number]>={pitchGain:[0,100],rollGain:[0,100],pitchRateDamping:[0,100],rollRateDamping:[0,100],yawRateDamping:[0,100]};
+    for(const [id,values] of Object.entries(profile.aircraftFlight??{})){
+      const vehicle=this.simulation.vehicles.find(v=>v.spec.id===id);
+      if(!vehicle||!vehicle.motion.aircraft||['glider','paraglider','wingsuit','balloon'].includes(vehicle.motion.aircraft.subtype)||!object(values)||Object.keys(values).some(k=>!Object.hasOwn(flightRanges,k)))throw new Error('HUMANOID_PROFILE_INVALID');
+      for(const key of Object.keys(values) as (keyof AircraftFlightTuning)[]){const value=values[key];if(typeof value!=='number'||!Number.isFinite(value)||value<flightRanges[key][0]||value>flightRanges[key][1])throw new Error('HUMANOID_PROFILE_INVALID');}
+    }
     const character=parseMovementSettings(profile.character??{},this.simulation.characterControl);
     const vehicles=Object.fromEntries(this.simulation.vehicles.map(v=>{const control=profile.vehicles?.[v.spec.id]??{};return [v.spec.id,{...parseMovementSettings(control,readMovementSettings(v.spec))}];}));
+    const aircraftFlight=Object.fromEntries(this.simulation.vehicles.filter(v=>v.motion.aircraft&&!['glider','paraglider','wingsuit','balloon'].includes(v.motion.aircraft.subtype)).map(v=>[v.spec.id,{...DEFAULT_AIRCRAFT_FLIGHT,...v.spec.aircraftFlight,...profile.aircraftFlight?.[v.spec.id]}]));
     for(const v of this.simulation.vehicles)if(v.motion.flyingCreature)resolveConfiguredFlyingCreatureFeel({...v.spec,...vehicles[v.spec.id]!});
     const numbers=[...Object.values(character),...Object.values(vehicles).flatMap(v=>Object.values(v))];
     if(numbers.some(v=>typeof v!=='number'||!Number.isFinite(v)||v<0))throw new Error('HUMANOID_PROFILE_INVALID');
-    return {character,vehicles};
+    return {character,vehicles,aircraftFlight};
   }
   private configureSimulation(simulation:Simulation,profile:ReturnType<HumanoidRuntime['prepareProfile']>):void{
     simulation.characterControl={...profile.character};
     const c=simulation.characterControl;
     for(const [id,actor] of simulation.actors){actor.controller.movementTuning={speedScale:c.speed/3.8,accelerationScale:c.accel/12,airControlScale:c.grip/3,turnScale:c.steer/14,maxSpeed:c.maxSpeed,slowSpeed:c.slowSpeed,coastDeceleration:c.coastDeceleration,jumpSpeed:c.jumpSpeed};this.applyActorMovement(actor.controller,this.actors.get(id)?.movement??{});}
-    for(const v of simulation.vehicles)Object.assign(v.spec,profile.vehicles[v.spec.id]);
+    for(const v of simulation.vehicles){Object.assign(v.spec,profile.vehicles[v.spec.id]);const flight=profile.aircraftFlight[v.spec.id];if(flight)v.spec.aircraftFlight={...flight};}
   }
   private commitProfile(profile:ReturnType<HumanoidRuntime['prepareProfile']>):void{
     this.configureSimulation(this.simulation,profile);
@@ -484,6 +496,7 @@ export class HumanoidRuntime implements PhysicsPort {
     return {profile:this.exportProfile(),effective:{
       subjectId:vehicle?.spec.id??this.inputActorId,family,
       control:Object.fromEntries(controlFields(family,!!(vehicle?.motion.wheelPhysics||vehicle?.motion.body?.powertrain)).filter(field=>!field.disabled).map(field=>[field.key,controls[field.key]])),
+      aircraftFlight:vehicle?.spec.aircraftFlight??null,
     }};
   }
   onVisualUpdate(callback:(deltaSeconds:number,sample:HumanoidDisplaySample)=>void):()=>void{this.assertLive();this.visualUpdates.add(callback);return()=>{this.visualUpdates.delete(callback);};}
