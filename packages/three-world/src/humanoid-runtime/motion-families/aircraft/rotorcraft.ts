@@ -3,10 +3,11 @@ import {AIRCRAFT as C,ROTOR_FLIGHT as R} from '../../../config/aircraft';
 import type {Input,VehicleState} from '../../simulation';
 
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
+export interface RotorForceTelemetry {desiredLiftNewtons:number;totalRotorThrustNewtons:number;transitionFactor:number;}
 /** 返回旋翼合力和力矩；实际位移、姿态仍只由 Rapier 积分。
  * 总距使用垂直速度增稳，周期变距使用姿态增稳。不是完整叶素/涡流仿真。
  */
-export function rotorForces(v:VehicleState,input:Input,h:number,wingLift:number){
+export function rotorForces(v:VehicleState,input:Input,h:number,wingLift:number):{force:Vector3;torque:Vector3}&RotorForceTelemetry{
  const a=v.motion.aircraft!,force=new Vector3(),torque=new Vector3(),weight=C.mass*9.81;
  const up=new Vector3(0,1,0).applyQuaternion(v.rotation);
  const localRate=a.angularVelocity.clone().applyQuaternion(v.rotation.clone().invert());
@@ -69,5 +70,5 @@ export function rotorForces(v:VehicleState,input:Input,h:number,wingLift:number)
  force.applyQuaternion(v.rotation);torque.applyQuaternion(v.rotation);
  force.addScaledVector(v.velocity,-C.mass*R.drag*(1-wing));
  a.loadFactor=force.dot(up)/weight;
- return {force,torque};
+ return {force,torque,desiredLiftNewtons:desiredLift,totalRotorThrustNewtons:total,transitionFactor:wing};
 }

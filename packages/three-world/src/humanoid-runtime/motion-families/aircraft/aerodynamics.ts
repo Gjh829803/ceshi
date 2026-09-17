@@ -13,10 +13,12 @@ export interface AircraftState {
  temperatureKelvin:number;fuel:number;canopy:number;towSeconds:number;towReleased?:boolean;
  subtype:AircraftSubtype;rotorSpeedFraction:number;collective:number;tilt:number;rotorPhases:number[];rotorThrusts:number[];motorThrusts:number[];
  angularVelocity:Vector3;airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;
+ dynamicPressurePascals:number;liftNewtons:number;dragNewtons:number;controlAuthority:number;
+ desiredLiftNewtons:number;totalRotorThrustNewtons:number;transitionFactor:number;
  stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;
  wheels:{contact:boolean;compression:number;load:number;angle:number;steer:number}[];
 }
-export function createAircraftState(subtype:AircraftSubtype='fixed-wing'):AircraftState{return {...(wearableFlight(subtype)?{wearable:createWearableFlight()}:{}),temperatureKelvin:288.15,fuel:1,canopy:0,towSeconds:0,subtype,rotorSpeedFraction:0,collective:0,tilt:0,rotorPhases:[],rotorThrusts:[],motorThrusts:[],angularVelocity:new Vector3(),airspeedMetersPerSecond:0,angleOfAttackRadians:0,loadFactor:0,stalled:false,landingSinkMetersPerSecond:0,hardLanding:false,wheels:C.wheels.map(()=>({contact:false,compression:0,load:0,angle:0,steer:0}))};}
+export function createAircraftState(subtype:AircraftSubtype='fixed-wing'):AircraftState{return {...(wearableFlight(subtype)?{wearable:createWearableFlight()}:{}),temperatureKelvin:288.15,fuel:1,canopy:0,towSeconds:0,subtype,rotorSpeedFraction:0,collective:0,tilt:0,rotorPhases:[],rotorThrusts:[],motorThrusts:[],angularVelocity:new Vector3(),airspeedMetersPerSecond:0,angleOfAttackRadians:0,loadFactor:0,dynamicPressurePascals:0,liftNewtons:0,dragNewtons:0,controlAuthority:0,desiredLiftNewtons:0,totalRotorThrustNewtons:0,transitionFactor:0,stalled:false,landingSinkMetersPerSecond:0,hardLanding:false,wheels:C.wheels.map(()=>({contact:false,compression:0,load:0,angle:0,steer:0}))};}
 /** 飞机只提交力和力矩；由既有 Rapier 世界的固定子步积分六自由度运动。 */
 export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQueries){
  if(dt<=0)return;
@@ -32,6 +34,8 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   const cl=(.25+4.7*clamp(alpha,-.25,.25))*Math.exp(-Math.max(0,Math.abs(alpha)-.25)*5);
   const wing=rotary?(a.subtype==='tiltrotor'?a.tilt:0):1;
   const lift=qS*cl*wing,drag=qS*(.023+.055*cl*cl)+C.mass*(v.spec.drag+speed*speed*v.spec.dragQuadratic+Math.max(0,speed-v.spec.speed)*1.5);
+  a.dynamicPressurePascals=qS;a.liftNewtons=lift;a.dragNewtons=drag*wing;a.controlAuthority=clamp(qS/(C.mass*9.81),0,1.5)*wing;
+  a.desiredLiftNewtons=0;a.totalRotorThrustNewtons=0;a.transitionFactor=rotary?wing:0;
   const liftAxis=up.clone();if(speed>.1)liftAxis.addScaledVector(v.velocity,-up.dot(v.velocity)/(speed*speed)).normalize();
   v.throttle=clamp(v.throttle+(rotary?input.lift:input.slow?-1:input.forward+Number(input.boost))*v.spec.throttleResponse*h,0,1);
   v.steering+=(input.steer-v.steering)*(1-Math.exp(-(v.grounded?(input.steer?v.spec.steeringResponse:v.spec.steeringReturn):C.turnResponse)*h));
@@ -40,7 +44,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
    const thrust=v.throttle*v.spec.accel*C.mass;force.addScaledVector(forward,thrust);
    if(a.subtype==='pusher')torque.addScaledVector(right,.2*thrust);
    a.rotorSpeedFraction=v.throttle;a.rotorPhases[0]=(a.rotorPhases[0]??0)+v.throttle*R.propellerSpeed*h;a.rotorThrusts=[thrust];
-  }else{const rotor=rotorForces(v,input,h,lift);force.add(rotor.force);torque.add(rotor.torque);}
+  }else{const rotor=rotorForces(v,input,h,lift);force.add(rotor.force);torque.add(rotor.torque);a.desiredLiftNewtons=rotor.desiredLiftNewtons;a.totalRotorThrustNewtons=rotor.totalRotorThrustNewtons;a.transitionFactor=rotor.transitionFactor;}
   if(speed>.01)force.addScaledVector(v.velocity,-Math.min(drag*wing,C.mass*speed/h)/speed);
   // 侧滑阻尼保留独立速度；不会将速度向量直接覆盖为机头方向。
   force.addScaledVector(right,-v.velocity.dot(right)*qS*.035*wing);
@@ -63,7 +67,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   v.grounded=contacts>0;
   if(!previousGround&&v.grounded){a.landingSinkMetersPerSecond=Math.max(0,-v.velocity.y);a.hardLanding=a.landingSinkMetersPerSecond>4;}
   // 简化增稳飞控通过有界力矩请求目标姿态，低空速舵效减弱；不写姿态四元数。
-  const authority=clamp(qS/(C.mass*9.81),0,1.5)*wing;
+  const authority=a.controlAuthority;
   // 推进式发动机安装偏置由升降舵配平补偿，低空速仍受舵效限制。
   if(a.subtype==='pusher')torque.addScaledVector(right,-.2*v.throttle*v.spec.accel*C.mass*clamp(authority,0,1));
   // A/D 请求航迹转弯角速度，随空速计算所需侧倾；低速限制侧倾以保留升力余量。

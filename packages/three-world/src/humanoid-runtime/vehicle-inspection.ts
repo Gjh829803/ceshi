@@ -20,7 +20,9 @@ export interface VehicleInspection {
   instanceId:string;mode:string;physicsOwner:'rigid-body'|'controller';grounded:boolean|null;
   speedMetersPerSecond:number;throttleRatio:number;drive:VehicleDriveTelemetry|null;
   wheelCount:number|null;wheelContacts:number|null;wheels?:VehicleWheelInspection[]|null;
-  aircraft:{airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean}|null;
+  aircraft:{airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;
+    altitudeMeters:number;verticalSpeedMetersPerSecond:number;dynamicPressurePascals:number;liftNewtons:number;dragNewtons:number;controlAuthority:number;
+    desiredLiftNewtons:number;totalRotorThrustNewtons:number;transitionFactor:number}|null;
 }
 /** Detached measured state only. Contact and slip are observations, not fault classifications. */
 export function inspectVehicle(v:VehicleState,detail:'summary'|'wheels'='summary',physicsStepSequence?:number):VehicleInspection {
@@ -35,5 +37,8 @@ export function inspectVehicle(v:VehicleState,detail:'summary'|'wheels'='summary
       air?air.wheels.map((w,index)=>({index,contact:w.contact,loadNewtons:w.load,steeringRadians:w.steer,rotationRadians:w.angle,
         suspensionLengthMeters:null,compressionMeters:w.compression,angularSpeedRadiansPerSecond:null,longitudinalSlipMetersPerSecond:null,longitudinalForceNewtons:null})):null}:{}),
     aircraft:air&&measured?{airspeedMetersPerSecond:air.airspeedMetersPerSecond,angleOfAttackRadians:air.angleOfAttackRadians,loadFactor:air.loadFactor,
-      stalled:air.stalled,landingSinkMetersPerSecond:air.landingSinkMetersPerSecond,hardLanding:air.hardLanding}:null};
+      stalled:air.stalled,landingSinkMetersPerSecond:air.landingSinkMetersPerSecond,hardLanding:air.hardLanding,altitudeMeters:v.position.y,
+      verticalSpeedMetersPerSecond:v.velocity.y,dynamicPressurePascals:air.dynamicPressurePascals,liftNewtons:air.liftNewtons,dragNewtons:air.dragNewtons,
+      controlAuthority:air.controlAuthority,desiredLiftNewtons:air.desiredLiftNewtons,totalRotorThrustNewtons:air.totalRotorThrustNewtons,
+      transitionFactor:air.transitionFactor}:null};
 }

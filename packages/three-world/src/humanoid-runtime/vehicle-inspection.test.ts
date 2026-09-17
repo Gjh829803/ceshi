@@ -32,5 +32,6 @@ it('binds fresh model-free fixed-wing specs to existing force-driven physics',()
   expect(inspectVehicle(v).sample.solver).toEqual({physicsStepSequence:2,phase:'pre-integration',deltaSeconds:1/120});
   expect(v.throttle).toBeGreaterThan(0);expect(v.position.z).toBeGreaterThan(0);
   expect(inspectVehicle(v,'wheels')).toMatchObject({wheelCount:3,aircraft:{airspeedMetersPerSecond:v.motion.aircraft!.airspeedMetersPerSecond},drive:null});
+  expect(inspectVehicle(v).aircraft).toMatchObject({altitudeMeters:v.position.y,verticalSpeedMetersPerSecond:v.velocity.y,dynamicPressurePascals:expect.any(Number),liftNewtons:expect.any(Number),dragNewtons:expect.any(Number),controlAuthority:expect.any(Number),transitionFactor:0});
  }finally{q.dispose();}
 });
