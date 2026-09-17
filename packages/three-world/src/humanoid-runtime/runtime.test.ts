@@ -15,7 +15,7 @@ import {Simulation} from './simulation';
 import type {EnvironmentDefinition} from './environment/types';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
-import {MOUNTED_CAMERA_PITCH_RATIO,DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls,vehicleKeyboardAxes,cameraKeyboardPitchRatio,cameraOrbitInput,type MountedInputContext} from './input';
+import {MOUNTED_CAMERA_PITCH_RATIO,DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls,vehicleKeyboardAxes,cameraKeyboardPitchRatio,type MountedInputContext} from './input';
 import {AIRCRAFT_SUBTYPES} from '../config/aircraft';
 import {ACTION_TUNING} from './humanoid/action-schema';
 import {createFlyingCreatureSpec} from './motion-families/flying-creature/controller';
@@ -45,7 +45,6 @@ describe('SDK humanoid runtime',()=>{
    keyboard.keyUp(left!);expect(keyboard.sample().humanoid?.roll).toBe(roll?1:0);
    keyboard.clear();expect(keyboard.sample()).toMatchObject({cameraPitchRatio:0,humanoid:{pitch:0,roll:0}});
   }
-  expect(cameraOrbitInput(new Set(['ArrowUp','ArrowLeft']),context,1)).toEqual([260,-220*cameraKeyboardPitchRatio(context)]);
  });
  it('keeps foot Q/Z actions separate and clears posture keys on rebinding and dismount',()=>{
   let context:MountedInputContext|undefined={mode:'spacecraft'};

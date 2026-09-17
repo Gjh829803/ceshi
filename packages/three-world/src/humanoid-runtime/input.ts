@@ -110,8 +110,4 @@ export function readControls(held:ReadonlySet<string>,mounted:boolean,jump:boole
   else {i.jump=jump;i.lift=key('jump')-key('crouch');i.actions={...commands};}
   return i;
 }
-export function cameraOrbitInput(held:ReadonlySet<string>,context:MountedInputContext|undefined,dt:number):[number,number]{
-  const key=(code:string)=>held.has(code)?1:0;
-  return [(key('ArrowLeft')-key('ArrowRight'))*dt*260,(key('ArrowDown')-key('ArrowUp'))*dt*220*cameraKeyboardPitchRatio(context)];
-}
 export const HUMANOID_CONTROL_HINTS:[string,string][]=controlHints();

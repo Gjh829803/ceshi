@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWorld, type ThreeWorld } from './world.js';
+import * as humanoid from './humanoid-runtime/public.js';
 import type { CommandReceipt, TaskScope } from './contracts.js';
 import {ActorResources,actorResources} from './actor-resources';
 
@@ -183,6 +184,10 @@ function deferred() {
 const emptyInput = { type: 'object', properties: {}, required: [], additionalProperties: false } as const;
 
 describe('public Three SDK v2 authoring and control contracts', () => {
+  it('does not publish a second camera orbit helper or a constructable humanoid controller',()=>{
+    expect(humanoid).not.toHaveProperty('cameraOrbitInput');
+    expect(humanoid).not.toHaveProperty('HumanoidController');
+  });
   it('keeps an immobile actor failure in its operation without poisoning world runtime health',async()=>{
     const {world}=await fixture(true);const npc=new THREE.Group();npc.position.set(4,0,0);
     world.addCharacter({id:'immobile',object:npc,body:{heightMeters:1.8,radiusMeters:.3},movement:{kind:'ground',walkSpeedMetersPerSecond:0,runSpeedMetersPerSecond:0,jumpSpeedMetersPerSecond:0}});
