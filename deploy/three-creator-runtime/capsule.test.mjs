@@ -9,7 +9,7 @@ import { freezeRunAssetPolicy } from '@worldkit/creator-cloud/three-eval-mcp-bri
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const rootManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json')));
-const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
+const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8').replaceAll('\r\n', '\n');
 
 test('minimal importer projection preserves exact package resolutions and integrity records', () => {
   const projected = projectLock(lock, rootManifest);

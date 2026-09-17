@@ -290,3 +290,18 @@ test('resuming cancelled Codex work requires exact job authorization and never d
  f.runtime.codexRetryAttempts={[f.args.taskId]:1};await assert.rejects(f.client.runCodex(f.args),/REQUIRES_TERMINAL_FAILED/);
  f.runtime.codexRetryCancelledJobs=['gen_abc123'];behavior.pollStatus='succeeded';await f.client.runCodex(f.args);assert.notEqual(f.payload().request_id,first);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
 });
+
+// Exercise native filesystem paths; object keys sent to cloud storage stay POSIX.
+test('output containment rejects the root and siblings before posting', async t => {
+  const f = await fixture(t, {postError: new Error('Unexpected test POST')});
+  for (const output of [f.root, path.dirname(f.root), path.join(f.root + '-other', 'plan.json'), path.join(f.root, '..', 'outside.json')]) {
+    await assert.rejects(f.client.runCodex({...f.args, outputs: [{path: output}]}), /OUTPUT_OUTSIDE_ROOT/);
+  }
+  assert.equal(f.calls.length, 0);
+});
+
+test('nested output keys stay portable while allowing names starting with two dots', async t => {
+  const f = await fixture(t);
+  await f.client.runCodex({...f.args, outputs: [{path: path.join(f.root, '..allowed', 'nested', 'plan.json')}]});
+  assert.equal(f.payload().tasks[0].outputs[0].path, '..allowed/nested/plan.json');
+});

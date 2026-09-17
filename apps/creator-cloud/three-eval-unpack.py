@@ -102,7 +102,7 @@ def main():
                     destination.write(chunk)
             assert written == member.size
     payload = output / 'payload'
-    actual = {str(p.relative_to(payload)): digest(p) for p in payload.rglob('*') if p.is_file()}
+    actual = {p.relative_to(payload).as_posix(): digest(p) for p in payload.rglob('*') if p.is_file()}
     inventory = json.loads((payload / 'artifact-hashes.json').read_text())
     assert inventory['schemaVersion'] == 1
     assert {k: v for k, v in actual.items() if k != 'artifact-hashes.json'} == inventory['files']

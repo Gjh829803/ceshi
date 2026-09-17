@@ -16,7 +16,7 @@ const json = async file => JSON.parse(await readFile(file, 'utf8'));
 async function optionalJson(file) { try { return await json(file); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } }
 async function save(file, value) { await mkdir(path.dirname(file), { recursive: true }); const tmp = `${file}.${process.pid}.part`; await writeFile(tmp, JSON.stringify(value, null, 2)); await rename(tmp, file); }
 function id(value) { if (!/^[a-z0-9][a-z0-9-]{2,119}$/.test(value ?? '')) throw new Error('EPISODE_CLOUD_ID_INVALID'); return value; }
-function inside(root, file) { const relative = path.relative(path.resolve(root), path.resolve(file)); if (!relative || relative.startsWith('../') || path.isAbsolute(relative)) throw new Error('EPISODE_OUTPUT_OUTSIDE_ROOT'); return relative; }
+function inside(root, file) { const relative = path.relative(path.resolve(root), path.resolve(file)); if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) throw new Error('EPISODE_OUTPUT_OUTSIDE_ROOT'); return relative.split(path.sep).join('/'); }
 async function bytes(file) { const stat = await lstat(file); if (!stat.isFile() || stat.isSymbolicLink() || !stat.size) throw new Error('EPISODE_INPUT_NOT_REGULAR_FILE'); return readFile(file); }
 function jobValue(value) { return value?.job ?? value?.data?.job ?? value?.data ?? value; }
 function s3(prefix, ...parts) { if (!/^s3:\/\/[a-z0-9.-]+\/.+/.test(prefix ?? '')) throw new Error('EPISODE_S3_ROOT_INVALID'); return `${prefix.replace(/\/$/, '')}/${parts.join('/')}`; }

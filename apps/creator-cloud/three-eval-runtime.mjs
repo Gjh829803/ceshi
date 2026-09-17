@@ -22,6 +22,10 @@ export async function writeJson(file, value) {
   await writeFile(temporary, JSON.stringify(value, null, 2) + "\n");
   await rename(temporary, file);
 }
+function isInside(root, file) {
+  const relative = path.relative(root, file);
+  return relative !== '' && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+}
 export async function verifyInstalledClosure(root, entries, manifestName) {
   if (await realpath(root) !== root || !Array.isArray(entries) || entries.length < 1 || entries.length > 30000) throw new Error("THREE_INSTALLED_CLOSURE_INVALID");
   const expected = new Set([manifestName]);
@@ -33,7 +37,7 @@ export async function verifyInstalledClosure(root, entries, manifestName) {
   await Promise.all(Array.from({length: Math.min(8, entries.length)}, async () => {
     while (index < entries.length) {
       const entry = entries[index++], file = path.join(root, entry.path), info = await lstat(file);
-      if (!(await realpath(file)).startsWith(`${root}/`)) throw new Error(`THREE_INSTALLED_PATH_ESCAPE: ${entry.path}`);
+      if (!isInside(root, await realpath(file))) throw new Error(`THREE_INSTALLED_PATH_ESCAPE: ${entry.path}`);
       if (entry.kind === "symlink") {
         if (!info.isSymbolicLink() || path.isAbsolute(entry.target) || await readlink(file) !== entry.target) throw new Error(`THREE_INSTALLED_SYMLINK_CHANGED: ${entry.path}`);
       } else {
@@ -126,7 +130,7 @@ export async function parseCloudLayout(argv) {
   if (new Set(resolvedAddDirs).size !== resolvedAddDirs.length || resolvedAddDirs.some(dir => dir !== outputs && dir !== path.join(workspace, "inputs"))) throw new Error("THREE_ADD_DIR_OUTSIDE_TASK");
   for (const imagePath of argv.flatMap((value,index) => value === "--image" ? [argv[index + 1]] : [])) {
     const image = await realpath(imagePath);
-    if (!image.startsWith(`${path.join(workspace, "inputs")}/`) || !(await lstat(image)).isFile()) throw new Error("THREE_IMAGE_OUTSIDE_INPUTS");
+    if (!isInside(path.join(workspace, "inputs"), image) || !(await lstat(image)).isFile()) throw new Error("THREE_IMAGE_OUTSIDE_INPUTS");
   }
   if (valueAfter(argv, "--model") !== "gpt-6-astra" || valueAfter(argv, "--sandbox") !== "workspace-write") throw new Error("CREATOR_MODEL_OR_SANDBOX_MISMATCH");
   const configurations = argv.flatMap((value, index) => ["-c", "--config"].includes(value) ? [argv[index + 1]] : []);

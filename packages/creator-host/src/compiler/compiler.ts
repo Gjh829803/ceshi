@@ -111,7 +111,7 @@ export class ThreeCompiler {
       for (const name of (await readdir(dir)).sort()) {
         if (EXCLUDED.has(name) || name.startsWith('.') || (dir === root && HOST_OWNED_ROOTS.has(name))) continue;
         const file = path.join(dir, name), stat = await lstat(file);
-        if (stat.isSymbolicLink()) throw new Error(`THREE_SOURCE_SYMLINK: ${path.relative(root, file)}`);
+        if (stat.isSymbolicLink()) throw new Error(`THREE_SOURCE_SYMLINK: ${path.relative(root, file).split(path.sep).join('/')}`);
         if (stat.isDirectory()) await walk(file);
         else if (stat.isFile() && SOURCE_EXTENSIONS.has(path.extname(name).toLowerCase())) {
           const relative = path.relative(root, file).split(path.sep).join('/');
