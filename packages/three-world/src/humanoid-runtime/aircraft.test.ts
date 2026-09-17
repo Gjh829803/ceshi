@@ -69,6 +69,21 @@ it('rotorcraft keeps collective independent from horizontal speed, pitch and Ctr
   step({lift:1},30);expect(v.throttle).toBeGreaterThan(.5);step({lift:-1},60);expect(v.throttle).toBeLessThan(.5);
  }finally{q.dispose();}
 });
+it.each(['helicopter','multirotor','tiltrotor'] as const)('%s releases powered lift after losing its driver',(subtype)=>{
+ const q=new EnvironmentQueries(getMap('aircraft-training')),spec=SPECS.find(s=>s.aircraftSubtype===subtype)!,sim=new Simulation(q,[spec]);
+ try{
+  const v=sim.vehicles[0]!;v.position.set(0,100,0);v.velocity.set(0,2,0);v.grounded=false;v.throttle=.7;
+  const start=v.position.y;
+  for(let n=0;n<120;n++)sim.step(1/60);
+  expect(v.throttle).toBeLessThan(.05);
+  expect(v.velocity.y).toBeLessThan(1);
+  expect(v.position.y).toBeLessThan(start+2);
+  v.position.set(0,0,0);v.velocity.set(0,0,0);v.grounded=true;v.throttle=.7;v.motion.aircraft!.rotorSpeedFraction=0;
+  let maxGroundHeight=v.position.y;
+  for(let n=0;n<120;n++){sim.step(1/60);maxGroundHeight=Math.max(maxGroundHeight,v.position.y);}
+  expect(maxGroundHeight).toBeLessThan(.4);
+ }finally{sim.dispose();q.dispose();}
+});
 it('rests on three spring contacts and brakes after landing',()=>{const {q,v,step}=fixture();try{step({},300);expect(v.grounded).toBe(true);expect(v.motion.aircraft!.wheels.filter(w=>w.load>100).length).toBe(3);expect(v.velocity.length()).toBeLessThan(.1);v.position.y=2;v.velocity.set(0,-2,12);step({slow:true},1200);expect(v.grounded).toBe(true);expect(v.velocity.length()).toBeLessThan(.3);expect(v.position.y).toBeGreaterThan(-.15);}finally{q.dispose();}});
 it('takes off and turns through torque without teleporting orientation',()=>{const {q,v,step}=fixture();try{step({boost:true},300);expect(v.speed).toBeGreaterThan(22);const before=v.rotation.clone();step({pitch:-.5},1);expect(before.angleTo(v.rotation)).toBeLessThan(.03);step({pitch:-.5},360);expect(v.grounded).toBe(false);expect(v.position.y).toBeGreaterThan(5);step({steer:1},180);expect(v.roll).toBeGreaterThan(.15);step({},180);expect(Math.abs(v.roll)).toBeLessThan(.15);}finally{q.dispose();}});
 it('keeps velocity independent from heading and resets angular state',()=>{const {q,v,step}=fixture();try{v.position.y=100;v.velocity.set(8,0,35);step({steer:1},1);expect(v.velocity.x).toBeGreaterThan(7);expect(createVehicle(v.spec).motion.aircraft!.angularVelocity.length()).toBe(0);}finally{q.dispose();}});

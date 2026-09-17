@@ -19,7 +19,7 @@ export const AIRCRAFT = {
 export const AIRCRAFT_SUBTYPES=['fixed-wing','pusher','helicopter','multirotor','tiltrotor','glider','paraglider','wingsuit','balloon'] as const;
 export type AircraftSubtype=typeof AIRCRAFT_SUBTYPES[number];
 export const ROTOR_FLIGHT={
- governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70,
+  governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70, releaseDamping:1.8,
  climbSpeed:8, verticalResponse:1.8, maxLift:2.1, pitchLimit:.32, bankLimit:.38,
  attitudeGain:8, rateDamping:4, yawRate:.65, drag:.12,
  transitionStart:12, transitionEnd:32, tiltRate:.22,

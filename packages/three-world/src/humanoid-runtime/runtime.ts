@@ -86,6 +86,7 @@ import { validateEnvironment } from './map-validation';
 import type { TankState } from './motion-families/ground-vehicle/tank';
 import { PresentationState,type HumanoidDisplaySample } from './presentation';
 import { createVehicle,emptyInput,resolveVehicleSpec,Simulation,type Input } from './simulation';
+import type { VehicleConditionObservation } from './vehicle-condition';
 import { sampleSkiEquipment } from './ski-visual';
 import { sampleTankVisual } from './tank-visual';
 
@@ -168,7 +169,7 @@ export interface HumanoidSnapshot {
   readonly traversal:{readonly kind:string;readonly phase:string;readonly progress:number;readonly elapsedSeconds:number;readonly durationSeconds:number;readonly sourceActionId:string}|null;
   readonly surface:{readonly mode:string;readonly surfaceId:string|null;readonly pose:{readonly actionId:string;readonly timeSeconds:number;readonly phase:string}|null};
   readonly interactionTargets:readonly {readonly id:string;readonly slotId:string;readonly generation:number;readonly claim:import('../contracts').InteractionClaimState|null;readonly kind:'pickup'|'seat';readonly state:string;readonly approachPositionWorldMetersXYZ:Vec3;readonly facingYawRadians:number;readonly eligible:boolean;readonly reason:string;readonly message:string;readonly positionWorldMetersXYZ:Vec3;readonly rotationWorldQuaternionXYZW:readonly [number,number,number,number]}[];
-  readonly vehicleDynamics:readonly {readonly flyingCreature:Readonly<import("./motion-families/flying-creature/state").FlyingCreatureStateV1>|null;readonly drive:VehicleDriveTelemetry|null;readonly physicsOwner:'rigid-body'|'controller';readonly unicycle:Readonly<UnicycleState>|null;readonly submersible:Readonly<ReturnType<typeof submersibleDiagnostics>>|null;readonly raft:Readonly<RaftState>|null;readonly jetski:Readonly<ReturnType<typeof jetSkiDiagnostics>>|null;readonly kayak:Readonly<KayakState>|null;readonly atv:Readonly<AtvState>|null;readonly tank:Readonly<TankState>|null;readonly instanceId:string;readonly launched:boolean;readonly pitchRadians:number;readonly rollRadians:number;readonly creature:{readonly gait:string;readonly phase:number;readonly flying:boolean;readonly leadPositionWorldMetersXYZ:Vec3|null;readonly leadYawRadians:number|null}|null}[];
+  readonly vehicleDynamics:readonly {readonly flyingCreature:Readonly<import("./motion-families/flying-creature/state").FlyingCreatureStateV1>|null;readonly drive:VehicleDriveTelemetry|null;readonly physicsOwner:'rigid-body'|'controller';readonly unicycle:Readonly<UnicycleState>|null;readonly submersible:Readonly<ReturnType<typeof submersibleDiagnostics>>|null;readonly raft:Readonly<RaftState>|null;readonly jetski:Readonly<ReturnType<typeof jetSkiDiagnostics>>|null;readonly kayak:Readonly<KayakState>|null;readonly atv:Readonly<AtvState>|null;readonly tank:Readonly<TankState>|null;readonly instanceId:string;readonly launched:boolean;readonly pitchRadians:number;readonly rollRadians:number;readonly condition:VehicleConditionObservation['condition'];readonly recoveryReason:VehicleConditionObservation['recoveryReason'];readonly recoveryAvailable:boolean;readonly creature:{readonly gait:string;readonly phase:number;readonly flying:boolean;readonly leadPositionWorldMetersXYZ:Vec3|null;readonly leadYawRadians:number|null}|null}[];
 }
 const tuple=(v:THREE.Vector3):Vec3=>[v.x,v.y,v.z];
 
@@ -373,7 +374,7 @@ export class HumanoidRuntime implements PhysicsPort {
       traversal:tr?{kind:tr.probe.kind,phase:tr.phase,progress:tr.progress,elapsedSeconds:tr.elapsed,durationSeconds:tr.duration,sourceActionId:tr.motion.sourceId}:null,
       surface:{mode:surface?.mode??'none',surfaceId:surface?.surface?.id??null,pose:surface?.pose?{actionId:surface.pose.key,timeSeconds:surface.pose.time,phase:surface.pose.phase??''}:null},
       interactionTargets:targets.map(t=>({id:t.entityId,slotId:t.slotId,generation:t.generation,claim:t.claim,kind:t.kind,state:t.state,approachPositionWorldMetersXYZ:t.approach,facingYawRadians:t.yaw,eligible:t.eligible,reason:t.reason,message:t.message,positionWorldMetersXYZ:t.position as Vec3,rotationWorldQuaternionXYZW:t.rotation as [number,number,number,number]})),
-      vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):null,drive:vehicleDriveTelemetry(v),physicsOwner:!v.motion.aircraft?.wearable?.groundLocomotion&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
+      vehicleDynamics:s.vehicles.map(v=>({flyingCreature:v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):null,drive:vehicleDriveTelemetry(v),physicsOwner:!v.motion.aircraft?.wearable?.groundLocomotion&&(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft)?'rigid-body':'controller',unicycle:copyUnicycleState(v.motion.unicycle)??null,submersible:v.motion.submersible?submersibleDiagnostics(v.motion.submersible):null,raft:v.motion.raft?{...v.motion.raft}:null,jetski:v.motion.jetski?jetSkiDiagnostics(v.motion.jetski):null,kayak:v.motion.kayak?{...v.motion.kayak}:null,atv:copyAtvState(v.motion.atv)??null,tank:v.motion.tank?{...v.motion.tank}:null,instanceId:v.spec.id,launched:v.launched,pitchRadians:v.pitch,rollRadians:v.roll,...s.vehicleCondition(v),creature:v.motion.creature?{gait:v.motion.creature.gait,phase:v.motion.creature.phase,flying:v.motion.creature.flying,leadPositionWorldMetersXYZ:v.motion.creature.leadPosition?tuple(v.motion.creature.leadPosition):null,leadYawRadians:v.motion.creature.leadYaw??null}:null})),
     };
   }
   private characterRestriction(actorId:string=this.inputActorId):{code:string;message:string}|undefined{
@@ -444,7 +445,7 @@ export class HumanoidRuntime implements PhysicsPort {
   private prepareOwned(id:string,spawn:MapSpawn,actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).prepare(this.index(id),spawn);this.sync(0);return ok;}
   private approachOwned(id:string,actorId:string=this.inputActorId):boolean{this.index(id);const ok=this.simulation.actor(actorId).approach(id);this.sync(0);return ok;}
   recoverVehicle():boolean{this.assertExternalMutation();return this.recoverVehicleOwned();}
-  private recoverVehicleOwned(actorId:string=this.inputActorId):boolean{const ok=this.simulation.actor(actorId).recoverVehicle();if(ok){this.setActorInputOwned(actorId,undefined);this.presentation.snap(this.simulation);this.sync(0);}return ok;}
+  private recoverVehicleOwned(actorId:string=this.inputActorId,targetId?:string):boolean{const ok=this.simulation.actor(actorId).recoverVehicle(targetId);if(ok){this.setActorInputOwned(actorId,undefined);this.presentation.snap(this.simulation);this.sync(0);}return ok;}
   interact():boolean{this.assertExternalMutation();const ok=this.simulation.controlledActor.interact();if(ok)this.sync(0);return ok;}
   summonDragon(id?:string,actorId:string=this.inputActorId):boolean{this.assertExternalMutation();return this.simulation.summonDragon(id,actorId);}
   enter(id:string):boolean{this.assertExternalMutation();return this.enterOwned(id);}
@@ -587,7 +588,9 @@ export class HumanoidRuntime implements PhysicsPort {
         // scene target or nearby mount, without falling through after rejection.
         const c=actor.controller,s=c.skills;
         const scene=!actor.vehicle&&(s.active||s.seated||s.carrying||c.surface.surface||s.nearest());
-        if(actor.vehicle||!scene&&actor.nearest()>=0){actor.interact();controls={...controls,actions:{...controls.actions,interact:false}};}
+        const recovery=actor.recoveryCandidate();
+        if(recovery){actor.recoverVehicle(recovery.spec.id);controls={...controls,actions:{...controls.actions,interact:false}};}
+        else if(actor.vehicle||!scene&&actor.nearest()>=0){actor.interact();controls={...controls,actions:{...controls.actions,interact:false}};}
         else controls={...controls,actions:{...controls.actions,interact:true}};
       }
       actorInputs.set(id,{input:controls,yaw:selected||override?(controlYawRadians??Math.atan2(this.controlForwardWorldXYZ()[0],this.controlForwardWorldXYZ()[2])):0});

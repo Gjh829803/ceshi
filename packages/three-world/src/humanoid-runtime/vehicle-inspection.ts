@@ -1,6 +1,8 @@
 import type {SolverSample} from './solver-sample';
 import type {VehicleState} from './simulation';
 import {vehicleDriveTelemetry,type VehicleDriveTelemetry} from './vehicle-dynamics';
+import {vehicleCondition,type VehicleConditionObservation} from './vehicle-condition';
+import type {EnvironmentQueries} from './environment/queries';
 export interface VehicleInspectionResult {
   worldRevision:number;simulationTick:number;simulationSeconds:number;isRunning:boolean;
   physicsStepSequence:number|null;vehicles:VehicleInspection[];
@@ -18,6 +20,7 @@ export interface VehicleWheelInspection {
 export interface VehicleInspection {
   sample:{status:'unmeasured'|'sampled'|'stale'|'not-applicable';solver:SolverSample|null};
   instanceId:string;mode:string;physicsOwner:'rigid-body'|'controller';grounded:boolean|null;
+  condition:VehicleConditionObservation['condition'];recoveryReason:VehicleConditionObservation['recoveryReason'];recoveryAvailable:boolean;
   speedMetersPerSecond:number;throttleRatio:number;drive:VehicleDriveTelemetry|null;
   wheelCount:number|null;wheelContacts:number|null;wheels?:VehicleWheelInspection[]|null;
   aircraft:{airspeedMetersPerSecond:number;angleOfAttackRadians:number;loadFactor:number;stalled:boolean;landingSinkMetersPerSecond:number;hardLanding:boolean;
@@ -25,11 +28,12 @@ export interface VehicleInspection {
     desiredLiftNewtons:number;totalRotorThrustNewtons:number;transitionFactor:number}|null;
 }
 /** Detached measured state only. Contact and slip are observations, not fault classifications. */
-export function inspectVehicle(v:VehicleState,detail:'summary'|'wheels'='summary',physicsStepSequence?:number):VehicleInspection {
+export function inspectVehicle(v:VehicleState,detail:'summary'|'wheels'='summary',physicsStepSequence?:number,condition?:VehicleConditionObservation,q?:EnvironmentQueries):VehicleInspection {
   const road=v.motion.wheelPhysics?.wheels,air=v.motion.aircraft,source=road??air?.wheels;
+  const state=condition??(q?vehicleCondition(v,q):{condition:'not-applicable',recoveryReason:null,recoveryAvailable:false});
   const solver=v.motion.wheelPhysics?.sample??air?.sample,measured=!!solver||!source;
   const status=solver?(physicsStepSequence!==undefined&&solver.physicsStepSequence!==physicsStepSequence?'stale':'sampled'):source?'unmeasured':'not-applicable';
-  return {sample:{status,solver:solver?{...solver}:null},instanceId:v.spec.id,mode:v.spec.mode,physicsOwner:v.motion.wheelPhysics||v.motion.body||air?'rigid-body':'controller',
+  return {sample:{status,solver:solver?{...solver}:null},instanceId:v.spec.id,mode:v.spec.mode,physicsOwner:v.motion.wheelPhysics||v.motion.body||air?'rigid-body':'controller',condition:state.condition,recoveryReason:state.recoveryReason,recoveryAvailable:state.recoveryAvailable,
     grounded:measured?v.grounded:null,speedMetersPerSecond:v.velocity.length(),throttleRatio:v.throttle,drive:measured?vehicleDriveTelemetry(v):null,
     wheelCount:source?.length??null,wheelContacts:solver?source?.filter(w=>w.contact).length??null:null,
     ...(detail==='wheels'?{wheels:!measured?null:road?road.map((w,index)=>({index,contact:w.contact,loadNewtons:w.load,steeringRadians:w.steer,rotationRadians:w.angle,

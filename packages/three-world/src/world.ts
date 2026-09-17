@@ -766,7 +766,7 @@ export class ThreeWorld implements API.World {
   const text=query.query?.toLowerCase();
   const ids=new Set([...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text))).map(entry=>entry.id));
   return {worldRevision:this.revision,simulationTick:this.simulationTick,simulationSeconds:this.simulationTick*this.engine.fixedTimeStepSeconds,
-   isRunning:this.isRunning,physicsStepSequence:this.humanoid?.environment.physicsStepSequence??null,vehicles:this.humanoid?.simulation.vehicles.filter(v=>ids.has(v.spec.id)).map(v=>inspectVehicle(v,query.detail,this.humanoid!.environment.physicsStepSequence))??[]};
+   isRunning:this.isRunning,physicsStepSequence:this.humanoid?.environment.physicsStepSequence??null,vehicles:this.humanoid?.simulation.vehicles.filter(v=>ids.has(v.spec.id)).map(v=>inspectVehicle(v,query.detail,this.humanoid!.environment.physicsStepSequence,this.humanoid!.simulation.vehicleCondition(v),this.humanoid!.environment))??[]};
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));

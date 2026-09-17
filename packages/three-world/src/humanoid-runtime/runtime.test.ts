@@ -12,7 +12,10 @@ import {createWorld} from '../world';
 import {ThreePhysics} from '../physics';
 import {emptyInput} from './simulation';
 import {Simulation} from './simulation';
+import {createRoadPhysicsProfile} from './motion-families/ground-vehicle/wheel-physics';
+import {VehicleConditionTracker} from './vehicle-condition';
 import type {EnvironmentDefinition} from './environment/types';
+import {EnvironmentQueries} from './environment/queries';
 import type {VehicleSpec} from './config';
 import {WorldKeyboard} from '../input';
 import {MOUNTED_CAMERA_PITCH_RATIO,DEFAULT_KEY_BINDINGS,createKeyBindings,controlHints,readControls,vehicleKeyboardAxes,cameraKeyboardPitchRatio,type MountedInputContext} from './input';
@@ -146,6 +149,48 @@ describe('SDK humanoid runtime',()=>{
    engine.advance(.25);engine.keyboard.keyDown('KeyF',true);engine.advance(.25);expect(interact).toHaveBeenCalledTimes(1);
    engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);expect(r.snapshot().mountedInstanceId).toBeNull();expect(interact).toHaveBeenCalledTimes(2);
   }finally{world.dispose();}
+ });
+ it('prioritizes vehicle recovery on F before enter and exit',async()=>{
+  const world=await fixture();try{
+   const engine=(world as unknown as {engine:WorldEngine}).engine,r=world.humanoid!,v=r.simulation.vehicles[0]!;
+   r.approach('car-1');v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.grounded=false;
+   expect(r.snapshot().vehicleDynamics[0]).toMatchObject({condition:'flipped',recoveryAvailable:true});
+   engine.keyboard.enabled=true;engine.keyboard.keyDown('KeyF');engine.advance(1/60);
+   expect(r.snapshot().mountedInstanceId).toBeNull();expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
+   engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);
+   expect(r.snapshot().mountedInstanceId).toBe('car-1');
+   v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI);v.grounded=false;
+   engine.keyboard.keyUp('KeyF');engine.keyboard.keyDown('KeyF');engine.advance(1/60);
+   expect(r.snapshot().mountedInstanceId).toBe('car-1');expect(r.snapshot().vehicleDynamics[0]?.recoveryAvailable).toBe(false);
+  }finally{world.dispose();}
+ });
+ it('reports sustained wall obstruction as stuck but leaves a parked vehicle normal',async()=>{
+  const world=await fixture();try{
+   const r=world.humanoid!,v=r.simulation.vehicles[0]!;
+   expect(r.snapshot().vehicleDynamics[0]).toMatchObject({condition:'normal',recoveryAvailable:false});
+   r.approach('car-1');expect(r.enter('car-1')).toBe(true);v.position.set(0,.03,8.5);v.rotation.identity();r.simulation.syncActorBodies();
+   world.step({humanoid:{...emptyInput(),forward:1}},60);
+   expect(r.snapshot().vehicleDynamics[0]).toMatchObject({condition:'stuck',recoveryReason:'blocked',recoveryAvailable:true});
+   world.step({humanoid:emptyInput()},1);
+   expect(r.snapshot().vehicleDynamics[0]).toMatchObject({condition:'stuck',recoveryAvailable:true});
+  }finally{world.dispose();}
+ });
+ it('treats a partially fallen motorcycle as flipped but keeps an airborne one airborne',()=>{
+  const q=new EnvironmentQueries({...map,regions:[{...map.regions[0]!,modes:['wheeled','motorcycle']}]});
+  const sim=new Simulation(q,[{...spec,id:'motorcycle',mode:'motorcycle',archetype:'motorcycle',wheelPhysics:createRoadPhysicsProfile('motorcycle')}],{id:'player'});try{
+   const v=sim.vehicles[0]!;v.position.set(0,.6,0);v.grounded=true;v.rotation.setFromAxisAngle(new Vector3(0,0,1),.6);
+   expect(sim.vehicleCondition(v)).toMatchObject({condition:'flipped',recoveryAvailable:true});
+   v.position.y=8;v.grounded=false;expect(sim.vehicleCondition(v)).toMatchObject({condition:'airborne',recoveryAvailable:false});
+  }finally{sim.dispose();q.dispose();}
+ });
+ it('offers recovery for an aircraft that is airborne on paper but remains immobile under input',()=>{
+  const q=new EnvironmentQueries({...map,regions:[{...map.regions[0]!,modes:['plane']}],spawns:[{...map.spawns[0]!,vehicleId:'plane',position:[0,8,0]}]});
+  const sim=new Simulation(q,[{...spec,id:'plane',mode:'plane',archetype:'plane',spawn:[0,8,0]}],{id:'player'});try{
+   const v=sim.vehicles[0]!;v.position.set(0,8,0);v.grounded=false;v.launched=true;v.velocity.set(0,0,0);
+   const tracker=new VehicleConditionTracker();
+   for(let i=0;i<6;i++)tracker.update(v,{...emptyInput(),forward:1},.1,q);
+   expect(tracker.inspect(v,q)).toMatchObject({condition:'stuck',recoveryReason:'blocked',recoveryAvailable:true});
+  }finally{sim.dispose();q.dispose();}
  });
  it('commits the reset hold only after live fixed ticks, not observations or explicit Episode-style input',async()=>{
   const world=await fixture();try{

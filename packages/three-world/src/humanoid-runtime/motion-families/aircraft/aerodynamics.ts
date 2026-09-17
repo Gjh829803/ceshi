@@ -23,6 +23,7 @@ export function createAircraftState(subtype:AircraftSubtype='fixed-wing'):Aircra
 export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQueries){
  if(dt<=0)return;
  if(['glider','paraglider','wingsuit','balloon'].includes(v.motion.aircraft!.subtype)){stepSoaring(v,input,dt,q);return;}const a=v.motion.aircraft!,rotary=['helicopter','multirotor','tiltrotor'].includes(a.subtype);
+ const releaseControl=input.releaseControl===true;
  const rig=q.vehicleRig(v.spec.id,a,v.position,v.rotation,C.mass,4,3.35,2.3,C.center[1],undefined,.6,.08,{boxes:aircraftCollisionBoxes(a.subtype),stops:C.wheels.map(w=>({radius:w.radius,center:new Vector3(w.x,w.y+C.travel,w.z)})),inertia:new Vector3(...C.inertia),center:new Vector3(...C.center)}),body=rig.body;
  body.setTranslation(v.position,true);body.setRotation(v.rotation,true);body.setLinvel(v.velocity,true);body.setAngvel(a.angularVelocity,true);body.setAngularDamping(.1);
  rig.beforeStep=h=>{
@@ -42,11 +43,16 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   v.steering+=(input.steer-v.steering)*(1-Math.exp(-(v.grounded?(input.steer?v.spec.steeringResponse:v.spec.steeringReturn):C.turnResponse)*h));
   force.addScaledVector(liftAxis,lift);
   if(!rotary){
-   const thrust=v.throttle*v.spec.accel*C.mass;force.addScaledVector(forward,thrust);
+   const propulsionThrottle=input.releaseControl?0:v.throttle;
+   const thrust=propulsionThrottle*v.spec.accel*C.mass;force.addScaledVector(forward,thrust);
    if(a.subtype==='pusher')torque.addScaledVector(right,.2*thrust);
-   a.rotorSpeedFraction=v.throttle;a.rotorPhases[0]=(a.rotorPhases[0]??0)+v.throttle*R.propellerSpeed*h;a.rotorThrusts=[thrust];
+   a.rotorSpeedFraction=propulsionThrottle;a.rotorPhases[0]=(a.rotorPhases[0]??0)+propulsionThrottle*R.propellerSpeed*h;a.rotorThrusts=[thrust];
   }else{const rotor=rotorForces(v,input,h,lift);force.add(rotor.force);torque.add(rotor.torque);a.desiredLiftNewtons=rotor.desiredLiftNewtons;a.totalRotorThrustNewtons=rotor.totalRotorThrustNewtons;a.transitionFactor=rotor.transitionFactor;}
   if(speed>.01)force.addScaledVector(v.velocity,-Math.min(drag*wing,C.mass*speed/h)/speed);
+  // After dismount, damp the velocity that was already accumulated while
+  // piloted. Releasing lift alone is not enough: a rotorcraft can otherwise
+  // keep climbing or travel away for several seconds under residual momentum.
+  if(releaseControl)force.addScaledVector(v.velocity,-C.mass*R.releaseDamping);
   // 侧滑阻尼保留独立速度；不会将速度向量直接覆盖为机头方向。
   force.addScaledVector(right,-v.velocity.dot(right)*qS*.035*wing);
   const previousGround=v.grounded;let contacts=0;
@@ -70,7 +76,7 @@ export function stepAircraft(v:VehicleState,input:Input,dt:number,q:EnvironmentQ
   // 简化增稳飞控通过有界力矩请求目标姿态，低空速舵效减弱；不写姿态四元数。
   const authority=a.controlAuthority;
   // 推进式发动机安装偏置由升降舵配平补偿，低空速仍受舵效限制。
-  if(a.subtype==='pusher')torque.addScaledVector(right,-.2*v.throttle*v.spec.accel*C.mass*clamp(authority,0,1));
+  if(a.subtype==='pusher')torque.addScaledVector(right,-.2*(input.releaseControl?0:v.throttle)*v.spec.accel*C.mass*clamp(authority,0,1));
   // A/D 请求航迹转弯角速度，随空速计算所需侧倾；低速限制侧倾以保留升力余量。
   const turn=v.spec.id==='plane'?POWERED_PLANE_TURN:C;
   const bankLimit=turn.maxBank*clamp(speed/30,.35,1);

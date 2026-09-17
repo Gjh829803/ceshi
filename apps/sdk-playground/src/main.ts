@@ -1182,10 +1182,12 @@ function updateUI(force = false) {
   const v = sim.controlledActor.vehicle,
     p = sim.controlledActor.player,
     nearest = sim.controlledActor.nearest(),
+    recoveryTarget = v ?? (nearest >= 0 ? sim.vehicles[nearest] : undefined),
+    recoveryDynamics = recoveryTarget ? runtime.snapshot().vehicleDynamics.find(dynamics => dynamics.instanceId === recoveryTarget.spec.id) : undefined,
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
   spacePanel.update(v?humanoid.spaceTelemetry(v):null);
   const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
-  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
+  shell.update({recoverable:!!recoveryDynamics?.recoveryAvailable,drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.controlledActor.controller,
     bindings = sdk.getKeyBindings(),
     key = (action: humanoid.ControlAction) => humanoid.bindingLabel(action, bindings),
@@ -1268,7 +1270,9 @@ function updateUI(force = false) {
   if (v)
     setHTML(
       "interaction",
-      v.motion.flyingCreature
+      recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具 · 再按一次${v ? '离开' : '进入'}`
+        : v.motion.flyingCreature
         ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('ascend')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
         ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('ascend')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
@@ -1285,7 +1289,9 @@ function updateUI(force = false) {
   else
     setHTML(
       "interaction",
-      (session.map.id===DRAGON_TRAINING.id
+      (recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具`
+        : session.map.id===DRAGON_TRAINING.id
         ? `${key('summonDragon')} 召唤飞龙 · ${summon?.phase==='arrived'?`飞龙已抵达 · 靠近鞍侧按 ${key('interact')} 上龙`:summon?.message??`飞龙会降落在附近，落稳后到鞍侧按 ${key('interact')} 上龙`}`
         : undefined) ?? h?.skills.hint(bindings) ??
         (h?.surface.mode === "climbing"
