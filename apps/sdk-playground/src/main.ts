@@ -60,6 +60,7 @@ import { mountAssetLibrary } from "./library";
 import {
   profileForTarget,
   profileScopeKey,
+  restoreProjectProfiles,
   scopeProfile,
   type ProfileTarget,
 } from "./profile-scopes";
@@ -266,8 +267,10 @@ const sdkPresentation = sdk.createPresentation({
   container: canvas.parentElement!,
 });
 shell.attachViewport(sdkPresentation);
-const profiles = new Map<string, AssetProfile>();
-const exportedProfiles = new Map<string, string>();
+const profileDefaults = ["person", ...SPECS.map((s) => s.id)].map((id) => getDefaultProfile(id)!);
+const projectProfiles = (effectiveProfiles as { profiles: unknown[] }).profiles.map((profile) => parseAssetProfile(profile));
+const profiles = restoreProjectProfiles(profileDefaults, projectProfiles);
+const exportedProfiles = new Map([...profiles].map(([scope, profile]) => [scope, JSON.stringify(profile)]));
 const localProfileOverridesEnabled =
   new URLSearchParams(location.search).get("debugProfiles") === "1" &&
   (location.hostname === "127.0.0.1" || location.hostname === "localhost");
@@ -297,20 +300,12 @@ function profileForScopedTarget(target: ProfileTarget): AssetProfile {
 function setScopedProfile(profile: AssetProfile): void {
   profiles.set(profileScopeKey(profile), profile);
 }
-for (const id of ["person", ...SPECS.map((s) => s.id)]) {
-  const project = (
-    effectiveProfiles as { profiles: AssetProfile[] }
-  ).profiles.find((p) => p.assetId === id);
-  let profile = project ?? getDefaultProfile(id)!;
-  exportedProfiles.set(id, JSON.stringify(profile));
+if (localProfileOverridesEnabled) for (const id of ["person", ...SPECS.map((s) => s.id)]) {
   // Local overrides are visibly marked and never silently included in a delivery.
-  if (localProfileOverridesEnabled) {
-    try {
-      profile = loadAssetProfile(localStorage, id) ?? profile;
-    } catch {}
-  }
-  setScopedProfile(profile);
-  applyControlProfile(runtime, profile);
+  try {
+    const saved = loadAssetProfile(localStorage, id);
+    if (saved) setScopedProfile(saved);
+  } catch {}
 }
 // Restore every present instance override, not only the vehicle currently selected
 // by the inspector. Asset defaults above remain the fallback for untouched instances.
@@ -318,12 +313,10 @@ if (localProfileOverridesEnabled) for (const identity of runtime.snapshot().vehi
   const target: ProfileTarget = { assetId: profileAssetIdForIdentity(identity), instanceId: identity.instanceId };
   try {
     const saved = loadAssetProfile(localStorage, target.assetId, target.instanceId);
-    if (saved) {
-      setScopedProfile(saved);
-      applyControlProfile(runtime, saved);
-    }
+    if (saved) setScopedProfile(saved);
   } catch {/* A stale developer override must not block Playground startup. */}
 }
+for (const profile of profiles.values()) applyControlProfile(runtime, profile);
 const pageLifetime = new AbortController();
 const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();

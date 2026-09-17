@@ -126,7 +126,7 @@ readEditableProfile(runtime, {
 ## 5. 保存、导出与重置
 
 - 没有实例 ID 的 profile 使用资产级保存范围。
-- 带实例 ID 的 profile 使用资产 + 实例的独立本地存储范围。
+- 带实例 ID 的 profile 使用资产 + 实例的独立内存及本地存储范围；即使 `instanceId` 恰好等于 `assetId` 也不会退化为资产级范围。
 - 3C 面板的“保存”保存当前实例配置。
 - 3C 面板的“重置”只恢复当前实例的默认值。
 - `profiles.json` 可以同时保存资产级 profile 和实例级 profile。

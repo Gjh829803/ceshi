@@ -13,13 +13,18 @@ describe('asset aircraft profiles',()=>{
  });
  it('keeps instance overrides in separate storage scopes',()=>{
   const profile=getDefaultProfile('plane')!,values=new Map<string,string>(),storage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);},removeItem:(key:string)=>{values.delete(key);}};
-  profile.instanceId='plane-01';profile.aircraftFlight!.pitchGain=12;saveAssetProfile(storage,profile);
-  expect(loadAssetProfile(storage,'plane','plane-01')).toMatchObject({instanceId:'plane-01',aircraftFlight:{pitchGain:12}});
+  profile.instanceId='plane';profile.aircraftFlight!.pitchGain=12;saveAssetProfile(storage,profile);
+  expect(loadAssetProfile(storage,'plane','plane')).toMatchObject({instanceId:'plane',aircraftFlight:{pitchGain:12}});
   expect(loadAssetProfile(storage,'plane','plane-02')).toBeUndefined();
   expect(loadAssetProfile(storage,'plane')).toBeUndefined();
+  // A v2 build before instance scopes were separated could have written this
+  // same-instance profile to the asset key. Never treat that stale value as a
+  // default that applies to every plane.
+  values.set('worldkit.asset-profile.v2.plane',JSON.stringify(profile));
+  expect(loadAssetProfile(storage,'plane')).toBeUndefined();
   const second={...getDefaultProfile('plane')!,instanceId:'plane-02',aircraftFlight:{...getDefaultProfile('plane')!.aircraftFlight!,pitchGain:15}};
-  saveAssetProfile(storage,second);clearAssetProfile(storage,'plane','plane-01');
-  expect(loadAssetProfile(storage,'plane','plane-01')).toBeUndefined();
+  saveAssetProfile(storage,second);clearAssetProfile(storage,'plane','plane');
+  expect(loadAssetProfile(storage,'plane','plane')).toBeUndefined();
   expect(loadAssetProfile(storage,'plane','plane-02')?.aircraftFlight?.pitchGain).toBe(15);
  });
  it('rejects specialized tuning on soaring profiles and incomplete tuning',()=>{

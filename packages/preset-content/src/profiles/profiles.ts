@@ -97,7 +97,7 @@ export function parseAssetProfile(input: unknown, expectedAssetId?: string): Ass
 }
 
 // Browser storage is a developer convenience. Saved values use the current complete form.
-const storageKey = (assetId: string, instanceId?: string) => instanceId&&instanceId!==assetId
+const storageKey = (assetId: string, instanceId?: string) => instanceId!==undefined
   ? `worldkit.asset-profile.v2.${encodeURIComponent(assetId)}.${encodeURIComponent(instanceId)}`
   : `worldkit.asset-profile.v2.${assetId}`;
 export function loadAssetProfile(storage: ProfileStorage, assetId: string, instanceId?: string): AssetProfile | undefined {
@@ -107,7 +107,7 @@ export function loadAssetProfile(storage: ProfileStorage, assetId: string, insta
   if(saved===null)return undefined;
   try{
     const parsed=parseAssetProfile(JSON.parse(saved),assetId);
-    return instanceId===undefined||parsed.instanceId===instanceId?parsed:undefined;
+    return parsed.instanceId===instanceId?parsed:undefined;
   }
   catch{return undefined;}
 }

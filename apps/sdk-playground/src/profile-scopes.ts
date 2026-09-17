@@ -7,7 +7,7 @@ export interface ProfileTarget {
 
 /** Asset defaults and instance overrides must never share an in-memory key. */
 export function profileScopeKey({ assetId, instanceId }: ProfileTarget): string {
-  return instanceId && instanceId !== assetId ? `${assetId}\u0000${instanceId}` : assetId;
+  return instanceId !== undefined ? `${assetId}\u0000${instanceId}` : assetId;
 }
 
 export function profileForTarget(
@@ -23,6 +23,26 @@ export function scopeProfile(profile: AssetProfile, target: ProfileTarget): Asse
   delete unscoped.instanceId;
   return {
     ...unscoped,
-    ...(target.instanceId && target.instanceId !== target.assetId ? { instanceId: target.instanceId } : {}),
+    ...(target.instanceId !== undefined ? { instanceId: target.instanceId } : {}),
   };
+}
+
+/**
+ * Rehydrate all entries from a delivered profiles.json. Asset defaults are applied
+ * first, then every instance override gets its own scope, regardless of file order.
+ */
+export function restoreProjectProfiles(
+  defaults: Iterable<AssetProfile>,
+  projectProfiles: Iterable<AssetProfile>,
+): Map<string, AssetProfile> {
+  const restored = new Map<string, AssetProfile>();
+  for (const profile of defaults) restored.set(profileScopeKey(profile), profile);
+  const imported = [...projectProfiles];
+  for (const profile of imported) {
+    if (profile.instanceId === undefined) restored.set(profileScopeKey(profile), profile);
+  }
+  for (const profile of imported) {
+    if (profile.instanceId !== undefined) restored.set(profileScopeKey(profile), profile);
+  }
+  return restored;
 }
