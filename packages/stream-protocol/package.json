@@ -1,0 +1,21 @@
+{
+  "name": "@worldkit/stream-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --root ../.. packages/stream-protocol",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@worldkit/world-ui": "workspace:*",
+    "ajv": "8.17.1"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "typescript": "^5.9.2"
+  }
+}

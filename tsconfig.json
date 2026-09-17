@@ -24,6 +24,7 @@
   },
   "include": [
     "packages/**/*.ts",
+    "packages/**/*.tsx",
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "scripts/**/*.ts",

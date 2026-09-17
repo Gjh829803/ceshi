@@ -258,3 +258,7 @@ Only the first five are downstream conditioning references.
 and automatically captures missing current views. Keep the resulting
 `creator-result.json` and archive. Do not write evidence/delivery files manually.
 Submission creates the local package; it does not upload or start Episode.
+
+For a separate streaming HUD, read [streaming UI](ui.md), available through
+`creator_get_authoring_schema({document:"ui.md"})`. It defines project files,
+component props/events, state-bound visibility, source-time animation and the producer binding.

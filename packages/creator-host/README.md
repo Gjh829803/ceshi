@@ -88,3 +88,10 @@ packaging. [Discovery](src/discovery/creator-discovery.ts) returns guides and re
 [binding examples](src/discovery/binding-examples.ts) returns typed integration snippets and their hashed manifest; complete internal fixtures support maintainer regression.
 Detailed SDK contracts stay in the [SDK manual](../three-world/README.md)
 and actual source. Maintainer checks are not extra steps in each generation task.
+
+## Direct local play
+
+`pnpm dev:example /absolute/case 53901` compiles and serves a case without a video
+stream service. Projects with `project.ui` show their authored React HUD by default.
+See [local UI and capture rules](docs/agent/ui.md#local-play-and-capture) for URL
+controls and presentation ownership. The SDK simulation remains the single clock.

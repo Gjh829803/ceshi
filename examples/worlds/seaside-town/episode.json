@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "steps": [
+    {
+      "durationSeconds": 0.6
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.12
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 1.4
+    },
+    {
+      "driveTo": {
+        "vehicleId": "motorcycle",
+        "positionWorldMetersXYZ": [
+          1.8,
+          0,
+          -35
+        ],
+        "maximumSpeedMetersPerSecond": 3,
+        "arrivalToleranceMeters": 2,
+        "stopAtTarget": true
+      },
+      "timeoutSeconds": 35
+    },
+    {
+      "keysDown": [
+        "f"
+      ],
+      "durationSeconds": 0.12
+    },
+    {
+      "keysUp": [
+        "f"
+      ],
+      "durationSeconds": 1.6
+    },
+    {
+      "keysDown": [
+        "w"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysUp": [
+        "w"
+      ],
+      "pointerDrag": {
+        "deltaXPixels": -110,
+        "deltaYPixels": -15
+      },
+      "durationSeconds": 1
+    },
+    {
+      "keysDown": [
+        "a"
+      ],
+      "durationSeconds": 2
+    },
+    {
+      "keysUp": [
+        "a"
+      ],
+      "keysDown": [
+        "Space"
+      ],
+      "durationSeconds": 0.15
+    },
+    {
+      "keysUp": [
+        "Space"
+      ],
+      "durationSeconds": 1.4
+    },
+    {
+      "keysDown": [
+        "s"
+      ],
+      "durationSeconds": 3
+    },
+    {
+      "keysUp": [
+        "s"
+      ],
+      "durationSeconds": 1
+    }
+  ],
+  "targets": [
+    {
+      "id": "street-arrival",
+      "positionMetersXYZ": [
+        1.8,
+        0,
+        -35
+      ],
+      "toleranceMeters": 3
+    }
+  ]
+}

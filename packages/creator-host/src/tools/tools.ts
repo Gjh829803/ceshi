@@ -220,7 +220,7 @@ export class ThreeCreatorTools {
       const session: Session = { candidate, browser, context, page, server, errors, networkErrors, close };
       this.session = session;
       hostPhase = 'browser.startup';
-      await page.goto(`${origin}${mountPath}`, { waitUntil: 'domcontentloaded', timeout: 60_000 }); const deadline = Date.now() + 60_000;
+      await page.goto(`${origin}${mountPath}?ui=off`, { waitUntil: 'domcontentloaded', timeout: 60_000 }); const deadline = Date.now() + 60_000;
       for (;;) {
         let diagnostics: SerializedDiagnostic[] = [];
         try { diagnostics = await page.evaluate(() => (window as any).__THREE_CREATOR_DIAGNOSTICS__?.records ?? []); }

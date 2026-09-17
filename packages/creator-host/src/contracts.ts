@@ -6,7 +6,7 @@ export { objectSchema } from './schema/schema-helpers.js';
 
 export const THREE_CREATOR_VERSION = '0.2.0-experimental';
 export type CreatorProfile = 'three-raw' | 'three-sdk';
-export type Project = { schemaVersion: 1; assetIds: string[] };
+export type Project = { schemaVersion: 1; assetIds: string[]; ui?:import('./compiler/world-ui.js').WorldUiProject };
 export type RoadVehicleDriveTarget = {
   vehicleId:string;
   positionWorldMetersXYZ:[number,number,number];
@@ -46,7 +46,7 @@ export const KEY_NAMES = [...new Set([...humanoid.SUPPORTED_KEY_CODES, 'Escape',
   /^Key[A-Z]$/.test(code)?[code.slice(3).toLowerCase(),code.slice(3)]:/^Digit[0-9]$/.test(code)?[code.slice(5)]:/^(Shift|Control|Alt)(Left|Right)$/.test(code)?[code.replace(/Left$|Right$/,'')]:[])])];
 const number = { type: 'number' };
 const keys = { type: 'array', items: { type: 'string', enum: KEY_NAMES }, maxItems: 20 };
-export const PROJECT_SCHEMA = objectSchema({ schemaVersion: { const: 1 }, assetIds: { type: 'array', items: { type: 'string', minLength: 1 }, uniqueItems: true, maxItems: 64 } }, ['schemaVersion', 'assetIds']);
+export const PROJECT_SCHEMA = objectSchema({ schemaVersion: { const: 1 }, assetIds: { type: 'array', items: { type: 'string', minLength: 1 }, uniqueItems: true, maxItems: 64 }, ui:objectSchema(Object.fromEntries(['catalog','definition','stateSchema','components'].map(key=>[key,{type:'string',minLength:1,maxLength:512}])),['catalog','definition','stateSchema','components']) }, ['schemaVersion', 'assetIds']);
 export const EPISODE_SCHEMA = { ...objectSchema({
   schemaVersion: { enum: [1, 2] },
   steps: { type: 'array', minItems: 1, maxItems: 1000, items: {...objectSchema({

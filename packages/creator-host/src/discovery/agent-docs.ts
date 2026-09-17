@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 
 export const AGENT_DOCUMENT_PATHS = [
-  'README.md','programming.md','sdk.md','sdk/basics.md','assets/README.md',
+  'README.md','programming.md','ui.md','sdk.md','sdk/basics.md','assets/README.md',
   'assets/humans/README.md','assets/humans/movement.md','assets/humans/actions.md',
   'assets/humans/interactions.md','assets/humans/integration.md',
   'assets/animals/README.md','assets/animals/flying-mounts.md','assets/vehicles/README.md','assets/scene/README.md',
@@ -9,6 +9,7 @@ export const AGENT_DOCUMENT_PATHS = [
 export type AgentDocumentPath = typeof AGENT_DOCUMENT_PATHS[number];
 const names = {quality:'README.md',programming:'programming.md','getting-started':'sdk.md',assets:'assets/README.md'} as const;
 const children:Partial<Record<AgentDocumentPath,readonly AgentDocumentPath[]>>={
+  'programming.md':['ui.md'],
   'sdk.md':['sdk/basics.md','assets/README.md'],
   'assets/README.md':['assets/humans/README.md','assets/animals/README.md','assets/vehicles/README.md','assets/scene/README.md'],
   'assets/animals/README.md':['assets/animals/flying-mounts.md'],

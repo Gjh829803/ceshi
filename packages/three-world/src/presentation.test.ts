@@ -31,6 +31,13 @@ describe('independent UI and clean model input',()=>{
    return {same,absent,replaced:observer.presentation===replacement};`);
   expect(result).toEqual({same:true,absent:true,replaced:true});
  });
+ it('freezes caller metadata in the same synchronous capture transaction',async()=>{
+  const result=await evaluate(`f.world.stop();const tick=f.world.simulationTick;const value={health:100};
+   const pending=f.presentation.modelInput.captureFrame({readMetadata:()=>value});value.health=20;
+   const packet=await pending;const metadata=packet.metadata;packet.image.close();
+   return {metadata,tick,after:f.world.simulationTick};`);
+  expect(result.metadata).toEqual({health:100});expect(result.after).toBe(result.tick);
+ });
  it('captures clean pixels on HTTP, without UI or displayed model feedback, and never advances the tick',async()=>{
   const data=await evaluate(`f.world.stop();const tick=f.world.simulationTick;const packet=await f.capture();
    const read=image=>{const c=document.createElement('canvas');c.width=800;c.height=450;const x=c.getContext('2d');x.drawImage(image,0,0);const a=x.getImageData(30,30,1,1).data;return [...a];};
