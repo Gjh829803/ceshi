@@ -841,6 +841,8 @@ const inspector = mountInspector(el("inspectorHost"), {
       defaults = getDefaultProfile(id)!;
     if (tab === "movement") {
       profile.control = defaults.control;
+      if (defaults.aircraftFlight) profile.aircraftFlight = defaults.aircraftFlight;
+      else delete profile.aircraftFlight;
       applyControlProfile(runtime, profile);
     }
     profiles.set(id, profile);
@@ -861,7 +863,15 @@ const inspector = mountInspector(el("inspectorHost"), {
     };
   },
   setCameraView,
-  getTelemetry: () => ({
+  getTelemetry: () => {
+    const aircraft = (() => {
+      const id = sim.controlledActor.vehicle?.spec.id;
+      return id === undefined
+        ? undefined
+        : sdk.inspectVehicles({ entityIds: [id] }).vehicles[0]?.aircraft ?? undefined;
+    })();
+    return {
+    ...(aircraft ? { aircraft } : {}),
     speedKmh:
       (sim.controlledActor.vehicle?.velocity.length() ?? sim.controlledActor.player.velocity.length()) * 3.6,
     altitudeMeters: (sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position).y,
@@ -870,7 +880,8 @@ const inspector = mountInspector(el("inspectorHost"), {
     headingDegrees:
       (((((sim.controlledActor.vehicle?.yaw ?? sim.controlledActor.player.yaw) * 180) / Math.PI) % 360) + 360) %
       360,
-  }),
+    };
+  },
   onInteract: clearInput,
 });
 function toggleInspector(show: boolean) {

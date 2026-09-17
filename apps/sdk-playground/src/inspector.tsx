@@ -49,6 +49,20 @@ export type InspectorTelemetry = {
   paused?: boolean;
   position?: readonly number[];
   headingDegrees?: number;
+  aircraft?: {
+    airspeedMetersPerSecond:number;
+    angleOfAttackRadians:number;
+    loadFactor:number;
+    stalled:boolean;
+    verticalSpeedMetersPerSecond:number;
+    dynamicPressurePascals:number;
+    liftNewtons:number;
+    dragNewtons:number;
+    controlAuthority:number;
+    desiredLiftNewtons:number;
+    totalRotorThrustNewtons:number;
+    transitionFactor:number;
+  };
 };
 export type InspectorTab = "movement" | "camera";
 export type InspectorMovement = {
@@ -74,7 +88,7 @@ export type InspectorOptions = {
   onInteract?(): void;
 };
 export type AssetInspector = { sync(): void; focus(): void; dispose(): void };
-type NumericFieldKey = keyof ControlTuning;
+type NumericFieldKey = string;
 type Snapshot = {
   assetId: string;
   subject: InspectorSubject;
@@ -90,6 +104,14 @@ const format = (value: number | undefined, precision = 1) =>
 const precision = (step: number) =>
   step < 0.001 ? 4 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
 let inspectorCount = 0;
+
+const AIRCRAFT_FLIGHT_FIELDS:readonly {key:keyof humanoid.AircraftFlightTuning;label:string;note:string}[]=[
+  {key:'pitchGain',label:'俯仰增益',note:'固定翼姿态控制的俯仰误差增益；数值越大，拉杆响应越快。'},
+  {key:'rollGain',label:'横滚增益',note:'固定翼姿态控制的横滚误差增益；数值越大，侧倾建立越快。'},
+  {key:'pitchRateDamping',label:'俯仰阻尼',note:'抑制俯仰角速度，数值越大越不容易过冲。'},
+  {key:'rollRateDamping',label:'横滚阻尼',note:'抑制横滚角速度，数值越大越容易稳定回正。'},
+  {key:'yawRateDamping',label:'偏航阻尼',note:'协调转弯时抑制偏航角速度。'},
+];
 
 function Group({
   title,
@@ -128,7 +150,7 @@ const NumericField = memo(function NumericField({
 }: {
   id: string;
   fieldKey: NumericFieldKey;
-  group?: "camera" | "control";
+  group?: "camera" | "control" | "aircraft";
   label: string;
   unit: string;
   step: number;
@@ -138,7 +160,7 @@ const NumericField = memo(function NumericField({
   disabled?: boolean;
   reason?: string | undefined;
   hidden?: boolean;
-  onChange(key: NumericFieldKey, value: number, group: "camera" | "control"): void;
+  onChange(key: NumericFieldKey, value: number, group: "camera" | "control" | "aircraft"): void;
 }) {
   const [draft, setDraft] = useState(
     String(Number(value.toFixed(precision(step)))),
@@ -153,6 +175,7 @@ const NumericField = memo(function NumericField({
       <div
         className="inspector-field"
         data-control-field={group === "control" ? fieldKey : undefined}
+        data-aircraft-field={group === "aircraft" ? fieldKey : undefined}
         data-camera-field={group === "camera" ? fieldKey : undefined}
         data-inactive={disabled}
         hidden={hidden}
@@ -215,7 +238,7 @@ const NumericField = memo(function NumericField({
             }}
           />
         </Hint>
-        <p className="inspector-field-note" hidden={group !== "control"}>
+        <p className="inspector-field-note" hidden={group === "camera"}>
           {note}
         </p>
       </div>
@@ -257,17 +280,30 @@ function Inspector({
     }
   }, [id, refresh]);
   const apply = useCallback((
-    key: keyof ControlTuning,
+    key: string,
     value: number | boolean,
-    group: "camera" | "control" = "camera",
+    group: "camera" | "control" | "aircraft" = "camera",
   ) => {
     run(() => {
       const next = structuredClone(options.getProfile(assetId));
-      next.control[key] = value as number;
-      const target = group === "control" ? "movement" : "camera";
+      next.control[key as keyof ControlTuning] = value as number;
+      const target = group === "control" || group === "aircraft" ? "movement" : "camera";
       options.applyProfile(next, target);
       setDirty((previous) => new Set(previous).add(`${assetId}:${target}`));
     }, "无法应用参数");
+  }, [assetId, options, run]);
+  const applyAircraft = useCallback((key: string, value: number) => {
+    run(() => {
+      const next = structuredClone(options.getProfile(assetId));
+      const aircraftFlight = {
+        ...humanoid.DEFAULT_AIRCRAFT_FLIGHT,
+        ...next.aircraftFlight,
+      };
+      aircraftFlight[key as keyof humanoid.AircraftFlightTuning] = value;
+      next.aircraftFlight = aircraftFlight;
+      options.applyProfile(next, "movement");
+      setDirty((previous) => new Set(previous).add(`${assetId}:movement`));
+    }, "无法应用飞行姿态参数");
   }, [assetId, options, run]);
   const stat = (label: string, value: string) => (
     <div className="inspector-stat" key={label}>
@@ -386,6 +422,22 @@ function Inspector({
                 ) : null;
               },
             )}
+            {profile.aircraftFlight && <Group title="飞行姿态" kicker="AIRCRAFT">
+              <p className="inspector-group-note">固定翼与倾转阶段参数；修改会实时应用到当前资产。</p>
+              {AIRCRAFT_FLIGHT_FIELDS.map((field) => <NumericField
+                key={`${assetId}:aircraft:${field.key}`}
+                id={`${id}-aircraft`}
+                fieldKey={field.key}
+                group="aircraft"
+                label={field.label}
+                unit="/s"
+                step={.1}
+                note={field.note}
+                value={profile.aircraftFlight![field.key]}
+                bounds={[0,100]}
+                onChange={applyAircraft}
+              />)}
+            </Group>}
             <Group title="实时运动状态" kicker="READ ONLY">
               <output
                 className="inspector-motion-velocity"
@@ -403,6 +455,20 @@ function Inspector({
                 )
                 .join("\n")}`}</output>
             </Group>
+            {telemetry.aircraft && <Group title="飞行数据" kicker="TELEMETRY">
+              <div className="inspector-camera-actual inspector-aircraft-telemetry">
+                {actual("空速", `${format(telemetry.aircraft.airspeedMetersPerSecond, 2)} m/s`)}
+                {actual("迎角", `${format(telemetry.aircraft.angleOfAttackRadians, 3)} rad`)}
+                {actual("载荷因子", `${format(telemetry.aircraft.loadFactor, 2)} G`)}
+                {actual("垂直速度", `${format(telemetry.aircraft.verticalSpeedMetersPerSecond, 2)} m/s`)}
+                {actual("动压", `${format(telemetry.aircraft.dynamicPressurePascals, 0)} Pa`)}
+                {actual("升力", `${format(telemetry.aircraft.liftNewtons, 0)} N`)}
+                {actual("阻力", `${format(telemetry.aircraft.dragNewtons, 0)} N`)}
+                {actual("控制权", format(telemetry.aircraft.controlAuthority, 2))}
+                {actual("状态", telemetry.aircraft.stalled ? "失速" : "正常")}
+                {actual("倾转比例", format(telemetry.aircraft.transitionFactor, 2))}
+              </div>
+            </Group>}
           </TabsContent>
           <TabsContent className="inspector-tab-panel" value="camera">
             <Group title="相机模式" kicker="CAMERA">
