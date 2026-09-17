@@ -57,6 +57,13 @@ import {
   type AssetEntry,
 } from "@worldkit/preset-content/platform/catalog";
 import { mountAssetLibrary } from "./library";
+import {
+  profileForTarget,
+  profileScopeKey,
+  restoreProjectProfiles,
+  scopeProfile,
+  type ProfileTarget,
+} from "./profile-scopes";
 import { mountWorkbench } from "./workbench";
 import {
   defaultRegion,
@@ -260,26 +267,56 @@ const sdkPresentation = sdk.createPresentation({
   container: canvas.parentElement!,
 });
 shell.attachViewport(sdkPresentation);
-const profiles = new Map<string, AssetProfile>();
-const exportedProfiles = new Map<string, string>();
-for (const id of ["person", ...SPECS.map((s) => s.id)]) {
-  const project = (
-    effectiveProfiles as { profiles: AssetProfile[] }
-  ).profiles.find((p) => p.assetId === id);
-  let profile = project ?? getDefaultProfile(id)!;
-  exportedProfiles.set(id, JSON.stringify(profile));
-  // Local overrides are visibly marked and never silently included in a delivery.
-  if (
-    new URLSearchParams(location.search).get("debugProfiles") === "1" &&
-    (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-  ) {
-    try {
-      profile = loadAssetProfile(localStorage, id) ?? profile;
-    } catch {}
-  }
-  profiles.set(id, profile);
-  applyControlProfile(runtime, profile);
+const profileDefaults = ["person", ...SPECS.map((s) => s.id)].map((id) => getDefaultProfile(id)!);
+const projectProfiles = (effectiveProfiles as { profiles: unknown[] }).profiles.map((profile) => parseAssetProfile(profile));
+const profiles = restoreProjectProfiles(profileDefaults, projectProfiles);
+const exportedProfiles = new Map([...profiles].map(([scope, profile]) => [scope, JSON.stringify(profile)]));
+const localProfileOverridesEnabled =
+  new URLSearchParams(location.search).get("debugProfiles") === "1" &&
+  (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+function profileAssetIdForIdentity(identity: { instanceId: string; assetId: string }): string {
+  const candidates = [
+    identity.assetId,
+    identity.assetId.replace(/^vehicle\./, ""),
+    ...(identity.assetId.startsWith("creature.dragon") ? ["dragon"] : []),
+    identity.instanceId,
+  ];
+  return candidates.find((id) => getDefaultProfile(id) !== undefined) ?? identity.instanceId;
 }
+function profileTargetForVehicle(): ProfileTarget {
+  const vehicle = sim.controlledActor.vehicle;
+  if (!vehicle) return { assetId: "person" };
+  const identity = runtime.snapshot().vehicles.find(({ instanceId }) => instanceId === vehicle.spec.id);
+  return {
+    assetId: profileAssetIdForIdentity(identity ?? { instanceId: vehicle.spec.id, assetId: vehicle.spec.id }),
+    instanceId: vehicle.spec.id,
+  };
+}
+function profileForScopedTarget(target: ProfileTarget): AssetProfile {
+  const profile = profileForTarget(profiles, target);
+  if (!profile) throw new Error(`profile not found: ${target.assetId}`);
+  return profile;
+}
+function setScopedProfile(profile: AssetProfile): void {
+  profiles.set(profileScopeKey(profile), profile);
+}
+if (localProfileOverridesEnabled) for (const id of ["person", ...SPECS.map((s) => s.id)]) {
+  // Local overrides are visibly marked and never silently included in a delivery.
+  try {
+    const saved = loadAssetProfile(localStorage, id);
+    if (saved) setScopedProfile(saved);
+  } catch {}
+}
+// Restore every present instance override, not only the vehicle currently selected
+// by the inspector. Asset defaults above remain the fallback for untouched instances.
+if (localProfileOverridesEnabled) for (const identity of runtime.snapshot().vehicles) {
+  const target: ProfileTarget = { assetId: profileAssetIdForIdentity(identity), instanceId: identity.instanceId };
+  try {
+    const saved = loadAssetProfile(localStorage, target.assetId, target.instanceId);
+    if (saved) setScopedProfile(saved);
+  } catch {/* A stale developer override must not block Playground startup. */}
+}
+for (const profile of profiles.values()) applyControlProfile(runtime, profile);
 const pageLifetime = new AbortController();
 const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();
@@ -748,22 +785,30 @@ const workbench = mountWorkbench(document.body, {
   onOpenChange: open=>onModalPanelChange('workbench',open),
   onPrepare: prepareSelection,
   getMapId: () => session.map.id,
-  getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
-  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
+  getAssetId: () => profileTargetForVehicle().assetId,
+  getProfile: (id) => {
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    return readEditableProfile(runtime, profileForScopedTarget(target));
+  },
   applyProfile: (value) => {
-    const profile = parseAssetProfile(value);
+    const target = profileTargetForVehicle();
+    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
     applyControlProfile(runtime, profile);
-    profiles.set(profile.assetId, profile);
+    setScopedProfile(profile);
 
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
-    saveAssetProfile(localStorage, profile);
+    const target = profileTargetForVehicle();
+    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
   },
   resetProfile: (id) => {
-    clearAssetProfile(localStorage, id);
-    const profile = getDefaultProfile(id)!;
-    profiles.set(id, profile);
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    clearAssetProfile(localStorage, target.assetId, target.instanceId);
+    const profile = scopeProfile(getDefaultProfile(target.assetId)!, target);
+    setScopedProfile(profile);
     applyControlProfile(runtime, profile);
 
     if (paused) renderPausedState();
@@ -816,7 +861,7 @@ function movementState() {
 const inspector = mountInspector(el("inspectorHost"), {
   panels:panelState,
   cameraEditor:getCameraEditor,
-  getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
+  getAssetId: () => profileTargetForVehicle().assetId,
   getSubject: () => ({
     name: sim.controlledActor.vehicle?.spec.name ?? "主体人物",
     subtitle: sim.controlledActor.vehicle
@@ -825,25 +870,36 @@ const inspector = mountInspector(el("inspectorHost"), {
     state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : controlledCharacter().clipLabel,
     color: sim.controlledActor.vehicle?.spec.color ?? "#b4d7c2",
   }),
-  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
+  getProfile: (id) => {
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    return readEditableProfile(runtime, profileForScopedTarget(target));
+  },
   applyProfile: (value, tab) => {
-    const profile = parseAssetProfile(value);
+    const target = profileTargetForVehicle();
+    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
     if (tab === "movement") applyControlProfile(runtime, profile);
 
-    profiles.set(profile.assetId, profile);
+    setScopedProfile(profile);
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
-    saveAssetProfile(localStorage, profile);
+    const target = profileTargetForVehicle();
+    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
   },
   resetProfile: (id, tab) => {
-    const profile = structuredClone(profiles.get(id)!),
-      defaults = getDefaultProfile(id)!;
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    clearAssetProfile(localStorage, target.assetId, target.instanceId);
+    const profile = scopeProfile(structuredClone(profileForScopedTarget(target)), target),
+      defaults = getDefaultProfile(target.assetId)!;
     if (tab === "movement") {
       profile.control = defaults.control;
+      if (defaults.aircraftFlight) profile.aircraftFlight = defaults.aircraftFlight;
+      else delete profile.aircraftFlight;
       applyControlProfile(runtime, profile);
     }
-    profiles.set(id, profile);
+    setScopedProfile(profile);
     if (paused) renderPausedState();
   },
   getMovement: movementState,
@@ -861,7 +917,15 @@ const inspector = mountInspector(el("inspectorHost"), {
     };
   },
   setCameraView,
-  getTelemetry: () => ({
+  getTelemetry: () => {
+    const aircraft = (() => {
+      const id = sim.controlledActor.vehicle?.spec.id;
+      return id === undefined
+        ? undefined
+        : sdk.inspectVehicles({ entityIds: [id] }).vehicles[0]?.aircraft ?? undefined;
+    })();
+    return {
+    ...(aircraft ? { aircraft } : {}),
     speedKmh:
       (sim.controlledActor.vehicle?.velocity.length() ?? sim.controlledActor.player.velocity.length()) * 3.6,
     altitudeMeters: (sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position).y,
@@ -870,7 +934,8 @@ const inspector = mountInspector(el("inspectorHost"), {
     headingDegrees:
       (((((sim.controlledActor.vehicle?.yaw ?? sim.controlledActor.player.yaw) * 180) / Math.PI) % 360) + 360) %
       360,
-  }),
+    };
+  },
   onInteract: clearInput,
 });
 function toggleInspector(show: boolean) {
@@ -1167,10 +1232,12 @@ function updateUI(force = false) {
   const v = sim.controlledActor.vehicle,
     p = sim.controlledActor.player,
     nearest = sim.controlledActor.nearest(),
+    recoveryTarget = v ?? (nearest >= 0 ? sim.vehicles[nearest] : undefined),
+    recoveryDynamics = recoveryTarget ? runtime.snapshot().vehicleDynamics.find(dynamics => dynamics.instanceId === recoveryTarget.spec.id) : undefined,
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
   spacePanel.update(v?humanoid.spaceTelemetry(v):null);
   const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
-  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
+  shell.update({recoverable:!!recoveryDynamics?.recoveryAvailable,drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.controlledActor.controller,
     bindings = sdk.getKeyBindings(),
     key = (action: humanoid.ControlAction) => humanoid.bindingLabel(action, bindings),
@@ -1253,7 +1320,9 @@ function updateUI(force = false) {
   if (v)
     setHTML(
       "interaction",
-      v.motion.flyingCreature
+      recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具 · 再按一次${v ? '离开' : '进入'}`
+        : v.motion.flyingCreature
         ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('ascend')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
         ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('ascend')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
@@ -1270,7 +1339,9 @@ function updateUI(force = false) {
   else
     setHTML(
       "interaction",
-      (session.map.id===DRAGON_TRAINING.id
+      (recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具`
+        : session.map.id===DRAGON_TRAINING.id
         ? `${key('summonDragon')} 召唤飞龙 · ${summon?.phase==='arrived'?`飞龙已抵达 · 靠近鞍侧按 ${key('interact')} 上龙`:summon?.message??`飞龙会降落在附近，落稳后到鞍侧按 ${key('interact')} 上龙`}`
         : undefined) ?? h?.skills.hint(bindings) ??
         (h?.surface.mode === "climbing"

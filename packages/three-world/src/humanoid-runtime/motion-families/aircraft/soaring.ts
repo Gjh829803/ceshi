@@ -23,6 +23,7 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
   a.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
   const up=new Vector3(0,1,0).applyQuaternion(v.rotation),forward=new Vector3(0,0,1).applyQuaternion(v.rotation),right=new Vector3(1,0,0).applyQuaternion(v.rotation);
   const relative=v.velocity.clone().sub(airVelocity(q,v.position)),speed=relative.length(),force=new Vector3(),torque=new Vector3();
+  a.dynamicPressurePascals=0;a.liftNewtons=0;a.dragNewtons=0;a.controlAuthority=0;a.desiredLiftNewtons=0;a.totalRotorThrustNewtons=0;a.transitionFactor=0;
   const oldGround=v.grounded,hit=glider?undefined:q.support(v.position,2,.1);
   v.grounded=glider?gliderLandingGear(v,i,h,q,force,torque):!!hit&&v.position.y-hit.height<.15;
   // 斜坡上原点可能仍离地数十厘米；可穿戴装备以真实向上接触确认承重。
@@ -54,7 +55,7 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    a.temperatureKelvin=clamp(a.temperatureKelvin+h*(b.heating*burn-b.cooling*(a.temperatureKelvin-b.ambientKelvin)-Math.max(0,-i.lift)*b.ventCooling),b.ambientKelvin,b.maxKelvin);
    const rho=1.225*Math.exp(-Math.max(0,v.position.y)/8500),inside=rho*b.ambientKelvin/a.temperatureKelvin;
    force.y=(rho-inside)*b.volume*9.81;
-   force.addScaledVector(relative,-.5*rho*b.dragArea*speed);a.loadFactor=force.y/(mass*9.81);
+   const drag=.5*rho*b.dragArea*speed;force.addScaledVector(relative,-drag);a.dynamicPressurePascals=.5*rho*speed*speed;a.dragNewtons=drag;a.loadFactor=force.y/(mass*9.81);
    // 吊篮悬挂的回正力矩；没有可凭空横向推进的方向舵。
    torque.addScaledVector(right,inertia.x*(v.pitch*3-a.angularVelocity.dot(right)*3));
    torque.addScaledVector(forward,inertia.z*(-v.roll*3-a.angularVelocity.dot(forward)*3));
@@ -70,6 +71,7 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    force.addScaledVector(liftAxis,lift);
    const drag=dynamic*((!glider?Math.max(0,Math.abs(alpha)-.35)*.35:0)+base.drag+(C.paraglider.drag-base.drag)*canopy+(base.induced+(C.paraglider.induced-base.induced)*canopy)*cl*cl+(airBrake?.12:0));
    if(speed>.01)force.addScaledVector(relative,-Math.min(drag,mass*speed/h)/speed);
+   a.dynamicPressurePascals=.5*1.225*speed*speed;a.liftNewtons=lift;a.dragNewtons=drag;
    // 地面牵引/助跑后释放。翼装必须从高台离开，不能在平地持续获得推力。
    if(glider&&v.launched&&a.towSeconds>0&&(!(i.boost||i.forward>0)||i.slow||i.brake||i.forward<0||v.position.y>=20||a.towSeconds>=C.towSeconds))a.towReleased=true;
    if(!a.towReleased&&(i.boost||i.forward>0)&&i.forward>=0&&!i.slow&&!i.brake&&!wear?.hadFlight&&a.towSeconds<C.towSeconds&&(!v.launched||glider&&v.position.y<20)){
@@ -96,7 +98,7 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
      force.addScaledVector(relative,-mass*.4);
     }
    }
-   const authority=clamp(speed/(glider?20:7),0,1),yawRate=v.grounded?0:-9.81*Math.tan(v.roll)/Math.max(speed,6);
+   const authority=clamp(speed/(glider?20:7),0,1),yawRate=v.grounded?0:-9.81*Math.tan(v.roll)/Math.max(speed,6);a.controlAuthority=authority;
    torque.addScaledVector(right,inertia.x*clamp((v.pitch-pitchTarget)*8-a.angularVelocity.dot(right)*4,-3,3)*authority);
    torque.addScaledVector(forward,inertia.z*clamp((rollTarget-v.roll)*10-a.angularVelocity.dot(forward)*5,-3,3)*authority);
    torque.addScaledVector(up,inertia.y*(yawRate-a.angularVelocity.dot(up))*3*authority);

@@ -245,7 +245,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
               {DRAGON_VARIANTS.map(variant=><ChoiceOption key={variant.id} value={variant.id}>{variant.name}</ChoiceOption>)}
             </ChoiceSelect>
           </label>}
-          {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
+          {s.recoverable&&btn("recoverButton","回正 / 脱困 · F","subtle-button")}
           <DisplayPanel panels={panels} settings={s.display} available={s.displayAvailable} error={s.displayError}
             rows={s.displayRows} pinned={s.displayPinned} onPinnedChange={value=>action('displayPin',String(value))}
             open={!!f('displayOpen')} onOpenChange={open => { flag('displayOpen', open); action('displayOpen', String(open)); }}

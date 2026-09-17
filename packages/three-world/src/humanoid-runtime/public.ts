@@ -76,7 +76,8 @@ export {
 
 export { sampleJetSkiVisual } from './jetski-visual';
 export {createRoadVehicleSpec,type RoadVehicleKind,type RoadVehicleSpec} from './road-vehicle';
-export {AIRCRAFT,SOARING} from '../config/aircraft';
+export {AIRCRAFT,DEFAULT_AIRCRAFT_FLIGHT,SOARING} from '../config/aircraft';
+export type {AircraftFlightTuning} from '../config/aircraft';
 
 export {FlyingCreatureVisual,type FlyingCreatureVisualResources} from './motion-families/flying-creature/visual';
 export type {FlyingCreatureTuning} from './motion-families/flying-creature/state';
@@ -86,6 +87,7 @@ export {dragonGroundHeading} from './motion-families/flying-creature/ground-pose
 
 export {createAircraftSpec,type AircraftSpec,type AircraftKind} from './aircraft-spec';
 export type {VehicleInspection,VehicleInspectionResult,VehicleInspectionQuery,VehicleWheelInspection} from './vehicle-inspection';
+export type {VehicleCondition,VehicleConditionObservation,VehicleRecoveryReason} from './vehicle-condition';
 
 // 显示层旋转模糊等特效不作为相机可碰撞实体。
 export {markCameraVisualEffect} from './camera-visual-effects';

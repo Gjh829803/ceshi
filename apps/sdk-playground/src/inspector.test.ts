@@ -73,6 +73,8 @@ describe("React playground inspector", () => {
     page.evaluate(() => (window as any).inspectorTest.state());
   const control = (key: string) =>
     page.locator(`[data-control-field="${key}"] input[type=number]`);
+  const aircraftControl = (key: string) =>
+    page.locator(`[data-aircraft-field="${key}"] input[type=number]`);
   it("offers only first person, third person and shoulder with truthful mode-specific controls", async () => {
     await page.getByRole("tab", { name: "相机模式" }).click();
     expect(
@@ -125,6 +127,9 @@ describe("React playground inspector", () => {
     await page.evaluate(() => (window as any).inspectorTest.select("plane"));
     await control("dragQuadratic").fill("0.005");
     expect((await state()).profile.control.dragQuadratic).toBe(0.005);
+    await aircraftControl("pitchGain").fill("12");
+    expect((await state()).profile.aircraftFlight.pitchGain).toBe(12);
+    expect(await aircraftControl("rollGain").isVisible()).toBe(true);
     expect(await control("coastDeceleration").isVisible()).toBe(false);
   });
   it("places motion and camera in one accessible keyboard-switchable tab row", async () => {

@@ -13,6 +13,7 @@
 | 读取真实接口 | [公共类型](../packages/three-world/src/contracts.ts) |
 | 修改内部调参、效果开关与 Playground 默认值 | [配置入口](../packages/three-world/src/config/README.md) · [验证记录](reviews/2026-09-09-runtime-tuning.md) |
 | 查看当前车辆按需诊断、固定翼自绘接入与验证 | [接入验证](reviews/2026-09-10-vehicle-diagnostics-aircraft-agent.md) |
+| 理解飞行器手感 profile 的资产默认值、实例覆盖与 3C 自动绑定 | [飞行器手感 profile 作用域](aircraft-flight-profile-scope.md) |
 | 查看 #215 / #218 自绘载具接入范围、验证与剩余缺口 | [载具接入现状](reviews/2026-09-09-creator-vehicle-integration-status.md) |
 | 配置汽车、摩托车漂移及理解速度/抓地力影响 | [制动漂移设计与调参](three-vehicle-drift.md) |
 | 使用 Agent 工具、编译、验证和交付 | [Creator](../packages/creator-host/README.md) |
