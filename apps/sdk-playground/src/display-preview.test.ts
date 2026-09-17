@@ -12,8 +12,8 @@ describe('diagnostic preview and clean source pixels', () => {
       import { defaultDisplaySettings } from './apps/sdk-playground/src/display-settings';
       import { ThreePresentation } from './packages/three-world/src/presentation';
       const mount=document.createElement('div');mount.style.cssText='position:relative;width:128px;height:128px';document.body.append(mount);
-      const source=new T.WebGLRenderer({preserveDrawingBuffer:true});source.setSize(128,128);mount.append(source.domElement);
-      const scene=new T.Scene(),camera=new T.PerspectiveCamera(50,1,.1,100);camera.position.z=5;
+      const source=new T.WebGLRenderer({preserveDrawingBuffer:true});source.setPixelRatio(window.testPixelRatio??1);source.setSize(128,128);mount.append(source.domElement);
+      const scene=new T.Scene(),camera=window.testOrthographic?new T.OrthographicCamera(-2,2,2,-2,.1,100):new T.PerspectiveCamera(50,1,.1,100);camera.position.z=5;
       const glass=new T.Mesh(new T.PlaneGeometry(2,2),new T.MeshBasicMaterial({color:0x00ffff,transparent:true,opacity:.3,depthWrite:false}));glass.position.z=1;glass.visible=false;scene.add(glass);
       const mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial({color:0xff0000}));scene.add(mesh);
       const holeTexture=new T.DataTexture(new Uint8Array([0,255,0,0]),1,1);holeTexture.needsUpdate=true;
@@ -28,6 +28,12 @@ describe('diagnostic preview and clean source pixels', () => {
       // Host resamples through the SDK after source-only clipping is restored.
       // In the fixture only the subject transform is interpolated.
       window.testPreview={
+        rangeFrame(range){
+          let helperFar;scene.onBeforeRender=()=>{const root=scene.getObjectByName('display-camera');root?.traverse(node=>{if(node instanceof T.CameraHelper)helperFar=node.camera.far;});};
+          const before={far:camera.far,fov:camera.fov,projection:camera.projectionMatrix.toArray()};
+          preview.setSettings({...defaultDisplaySettings(),cameras:true,cameraRange:range});renderSource();
+          return {monitor:pixel(mount.querySelector('[data-camera-monitor-frame]')),source:pixel(source.domElement),helperFar,before,after:{far:camera.far,fov:camera.fov,projection:camera.projectionMatrix.toArray()}};
+        },
         interpolatedFrame(x){displayX=x;mesh.position.x=Math.ceil(x);camera.position.x=x;scene.onBeforeRender=(renderer)=>{if(renderer!==source)observedX=mesh.position.x;};renderSource();return {displayX,observedX,committedX:mesh.position.x,world:preview.worldCamera.position.toArray()};},
         foreground(){glass.visible=true;preview.setSettings({...defaultDisplaySettings(),mode:'semantic'});renderSource();const result=pixel(preview.canvas);glass.visible=false;return result;},
         async draw(mode){preview.setSettings({...defaultDisplaySettings(),mode:mode==='collision'||mode==='wireframe'?'material':mode,helperOnly:mode==='collision'||mode==='wireframe'?mode:'none',depthFar:10});renderSource();const p=preview.canvas;const frame=await presentation.modelInput.captureFrame();const captured=pixel(frame.image);frame.image.close();return {source:pixel(source.domElement),preview:p?pixel(p):null,captured,tick:frame.source.simulationTick,materialRestored:mesh.material===originalMaterial,camera:camera.position.toArray(),before,visible:mesh.visible};},
@@ -53,6 +59,22 @@ describe('diagnostic preview and clean source pixels', () => {
     browser = await launchChromiumWithSystemFallback();
   }, 60000);
   afterAll(async () => { await browser?.close(); });
+  it.each([{orthographic:false,pixelRatio:1},{orthographic:false,pixelRatio:1.5},{orthographic:true,pixelRatio:2}])('clips the monitor at the helper range without changing the source: %j',async options=>{
+    const page=await browser.newPage();
+    try{
+      await page.setContent('<body></body>');
+      await page.evaluate(({orthographic,pixelRatio})=>{(window as any).testOrthographic=orthographic;(window as any).testPixelRatio=pixelRatio;},options);
+      await page.addScriptTag({content:script});
+      const read=(range:number)=>page.evaluate(range=>(window as any).testPreview.rangeFrame(range),range);
+      const far=await read(6),near=await read(3),restored=await read(6);
+      expect(far.monitor).toEqual([255,0,0,255]);
+      expect(near.monitor.slice(0,3)).toEqual([0,0,0]);
+      expect(restored.monitor).toEqual(far.monitor);
+      for(const result of [far,near,restored]){expect(result.source).toEqual([255,0,0,255]);expect(result.after).toEqual(result.before);}
+      expect([far.helperFar,near.helperFar,restored.helperFar]).toEqual([6,3,6]);
+      await page.evaluate(()=>(window as any).testPreview.dispose());
+    }finally{await page.close();}
+  },30000);
   it('follows subject translation without copying camera orbit, recentering or distance changes during turns',async()=>{
     const page=await browser.newPage();
     try{
