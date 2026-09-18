@@ -173,6 +173,8 @@ it('recreates the native car, drives it in the same world and clears the new ins
 
 
 it('creates every catalog choice on demand in the full campus without replacing the world',async()=>{
+ // Keep the real desktop layout and full map while bounding software raster work on CI.
+ await page.setViewportSize({width:960,height:600});
  await page.goto(url.replace('asset-lifecycle.html','native-lifecycle.html'));await page.waitForFunction(()=>document.body.dataset.ready==='true');
  const native=()=>page.evaluate(()=>({...((window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:NonNullable<Snapshot['world']>;errors:string[]}}}).nativeLifecycleLab.snapshot()),message:document.getElementById('message')!.textContent,createEnabled:!(document.getElementById('vehicle-create') as HTMLButtonElement).disabled}));
  const before=await native();expect(before.mapId).toBe('campus');expect(before.bounds.max[0]!-before.bounds.min[0]!).toBe(1000);
@@ -182,11 +184,16 @@ it('creates every catalog choice on demand in the full campus without replacing 
   const started=performance.now();
   try{
    await page.selectOption('#vehicle-type',type);await page.locator('#vehicle-create').click();
-   // Read one coherent completion sample instead of serial round trips through a busy renderer.
-   let observed:Awaited<ReturnType<typeof native>>|undefined;
-   await expect.poll(async()=>{observed=await native();return observed.errors.length>0||(observed.loaded.some(entry=>entry.type===type)&&observed.createEnabled);},{timeout:20000}).toBe(true);
-   expect(observed!.errors,`${type}: ${observed!.message}`).toEqual([]);expect(observed!.loaded.some(entry=>entry.type===type),type).toBe(true);
-   expect(observed!.createEnabled,type).toBe(true);expect(observed!.message,type).toContain('已定位');
+   // Wait where the state lives. Repeated full-world CDP serialization competes
+   // with the live renderer on CPU-only CI; transfer one coherent sample afterwards.
+   await page.waitForFunction(selected=>{
+    if((document.getElementById('vehicle-create') as HTMLButtonElement).disabled)return false;
+    const state=(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{type:string}[];errors:string[]}}}).nativeLifecycleLab.snapshot();
+    return state.errors.length>0||state.loaded.some(entry=>entry.type===selected);
+   },type,{timeout:20000,polling:100});
+   const observed=await native();
+   expect(observed.errors,`${type}: ${observed.message}`).toEqual([]);expect(observed.loaded.some(entry=>entry.type===type),type).toBe(true);
+   expect(observed.createEnabled,type).toBe(true);expect(observed.message,type).toContain('已定位');
   }catch(error){console.error('Catalog creation failed',{type,elapsedMs:Math.round(performance.now()-started),completed:timings});throw error;}
   timings.push({type,milliseconds:Math.round(performance.now()-started)});
  }

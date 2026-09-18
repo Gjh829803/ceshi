@@ -311,3 +311,31 @@ nonhuman-subject / assets / extensions 主题发现。接口绑定已经登记�
 
 用法与完整边界见 [SDK 可选实体回调](../packages/three-world/README.md#optional-entity-lifecycle-callbacks)。
 这不是资产库实现，也不自动替换已有角色或载具的动画逻辑。
+
+
+## 本地完整门禁的运行环境
+
+完整门禁按 [CI 环境](../.github/actions/setup-validation/action.yml) 在 Linux 上执行，
+使用 Node 24.3.0、pnpm 10.14.0，并准备 Python、Pillow、requests、FFmpeg 和 Playwright。
+Windows 可以运行类型、构建和游玩回归，但不能把 Linux 归档路径、符号链接、
+目录文件描述符和 shebang 子进程检查在 Windows 上的失败直接判为 SDK 生命周期回归。
+也不能跳过这些测试后声称完整门禁通过；应把同一份源码交给 Linux 环境复核。
+
+Linux 验证副本必须核对源码字节与当前修改，并使用独立依赖和临时目录。
+`TMPDIR` 应位于工作区之外，例如通过 `mktemp -d /tmp/worldkit-validation-XXXXXX` 创建。
+项目声明 `type: module`；把临时夹具放进项目内，会让测试生成的无扩展名 CommonJS
+假程序继承 ESM 规则，导致 `require` 失败，即使真正的生产可执行程序没有问题。
+
+从仓库根目录运行 `pnpm test:independent`、`pnpm test:contract`、
+`pnpm test:resource-heavy`；保留失败日志，复测结果与首次结果分开记录。
+测试的超时不能通过重试成功、删断言或扩大预算来掩盖。
+
+Episode 只使用 Lodash 的 `isEqual` 时直接导入 `lodash-es/isEqual.js`。
+这是同一个实现，但避免工作流首次导入时加载总入口的全部工具模块。
+冷启动开销应从实际模块依赖消除，保留 capture 用例的原有限时和行为断言。
+
+
+全目录创建回归使用 960×600 的桌面视口，限制无 GPU runner 的纯栅格开销；
+不缩小 campus 的物理地图、不停用模拟、不减少同场实体或实际按钮操作。
+创建按钮禁用期间只轮询 DOM，完成后读取真实状态进行断言，避免等待期间反复
+构造并传输全世界快照。单型号 20 秒和完整用例 150 秒限时保持不变。

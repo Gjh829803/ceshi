@@ -1,4 +1,4 @@
-import {isEqual} from 'lodash-es';
+import isEqual from 'lodash-es/isEqual.js';
 import {buildGpuCaptureQueueEntry,selectGpuCaptureBatch,cloudProductionContentHash} from './cloud-production-run.mjs';
 const id = value => {if(!/^[a-z0-9][a-z0-9-]{2,119}$/.test(value??''))throw Error('EPISODE_BATCH_ID_INVALID');return value;};
 export function newCohort(cohortId,caseIds){
