@@ -11,7 +11,7 @@ import {buildSoaringShell} from './vehicles/aircraft/soaring-shell';
 import {buildAircraftShell} from './vehicles/aircraft/shell';
 import * as T from 'three';
 import { SPECS, type VehicleSpec } from './config';
-import { ROAD_CUSHIONS } from './vehicles/road/seating';
+import { ROAD_CUSHIONS, kartCushionSupportRise } from './vehicles/road/seating';
 import { buildCreatureVisual, type CreatureVisual } from './creatures/visual';
 import { buildSkiModel } from './vehicles/ski/model';
 import { buildSledModel } from './vehicles/sled/model';
@@ -62,7 +62,18 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
     root.add(pivot);wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius:r});return pivot;
   }
   function pilotSeat(y:number,z=0){box(root,.72,.13,.75,0,y,z,dark);box(root,.74,.72,.13,0,y+.35,z-.38,dark);}
-  function roadSeat(){const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';if(s.mode!=='motorcycle')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';}
+  function roadSeat(){
+    const {center,size}=ROAD_CUSHIONS[s.id as keyof typeof ROAD_CUSHIONS];
+    const cushion=box(root,size[0],size[1],size[2],center[0],center[1],center[2],dark);cushion.name='seat-cushion';
+    if(s.id==='kart'){
+      cushion.geometry.dispose();
+      cushion.geometry=new T.BoxGeometry(size[0],size[1],size[2],24,1,1);
+      const vertices=cushion.geometry.getAttribute('position');
+      for(let i=0;i<vertices.count;i++)if(vertices.getY(i)>0)vertices.setY(i,vertices.getY(i)+kartCushionSupportRise(vertices.getX(i)));
+      cushion.geometry.computeVertexNormals();
+    }
+    if(s.mode!=='motorcycle')box(root,.74,.72,.13,center[0],center[1]+.35,center[2]-size[2]/2-.065,dark).name='seat-back';
+  }
   function thruster(x:number,y:number,z:number){const glow=new T.Mesh(new T.ConeGeometry(.18,.8,12),new T.MeshBasicMaterial({color:'#95f9ff',transparent:true,opacity:.65}));glow.rotation.x=-Math.PI/2;glow.position.set(x,y,z);root.add(glow);engine.push(glow);}
   const archetype=s.archetype;
   if(archetype==='unicycle'){root.add(buildUnicycleModel());

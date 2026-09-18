@@ -59,7 +59,7 @@ describe('per-wheel road vehicle',()=>{
    expect(side*f.v.position.x).toBeLessThan(.3);
   }finally{f.q.dispose();}
  });
- it.each(['rover','trail-rover'])('covers %s visible body vertices with persistent solver colliders',id=>{
+ it.each(['rover','trail-rover','kart'])('covers %s visible body vertices with persistent solver colliders',id=>{
   vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({beginPath(){},roundRect(){},fill(){},fillText(){}})})});
   const selected=playgroundVehicles.find(v=>v.id===id)!,visual=buildVehicle(selected),f=fixture();
   f.v=createVehicle({...selected,spawn:[0,0,0],yaw:.7});
@@ -163,6 +163,39 @@ describe('per-wheel road vehicle',()=>{
     for(let n=0;n<30;n++){run(f,1,{...emptyInput(),forward:1,boost:true,steer:sign});axleLoad+=v.motion.wheelPhysics!.wheels[1]!.load+v.motion.wheelPhysics!.wheels[3]!.load;}
     expect(axleLoad/30).toBeGreaterThan(1000);expect(-sign*(v.yaw-yaw)).toBeGreaterThan(.06);expect(-sign*(v.position.x-origin.x)).toBeGreaterThan(.1);expect(v.position.y).toBeGreaterThan(origin.y);
    }finally{q.dispose();}
+  }
+ });
+ it.each([[12,24],[12,27.6],[22,24],[22,27.6]])('keeps the kart body above the %s degree ramp at %s m/s during entry and downhill landing',(degrees,speed)=>{
+  const campus=getMap('campus'),ramp=campus.boxes.find(b=>b.id===`grade-${degrees}`)!,angle=degrees*Math.PI/180;
+  const rotation=new Quaternion().setFromAxisAngle(new Vector3(1,0,0),angle);
+  // Bottom corners of the authored floor pan and front/rear bumpers, in metres.
+  const corners=[{half:[.7,.05,1.25],center:[0,.16,0]},{half:[.93,.09,.13],center:[0,.28,1.23]},{half:[.82,.06,.08],center:[0,.25,-1.25]}]
+   .flatMap(({half,center})=>[-1,1].flatMap(x=>[-1,1].map(z=>new Vector3(center[0]!+x*half[0]!,center[1]!-half[1]!,center[2]!+z*half[2]!))));
+  for(const downhill of [false,true]){
+   const z=downhill?175:136,y=downhill?(z-146)*Math.tan(angle):0;
+   const f={q:new EnvironmentQueries(campus),v:createVehicle({...playgroundVehicles.find(v=>v.id==='kart')!,spawn:[ramp.position[0],y,z],yaw:downhill?Math.PI:0})};
+   try{
+    if(downhill)f.v.rotation.setFromAxisAngle(new Vector3(1,0,0),-angle).multiply(new Quaternion().setFromAxisAngle(new Vector3(0,1,0),Math.PI));
+    run(f,120,{...emptyInput(),brake:true});
+    f.v.velocity.set(0,0,speed).applyQuaternion(f.v.rotation);for(const w of f.v.motion.wheelPhysics!.wheels)w.omega=speed/f.v.spec.wheelPhysics!.radius;
+    let penetration=0;
+    for(let n=0;n<240;n++){
+     const previousPosition=f.v.position.clone(),previousRotation=f.v.rotation.clone();
+     run(f,1,{...emptyInput(),forward:1,boost:true});
+     for(const alpha of [.25,.5,.75,1])for(const corner of corners){
+      const position=previousPosition.clone().lerp(f.v.position,alpha),orientation=previousRotation.clone().slerp(f.v.rotation,alpha);
+      const world=corner.clone().applyQuaternion(orientation).add(position);
+      penetration=Math.max(penetration,-world.y);
+      const local=world.clone().sub(new Vector3(...ramp.position)).applyQuaternion(rotation);
+      if(Math.abs(local.x)<ramp.size[0]/2&&Math.abs(local.z)<ramp.size[2]/2){
+       penetration=Math.max(penetration,ramp.size[1]/2-local.y);
+      }
+     }
+     if(downhill?f.v.position.z<140:f.v.position.z>175)break;
+    }
+    expect(penetration,`downhill=${downhill}`).toBeLessThan(.025);
+    expect(downhill?f.v.position.z<140:f.v.position.z>175).toBe(true);
+   }finally{f.q.dispose();}
   }
  });
  it.each(['rover','racer','supercar'])('bends the actual velocity and trajectory under high-speed full throttle: %s',id=>{

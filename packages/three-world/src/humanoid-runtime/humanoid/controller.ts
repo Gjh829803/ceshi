@@ -61,6 +61,7 @@ export class HumanoidController {
   crates:{id:string;body:RAPIER.RigidBody;size:number;initial:Vector3}[]=[];
   position=new Vector3(-6,.03,2.1);
   velocity=new Vector3();
+  locomotionTargetSpeed=0;
   facing=new Vector3(0,0,-1);
   grounded=false;
   vertical=0;
@@ -186,6 +187,7 @@ export class HumanoidController {
   /** Synchronize the actor immediately for queries; never integrate world physics here. */
   commitPose(){this.body.setTranslation(this.body.nextTranslation(),true);this.world.updateSceneQueries([this.capsule.handle]);}
   private resetMovement(x:number,z:number,y:number,yaw:number){
+    this.locomotionTargetSpeed=0;
     this.resources.release(this);
     this.traversalRequested=false;
     this.completedMotion=null;this.motionSerial++;this.controller.enableSnapToGround(.18);this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
@@ -539,6 +541,7 @@ export class HumanoidController {
     if((hasInput&&this.animationEvent?.kind==='stop')||(!hasInput&&this.animationEvent?.kind==='start'))this.animationEvent=null;
     const targetSpeed=this.stance==='crouch'?(walk?.8:1.5)*this.movementTuning.speedScale:walk?this.movementTuning.slowSpeed:sprint?this.movementTuning.maxSpeed:3.1*this.movementTuning.speedScale;
     const target=input.clone().multiplyScalar(targetSpeed);
+    this.locomotionTargetSpeed=target.length();
     const accel=this.grounded?(input.lengthSq()?14*this.movementTuning.accelerationScale:this.movementTuning.coastDeceleration):5*this.movementTuning.airControlScale;
     const change=target.clone().sub(this.velocity);change.y=0;
     if(change.length()>accel*dt)change.setLength(accel*dt);
