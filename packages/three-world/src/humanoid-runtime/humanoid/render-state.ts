@@ -11,7 +11,7 @@ export function readHumanoid(h?:HumanoidController):HumanoidRenderState|undefine
   return {simulationIdentity:h,position:h.position.clone(),facing:h.facing.clone(),motionSerial:h.motionSerial,
     traversal:h.traversal?{motion:h.traversal.motion,elapsed:h.traversal.elapsed,duration:h.traversal.duration}:null,
     completedMotion:h.completedMotion?{...h.completedMotion}:null,
-    speed:h.speed,vertical:h.vertical,grounded:h.grounded,animationGrounded:h.animationGrounded,stance:h.stance,swimming:h.swimming,swimStyle:h.swimStyle,
+    speed:h.speed,locomotionTargetSpeed:h.locomotionTargetSpeed,vertical:h.vertical,grounded:h.grounded,animationGrounded:h.animationGrounded,stance:h.stance,swimming:h.swimming,swimStyle:h.swimStyle,
     animationEvent:h.animationEvent?{...h.animationEvent}:null,
     surface:{pose:h.surface.pose?{...h.surface.pose}:null},
     skills:{pose:h.skills.pose?{...h.skills.pose}:null,seated:h.skills.seated,carrying:h.skills.carrying,active:h.skills.active?{id:h.skills.active.id}:null},

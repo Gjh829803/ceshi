@@ -1,7 +1,43 @@
-import {describe,expect,it} from 'vitest';
+import {describe,expect,it,vi} from 'vitest';
 import {clearAssetProfile,getDefaultProfile,loadAssetProfile,parseAssetProfile,saveAssetProfile} from './profiles';
-import {applyControlProfile} from './profile-runtime';
 import {humanoid} from '@worldkit/three';
+import {SPECS} from '../config';
+import {assetIdForPreset} from '../assets/catalog';
+import {applyControlProfile,readEditableProfile} from './profile-runtime';
+
+describe('profile runtime asset identities',()=>{
+ const vehicles=SPECS.map(spec=>({instanceId:`instance-${spec.id}`,assetId:assetIdForPreset(spec)}));
+ function fixture(instances=vehicles){
+  const applyProfile=vi.fn(),exportProfile=vi.fn(()=>({vehicles:{}}));
+  const runtime={snapshot:()=>({vehicles:instances}),applyProfile,exportProfile} as unknown as humanoid.HumanoidRuntime;
+  return {runtime,applyProfile};
+ }
+ it.each(SPECS.map(spec=>spec.id))('restores %s defaults against its real catalog identity',id=>{
+  const {runtime,applyProfile}=fixture(),profile=getDefaultProfile(id)!;
+  applyControlProfile(runtime,profile);
+  expect(applyProfile).toHaveBeenCalledWith(expect.objectContaining({vehicles:{[`instance-${id}`]:profile.control}}));
+  expect(readEditableProfile(runtime,profile).control).toEqual(profile.control);
+ });
+ it('applies horse defaults to both instances and scoped edits only to the selected horse',()=>{
+  const {runtime,applyProfile}=fixture([
+   {instanceId:'horse-a',assetId:'creature.horse'},
+   {instanceId:'horse-b',assetId:'creature.horse'},
+   {instanceId:'carriage',assetId:'vehicle.carriage'},
+  ]),profile=getDefaultProfile('horse')!;
+  applyControlProfile(runtime,profile);
+  expect(applyProfile).toHaveBeenLastCalledWith({vehicles:{'horse-a':profile.control,'horse-b':profile.control}});
+  applyControlProfile(runtime,{...profile,instanceId:'horse-b'});
+  expect(applyProfile).toHaveBeenLastCalledWith({vehicles:{'horse-b':profile.control}});
+  expect(()=>applyControlProfile(runtime,{...profile,instanceId:'carriage'})).toThrow('profile instance asset mismatch');
+  expect(()=>applyControlProfile(runtime,{...profile,instanceId:'missing'})).toThrow('profile instance not found');
+ });
+ it('continues to match the active dragon variant',()=>{
+  const {runtime,applyProfile}=fixture([{instanceId:'dragon',assetId:assetIdForPreset({id:'dragon',mode:'dragon'},'D02')}]);
+  const profile=getDefaultProfile('dragon')!;
+  applyControlProfile(runtime,profile);
+  expect(applyProfile).toHaveBeenCalledWith({vehicles:{dragon:profile.control}});
+ });
+});
 
 describe('asset aircraft profiles',()=>{
  it('ships complete fixed-wing tuning and round-trips it through storage',()=>{
