@@ -453,3 +453,67 @@ this is not a display-FPS measurement. Disable sampling after diagnosis.
 
 Repeatable dense-scene routes and baseline comparison are documented in
 [the camera maintenance harness](scripts/camera-quality/README.md).
+
+## Independent asset lifecycle lab
+
+From `apps/sdk-playground`, run:
+
+```sh
+pnpm exec vite --config asset-lifecycle.vite.config.ts --configLoader runner
+# http://127.0.0.1:5307/asset-lifecycle.html
+pnpm exec vite build --config asset-lifecycle.vite.config.ts --configLoader runner
+# ../../.codex-tmp/asset-lifecycle-dist/asset-lifecycle.html
+```
+
+This scene begins empty. Create Controllable Character loads a real animated GLB
+through `world.assets.load` and registers it with `world.addCharacter`. Click the
+canvas, then use WASD, Shift and Space for movement, running and jumping. The floor
+and wall use ordinary fixed colliders. Per-instance controls select input ownership,
+play an actual asset clip, restore movement-driven animation, deactivate/reactivate,
+remove, or destroy the instance. Deactivation freezes animation/input/physics while
+leaving the model visible for comparison; another actor continues running.
+The SDK owns all simulation and animation updates; the page observes `onRender`.
+
+The separate Load and Place control creates static specimens with `world.addEntity`.
+The normal training scene and its loading policy are unchanged. This lab exercises
+asset-backed characters, not the native vehicle/rider runtime.
+
+Load the same asset twice to inspect sharing, remove an instance, then destroy
+the test world and create a new one. Removal currently retains the asset under
+world ownership. Destroy Instance instead releases that live instance without
+stopping its peers or the world; shared resources release after their last lease.
+A destroyed instance is excluded from reset; the source model can be loaded again.
+The table observes geometry/material/texture disposal events, not GPU bytes or
+proof of absence of long-term leaks. The read-only `window.assetLifecycleLab.snapshot()`
+reports observations without advancing simulation. Tests cover real textured
+GLBs, delayed loads across disposal, failure/retry, fresh loading after cleanup,
+real keyboard run/jump/wall collision and independent activation/destruction.
+
+
+The same isolated server also serves `/native-lifecycle.html`. It reuses the full
+1 km × 1 km campus map, including road, slopes, water and airfield, while loading
+vehicle models on demand from the existing preset catalog and dragon variants.
+Choose a model, click **创建并定位到载具旁**, then **上车／骑乘** (or F in the canvas).
+Dragons initialize airborne: after locating on the ground, click **召唤选中飞龙落地**,
+wait for landing, locate at the saddle again, then board and press Space to take off.
+This uses the existing `world.humanoid.summonDragon` and normal landing/boarding checks.
+Existing instances can be selected and approached again without creating duplicates.
+The initial rover retains the `car` identity for the established lifecycle checks.
+
+The page calls `world.addVehicle`, `vehicle.approach/enter/exit`,
+`entity.set-active/destroy` and `world.reset/dispose`. It does not replace motion
+families, create another clock, or add rider control animations. Control hints come
+from the existing preset bindings. Vehicle visuals update in the SDK display callback.
+A frozen mounted player and vehicle resume together; after the old vehicle is destroyed,
+resume also restores a still-inactive player so a newly created vehicle can be boarded.
+
+Native visual controllers transfer to the SDK after successful registration; page-owned
+procedural shells, labels and creature presentations remain with the page. Failed or
+late preparation releases unadopted models. Reset removes post-baseline instances,
+reconciles the instance selector and releases their page-owned visuals; permanent
+removal does not resurrect an object on reset. Creation, boarding and safe-exit failures
+are displayed with their actual reason instead of claiming success.
+
+Browser coverage retains the original lifecycle flows and adds catalog-wide creation
+and approach plus driving/riding for water, aircraft, creature and spacecraft examples.
+Catalog-wide creation is not exhaustive dynamic or rider-fit validation for every model.

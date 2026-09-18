@@ -172,12 +172,24 @@ export class WorldInputRouter {
     binding.surface.focus({ preventScroll: true });
   }
   releasePointerLock(): void { const surface=this.current?.surface;if(surface&&surface.ownerDocument.pointerLockElement===surface)surface.ownerDocument.exitPointerLock(); }
-  clear(force=false): void { if(this.keyboard.remoteMode&&!force)return;this.releasePointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
+  clear(force=false): void {
+    if(this.keyboard.remoteMode&&!force)return;
+    // Host DOM release failures must not keep keyboard or simulation input held.
+    // Preserve the first thrown value after independent input owners are cleared.
+    let failed = false, firstError: unknown;
+    const release = (cleanup: () => void) => {try {cleanup();} catch (error) {if (!failed) {failed = true; firstError = error;}}};
+    release(() => this.releasePointerLock()); release(() => this.releasePointer());
+    this.keyboard.clear(); release(() => this.options.onRelease());
+    if (failed) throw firstError;
+  }
   dispose(): void {
     if (this.disposed) return;
-    this.suspend(); this.bindings.length = 0; this.disposed = true;
-    // A disposed router must not expose a still-attached keyboard to the whole page.
-    this.keyboard.setEventAdmission(() => false);
+    try {this.suspend();}
+    finally {
+      this.bindings.length = 0; this.disposed = true;
+      // A disposed router must not expose a still-attached keyboard to the whole page.
+      this.keyboard.setEventAdmission(() => false);
+    }
   }
 
   private activate(blocked: boolean): void {
@@ -198,8 +210,11 @@ export class WorldInputRouter {
   private suspend(): void {
     const binding = this.current;
     if (!binding) return;
-    this.clear(); binding.releaseListeners?.(); delete binding.releaseListeners;
-    if (activeRouterByDocument.get(binding.surface.ownerDocument) === this) activeRouterByDocument.delete(binding.surface.ownerDocument);
+    try {this.clear();}
+    finally {
+      binding.releaseListeners?.(); delete binding.releaseListeners;
+      if (activeRouterByDocument.get(binding.surface.ownerDocument) === this) activeRouterByDocument.delete(binding.surface.ownerDocument);
+    }
   }
   private install(binding: InputBinding): void {
     const { surface, uiRoot } = binding, doc = surface.ownerDocument, win = doc.defaultView;

@@ -9,7 +9,7 @@ const roots:string[]=[];
 afterEach(async()=>{for(const root of roots.splice(0))await rm(root,{recursive:true,force:true});});
 async function fixture() {
   const root=await mkdtemp(path.join(os.tmpdir(),'camera-route-identity-'));roots.push(root);
-  const names=['model.glb','tool.mjs','style.css','index.html','pnpm-lock.yaml','vendor.tgz','model with\nnewline.glb'];
+  const names=['model.glb','tool.mjs','style.css','index.html','pnpm-lock.yaml','vendor.tgz',process.platform==='win32'?'model with 空格.glb':'model with\nnewline.glb'];
   const bytes=Buffer.from([0,255,7,10]);
   for(const name of names)await writeFile(path.join(root,name),bytes);
   await writeFile(path.join(root,'.gitignore'),'output/\n');

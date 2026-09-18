@@ -94,3 +94,27 @@ it('public World input moves the equipped character, exposes walking semantics a
     expect(actor.vehicle).toBe(v);expect(actor.wingsuitGroundControl).toBe(true);
   }finally{f.world.dispose();}
 });
+
+
+it('suspends walking wingsuit and wearer together, preserves their clocks and resumes the same controller',async()=>{
+  const f=await fixture();try{
+    const {world,sim,actor,v}=f;
+    world.step({humanoid:{...emptyInput(),forward:1}},60);
+    const position=v.position.clone(),time=sim.entityTime(v.spec.id),actorTime=actor.time;
+    expect(await world.execute({type:'entity.set-active',entityId:v.spec.id,isActive:false})).toMatchObject({status:'applied'});
+    expect(world.getEntityState(actor.id).isActive).toBe(false);
+    expect(actor.controller.body.isEnabled()).toBe(false);
+    world.step({humanoid:{...emptyInput(),forward:1,jump:true}},90);
+    expect(v.position.toArray()).toEqual(position.toArray());
+    expect(sim.entityTime(v.spec.id)).toBeCloseTo(time,10);expect(actor.time).toBeCloseTo(actorTime,10);
+    expect(actor.wingsuitGroundControl).toBe(true);expect(actor.vehicle).toBe(v);
+    expect(await world.execute({type:'entity.set-active',entityId:actor.id,isActive:true})).toMatchObject({status:'applied'});
+    expect(world.getEntityState(v.spec.id).isActive).toBe(true);expect(actor.controller.body.isEnabled()).toBe(true);
+    world.step({humanoid:{...emptyInput(),forward:1}},60);
+    expect(v.position.distanceTo(position)).toBeGreaterThan(2);
+    expect(v.position.distanceTo(actor.controller.position)).toBeLessThan(1e-8);
+    expect(actor.controller.isMounted).toBe(false);
+    expect(world.humanoid!.snapshot().vehicleDynamics[0]!.physicsOwner).toBe('controller');
+    expect(world.snapshot().errors).toEqual([]);
+  }finally{f.world.dispose();}
+});

@@ -1091,6 +1091,15 @@ export class CameraController {
     };
     return pose ? clone(pose) : undefined;
   }
+  /** Permanent entity destruction retires only a reset binding that names that entity. */
+  forgetDestroyedTarget(id:string):void {
+    const baseline=this.baseline;
+    if(baseline?.mode!=="follow"||baseline.document.binding.targetEntityId!==id)return;
+    const saved=this.baselines.get(baseline);
+    if(!saved?.state.current)throw failure("CAMERA_BASELINE_REQUIRED");
+    const replacement:CameraBaseline=immutable({mode:"authored",authoredPose:clone(saved.state.current)});
+    this.baselines.set(replacement,saved);this.baseline=replacement;
+  }
   targetRemoved(
     identity: { readonly id: string; readonly generation: number },
     frame: CameraControllerFrame,

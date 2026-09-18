@@ -156,7 +156,7 @@ it('probes an authored view using actual camera facing without advancing the wor
   const after=await browser.observe({view:'current'});
   console.log(JSON.stringify({observed:observed.snapshot,point,after:after.snapshot}));
  } finally {await browser.close();}`);
- const {stdout}=await promisify(execFile)(process.execPath,['--import',path.join(repository,'node_modules/tsx/dist/loader.mjs'),runner],{cwd:repository,env:{...process.env,TSX_DISABLE_CACHE:'1'},timeout:25_000});
+ const {stdout}=await promisify(execFile)(process.execPath,['--import',pathToFileURL(path.join(repository,'node_modules/tsx/dist/loader.mjs')).href,runner],{cwd:repository,env:{...process.env,TSX_DISABLE_CACHE:'1'},timeout:25_000});
  const {observed,point,after}=JSON.parse(stdout.trim());
  expect(observed.camera.mode).toBe('authored');expect(observed.camera.desiredYawRadians).toBeNull();
  expect(point.startProbe.isValid).toBe(true);

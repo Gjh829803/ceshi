@@ -1,3 +1,4 @@
+import {disposeInOrder as runCleanup} from './lifecycle-disposal';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import {
@@ -257,15 +258,6 @@ function disposeTemplate(gltf: GLTF): void {
     ...[...materials].map((value) => () => value.dispose()),
     ...[...textures].map((value) => () => value.dispose()),
   ]);
-}
-
-// A throwing dispose listener must not prevent the remaining owned resources releasing.
-function runCleanup(cleanups: (() => void)[]): void {
-  let firstError: unknown;
-  for (const cleanup of cleanups) {
-    try { cleanup(); } catch (error) { firstError ??= error; }
-  }
-  if (firstError) throw firstError;
 }
 
 function release(key: string, entry: CacheEntry, gltf?: GLTF): void {

@@ -43,7 +43,7 @@ it('publishes a valid optional method parameter from the edited workspace runtim
  const source=`type Vec3=readonly [number,number,number];\ninterface Runtime {${method.getText(declarations)}}\ndeclare const runtime:Runtime;\nruntime.prepareCharacter([0,0,0]);\nruntime.prepareCharacter([0,0,0],1);\n// @ts-expect-error The workspace narrowed this parameter to 0 or 1.\nruntime.prepareCharacter([0,0,0],2);\n`;
  const options:ts.CompilerOptions={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,strict:true,skipLibCheck:true,noEmit:true,types:[]};
  const host=ts.createCompilerHost(options),readSource=host.getSourceFile.bind(host);
- host.getSourceFile=(name,version,onError,fresh)=>name===filename?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
+ host.getSourceFile=(name,version,onError,fresh)=>path.normalize(name)===path.normalize(filename)?ts.createSourceFile(name,source,version,true):readSource(name,version,onError,fresh);
  const program=ts.createProgram([filename],options,host),consumer=program.getSourceFile(filename);
  if(!consumer)throw new Error('Missing declaration consumer');
  expect(ts.getPreEmitDiagnostics(program,consumer).map(d=>ts.flattenDiagnosticMessageText(d.messageText,'\n'))).toEqual([]);
