@@ -3,10 +3,10 @@ import {readFileSync} from 'node:fs';
 import {getDefaultProfile,loadAssetProfile,saveAssetProfile,clearAssetProfile} from '@worldkit/preset-content/platform/profiles';
 import {migrateLegacyAssetProfile} from './camera-configuration';
 const baseline=JSON.parse(readFileSync(new URL('./fixtures/legacy-camera-baseline.json',import.meta.url),'utf8'));
-it('keeps raw browser v1 data untouched across v2 load/save/clear and explicit conversion',async()=>{
+it('keeps raw browser v1 data untouched across v3 load/save/clear and explicit conversion',async()=>{
   const raw=JSON.stringify(baseline.profiles.person),key='worldkit.humanoid.profile.person';const records=new Map([[key,raw]]),storage={getItem:(k:string)=>records.get(k)??null,setItem:(k:string,v:string)=>{records.set(k,v);},removeItem:(k:string)=>{records.delete(k);}};
   expect(loadAssetProfile(storage,'person')).toBeUndefined();saveAssetProfile(storage,getDefaultProfile('person')!);clearAssetProfile(storage,'person');expect(records.get(key)).toBe(raw);
-  const converted=await migrateLegacyAssetProfile(raw);expect(converted.profile.control).toEqual(baseline.profiles.person.control);expect(converted.profile.envelope).toEqual(baseline.profiles.person.envelope);expect(converted.profile).not.toHaveProperty('camera');expect(converted.sourceBytes).toBe(raw);
+  const converted=await migrateLegacyAssetProfile(raw);expect(converted.profile.control).toEqual(baseline.profiles.person.control);expect(converted.envelope).toEqual(baseline.profiles.person.envelope);expect(converted.profile).not.toHaveProperty('envelope');expect(converted.profile).not.toHaveProperty('camera');expect(converted.sourceBytes).toBe(raw);
  });
 
 it('hash-checks all exporter inputs before writes and reports each exact source',async()=>{

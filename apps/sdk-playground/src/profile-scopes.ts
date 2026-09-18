@@ -1,4 +1,4 @@
-import type { AssetProfile } from "@worldkit/preset-content/platform/profiles";
+import type { ControlProfile } from "@worldkit/preset-content/platform/profiles";
 
 export interface ProfileTarget {
   assetId: string;
@@ -11,13 +11,13 @@ export function profileScopeKey({ assetId, instanceId }: ProfileTarget): string 
 }
 
 export function profileForTarget(
-  profiles: ReadonlyMap<string, AssetProfile>,
+  profiles: ReadonlyMap<string, ControlProfile>,
   target: ProfileTarget,
-): AssetProfile | undefined {
+): ControlProfile | undefined {
   return profiles.get(profileScopeKey(target)) ?? profiles.get(target.assetId);
 }
 
-export function scopeProfile(profile: AssetProfile, target: ProfileTarget): AssetProfile {
+export function scopeProfile(profile: ControlProfile, target: ProfileTarget): ControlProfile {
   if (profile.assetId !== target.assetId) throw new Error("profile target asset mismatch");
   const unscoped = { ...profile };
   delete unscoped.instanceId;
@@ -32,10 +32,10 @@ export function scopeProfile(profile: AssetProfile, target: ProfileTarget): Asse
  * first, then every instance override gets its own scope, regardless of file order.
  */
 export function restoreProjectProfiles(
-  defaults: Iterable<AssetProfile>,
-  projectProfiles: Iterable<AssetProfile>,
-): Map<string, AssetProfile> {
-  const restored = new Map<string, AssetProfile>();
+  defaults: Iterable<ControlProfile>,
+  projectProfiles: Iterable<ControlProfile>,
+): Map<string, ControlProfile> {
+  const restored = new Map<string, ControlProfile>();
   for (const profile of defaults) restored.set(profileScopeKey(profile), profile);
   const imported = [...projectProfiles];
   for (const profile of imported) {

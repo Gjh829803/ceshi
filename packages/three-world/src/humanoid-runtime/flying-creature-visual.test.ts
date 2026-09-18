@@ -212,7 +212,7 @@ it('publishes eleven selectable complete rigs with embedded textures and source-
   const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
   for(const variant of imported.slice(1)){
     const profile=getDefaultProfile('dragon')!;
-    expect(()=>parseAssetProfile({...profile,envelope:variant.envelope})).not.toThrow();
+    expect(()=>parseAssetProfile({...profile,envelope:variant.envelope})).toThrow('unknown control profile field');
     const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
     const json=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)).toString());
     const source=sources.find((s:{id:string})=>s.id===variant.id);

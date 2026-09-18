@@ -26,7 +26,7 @@ const position=(await state()).position;await page.keyboard.down('w');await page
 const downloadPending=page.waitForEvent('download');await page.getByRole('button',{name:'导出全部配置',exact:true}).click();
 const download=await downloadPending;await download.saveAs('output/playwright/profiles.json');
 const exported=JSON.parse(await readFile('output/playwright/profiles.json','utf8'));
-assert.equal(exported.schemaVersion,1);assert.equal(exported.profiles.find((profile:{assetId:string})=>profile.assetId==='person').control.speed,4);
+assert.equal(exported.schemaVersion,3);assert.equal(exported.profiles.find((profile:{assetId:string})=>profile.assetId==='person').control.speed,4);
 await page.locator('#libraryButton').click();await page.waitForSelector('.asset-library');await page.screenshot({path:'output/playwright/react-editor-library.png'});await page.keyboard.press('Escape');
 await page.locator('#equipmentButton').click();await page.waitForSelector('.equipment-panel[role="dialog"][data-state="open"]');await page.screenshot({path:'output/playwright/react-editor-equipment.png'});assert.equal((await state()).paused,false); // UI modal pauses SDK but preserves user pause state.
 await page.getByRole('button',{name:'关闭人物装备'}).click();await page.waitForSelector('.equipment-panel[role=dialog]',{state:'detached'});

@@ -1,9 +1,9 @@
 import {JET_POWERTRAIN} from '../powertrains';
 import type {VehicleSpec} from '../../config';
+import { getSharedControlDefaults } from '../../control/defaults';
 export const JETSKI_SPEC:VehicleSpec={
  id:'jetski',name:'水上摩托',en:'JET SKI',mode:'boat',archetype:'jetski',kernel:'K06',color:'#bad43e',
- spawn:[220,-1.98,-145],yaw:0,speed:23,maxSpeed:29,reverseSpeed:5,accel:6.5,grip:4,steer:1.15,
- coastDeceleration:.65,brakeDeceleration:8,steeringResponse:7,steeringReturn:9,throttleResponse:5,pitchResponse:6,rollResponse:6,
+ spawn:[220,-1.98,-145],yaw:0,...getSharedControlDefaults('jetski')!,
  radius:1.8,seat:[0,1,-.15],characterPose:'atv',
  bodyPhysics:{kind:'jet',mass:330,centerOfMassHeight:0.3,driveRadius:.35,powertrain:JET_POWERTRAIN,water:{displacement:.70,depth:.6,bottom:.30,damping:6}},
   envelope:{kind:'box',halfExtents:[.72,.84,1.65],offset:[0,.54,0]},

@@ -213,6 +213,19 @@ describe('SDK humanoid runtime',()=>{
    expect(ticks).toHaveLength(1);
   }finally{world.dispose();}
  });
+ it('commits the reset hold while the humanoid is on foot',async()=>{
+  const world=await fixture();try{
+   const engine=(world as unknown as {engine:WorldEngine}).engine,r=world.humanoid!;
+   engine.keyboard.enabled=true;
+   const resets:number[]=[];engine.setResetHandler(()=>resets.push(world.simulationTick));
+   engine.keyboard.keyDown('Backspace');
+   for(let n=0;n<47;n++)engine.advance(1/60);
+   expect(resets).toEqual([]);
+   engine.advance(1/60);
+   expect(resets).toEqual([48]);
+   expect(r.simulation.controlledActor.vehicle).toBeUndefined();
+  }finally{world.dispose();}
+ });
  it('does not fall through from a rejected scene interaction to a nearby vehicle on F',async()=>{
   const world=await fixture();try{
    const r=world.humanoid!;r.approach('car-1');

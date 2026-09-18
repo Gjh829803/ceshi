@@ -137,13 +137,13 @@ export async function writeCameraMigration(plan:MigrationPlan,destination:string
 
 /** Explicit export conversion; browser runtime never imports or runs this reader. */
 export async function migrateLegacyAssetProfile(sourceBytes:string){
- const {parseAssetProfile}=await import('@worldkit/preset-content/platform/profiles');
+ const {parseControlProfile}=await import('@worldkit/preset-content/platform/profiles');
  const old=JSON.parse(sourceBytes);
  if(old.version!==1)throw new Error('LEGACY_PROFILE_VERSION_REQUIRED');
- const profile=parseAssetProfile({version:2,assetId:old.assetId,control:old.control,envelope:old.envelope});
- return {profile,sourceBytes,sourceHash:sourceSha256(sourceBytes),inactiveCamera:old.camera,report:[
-  {field:'control',status:'equivalent',note:'Explicit import into v2 control owner.'},
-  {field:'envelope',status:'equivalent',note:'Explicit import preserves geometry.'},
+ const profile=parseControlProfile({version:3,assetId:old.assetId,control:old.control});
+ return {profile,envelope:old.envelope,sourceBytes,sourceHash:sourceSha256(sourceBytes),inactiveCamera:old.camera,report:[
+  {field:'control',status:'equivalent',note:'Explicit import into the v3 control owner.'},
+  {field:'envelope',status:'separate',note:'Geometry remains a separate asset fact and is not written into the control profile.'},
   {field:'camera',status:'inactive',note:'Requires separate CameraDocument migration; never applied by profile import.'},
   ...Object.keys(old).filter(k=>!['version','assetId','control','envelope','camera'].includes(k)).map(field=>({field,status:'unknown',note:'Retained in source bytes; manual review required.'})),
  ]};
