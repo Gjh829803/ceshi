@@ -483,9 +483,22 @@ export class HumanoidActor {
         if(!placed||q.bodyOverlap({position:placed,rotation,body},{excludedActorIds:new Set([v.spec.id])}))continue;
         safe=placed;break;
       }
+      let airborne=false;
+      if(!safe&&(trapped||condition.condition==='flipped')){
+        // If the nearby terrain cannot support the complete chassis, prefer a
+        // nearby clear volume over a distant reset. Ground vehicles remain
+        // airborne only temporarily and fall under their normal physics.
+        const airHeights=[0,.75,1.5,3,6];
+        airborneSearch: for(const height of airHeights)for(const offset of offsets){
+          const candidate=v.position.clone().add(offset);candidate.y+=height;
+          const placed=q.safeSpawn(candidate,body,rotation);
+          if(!placed||q.bodyOverlap({position:placed,rotation,body},{excludedActorIds:new Set([v.spec.id])}))continue;
+          safe=placed;airborne=true;break airborneSearch;
+        }
+      }
       let fallback=false;
-      if(!safe&&trapped){
-        // A penetrated aircraft/vehicle can have no valid ray to a nearby floor.
+      if(!safe&&(trapped||condition.condition==='flipped')){
+        // A rollover or penetrated vehicle can have no valid nearby level floor.
         // Reuse an authored/prepared spawn as a checked escape destination instead
         // of teleporting to an arbitrary point or leaving F with no effect.
         const spawn=this.world.preparedVehicleSpawns.get(v.spec.id)
@@ -511,6 +524,6 @@ export class HumanoidActor {
       resetFamilyRigidState(v);
       this.world.resetVehicleCondition(v);
       if(mounted){this.player.position.copy(v.position);this.player.velocity.set(0,0,0);this.player.yaw=yaw;}
-      this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=fallback?'车辆已脱困并返回安全停放点 · 可以继续驾驶':relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
+      this.transition=0;this.transitionKind='';this.dragonTransition=undefined;this.teleportRevision++;this.world.syncActorBodies();this.message=fallback?'车辆已脱困并返回安全停放点 · 可以继续驾驶':airborne?'车辆已移至附近空中并扶正 · 将自然落下':relocated?'车辆已移至附近安全地面并扶正 · 可以继续驾驶':'车辆已原地扶正 · 可以继续驾驶';return true;
     }
 }

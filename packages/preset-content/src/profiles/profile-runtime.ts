@@ -6,6 +6,7 @@ import { parseAssetProfile, type AssetProfile } from './profiles';
 function matchesProfileAsset(assetId: string, vehicle: ReturnType<Runtime['snapshot']>['vehicles'][number]): boolean {
   return vehicle.assetId===assetId
     || vehicle.assetId===`vehicle.${assetId}`
+    || vehicle.assetId===`creature.${assetId}`
     || assetId==='dragon'&&vehicle.assetId.startsWith('creature.dragon');
 }
 

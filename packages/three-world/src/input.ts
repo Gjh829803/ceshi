@@ -79,7 +79,7 @@ export class WorldKeyboard {
   /** Called after a committed fixed tick, never from sampling or a physics transaction. */
   advanceReset(dt:number):boolean{
     this.syncContext();
-    if(!this.enabled||!this.humanoidMounted?.()||!this.bindings.reset.some(code=>this.held.has(code))){this.resetHeldSeconds=0;return false;}
+    if(!this.enabled||!this.bindings.reset.some(code=>this.held.has(code))){this.resetHeldSeconds=0;return false;}
     this.resetHeldSeconds+=dt;
     if(this.resetHeldSeconds+1e-10<INPUT_RESET_HOLD_SECONDS)return false;
     this.clear();this.reset();return true;

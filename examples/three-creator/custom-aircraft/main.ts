@@ -54,6 +54,8 @@ world.humanoid!.onVisualUpdate((dt,sample)=>{
 world.setCaptureTargets(['person',spec.id]);
 const presentation=world.createPresentation();
 const hud=document.createElement('div');hud.style.cssText='position:absolute;left:16px;top:16px;padding:12px;background:#333c;color:white;font:14px sans-serif;white-space:pre-line';
-hud.textContent=spec.hint;presentation.ui.mount(hud);
+const key=(action:humanoid.ControlAction)=>humanoid.bindingLabel(action,world.getKeyBindings());
+hud.textContent=`自绘固定翼飞机\n${key('forward')} / ${key('backward')} 增减油门 · ${key('fixedWingPitchDown')} / ${key('fixedWingPitchUp')} 低头 / 抬头\n${key('left')} / ${key('right')} 转向 · ${key('slow')} 减油门 / 地面制动 · ${key('sprint')} 辅助加油门 · ${key('jump')} 地面制动 · ${key('interact')} 上下机`;
+presentation.ui.mount(hud);
 world.onDispose(()=>{for(const geometry of geometries)geometry.dispose();material.dispose();accent.dispose();rubber.dispose();});
 await world.start();presentation.focus();
