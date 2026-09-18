@@ -732,6 +732,24 @@ it('creates a drivable native car inside the existing physics world and removes 
  expect(r.simulation.vehicles[0]!.position.distanceTo(before)).toBeGreaterThan(.2);expect(physics.bodies.len()).toBeGreaterThan(bodies);
  await world.reset();expect(world.snapshot().entities.some(e=>e.id===car.instanceId)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.vehicles).toHaveLength(0);expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(car.object.parent).toBeNull();expect(r.environment.borrowPhysics().world.bodies.len()).toBe(bodies);world.step({},2);expect(world.snapshot().errors).toEqual([]);
 });
+it.each(['boarding','mounted','inactive'] as const)('reset retires the %s rider before removing its post-baseline vehicle',async phase=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!;world.step({},1);
+ const car=nativeCar();world.addVehicle(car);expect(r.approach(car.instanceId)).toBe(true);expect(r.enter(car.instanceId)).toBe(true);
+ if(phase!=='boarding')world.step({},40);
+ const previous=r.simulation,rider=previous.actor('player');expect(rider.vehicle?.spec.id).toBe(car.instanceId);
+ if(phase==='boarding')expect(rider.transition).toBeGreaterThan(0);
+ if(phase==='inactive')expect(await world.execute({type:'entity.set-active',entityId:car.instanceId,isActive:false})).toMatchObject({status:'applied'});
+ // Occupied removal must still reject outside reset; reset must retire actors first.
+ expect(()=>previous.removeVehicle(car.instanceId)).toThrow('HUMANOID_MOUNT_ACTIVE');
+ const dispose=vi.spyOn(rider,'dispose'),remove=previous.removeVehicle.bind(previous);
+ const observed=vi.spyOn(previous,'removeVehicle').mockImplementation(id=>{
+  expect(previous.actors.size).toBe(0);expect(dispose).toHaveBeenCalledTimes(1);return remove(id);
+ });
+ await world.reset();expect(observed).toHaveBeenCalledWith(car.instanceId);expect(r.simulation).not.toBe(previous);
+ expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(r.simulation.actor('player')).not.toBe(rider);
+ expect(world.snapshot().entities.some(e=>e.id===car.instanceId)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(car.object.parent).toBeNull();
+ world.step({},2);expect(world.snapshot().errors).toEqual([]);world.dispose();expect(dispose).toHaveBeenCalledTimes(1);
+});
 it('recreates a destroyed initial vehicle id without restoring its old mount, inactive state or reset baseline',async()=>{
  const first=nativeCar('car',0),world=await setup(undefined,{map:{...nativeCreationMap,spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[first],initialMountId:'car'}),r=world.humanoid!;world.step({},2);
  await world.execute({type:'entity.set-active',entityId:'car',isActive:false});expect(await world.execute({type:'entity.destroy',entityId:'car'})).toMatchObject({status:'applied'});

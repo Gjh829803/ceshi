@@ -875,6 +875,7 @@ export class WorldEngine {
   capabilities(): unknown { return [...this.entities].map(([id, e]) => ({ entityId: id, name: e.options.name ?? id, tags: e.options.tags ?? [], commands: ['entity.set-visible', 'entity.set-position', 'entity.set-scale', ...(id === this.controlled ? [] : ['entity.despawn']), ...(this.navigation && e.character && id !== this.controlled ? ['actor.move-to', 'actor.follow', 'actor.stop'] : []), ...(e.asset?.clips.length ? ['entity.play-action'] : []), ...(e.options.physics?.kind === 'dynamic' ? ['entity.apply-impulse'] : [])], actions: e.asset?.clips.map(c => c.name) ?? [] })); }
   reset(): void {
     this.assertLifecycleMutationAllowed(); this.sealInitialState(); this.resetting=true; try{const wasRunning = this.running; this.stop(); for(const id of [...this.goals.keys()])this.clearGoal(id); this.taskResults.clear();this.jumped.clear();for(const id of [...this.manualActions.keys()])this.stopAction(id);this.locomotionAnimations.clear();
+    // Retire every native actor/controller before reset removes transient vehicles from the old simulation.
     this.entityLifecycle.restore(id=>this.physics.remove(id),entity=>this.retireEntity(entity));
     this.scene.updateWorldMatrix(true, true, true);
     this.controlled = this.controlledInitial;

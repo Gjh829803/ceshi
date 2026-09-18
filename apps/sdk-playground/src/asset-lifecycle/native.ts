@@ -24,13 +24,14 @@ Object.defineProperty(window,'nativeLifecycleLab',{value:{snapshot},configurable
 function refresh(){
  if(!ready||!world||disposed)return;
  const state=world.snapshot(),player=state.entities.find(e=>e.id==='player')!,vehicle=state.entities.find(e=>e.id===selectedId),peer=state.entities.find(e=>e.id==='peer');
- const rows=[...records.values()].filter(r=>state.entities.some(e=>e.id===r.id));
+ const entityIds=new Set(state.entities.map(e=>e.id)),selectedExists=entityIds.has(instanceId(choices.find(c=>c.id===catalog.value)!));
+ const rows=[...records.values()].filter(r=>entityIds.has(r.id));
  if(instances.dataset.ids!==rows.map(r=>r.id).join('|')){instances.replaceChildren(...rows.map(r=>new Option(r.choice.name,r.id)));instances.dataset.ids=rows.map(r=>r.id).join('|');}
  instances.value=vehicle?selectedId:'';instances.disabled=rows.length===0;
  catalog.disabled=creating;button('vehicle-create').disabled=creating;
- button('vehicle-create').textContent=creating?'正在加载…':live(instanceId(choices.find(c=>c.id===catalog.value)!))?'定位到已有载具':'创建并定位到载具旁';
+ button('vehicle-create').textContent=creating?'正在加载…':selectedExists?'定位到已有载具':'创建并定位到载具旁';
  for(const id of ['enter','locate','car-destroy'])button(id).disabled=!vehicle||creating;
- button('car-create').disabled=creating||live(instanceId(choices.find(c=>c.id===catalog.value)!));
+ button('car-create').disabled=creating||selectedExists;
  for(const id of ['pause','resume','exit','reset','destroy'])button(id).disabled=creating;
  for(const id of ['peer-pause','peer-resume','peer-destroy'])button(id).disabled=!peer||creatingPeer;
  button('peer-create').disabled=!!peer||creatingPeer;
@@ -56,7 +57,7 @@ button('locate').onclick=()=>{void locate();};button('enter').onclick=()=>{void 
 button('pause').onclick=()=>{void execute({type:'entity.set-active',entityId:live(selectedId)?selectedId:'player',isActive:false});};
 button('resume').onclick=()=>{void (async()=>{if(world&&!disposed&&!world.getEntityState('player').isActive)await execute({type:'entity.set-active',entityId:'player',isActive:true});if(live(selectedId))await execute({type:'entity.set-active',entityId:selectedId,isActive:true});})();};
 for(const [id,active] of [['peer-pause',false],['peer-resume',true]] as const)button(id).onclick=()=>{void execute({type:'entity.set-active',entityId:'peer',isActive:active});};
-function reconcile(){for(const [id,record] of records)if(!live(id)){record.dispose();records.delete(id);}refresh();}
+function reconcile(){const ids=new Set(world&&!disposed?world.snapshot().entities.map(e=>e.id):[]);for(const [id,record] of records)if(!ids.has(id)){record.dispose();records.delete(id);}refresh();}
 async function createSelected(approach:boolean){
  if(!world||disposed||creating)return;const choice=choices.find(c=>c.id===catalog.value)!;selectedId=instanceId(choice);
  if(live(selectedId)){if(approach)await locate();refresh();return;}

@@ -174,16 +174,23 @@ it('recreates the native car, drives it in the same world and clears the new ins
 
 it('creates every catalog choice on demand in the full campus without replacing the world',async()=>{
  await page.goto(url.replace('asset-lifecycle.html','native-lifecycle.html'));await page.waitForFunction(()=>document.body.dataset.ready==='true');
- const native=()=>page.evaluate(()=>(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:NonNullable<Snapshot['world']>;errors:string[]}}}).nativeLifecycleLab.snapshot());
+ const native=()=>page.evaluate(()=>({...((window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:NonNullable<Snapshot['world']>;errors:string[]}}}).nativeLifecycleLab.snapshot()),message:document.getElementById('message')!.textContent,createEnabled:!(document.getElementById('vehicle-create') as HTMLButtonElement).disabled}));
  const before=await native();expect(before.mapId).toBe('campus');expect(before.bounds.max[0]!-before.bounds.min[0]!).toBe(1000);
  const types=await page.locator('#vehicle-type option').evaluateAll(options=>options.map(option=>(option as HTMLOptionElement).value));expect(types).toEqual(expect.arrayContaining(['canoe','plane','horse','tank','spacecraft','dragon-D01','dragon-D11']));
+ const timings:{type:string;milliseconds:number}[]=[];
  for(const type of types){
-  await page.selectOption('#vehicle-type',type);await page.locator('#vehicle-create').click();
-  await expect.poll(async()=>{const state=await native();return state.loaded.some(entry=>entry.type===type)||state.errors.length>0;},{timeout:20000}).toBe(true);
-  const state=await native();expect(state.errors,`${type}: ${await page.locator('#message').textContent()}`).toEqual([]);expect(state.loaded.some(entry=>entry.type===type),type).toBe(true);
-  await expect.poll(async()=>page.locator('#vehicle-create').isEnabled()).toBe(true);
-  expect(await page.locator('#message').textContent(),type).toContain('已定位');
+  const started=performance.now();
+  try{
+   await page.selectOption('#vehicle-type',type);await page.locator('#vehicle-create').click();
+   // Read one coherent completion sample instead of serial round trips through a busy renderer.
+   let observed:Awaited<ReturnType<typeof native>>|undefined;
+   await expect.poll(async()=>{observed=await native();return observed.errors.length>0||(observed.loaded.some(entry=>entry.type===type)&&observed.createEnabled);},{timeout:20000}).toBe(true);
+   expect(observed!.errors,`${type}: ${observed!.message}`).toEqual([]);expect(observed!.loaded.some(entry=>entry.type===type),type).toBe(true);
+   expect(observed!.createEnabled,type).toBe(true);expect(observed!.message,type).toContain('已定位');
+  }catch(error){console.error('Catalog creation failed',{type,elapsedMs:Math.round(performance.now()-started),completed:timings});throw error;}
+  timings.push({type,milliseconds:Math.round(performance.now()-started)});
  }
+ console.info('Catalog creation timings',timings);
  const final=await native();expect(final.loaded.length).toBe(types.length);expect(final.world.simulationTick).toBeGreaterThan(before.world.simulationTick);expect(final.world.errors).toEqual([]);
  await page.screenshot({path:path.join(app,'../../.codex-tmp/asset-lifecycle-lab/catalog-all.png'),fullPage:true});
  await page.locator('#reset').click();await expect.poll(async()=>(await native()).loaded.length).toBe(1);
