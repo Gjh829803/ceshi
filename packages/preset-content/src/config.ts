@@ -7,7 +7,7 @@ import { JETSKI_SPEC } from './vehicles/jetski/spec';
 import { KAYAK_SPEC } from './vehicles/kayak/spec';
 import { RAFT_SPEC } from './vehicles/raft/spec';
 import { roadSeatAnchor } from './vehicles/road/seating';
-import { roverBodyParts } from './vehicles/road/collision';
+import { kartBodyParts, roverBodyParts } from './vehicles/road/collision';
 import { SKI_SPEC } from './vehicles/ski/spec';
 import { SLED_SPEC } from './vehicles/sled/spec';
 import { SUBMERSIBLE_SPEC } from './vehicles/submersible/spec';
@@ -92,6 +92,7 @@ for(const spec of SPECS){if(spec.mode==='wheeled'){
   }
   if(spec.id==='kart'){
     spec.wheelPhysics=humanoid.createRoadPhysicsProfile('car',{centerOfMassHeight:.3,tireFriction:1.4,mass:180,radius:.24,hubHeight:.24,halfTrack:.78,halfWheelbase:.87,wheelWidth:.24,maxRaise:.02,maxDrop:.025,wheels:[-.78,.78].flatMap(x=>[-.89,.85].map(z=>({x,z,steering:z>0,driven:z<0}))),powertrain:{...powertrain,torqueCurve:powertrain.torqueCurve.map(([rpm,torque])=>[rpm,torque*.08]),engineBrakeTorque:5,dragArea:.45,boostTorqueMultiplier:1.6}});
+    spec.wheelPhysics.bodyParts=kartBodyParts();
   }
   // 训练场汽车逐车型调校；其他载具以及模型无关的 SDK 默认值不启用松油门辅助。
   if(['rover','racer','trail-rover','supercar','kart'].includes(spec.id)){

@@ -8,6 +8,9 @@ import { emptyInput } from './simulation';
 import type { WorldEngine } from '../engine';
 import { PresentationState } from './presentation';
 
+// Procedural vehicle fixtures do not consume browser creature resources.
+vi.mock('@worldkit/preset-content/assets/resources',()=>({definitions:{},resolvePresetResource:()=>{throw new Error('UNEXPECTED_CREATURE_RESOURCE');}}));
+
 // Distinguish the adopted SDK source subtree from later author-owned children.
 function instrumentedCharacter() {
   const root=new Group(),bone=new Group();root.add(bone);
@@ -261,6 +264,67 @@ it('passes wearable run-up speed to locomotion and suppresses it after leaving t
  expect(source.smoothing).toBe(true);
 });
 
+
+it('fits the kart seat anchor without straightening the driver knees or piercing the floor',async()=>{
+ const {readFile}=await import('node:fs/promises'),{fileURLToPath}=await import('node:url');
+ const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+ const {parseFixtureGlb}=await import('./textured-glb-fixture');
+ const {SkinnedMesh,PerspectiveCamera,Mesh,Raycaster}=await import('three');
+ const {createWorld}=await import('../world');
+ const {SPECS}=await import('@worldkit/preset-content/config');
+ const {getMap}=await import('@worldkit/preset-content/environment/maps');
+ const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>parseFixtureGlb(await readFile(fileURLToPath(url))));
+ const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
+ const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
+ try{
+  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  const spec=structuredClone(SPECS.find(s=>s.id==='kart')!);
+  const {buildVehicle}=await import('@worldkit/preset-content/models');
+  vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({beginPath(){},roundRect(){},fill(){},fillText(){}})})});
+  let vehicle:Group;
+  try{vehicle=buildVehicle(spec).root;}finally{vi.unstubAllGlobals();}
+  const cushion=vehicle.getObjectByName('seat-cushion') as InstanceType<typeof Mesh>;
+  const seatSurface=new Mesh(cushion.geometry,cushion.material);seatSurface.position.copy(cushion.position);seatSurface.updateMatrixWorld(true);
+  const seatRay=new Raycaster(),seatGaps=[Infinity,Infinity];
+  world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:getMap('campus'),character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:spec.id,assetId:spec.id,spec,object:vehicle}]}});
+  world.humanoid!.simulation.controlledActor.commitMountedStart(0);
+  const point=new Vector3(),engine=engineOf(world);
+  const check=()=>{
+   let lowest=Infinity,footrestClearance=Infinity,vertices=0,seatClearance=Infinity;
+   seatGaps.fill(Infinity);
+   rider.root.updateWorldMatrix(true,true);vehicle.updateWorldMatrix(true,false);
+   rider.root.traverse(node=>{if(node instanceof SkinnedMesh){node.skeleton.update();for(let i=0;i<node.geometry.getAttribute('position').count;i++){
+    node.getVertexPosition(i,point).applyMatrix4(node.matrixWorld);vehicle.worldToLocal(point);
+    lowest=Math.min(lowest,point.y);vertices++;
+    seatRay.set(new Vector3(point.x,2,point.z),new Vector3(0,-1,0));
+    const contact=seatRay.intersectObject(seatSurface,false)[0];
+    if(contact){
+     const gap=point.y-contact.point.y;seatClearance=Math.min(seatClearance,gap);
+     if(Math.abs(point.x)>.05&&point.z>-.27&&point.z<-.07){const side=point.x<0?0:1;seatGaps[side]=Math.min(seatGaps[side]!,gap);}
+    }
+    if(Math.abs(point.x)<.33&&point.z>.40&&point.z<1.09){
+     footrestClearance=Math.min(footrestClearance,point.y-(.30+.075/Math.cos(.14)-(point.z-.75)*Math.tan(.14)));
+    }
+   }}});
+   expect(vertices).toBeGreaterThan(100);expect(lowest).toBeGreaterThan(.21);
+   expect(seatClearance).toBeGreaterThan(-.003);
+   for(const gap of seatGaps)expect(gap).toBeLessThan(.01);
+   // Bent legs can stay behind the raised footrest; any overlap must clear it.
+   expect(footrestClearance).toBeGreaterThan(.005);
+   expect(vehicle.worldToLocal(rider.hip!.getWorldPosition(point)).distanceTo(new Vector3(...spec.seat))).toBeLessThan(1e-6);
+   for(const side of ['l','r']){
+    const thigh=rider.actor.getObjectByName(`thigh_${side}`)!.getWorldPosition(new Vector3());
+    const knee=rider.actor.getObjectByName(`calf_${side}`)!.getWorldPosition(new Vector3());
+    const ankle=rider.actor.getObjectByName(`foot_${side}`)!.getWorldPosition(new Vector3());
+    expect(knee.clone().sub(thigh).normalize().dot(ankle.sub(knee).normalize())).toBeLessThan(.35);
+   }
+  };
+  for(const frames of [1,30,60]){
+   world.step({humanoid:{...emptyInput(),forward:1,steer:.4}},frames);
+   for(const alpha of [0,.5,1])engine.withPresentation(check,alpha,'object');
+  }
+ }finally{world?.dispose();if(!world)rider.dispose();loader.mockRestore();transport.mockRestore();}
+});
 
 it('places wearable ground shoes at the support in fixed and interpolated presentation',async()=>{
  const {readFile}=await import('node:fs/promises'),{fileURLToPath}=await import('node:url');

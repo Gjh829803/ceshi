@@ -10,6 +10,10 @@ export function fitRoadBodyParts(rig:VehicleRigidRig,parts:readonly CollisionEnv
   collider.setShape(new RAPIER.Cuboid(...part.halfExtents));
   collider.setTranslationWrtParent({x:part.offset[0],y:part.offset[1],z:part.offset[2]});
  });
+ // Thin floor pans can reach a slope between contact-generation steps even
+ // with swept CCD enabled. Bounded speculative contacts act before penetration;
+ // they neither enlarge the authored hull nor add physics substeps.
+ rig.body.setSoftCcdPrediction(.05);
  calibrated.add(rig);
 }
 /** 只替换显式配置车型的驾驶舱；下部斜切底盘、轮组、质量和惯量保持原值。 */

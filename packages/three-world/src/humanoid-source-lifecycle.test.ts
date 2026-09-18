@@ -32,6 +32,36 @@ function resources(options:{fail?:()=>boolean;gate?:Promise<void>;manifestModel?
 }
 function mesh(actor:SourceCharacter){let found:THREE.SkinnedMesh|undefined;actor.root.traverse(node=>{if(!found&&(node as THREE.SkinnedMesh).isSkinnedMesh)found=node as THREE.SkinnedMesh;});return found!;}
 
+it.each([['ShiftLeft',60],['ShiftRight',120]] as const)('returns to the original walking gait after releasing %s while W stays held at %i Hz',async(shift,hz)=>{
+ const {resolve}=resources(),actor=new Character();characters.push(actor);await actor.load(resolve);
+ const {createWorld}=await import('./world');
+ const {getDefaultProfile}=await import('@worldkit/preset-content/platform/profiles');
+ const world=await createWorld({camera:new THREE.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{
+  map:{id:'gait-release',name:'Gait release',description:'',bounds:{min:[-100,-10,-100],max:[100,20,100]},boxes:[{id:'floor',position:[0,-.5,0],size:[200,1,200]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]},
+  character:{instanceId:'person',object:actor.root,animation:actor},vehicles:[],
+ }});
+ try{
+  world.humanoid!.applyProfile({character:getDefaultProfile('person')!.control});
+  const engine=(world as unknown as {engine:import('./engine').WorldEngine}).engine,source=actor.sourceCharacter!;
+  engine.keyboard.enabled=true;
+  const advance=(seconds:number)=>{for(let n=0;n<Math.round(seconds*hz);n++){engine.advance(1/hz);engine.render();}};
+  advance(.5);engine.keyboard.keyDown('KeyW');advance(1);expect(source.weights.walk).toBeGreaterThan(.9);
+  engine.keyboard.keyDown(shift);advance(1);expect(source.weights.run).toBeGreaterThan(.9);
+  engine.keyboard.keyUp(shift);advance(1/60);
+  expect(world.humanoid!.inspectControls().lastApplied!.input).toMatchObject({forward:1,boost:false});
+  advance(.4);expect(source.weights.walk).toBeGreaterThan(.9);expect(source.weights.run).toBeLessThan(.1);
+  advance(1);expect(source.weights.walk).toBeGreaterThan(.99);
+  engine.keyboard.keyDown(shift);advance(.6);expect(source.weights.run).toBeGreaterThan(.9);
+  // A single contact-seam correction while sprint is held must not select walk.
+  const {readHumanoid}=await import('./humanoid-runtime/humanoid/render-state');
+  actor.update(1/60,{...readHumanoid(world.humanoid!.simulation.controlledActor.controller)!,speed:0});
+  expect(source.weights.run).toBeGreaterThan(.9);
+  // Faster normal movement still uses the existing running gait without Shift.
+  world.humanoid!.applyProfile({character:{speed:3.8,maxSpeed:5.8}});
+  engine.keyboard.keyUp(shift);advance(1);expect(source.weights.run).toBeGreaterThan(.99);
+ }finally{world.dispose();}
+});
+
 it('keeps author colors independent across real humanoid factories, views and source disposal',async()=>{
  const {resolve}=resources(),actor=new Character();characters.push(actor);actor.setColor('#3a8fc4');await actor.load(resolve);
  const model=(person:Character)=>{let result:THREE.SkinnedMesh|undefined;person.root.traverse(node=>{if(!result&&(node as THREE.SkinnedMesh).isSkinnedMesh)result=node as THREE.SkinnedMesh;});return result!;};
