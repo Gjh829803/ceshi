@@ -291,18 +291,18 @@ describe('per-wheel road vehicle',()=>{
  it('rejects recovery without a driver or ground, and escapes blocked headroom via the safe spawn',()=>{
    const q=new EnvironmentQueries({...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}],boxes:[...map.boxes,{id:'roof',position:[10,1.8,15],size:[30,.3,30]}]});const sim=new Simulation(q,[spec],{id:'player'});
   try{expect(sim.controlledActor.recoverVehicle()).toBe(false);sim.controlledActor.vehicleIndex=0;sim.controlledActor.controller.setMounted(true);const v=sim.controlledActor.vehicle!;v.position.set(0,20,0);expect(sim.controlledActor.recoverVehicle()).toBe(false);expect(v.position.y).toBe(20);
-   v.position.set(10,.2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(v.position.x).toBe(10);expect(v.position.y).toBeGreaterThan(.2);expect(v.position.z).toBe(15);expect(new Vector3(0,1,0).applyQuaternion(v.rotation).y).toBeCloseTo(1);
+   v.position.set(10,.2,15);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(v.position.x).toBe(10);expect(v.position.y).toBeGreaterThan(.2);expect(v.position.y).toBeLessThanOrEqual(1.75);expect(v.position.z).toBe(15);expect(new Vector3(0,1,0).applyQuaternion(v.rotation).y).toBeCloseTo(1);
   }finally{sim.dispose();q.dispose();}
  });
- it('uses the safe spawn when a flipped vehicle has no full-body local landing area',()=>{
-  const q=new EnvironmentQueries({...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}],boxes:[
+ it('uses the prepared safe spawn when local ground and air candidates are blocked',()=>{
+  const q=new EnvironmentQueries({...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}],spawns:[{id:'safe-car',name:'Safe car',vehicleId:'car',position:[-20,.03,0],yaw:0,regionId:'road'}],boxes:[
    {id:'spawn-ground',position:[-20,-.5,0],size:[8,1,8]},
-   {id:'small-platform',position:[0,-.05,0],size:[1.5,.1,1.5]},
+   {id:'recovery-block',position:[0,5,0],size:[24,12,24]},
   ]});
   const sim=new Simulation(q,[spec],{id:'player'});
   try{sim.controlledActor.vehicleIndex=0;sim.controlledActor.controller.setMounted(true);const v=sim.controlledActor.vehicle!;
    v.position.set(0,.2,0);v.rotation.setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);
-   expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(v.position.x).toBe(0);expect(v.position.y).toBeGreaterThanOrEqual(.2);expect(v.position.z).toBe(0);expect(v.velocity.length()).toBe(0);
+   expect(sim.controlledActor.recoverVehicle()).toBe(true);expect(sim.controlledActor.message).toContain('安全停放点');expect(v.position.x).toBe(-20);expect(v.position.z).toBe(0);expect(v.velocity.length()).toBe(0);
   }finally{sim.dispose();q.dispose();}
  });
  it.each([1,-1])('continues rotating after a fast nose contact (%s) and loses sliding speed',sign=>{

@@ -489,11 +489,11 @@ export class HumanoidActor {
         // nearby clear volume over a distant reset. Ground vehicles remain
         // airborne only temporarily and fall under their normal physics.
         const airHeights=[0,.75,1.5,3,6];
-        for(const height of airHeights)for(const offset of offsets){
+        airborneSearch: for(const height of airHeights)for(const offset of offsets){
           const candidate=v.position.clone().add(offset);candidate.y+=height;
           const placed=q.safeSpawn(candidate,body,rotation);
           if(!placed||q.bodyOverlap({position:placed,rotation,body},{excludedActorIds:new Set([v.spec.id])}))continue;
-          safe=placed;airborne=true;break;
+          safe=placed;airborne=true;break airborneSearch;
         }
       }
       let fallback=false;
