@@ -6,7 +6,8 @@ import { Vector3 } from 'three';
 import {type EnvironmentQueries,type HumanoidRig,type QueryBody} from '../environment/queries';
 import {humanoidLevel,type HumanoidLevel,type LevelBox} from './level-adapter';
 import {createTraversalMotion,type MotionPlan,type MotionSource} from './motion';
-import {SWIM_ROOT_DEPTH,SWIM_SPEED,SWIM_FAST_SPEED,swimVerticalVelocity,type WaterContact} from './water-physics';
+import {SWIM_ROOT_DEPTH,SWIM_SPEED,SWIM_FAST_SPEED,swimVerticalVelocity,underwaterVerticalVelocity,type WaterContact} from './water-physics';
+import {SWIMMING_TUNING} from '../../config/actions';
 import {ActionSystem,type ActionCommands} from './action-system';
 import {SurfaceActions} from './surface-actions';
 import type {SurfaceCommands} from './surface-types';
@@ -68,6 +69,7 @@ export class HumanoidController {
   state='idle';
   stance:'stand'|'crouch'='stand';
   swimming=false;
+  private underwaterControl=false;
   swimStyle:'breaststroke'|'freestyle'='breaststroke';
   water:WaterContact|null=null;
   waterEntrySerial=0;
@@ -187,7 +189,7 @@ export class HumanoidController {
     this.resources.release(this);
     this.traversalRequested=false;
     this.completedMotion=null;this.motionSerial++;this.controller.enableSnapToGround(.18);this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
-    this.swimming=false;this.water=null;this.waterEntrySpeed=0;
+    this.swimming=false;this.underwaterControl=false;this.water=null;this.waterEntrySpeed=0;
     this.stance='stand';this.actionCapsuleHalf=null;this.capsule.setShape(new RAPIER.Capsule(HALF,RADIUS));this.animationEvent=null;this.wasMoving=false;this.stationaryTime=0;this.positionHistory=[];this.airborneTime=0;this.turnCooldown=0;
     this.inputHeldTime=0;this.runHeldTime=0;this.startEmitted=false;this.lastMoveInput.set(0,0,0);
     this.recentSpeeds=[];
@@ -230,11 +232,12 @@ export class HumanoidController {
     const volume=this.level?.waters?.find(w=>Math.abs(this.position.x-w.x)<=w.w/2&&Math.abs(this.position.z-w.z)<=w.d/2
       &&this.position.y<w.surfaceY+.03&&this.position.y+this.capsuleHeight>w.bottomY);
     if(volume){
-      const floorOrigin=new Vector3(this.position.x,volume.surfaceY+.025,this.position.z);
-      const floor=this.ray(floorOrigin,new Vector3(0,-1,0),volume.surfaceY-volume.bottomY+.1,undefined);
+      // Measure support below the swimmer, not a submerged roof above them.
+      const floorOrigin=new Vector3(this.position.x,Math.min(volume.surfaceY+.025,this.position.y+.025),this.position.z);
+      const floor=this.ray(floorOrigin,new Vector3(0,-1,0),Math.max(.1,floorOrigin.y-volume.bottomY+.1),undefined);
       const floorY=floor&&floor.normal.y>.3?floorOrigin.y-floor.timeOfImpact:volume.bottomY;
       const depth=Math.max(0,volume.surfaceY-Math.max(volume.bottomY,floorY));
-      this.water={volumeId:volume.id,surfaceY:volume.surfaceY,depth,
+      this.water={swimmingMode:null,volumeId:volume.id,surfaceY:volume.surfaceY,depth,
         submersion:Math.max(0,Math.min(1,(volume.surfaceY-this.position.y)/this.capsuleHeight)),
         feetBelowSurfaceMeters:volume.surfaceY-this.position.y,
         requiredDepthMeters:wasSwimming?SWIM_ROOT_DEPTH+.01:SWIM_ROOT_DEPTH+.13,
@@ -262,10 +265,15 @@ export class HumanoidController {
       this.animationEvent=null;this.airborneTime=0;this.wasMoving=false;this.startEmitted=true;
       this.lastResult=this.water?'水深变浅：恢复涉水行走':'离开水域：恢复陆地运动';
     }
+    if(!this.swimming)this.underwaterControl=false;
+    if(this.water)this.water.swimmingMode=this.swimming?(this.underwaterControl?'underwater':'surface'):null;
     return this.swimming;
   }
-  private stepSwimming(input:Vector3,sprint:boolean){
+  private stepSwimming(input:Vector3,sprint:boolean,lift:number){
     const dt=FIXED_DT,water=this.water!;
+    const surfaceTarget=water.surfaceY-SWIM_ROOT_DEPTH;
+    if(lift<0)this.underwaterControl=true;
+    else if(this.underwaterControl&&this.position.y>=surfaceTarget-SWIMMING_TUNING.surfaceReturnToleranceMeters)this.underwaterControl=false;
     const hasInput=input.lengthSq()>.01;
     const target=input.clone().setY(0).multiplyScalar(sprint?SWIM_FAST_SPEED:SWIM_SPEED);
     const change=target.sub(this.velocity).setY(0),acceleration=hasInput?3.8:5;
@@ -281,20 +289,25 @@ export class HumanoidController {
     // A submerged swimmer first recovers to the surface. No underwater magnetic
     // catches, and the same ledge/headroom/path checks protect dry traversal.
     const atSurface=Math.abs(this.position.y-(water.surfaceY-SWIM_ROOT_DEPTH))<.2&&Math.abs(this.vertical)<2;
-    if(wantsClimb&&atSurface&&this.cooldown<=0&&this.probe&&this.probe.kind!=='blocked'
+    // Only surface swimmers may step onto a shallow bank; divers cannot step
+    // upward against their requested descent or through an underwater obstacle.
+    if(atSurface&&!this.underwaterControl)this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
+    else this.controller.disableAutostep();
+    if(wantsClimb&&!this.underwaterControl&&atSurface&&this.cooldown<=0&&this.probe&&this.probe.kind!=='blocked'
       &&this.probe.top.y>=water.surfaceY-.1&&this.begin(this.probe)){
       this.jumpBuffer=0;this.swimming=false;this.water=null;this.controller.enableAutostep(.27,STEP_MIN_WIDTH,false);
       return;
     }
     this.jumpBuffer=0;this.coyote=0;
-    this.vertical=swimVerticalVelocity(this.position.y,this.vertical,water.surfaceY,dt);
+    this.vertical=this.underwaterControl?underwaterVerticalVelocity(this.vertical,lift,dt):swimVerticalVelocity(this.position.y,this.vertical,water.surfaceY,dt);
+    if(this.underwaterControl&&this.vertical>0)this.vertical=Math.min(this.vertical,Math.max(0,(surfaceTarget-this.position.y)/dt));
     const desired={x:this.velocity.x*dt,y:this.vertical*dt,z:this.velocity.z*dt};
     this.controller.computeColliderMovement(this.capsule,desired,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);
     const corrected=this.controller.computedMovement(),cur=this.body.translation();
     this.collisions=this.controller.numComputedCollisions();
     if(Math.abs(corrected.y-desired.y)>.005)this.vertical=0;
     this.body.setNextKinematicTranslation({x:cur.x+corrected.x,y:cur.y+corrected.y,z:cur.z+corrected.z});
-    this.speed=Math.hypot(corrected.x,corrected.z)/dt;
+    this.speed=Math.hypot(corrected.x,corrected.y,corrected.z)/dt;
     this.commitPose();this.sync();this.grounded=false;this.animationEvent=null;
     this.updateWaterContact();
     this.state=this.swimming?(this.speed<.12?'swim-idle':sprint?'swim-fast':'swim'):'fall';
@@ -459,7 +472,7 @@ export class HumanoidController {
     this.position.copy(safe);const center=safe.clone().addScaledVector(UP,CENTER);
     this.body.setTranslation(center,true);this.body.setNextKinematicTranslation(center);this.commitPose();this.sync();
   }
-  step(input:Vector3,sprint:boolean,walk:boolean,jump:boolean,actions?:{toggleCrouch?:boolean}&ActionCommands&SurfaceCommands){
+  step(input:Vector3,sprint:boolean,walk:boolean,jump:boolean,actions?:{toggleCrouch?:boolean}&ActionCommands&SurfaceCommands,lift=0){
     if(this.disposed)throw new Error('Humanoid controller disposed');
     if(this.mounted)return;
     if(actions?.toggleCrouch&&this.surface.mode==='climbing'||actions?.slide&&this.surface.mode==='climbing')actions={...actions,toggleCrouch:false,slide:false,releaseClimb:true};
@@ -510,7 +523,7 @@ export class HumanoidController {
       }
       return;
     }
-    if(this.updateWaterContact()){this.surface.reset();this.stepSwimming(input,sprint);return;}
+    if(this.updateWaterContact()){this.surface.reset();this.stepSwimming(input,sprint,lift);return;}
     if(!this.skills.active&&!this.skills.carrying&&!this.skills.seated&&this.surface.step(input,actions,jump)){this.checkBounds();return;}
     if(this.skills.step(input,sprint,actions,jump)){this.checkBounds();return;}
     if(this.skills.carrying){sprint=false;walk=true;this.jumpBuffer=0;}

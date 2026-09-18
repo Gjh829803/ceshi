@@ -247,7 +247,11 @@ export class ThreeWorld implements API.World {
  setCaptureTargets(targets:readonly API.CaptureTargetSelection[]):void{this.alive();this.captureTargets=normalizeCaptureSelection(targets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  private captureObservation(){this.alive();return observeCaptureSelection(this.captureTargets,id=>this.entries.get(id)?.object,this.engine.controlledEntityId);}
  /** Observes a completed render after presentation materials are restored; observers must not advance simulation. */
- onRender(callback:()=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ onRender(callback:(interpolationAlpha:number)=>void):()=>void{this.alive();return this.engine.onRender(callback);}
+ /** Synchronous auxiliary view of the same SDK display sample; never advances simulation. */
+ withPresentation<T>(work:()=>T,options?:{readonly interpolationAlpha?:number;readonly view?:'world'|'object'}):T{
+  this.alive();return this.engine.withPresentation(work,options?.interpolationAlpha??1,options?.view);
+ }
  onRuntimeSample(callback:(sample:API.RuntimeSample)=>void):()=>void{this.alive();return this.engine.onRuntimeSample(callback);}
  /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
  onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
@@ -863,7 +867,7 @@ export class ThreeWorld implements API.World {
   const text=query.query?.toLowerCase();
   const ids=new Set([...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text))).map(entry=>entry.id));
   return {worldRevision:this.revision,simulationTick:this.simulationTick,simulationSeconds:this.simulationTick*this.engine.fixedTimeStepSeconds,
-   isRunning:this.isRunning,physicsStepSequence:this.humanoid?.environment.physicsStepSequence??null,vehicles:this.humanoid?.simulation.vehicles.filter(v=>ids.has(v.spec.id)).map(v=>inspectVehicle(v,query.detail,this.humanoid!.environment.physicsStepSequence))??[]};
+   isRunning:this.isRunning,physicsStepSequence:this.humanoid?.environment.physicsStepSequence??null,vehicles:this.humanoid?.simulation.vehicles.filter(v=>ids.has(v.spec.id)).map(v=>inspectVehicle(v,query.detail,this.humanoid!.environment.physicsStepSequence,this.humanoid!.simulation.vehicleCondition(v),this.humanoid!.environment))??[]};
  }
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
@@ -890,6 +894,7 @@ export class ThreeWorld implements API.World {
   const observer:API.WorldObservation={withPresentation:(work,options)=>world.engine.withPresentation(work,1,options?.view),ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
    get presentation(){return world.presentation;},
    get controlledObject(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return world.captureObservation().targets;},
+   getEntityGeometry:entityId=>{const entry=world.entries.get(entityId);return entry?{object:entry.object,physicsKind:entry.physicsKind}:undefined;},
    get captureTargetIds(){return world.captureObservation().captureTargetIds;},get targetRepresentativesById(){return world.captureObservation().targetRepresentativesById;},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
    startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:query=>world.describe(query),inspectVehicles:query=>world.inspectVehicles(query),inspectCamera:()=>world.inspectCamera(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};

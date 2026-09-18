@@ -19,11 +19,16 @@ export function createDebugRecording(port:DebugRecordingPort,files:DebugArtifact
  const world=port.world,canvas=port.canvas.ownerDocument.createElement('canvas'),context=canvas.getContext('2d');
  let enabled=false,disposed=false,busy=false,replaying=false,cancelled=false,lastError:string|null=null;
  let source:DebugSourceIdentity|undefined,recording:DebugRecording|undefined;
+ let savedRecording:{recordingId:string;bundleId:string;replayable:boolean;inputTicks:number}|null=null;
  let replayOperation:{id:string;status:string;advancedTicks:number;result?:unknown}|undefined;
  let unsubscribe=()=>{};let observing=false;
  const recent:InputSample[]=[];
  let latest:{frame:FrameSample;snapshot:ReturnType<ThreeWorld['snapshot']>;camera:ReturnType<ThreeWorld['inspectCamera']>}|undefined;
  const ready=()=>{if(disposed||!port.ready())throw Error('DEBUG_WORLD_NOT_READY');};
+ const reachLimit=()=>{
+  recording!.status='limit-reached';
+  void Promise.resolve().then(()=>port.pause()).catch(error=>{lastError=String(error);});
+ };
  const state=():State=>{
   const snapshot=world.snapshot(),id=snapshot.controlledEntityId;
   if(!id)throw Error('DEBUG_CONTROLLED_ENTITY_REQUIRED');
@@ -38,7 +43,7 @@ export function createDebugRecording(port:DebugRecordingPort,files:DebugArtifact
      if(sample.simulationTick!==recording.firstTick+recording.inputTicks+1)recording.invalidReason='simulation-tick-discontinuity';
      if(sample.controlledEntityId!==recording.start.actorId)recording.invalidReason='controlled-entity-changed';
      recording.events.push({sample,state:state()});recording.inputTicks++;
-     if(recording.inputTicks*sample.deltaSeconds>=recording.maximumSeconds){recording.status='limit-reached';void Promise.resolve().then(()=>port.pause()).catch(error=>{lastError=String(error);});}
+     if(recording.inputTicks*sample.deltaSeconds>=recording.maximumSeconds||recording.events.length>=20000)reachLimit();
     }
    }else{
     if(sample.simulationTick<(recent.at(-1)?.simulationTick??-1))recent.length=0;
@@ -51,15 +56,17 @@ export function createDebugRecording(port:DebugRecordingPort,files:DebugArtifact
     }
     if(recording?.status==='recording'&&!replaying){
      recording.events.push({sample});
-     if(recording.events.length>20000){recording.status='limit-reached';recording.invalidReason='event-capacity-exceeded';}
+     if(recording.events.length>=20000)reachLimit();
     }
    }
   }catch(error){lastError=error instanceof Error?error.message:String(error);enabled=false;if(recording)recording.invalidReason=lastError;}
  };
  const ensureObservation=()=>{if(!observing){unsubscribe=world.onRuntimeSample(observe);observing=true;}};
- const inspect=()=>({enabled,busy,replaying,lastError,replayOperation:replayOperation?structuredClone(replayOperation):null,recentInputTicks:recent.length,
+ const inspect=()=>({enabled,busy,replaying,lastError,savedRecording:savedRecording?{...savedRecording}:null,replayOperation:replayOperation?structuredClone(replayOperation):null,recentInputTicks:recent.length,
   frame:latest?{frameId:latest.frame.frameId,simulationTick:latest.frame.simulationTick,widthPixels:canvas.width,heightPixels:canvas.height}:null,
-  recording:recording?{id:recording.id,status:recording.status,events:recording.events.length,inputTicks:recording.events.filter(e=>e.sample.kind==='fixed-input').length,invalidReason:recording.invalidReason,source:recording.source}:null});
+  recording:recording?{id:recording.id,status:recording.status,events:recording.events.length,inputTicks:recording.inputTicks,
+   elapsedSeconds:recording.inputTicks?recording.inputTicks*(recording.events.find(e=>e.sample.kind==='fixed-input')!.sample as InputSample).deltaSeconds:0,
+   maximumSeconds:recording.maximumSeconds,invalidReason:recording.invalidReason,source:recording.source}:null});
  const run=async<T>(work:()=>Promise<T>)=>{
   if(busy)return failure(Error('DEBUG_RECORDING_BUSY'));busy=true;cancelled=false;
   try{ready();return await work();}catch(error){return failure(error);}finally{busy=false;port.onStateChange?.(enabled);}
@@ -124,7 +131,12 @@ export function createDebugRecording(port:DebugRecordingPort,files:DebugArtifact
 
  const stop=()=>run(async()=>{
   if(!recording)throw Error('DEBUG_RECORDING_UNAVAILABLE');await port.pause();if(recording.status==='recording')recording.status='stopped';
-  const saved=await saveFrozen(freezeBundle('input recording',!!latest));return {status:'saved',...saved,recording:inspect().recording};
+  const bundle=freezeBundle('input recording',!!latest),saved=await saveFrozen(bundle);
+  const trace=bundle.recording!;
+  // Trace replayability is separate from whether it reproduces the cached screenshot.
+  const replayable=!trace.invalidReason&&(trace.inputTicks>0||trace.events.some(e=>e.sample.kind==='rendered-frame'));
+  savedRecording={recordingId:trace.id,bundleId:saved.id,replayable,inputTicks:trace.inputTicks};
+  return {status:'saved',...saved,replayable,recording:inspect().recording};
  });
  const capture=(value:unknown)=>run(async()=>{
   const input=value as {label?:string;pause?:boolean};

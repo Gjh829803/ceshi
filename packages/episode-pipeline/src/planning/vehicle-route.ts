@@ -6,7 +6,7 @@ import type {
   RouteDecision,
 } from './route-controller.js';
 
-const {AIRCRAFT}=humanoid;
+const {AIRCRAFT,SOARING}=humanoid;
 
 export const VEHICLE_FAMILIES = [
   'paddled_boat',
@@ -29,10 +29,10 @@ export const VEHICLE_FAMILIES = [
   'dragon',
 ] as const;
 export type VehicleFamily=typeof VEHICLE_FAMILIES[number];
-const clamp=(n:number)=>Math.max(-1,Math.min(1,n));
+const clamp=(n:number,a=-1,b=1)=>Math.max(a,Math.min(b,n));
 const angle=(n:number)=>Math.atan2(Math.sin(n),Math.cos(n));
 /** Steering is body-relative; camera orbit never steers a vehicle. No transforms are written. */
-export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotation:Vec3,velocity:Vec3,target:Vec3,aircraft?:{subtype?:AircraftSubtype|undefined;throttle:number}):WorldInput {
+export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotation:Vec3,velocity:Vec3,target:Vec3,_aircraft?:{subtype?:AircraftSubtype|undefined;throttle:number}):WorldInput {
   if(family==='wheeled'||family==='motorcycle')return roadVehicleRouteInput({positionWorldMetersXYZ:position,rotationWorldRadiansXYZ:rotation,velocityWorldMetersPerSecondXYZ:velocity},{positionWorldMetersXYZ:target,maximumSpeedMetersPerSecond:30,stopAtTarget:false});
   const delta=new Vector3(...target).sub(new Vector3(...position));
   const q=new Quaternion().setFromEuler(new Euler(...rotation));
@@ -40,16 +40,16 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
   const yaw=Math.atan2(heading.x,heading.z),desiredYaw=Math.atan2(delta.x,delta.z);
   const yawError=angle(desiredYaw-yaw),horizontal=Math.hypot(delta.x,delta.z);
   const input={forward:Math.max(.15,Math.cos(yawError)),steer:clamp(-yawError*1.8),roll:0,lift:0,pitch:0,strafe:0,boost:false,brake:false,slow:false,jump:false};
-  if(family==='plane'&&aircraft?.subtype==='balloon'){
-    input.forward=0;input.steer=0;input.boost=delta.y-velocity[1]*2>1;input.slow=delta.y-velocity[1]*2< -1;
-  } else if(family==='plane'&&aircraft?.subtype&&['helicopter','multirotor','tiltrotor'].includes(aircraft.subtype)){
+  if(family==='plane'&&_aircraft?.subtype==='balloon'){
+    input.forward=0;input.steer=0;input.lift=clamp((delta.y-velocity[1]*2)/3);
+  } else if(family==='plane'&&_aircraft?.subtype&&['helicopter','multirotor','tiltrotor'].includes(_aircraft.subtype)){
     const desiredVelocity=new Vector3(delta.x,0,delta.z).multiplyScalar(.45).clampLength(0,6);
     const acceleration=desiredVelocity.sub(new Vector3(velocity[0],0,velocity[2])).multiplyScalar(.65).addScaledVector(new Vector3(velocity[0],0,velocity[2]),.12).applyQuaternion(q.clone().invert());
     input.steer=horizontal>8?input.steer*.5:0;
     input.forward=clamp(acceleration.z/(9.81*.32));
     input.roll=clamp((-acceleration.x/9.81-input.steer*Math.max(0,Math.min(1,Math.hypot(velocity[0],velocity[2])/35))*.3)/.38);
-    const throttleTarget=Math.max(.2,Math.min(.8,.5+clamp((delta.y*.6-velocity[1]*.15)/3)*3/8));
-    input.boost=aircraft.throttle<throttleTarget-.015;input.slow=aircraft.throttle>throttleTarget+.015;
+    const throttleCorrection=clamp((.58-(_aircraft.throttle??.5))*.8,-.15,.15);
+    input.lift=clamp((delta.y*.6-velocity[1]*.15)/3+throttleCorrection);
   } else if(family==='tank'){
     input.forward=Math.abs(yawError)>1?0:input.forward;
     input.brake=horizontal<Math.hypot(velocity[0],velocity[2])**2/12+.5;
@@ -62,7 +62,9 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
     input.lift=clamp((delta.y-velocity[1]*.8)/3);input.forward=horizontal<.5?0:input.forward;
   } else if(family==='plane'||family==='glider'){
     const pitch=Math.atan2(delta.y+(family==='glider'?1.2:0),Math.max(5,horizontal));
-    input.forward=clamp(-(pitch-(family==='plane'?Math.atan2(velocity[1]!,Math.max(1,Math.hypot(velocity[0]!,velocity[2]!))):0))/(family==='plane'?.27:.62));input.boost=family==='glider'||Math.hypot(...velocity)<32;input.slow=family==='plane'&&Math.hypot(...velocity)>40;
+    const speed=Math.hypot(...velocity),flightPath=family==='plane'?Math.atan2(velocity[1]!,Math.max(1,speed)):0;
+    input.pitch=clamp(-(pitch-flightPath)/(family==='plane'?.27:.62));
+    input.forward=family==='plane'?clamp((56-speed)/12):clamp((SOARING.targetSpeed.glider-speed)/8);
     if(family==='plane'){const speed=Math.hypot(velocity[0]!,velocity[2]!),course=speed>3?Math.atan2(velocity[0]!,velocity[2]!):yaw;
       const acceleration=2*speed*speed*Math.sin(desiredYaw-course)/Math.max(15,Math.min(horizontal,speed*1.3));input.steer=clamp(-acceleration/Math.max(speed,16)/AIRCRAFT.turnRate);}
   } else if(family==='sled'||family==='ski'){

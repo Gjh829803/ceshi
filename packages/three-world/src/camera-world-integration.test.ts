@@ -6,7 +6,7 @@ import type {World} from './contracts';
 import {createHumanoidCameraDocument,type CameraDocument} from './config/camera/index';
 import {createMountedFixture} from './humanoid-runtime/mounted-test-fixture';
 import {WorldPresentationContext} from './camera/presentation-context';
-import type {CameraOrbitOptions,World as PublicWorld} from './index';
+import {emptyHumanoidInput,type CameraOrbitOptions,type World as PublicWorld} from './index';
 const map={id:'camera-integration',name:'Camera',description:'',bounds:{min:[-50,-10,-50],max:[50,50,50]},boxes:[{id:'ground',position:[0,-.5,0],size:[100,1,100]}],water:[],regions:[],spawns:[],playerSpawn:[0,.03,0]} as const;
 async function fixture(){return createWorld({navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:new THREE.Group()},vehicles:[]}});}
 function document(targetEntityId='person'):CameraDocument{return {kind:'world-camera',schemaVersion:1,defaultViewId:'third',binding:{targetEntityId},activation:'immediate',input:{cycleViewIds:['third','first','shoulder']},views:{third:{kind:'third-person',overrides:{position:{distanceMeters:4},orientation:{recenter:{enabled:false}}}},first:{kind:'first-person'},shoulder:{kind:'shoulder'}}};}
@@ -43,6 +43,22 @@ it('uses real camera collision for an absolute orbit cut without moving the acto
   expect(camera.diagnostics).toMatchObject({status:'measured',limited:true,colliderEntityId:'orbit-wall'});
   expect(new THREE.Vector3(...camera.current!.positionWorldMetersXYZ).distanceTo(new THREE.Vector3(...camera.current!.pivotWorldMetersXYZ))).toBeLessThan(3);
   expect(world.getEntityState('person')).toEqual(before);expect(world.simulationTick).toBe(tick);
+ }finally{world.dispose();}
+});
+
+it('turns the actual camera sight left and right in all character views',async()=>{
+ const world=await fixture();try{
+  world.setCameraFollow({configuration:document()});
+  for(const view of ['third','first','shoulder'])for(const [key,direction] of [['ArrowLeft',-1],['ArrowRight',1]] as const){
+   world.setCameraView(view);world.step({},30);
+   const right=new THREE.Vector3(1,0,0).applyQuaternion(world.camera.quaternion);
+   const before=world.camera.getWorldDirection(new THREE.Vector3());
+   const e=engine(world);e.keyboard.enabled=true;e.keyboard.keyDown(key);
+   for(let n=0;n<15;n++)e.advance(1/60);
+   e.keyboard.keyUp(key);
+   const turn=world.camera.getWorldDirection(new THREE.Vector3()).sub(before).dot(right);
+   expect(turn*direction,view+' '+key).toBeGreaterThan(.02);
+  }
  }finally{world.dispose();}
 });
 
@@ -520,6 +536,44 @@ it('notifies render observers after restoring subject presentation without anoth
   expect(world.simulationTick).toBe(tick);expect(world.inspectCamera().cameraCommitRevision).toBe(revision);
   release();engine(world).render(1);expect(order).toEqual(['source','observer','source']);
  }finally{world.dispose();geometry.dispose();material.dispose();}
+});
+
+it('resamples moving vehicles at the source render alpha for auxiliary object views without stepping',async()=>{
+ const {SPECS}=await import('@worldkit/preset-content/config');
+ const spec={...structuredClone(SPECS.find(value=>value.id==='rover')!),spawn:[0,.03,0] as [number,number,number]};
+ const vehicle=new THREE.Group(),person=new THREE.Group();
+ const world=await createWorld({navigation:false,assetDefinitions:{},humanoid:{map:{...map,
+  regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[100,100],color:'#fff',modes:['wheeled']}],
+  spawns:[{id:'rover-spawn',name:'Rover',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'road'}]},
+  character:{instanceId:'person',object:person,initialMountId:spec.id},
+  vehicles:[{instanceId:spec.id,assetId:'fixture',spec,object:vehicle}],
+ }});
+ try{
+  world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});
+  world.step({humanoid:{...emptyHumanoidInput(),forward:1}},60);
+  const committed=vehicle.position.clone(),snapshot=world.snapshot(),revision=world.inspectCamera().cameraCommitRevision;
+  let rendered:THREE.Vector3|undefined,renderedCamera:THREE.Vector3|undefined,observations=0;
+  Object.defineProperty(engine(world),'renderer',{value:{render(){rendered=vehicle.position.clone();renderedCamera=world.camera.position.clone();},dispose(){}}});
+  const api:PublicWorld=world;
+  const release=api.onRender(interpolationAlpha=>{
+    expect(vehicle.position.distanceTo(committed)).toBeLessThan(1e-10);
+    api.withPresentation(()=>{
+      expect(vehicle.position.distanceTo(rendered!)).toBeLessThan(1e-10);
+      expect(world.camera.position.distanceTo(renderedCamera!)).toBeLessThan(1e-10);
+      expect(person.visible).toBe(true);
+    },{interpolationAlpha,view:'object'});
+    observations++;
+    expect(vehicle.position.distanceTo(committed)).toBeLessThan(1e-10);
+  });
+  for(const alpha of [.1,.4,.8]){
+    engine(world).render(alpha);
+    expect(rendered!.distanceTo(committed)).toBeGreaterThan(1e-5);
+  }
+  expect(observations).toBe(3);expect(world.snapshot()).toEqual(snapshot);
+  expect(world.inspectCamera().cameraCommitRevision).toBe(revision);
+  for(const interpolationAlpha of [NaN,-.1,1.1])expect(()=>api.withPresentation(()=>{}, {interpolationAlpha})).toThrow('WORLD_PRESENTATION_ALPHA_INVALID');
+  release();
+ }finally{world.dispose();}
 });
 
 it('consumes measured movement direction through the public World and preserves it at rest',async()=>{

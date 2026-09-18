@@ -86,6 +86,7 @@ export function DisplayHelpers({settings:s,change,available:a}:ControlsProps&{av
       </HelperToggle>
       <HelperToggle label="摄像机和取景范围" hint="切换世界视角查看游玩摄像机与取景框；鼠标观察，键盘继续控制角色或载具。" checked={s.cameras} change={v=>update({cameras:v})}>
         <label className="display-number">取景范围显示距离 / 米<input aria-label="取景范围显示距离 / 米" type="number" min={1} max={100} step={1} value={s.cameraRange} onChange={e=>{const n=e.currentTarget.valueAsNumber;if(Number.isFinite(n)&&n>=1&&n<=100)update({cameraRange:n});}}/></label>
+        <p className="display-hint">同时限制取景框和右下角预览的可见距离，距离外的物体不显示；不改变 FOV 或实际游玩相机。</p>
         <p className="display-hint">鼠标环绕、平移和缩放；键盘继续游玩。同时开启碰撞体“全部类型”，显示真实探测球与扫掠路径：青色为畅通，橙色为受阻，红色为返回的接触点与法线。第一人称未执行扫掠时不显示旧数据。</p>
       </HelperToggle>
       <HelperToggle label="网格线框" hint="叠加三角网格，检查几何密度和拓扑。" checked={s.wireframe} change={v=>update({wireframe:v})} reason={['depth','normal','semantic'].includes(s.mode)?'当前画面模式不支持叠加网格线框；可使用上方“仅看线框”。':undefined}/>

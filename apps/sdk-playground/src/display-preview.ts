@@ -10,7 +10,9 @@ export function createDisplayPreview(options: {
   scene: T.Scene; camera: T.Camera; source: T.WebGLRenderer; mount: HTMLElement;
   collisionDiagnostics?():CameraProbeSample|undefined;
   /** SDK render completion, after its camera/body display transaction restores. */
-  onRender?(callback:()=>void):()=>void;
+  onRender?(callback:(interpolationAlpha:number)=>void):()=>void;
+  /** SDK-owned display resampling with full subject visibility for the world observer. */
+  withPresentation?(draw:()=>void,interpolationAlpha:number):void;
   inputSurface?:HTMLElement; focusGameplay?():void;
   context(): DisplayContext; overlay?: DisplayOverlay; onError(error: unknown): void;
 }) {
@@ -19,23 +21,61 @@ export function createDisplayPreview(options: {
   const cameraDisplay = createCameraDisplay({collisionDiagnostics:()=>options.collisionDiagnostics?.(),source:camera,mount:options.inputSurface??options.mount,focusGameplay:()=>options.focusGameplay?.(),redraw:()=>draw()});
   const monitor=createCameraMonitor(source.domElement,options.inputSurface??options.mount,()=>options.focusGameplay?.(),{locate:()=>cameraDisplay.locate(),setFollowing:value=>cameraDisplay.setFollowing(value)});
   let renderer: T.WebGLRenderer | undefined, settings = defaultDisplaySettings(), failed = false, disposed = false;
+  let interpolationAlpha=1;
   const previous = scene.onAfterRender;
   const size = new T.Vector2();
+  let monitorCamera:T.PerspectiveCamera|T.OrthographicCamera|undefined;
+  function prepareRenderer(){
+    if (!renderer) {
+      renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha:true });
+      renderer.domElement.dataset.displayPreview = '';
+      renderer.domElement.setAttribute('aria-label', '诊断预览');
+      renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0';
+      options.mount.append(renderer.domElement);
+      // Diagnostic passes must not rewrite shadow maps owned by the source.
+      renderer.shadowMap.enabled = false;
+    }
+    source.getSize(size);
+    if (renderer.domElement.width !== source.domElement.width || renderer.domElement.height !== source.domElement.height) {
+      renderer.setPixelRatio(source.getPixelRatio()); renderer.setSize(size.x, size.y, false);
+    }
+    return renderer;
+  }
+  function drawMonitor(){
+    if(disposed||failed||!resolveDisplaySettings(settings).cameras)return;
+    if(!(camera instanceof T.PerspectiveCamera||camera instanceof T.OrthographicCamera)){monitor.copyFrame();return;}
+    try{
+      const diagnostic=prepareRenderer();
+      monitorCamera??=camera.clone();
+      if(monitorCamera instanceof T.PerspectiveCamera&&camera instanceof T.PerspectiveCamera)monitorCamera.copy(camera,false);
+      else if(monitorCamera instanceof T.OrthographicCamera&&camera instanceof T.OrthographicCamera)monitorCamera.copy(camera,false);
+      camera.getWorldPosition(monitorCamera.position);camera.getWorldQuaternion(monitorCamera.quaternion);monitorCamera.scale.setScalar(1);
+      monitorCamera.matrixAutoUpdate=true;monitorCamera.matrixWorldAutoUpdate=true;
+      monitorCamera.far=Math.max(camera.near+.01,Math.min(camera.far,settings.cameraRange));
+      monitorCamera.updateProjectionMatrix();monitorCamera.updateMatrixWorld(true);
+      monitor.setRange(monitorCamera.far);
+      // Render only the monitor's pixel area using the existing diagnostic
+      // renderer, during the source's display transaction (including body fade).
+      const width=Math.min(size.x,monitor.width),height=width*size.y/size.x;
+      const viewport=diagnostic.getViewport(new T.Vector4()),scissor=diagnostic.getScissor(new T.Vector4()),scissorTest=diagnostic.getScissorTest();
+      diagnostic.outputColorSpace=source.outputColorSpace;diagnostic.toneMapping=source.toneMapping;diagnostic.toneMappingExposure=source.toneMappingExposure;
+      diagnostic.setClearColor(source.getClearColor(new T.Color()),source.getClearAlpha());
+      try{
+        diagnostic.setViewport(0,0,width,height);diagnostic.setScissor(0,0,width,height);diagnostic.setScissorTest(true);
+        diagnostic.render(scene,monitorCamera);
+        const pixelsWide=Math.round(width*diagnostic.getPixelRatio()),pixelsHigh=Math.round(height*diagnostic.getPixelRatio());
+        monitor.copyFrame(diagnostic.domElement,{x:0,y:diagnostic.domElement.height-pixelsHigh,width:pixelsWide,height:pixelsHigh});
+      }finally{diagnostic.setViewport(viewport);diagnostic.setScissor(scissor);diagnostic.setScissorTest(scissorTest);}
+    }catch(error){
+      cameraDisplay.setEnabled(false);monitor.setEnabled(false);failed=true;if(renderer)renderer.domElement.hidden=true;
+      options.onError(error);
+    }
+  }
   function draw() {
     if (disposed || failed || !isDisplayPreviewActive(settings)) { if (renderer) renderer.domElement.hidden = true; return; }
     try {
       const renderSettings=resolveDisplaySettings(settings);
-      if (!renderer) {
-        renderer = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha:true });
-        renderer.domElement.dataset.displayPreview = '';
-        renderer.domElement.setAttribute('aria-label', '诊断预览');
-        renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0';
-        options.mount.append(renderer.domElement);
-      }
-      source.getSize(size);
-      if (renderer.domElement.width !== source.domElement.width || renderer.domElement.height !== source.domElement.height) {
-        renderer.setPixelRatio(source.getPixelRatio()); renderer.setSize(size.x, size.y, false);
-      }
+      renderer=prepareRenderer();
       renderer.outputColorSpace = renderSettings.mode === 'depth' ? T.LinearSRGBColorSpace : source.outputColorSpace;
       renderer.toneMapping = renderSettings.mode === 'material' || renderSettings.mode === 'clay' ? source.toneMapping : T.NoToneMapping;
       renderer.toneMappingExposure = source.toneMappingExposure;
@@ -57,7 +97,20 @@ export function createDisplayPreview(options: {
           },allHelpers);}finally{if(cameraHelper)cameraHelper.visible=helperVisible!;}
         }
       };
-      if(renderSettings.cameras)cameraDisplay.render(scene,camera,renderSettings,context.subjects??[],size.x,size.y,drawScene);
+      if(renderSettings.cameras){
+        const drawWorld=()=>cameraDisplay.render(scene,camera,renderSettings,context.subjects??[],size.x,size.y,drawScene,context.followTarget);
+        // The source camera keeps its interpolated pose after SDK restoration,
+        // but subject roots do not. Resample both at that frame's alpha, retaining
+        // full bodies rather than first-person clipping or gameplay camera fade.
+        if(options.withPresentation){
+          // Renderer/helper failures stay local; let the SDK restore successfully
+          // before reporting them, rather than stopping its gameplay clock.
+          let failure:{error:unknown}|undefined;
+          options.withPresentation(()=>{try{drawWorld();}catch(error){failure={error};}},interpolationAlpha);
+          if(failure)throw failure.error;
+        }
+        else drawWorld();
+      }
       else drawScene(camera);
     } catch (error) {
       cameraDisplay.setEnabled(false);monitor.setEnabled(false);failed = true; if (renderer) renderer.domElement.hidden = true;
@@ -69,16 +122,16 @@ export function createDisplayPreview(options: {
     if (renderedBy === renderer) return;
     previous.apply(scene, args);
     if (renderedBy === source && renderedCamera === camera && source.getRenderTarget() === null) {
-      monitor.copyFrame();
+      drawMonitor();
       // Picture overlays stay aligned with the source's display sample. The world
-      // observer waits for SDK restoration so first-person clipping and subject
-      // fading never leak into its committed subjects. The source camera retains
+      // observer waits for SDK restoration, then resamples with full bodies so
+      // first-person clipping and subject fading never leak. The source camera retains
       // its actual display pose, which also identifies the displayed probe sample.
       if(!resolveDisplaySettings(settings).cameras||!options.onRender)draw();
     }
   };
   scene.onAfterRender = afterRender;
-  const releaseRender=options.onRender?.(()=>{if(resolveDisplaySettings(settings).cameras)draw();});
+  const releaseRender=options.onRender?.(alpha=>{interpolationAlpha=alpha;if(resolveDisplaySettings(settings).cameras)draw();});
   function setSettings(next:DisplaySettings){
     settings=structuredClone(next);failed=false;cameraDisplay.setEnabled(resolveDisplaySettings(settings).cameras);
     monitor.setEnabled(resolveDisplaySettings(settings).cameras);

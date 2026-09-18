@@ -7,7 +7,7 @@ export function dockTargets(v:VehicleState,input:Input,dt:number,q:EnvironmentQu
  if(v.motion.family!=='space')throw Error('MOTION_PHYSICS_OWNER_MISMATCH');
  const s=v.motion,d=s.docking;
  if(!d)return;
- const manual=[input.forward,input.steer,input.lift,input.pitch,input.roll,input.strafe].some(n=>Math.abs(n)>.01)||input.boost;
+ const manual=[input.forward,input.steer,input.lift,input.pitch,input.roll,input.strafe].some(n=>Math.abs(n)>.01)||input.slow;
  if(manual||(d.status==='approaching'&&!s.body.riderMounted)){s.docking=null;return;}
  if(d.status==='docked')return;
  const port=v.spec.spaceFlight!.dockingPorts!.find(p=>p.id===d.portId)!;

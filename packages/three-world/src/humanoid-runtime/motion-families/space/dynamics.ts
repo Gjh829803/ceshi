@@ -23,7 +23,7 @@ export function stepBodyVehicle(v:VehicleState,input:Input,dt:number,_time:numbe
   body.wakeUp();
   const mass=c.massKilograms;
   // 未乘坐时只保留惯性/引力，不把主项目的驻车输入当太空刹车。
-  const commanded=state.riderMounted||[input.forward,input.steer,input.lift,input.pitch,input.roll,input.strafe].some(n=>n!==0)||input.boost;
+  const commanded=state.riderMounted||[input.forward,input.steer,input.lift,input.pitch,input.roll,input.strafe].some(n=>n!==0)||input.slow;
   const actuation=commanded?spaceForces(v,input,c,mass,targets):{force:new Vector3(),torque:new Vector3()};
   state.mass=mass;
   body.setAdditionalMassProperties(state.mass,new Vector3(...e.offset),spaceInertia(v,c,state.mass),new Quaternion(),true);

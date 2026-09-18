@@ -7,7 +7,7 @@ import {resolve} from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createWorld, type ThreeWorld} from './world';
 import {setObjectColor} from './object-color';
-import {createWorld as createEngine, WorldEngine} from './engine';
+import {WorldEngine} from './engine';
 import type {AssetDefinition} from './engine-contracts';
 import type {AssetInstance} from './contracts';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
@@ -60,7 +60,7 @@ function meshOf(instance: AssetInstance): THREE.SkinnedMesh {
 describe('disposal ownership and ordering baseline', () => {
   it('stops frames and input before callbacks, isolates callback errors, and leaves a borrowed renderer usable', async () => {
     const frames = frameClock(), borrowed = renderer();
-    const engine = await createEngine({navigation: false, renderer: borrowed as unknown as THREE.WebGLRenderer});
+    const engine = await WorldEngine.create({navigation: false, renderer: borrowed as unknown as THREE.WebGLRenderer});
     const order: string[] = [];
     const cameraDispose = engine.cameraController.dispose.bind(engine.cameraController);
     const physicsDispose = engine.physics.dispose.bind(engine.physics);
@@ -83,7 +83,7 @@ describe('disposal ownership and ordering baseline', () => {
   });
 
   it('releases an engine-created renderer once, after physics', async () => {
-    const engine = await createEngine({navigation: false, canvas: {} as HTMLCanvasElement});
+    const engine = await WorldEngine.create({navigation: false, canvas: {} as HTMLCanvasElement});
     const order: string[] = [];
     const physicsDispose = engine.physics.dispose.bind(engine.physics);
     vi.spyOn(engine.physics, 'dispose').mockImplementation(() => {order.push('physics'); physicsDispose();});
@@ -226,7 +226,7 @@ describe('disposal failure recovery', () => {
   });
 
   it('finishes entity bookkeeping after an owned renderer throws and never retries the renderer', async () => {
-    const engine = await createEngine({navigation: false, canvas: {} as HTMLCanvasElement});
+    const engine = await WorldEngine.create({navigation: false, canvas: {} as HTMLCanvasElement});
     engine.addEntity({id: 'marker', object: new THREE.Group()});
     const fault = new Error('RENDERER_CLEANUP_FAILURE');
     const dispose = vi.mocked(engine.renderer!.dispose).mockImplementation(() => {throw fault;});
@@ -294,7 +294,7 @@ describe('failed construction ownership',()=>{
     const physics=vi.spyOn(ThreePhysics.prototype,'dispose').mockImplementation(function(this:ThreePhysics){order.push('physics');physicsDispose.call(this);throw Error('PHYSICS_CLEANUP_FAILED');});
     vi.mocked(THREE.WebGLRenderer).mockImplementation(function(){throw original;});
     vi.spyOn(console,'warn').mockImplementation(()=>{});
-    await expect(createEngine({canvas:{} as HTMLCanvasElement})).rejects.toBe(original);
+    await expect(WorldEngine.create({canvas:{} as HTMLCanvasElement})).rejects.toBe(original);
     expect(order).toEqual(['navigation','physics']);expect(navigation).toHaveBeenCalledOnce();expect(physics).toHaveBeenCalledOnce();
   });
   it('keeps a catalog preparation error when engine rollback also fails',async()=>{

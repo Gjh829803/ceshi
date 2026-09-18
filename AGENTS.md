@@ -15,6 +15,9 @@ explicitly by the corresponding Host.
 - [Workspace guide](docs/workspace-packages.md): all packages and dependency boundaries.
 - [Production workflow](docs/three-sdk-data-production.md): operational entry points.
 
+For Playground incident triage, recording replay or debugging handoffs, use
+[playground-debugging](.agents/skills/playground-debugging/SKILL.md).
+
 Before adding or updating assets or capabilities for Agent use, read the
 [integration maintenance rules](docs/asset-production-integration.md#接入维护约束)
 and follow that document's cross-package integration workflow.

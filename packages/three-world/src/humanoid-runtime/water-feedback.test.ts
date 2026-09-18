@@ -4,8 +4,96 @@ import { createWorld } from '../world';
 import type { EnvironmentDefinition } from './environment/types';
 import type { VehicleSpec } from './config';
 import { emptyInput } from './simulation';
+import {createKeyBindings,readControls} from './input';
 
 const forward = { humanoid: { ...emptyInput(), forward: 1 } };
+const lift = (value:number) => ({humanoid:{...emptyInput(),lift:value}});
+const deepPool = ():EnvironmentDefinition => pool({
+  playerSpawn:[0,-1.4,0],
+  boxes:[{id:'bottom',position:[0,-6.2,0],size:[60,.4,60]}],
+  water:[{id:'pool',min:[-10,-6,-10],max:[10,0,10],surface:0}],
+});
+
+it('uses held and rebound native keys for signed swim lift without repeating the jump edge',()=>{
+  expect(readControls(new Set(['KeyC']),false,false,{})).toMatchObject({lift:-1,slow:false});
+  for(const key of ['ControlLeft','ControlRight'])expect(readControls(new Set([key]),false,false,{})).toMatchObject({lift:0,slow:true});
+  expect(readControls(new Set(['Space']),false,false,{})).toMatchObject({lift:1,jump:false});
+  expect(readControls(new Set(['Space','KeyC']),false,false,{}).lift).toBe(0);
+  const bindings=createKeyBindings({jump:['KeyU'],crouch:['KeyJ']});
+  expect(readControls(new Set(['KeyJ']),false,false,{},bindings).lift).toBe(-1);
+  expect(readControls(new Set(),false,false,{},bindings).lift).toBe(0);
+});
+
+it('dives through native input, retains depth on release, and ascends back to surface buoyancy',async()=>{
+  const world=await fixture(deepPool());
+  try{
+    world.step({},90);
+    const surfaceY=world.getEntityState('player').positionWorldMetersXYZ[1];
+    expect(surfaceY).toBeCloseTo(-1.15,1);
+    world.step(lift(-1),90);
+    const submergedY=world.getEntityState('player').positionWorldMetersXYZ[1];
+    expect(submergedY).toBeLessThan(surfaceY-1.5);
+    expect(world.snapshot().humanoid!.water).toMatchObject({swimming:true,contact:{swimmingMode:'underwater'}});
+    world.step({},30);
+    const heldY=world.getEntityState('player').positionWorldMetersXYZ[1];
+    world.step({},120);
+    expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(heldY,3);
+    world.step(lift(1),180);world.step({},60);
+    expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(surfaceY,2);
+    expect(world.snapshot().humanoid!.water).toMatchObject({swimming:true,contact:{swimmingMode:'surface'}});
+  }finally{world.dispose();}
+});
+
+it('keeps descent above the colliding pool floor and clears underwater control on reset',async()=>{
+  const world=await fixture(deepPool());
+  try{
+    world.step(lift(-1),300);
+    const bottom=world.getEntityState('player').positionWorldMetersXYZ[1];
+    expect(bottom).toBeGreaterThanOrEqual(-6);
+    expect(bottom).toBeLessThan(-5.8);
+    const before=world.snapshot().humanoid!.water;
+    expect(before).toMatchObject({swimming:true,contact:{swimmingMode:'underwater'}});
+    expect(world.snapshot().humanoid!.water).toEqual(before);
+    await world.reset();world.step({},90);
+    expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(-1.15,1);
+    expect(world.snapshot().humanoid!.water).toMatchObject({contact:{swimmingMode:'surface'}});
+    expect(before.contact).toMatchObject({swimmingMode:'underwater'});
+  }finally{world.dispose();}
+});
+
+it('keeps swimming underneath a submerged ceiling and cannot ascend through it',async()=>{
+  const map=deepPool();map.playerSpawn=[0,-4,0];
+  map.boxes=[...map.boxes,{id:'roof',position:[0,-.8,0],size:[8,.4,8]}];
+  const world=await fixture(map);
+  try{
+    world.step(lift(-1),20);world.step(lift(1),180);
+    const y=world.getEntityState('player').positionWorldMetersXYZ[1];
+    expect(y).toBeLessThanOrEqual(-2.68);
+    expect(y).toBeGreaterThan(-2.85);
+    expect(world.snapshot().humanoid!.water).toMatchObject({swimming:true,contact:{swimmingMode:'underwater'}});
+    expect(world.snapshot().humanoid!.water.contact!.depthMeters).toBeCloseTo(6,4);
+    world.step({},90);
+    expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(y,3);
+  }finally{world.dispose();}
+});
+
+it('returns from a dive to the surface and walks up collision-backed pool stairs',async()=>{
+  const map=deepPool();map.playerSpawn=[0,-1.4,-4];
+  map.boxes=[...map.boxes,{id:'deck',position:[0,-.25,11.5],size:[8,.5,10]},...Array.from({length:20},(_,i)=>{
+    const top=-4.75+i*.25;
+    return {id:`stair-${i}`,position:[0,(top-6)/2,-2+i*.44] as const,size:[8,top+6,.44] as const};
+  })];
+  const world=await fixture(map);
+  try{
+    world.step(lift(-1),80);world.step(lift(1),120);
+    world.step({...forward,humanoid:{...forward.humanoid,lift:1}},420);
+    const position=world.getEntityState('player').positionWorldMetersXYZ;
+    expect(position[2]).toBeGreaterThan(5.5);
+    expect(position[1]).toBeGreaterThan(-.25);
+    expect(world.snapshot().humanoid!.water.swimming).toBe(false);
+    expect(world.snapshot().humanoid!.water.contact?.swimmingMode??null).toBeNull();
+  }finally{world.dispose();}
+});
 function pool(overrides: Partial<EnvironmentDefinition> = {}): EnvironmentDefinition {
   return { id: 'water-feedback', name: 'Water feedback', description: '',
     bounds: { min: [-40, -10, -40], max: [40, 20, 40] },

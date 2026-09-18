@@ -2,11 +2,18 @@ import {describe,expect,it} from 'vitest';
 import {buildWaterFeedback,summarizeWaterFeedback} from '../../src/tools/water-feedback';
 import {playtestSubmissionReadiness} from '../../src/tools/tools';
 
-const contact={volumeId:'pool',surfaceHeightMeters:0,depthMeters:2,submersionRatio:.6,feetBelowSurfaceMeters:1.1,
+const contact={swimmingMode:'surface',volumeId:'pool',surfaceHeightMeters:0,depthMeters:2,submersionRatio:.6,feetBelowSurfaceMeters:1.1,
  requiredDepthMeters:1.28,requiredFeetBelowSurfaceMeters:.95,depthCheckPassed:true,immersionCheckPassed:true,
  wasSwimmingAtSample:false,entrySpeedMetersPerSecond:1,entrySerial:1};
 const water={declaredVolumeCount:1,controllerActive:true,swimming:true,contact};
 describe('advisory water feedback',()=>{
+ it('reports native underwater mode and records surface transitions without rerunning physics',()=>{
+  const submerged={...water,contact:{...contact,swimmingMode:'underwater'}};
+  expect(buildWaterFeedback(submerged).code).toBe('SWIMMING_UNDERWATER');
+  expect(summarizeWaterFeedback([{water},{water:submerged},{water:submerged},{water}]).events.map(e=>e.code))
+   .toEqual(['SWIMMING','SWIMMING_UNDERWATER','SWIMMING']);
+  expect(buildWaterFeedback({...water,contact:{...contact,swimmingMode:'flying'}}).code).toBe('WATER_DIAGNOSTICS_UNAVAILABLE');
+ });
  it('reports measured swimming without changing or retaining mutable input',()=>{
   const input=structuredClone(water),result=buildWaterFeedback(input);
   expect(result.code).toBe('SWIMMING');expect(result.advisory).toBe(true);

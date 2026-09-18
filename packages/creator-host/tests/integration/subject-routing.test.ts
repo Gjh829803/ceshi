@@ -34,11 +34,11 @@ it.each([0,1])('switches the standalone subject and replays the Episode default 
  const initial=await service.inspect();expect(initial.observation.snapshot.camera.viewKind).toBe('first-person');
  const page=(service as unknown as {session:{page:Page}}).session.page;
  await page.evaluate(()=>((window as any).__subjectTestWorld).start());
- await page.keyboard.down('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='third-person');
- await page.keyboard.down('t');expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind)).toBe('third-person');await page.keyboard.up('t');
- await page.keyboard.press('t');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='first-person');
+ await page.keyboard.down('v');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='third-person');
+ await page.keyboard.down('v');expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind)).toBe('third-person');await page.keyboard.up('v');
+ await page.keyboard.press('v');await page.waitForFunction(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind==='first-person');
  await page.evaluate(()=>{const input=document.createElement('input');input.id='view-focus';document.body.append(input);input.focus();});
- await page.keyboard.press('t');expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind)).toBe('first-person');
+ await page.keyboard.press('v');expect(await page.evaluate(()=>window.__WORLDKIT_EVAL__!.snapshot!().camera.viewKind)).toBe('first-person');
  await page.evaluate(()=>document.getElementById('view-focus')!.remove());
  const captured=await page.evaluate(async()=>{
   const host=window.__THREE_CREATOR_HOST__!,observer=window.__WORLDKIT_EVAL__!,world=(window as unknown as {__subjectTestWorld:import('@worldkit/three').ThreeWorld}).__subjectTestWorld;

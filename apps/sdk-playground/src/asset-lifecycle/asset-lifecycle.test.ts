@@ -1,6 +1,7 @@
 import {afterAll,afterEach,beforeAll,beforeEach,expect,it} from 'vitest';
 import {createServer,type ViteDevServer} from 'vite';
 import {launchChromiumWithSystemFallback} from '@worldkit/browser-capture/browser';
+import {humanoid} from '@worldkit/three';
 import type {Browser,Page} from 'playwright';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -196,7 +197,7 @@ it.each([{type:'canoe',key:'w'},{type:'plane',key:'Shift'},{type:'horse',key:'w'
  await expect.poll(async()=>page.locator('#message').textContent(),{timeout:20000}).toContain('已定位');
  if(type.startsWith('dragon-')){await expect.poll(async()=>(await native()).world.entities.find(e=>e.id==='player')!.motion?.isGrounded).toBe(true);await page.locator('#summon').click();await expect.poll(async()=>page.locator('#message').textContent()).toContain('召唤已开始');await expect.poll(async()=>page.locator('#dragon-state').textContent(),{timeout:70000}).toContain('飞龙已落稳');await page.locator('#locate').click();await expect.poll(async()=>page.locator('#message').textContent()).toContain('已定位');}
  await page.locator('#enter').click();await expect.poll(async()=>page.locator('#message').textContent()).toContain('已执行');
- if(type.startsWith('dragon-')){await expect.poll(async()=>(await native()).riding,{timeout:15000}).toEqual({vehicleId:(await native()).selectedId,transitioning:false});await page.locator('#viewport canvas').click();await page.keyboard.press('Space');}
+ if(type.startsWith('dragon-')){await expect.poll(async()=>(await native()).riding,{timeout:15000}).toEqual({vehicleId:(await native()).selectedId,transitioning:false});await page.locator('#viewport canvas').click();await page.keyboard.press(humanoid.DEFAULT_KEY_BINDINGS.ascend[0]!);}
  const state=await native(),id=state.selectedId,before=state.world.entities.find(e=>e.id===id)!.positionWorldMetersXYZ;
  await page.locator('#viewport canvas').click();await page.keyboard.down(key);
  try{await expect.poll(async()=>{const p=(await native()).world.entities.find(e=>e.id===id)!.positionWorldMetersXYZ;return Math.hypot(...p.map((v,i)=>v-before[i]!));},{timeout:10000}).toBeGreaterThan(.5);}finally{await page.keyboard.up(key);}

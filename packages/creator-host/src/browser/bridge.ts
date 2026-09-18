@@ -3,6 +3,8 @@ import type { WorldCommand, WorldObservation } from '@worldkit/three';
 import {captureObjectViews, captureTargets, withCapturePresentation} from './capture.js';
 import {CharacterContinuityMonitor} from './character-continuity.js';
 import {inspectViewport} from './viewport-diagnostics.js';
+import {inspectWorldSurfaceOverlaps,type SurfaceOverlapQuery} from './surface-overlap-inspection.js';
+import {captureSurfaceOverlap} from './surface-overlap-highlight.js';
 export {targetTriviewBasis} from './capture.js';
 
 declare global {
@@ -12,12 +14,13 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
-export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles' | 'camera' | 'viewport';
+export type InspectionSection = 'snapshot' | 'description' | 'hierarchy' | 'diagnostics' | 'vehicles' | 'camera' | 'viewport' | 'surface-overlaps';
 export interface InspectionQuery {
   query?: string;
   entityIds?: string[];
   vehicleDetail?: 'summary' | 'wheels';
-  /** Omit for standard sections; vehicles and camera are opt-in. */
+  surfaceOverlaps?:SurfaceOverlapQuery;
+  /** Omit for standard sections; vehicles, camera and surface-overlaps are opt-in. */
   sections?: InspectionSection[];
 }
 function observation(): WorldObservation {
@@ -121,9 +124,16 @@ function createBridge() {
     viewport() { const world = observation(); return inspectViewport(world.renderer, world.camera); },
     inspect(query?: InspectionQuery) {
       const world = observation();
-      const {sections, vehicleDetail, ...selection} = query ?? {};
+      const {sections, vehicleDetail, surfaceOverlaps:overlapOptions, ...selection} = query ?? {};
       const includes = (section: InspectionSection) => !sections || sections.includes(section);
       const snapshot = world.snapshot?.() ?? null;
+      const surfaceOverlaps=sections?.includes('surface-overlaps')?inspectWorldSurfaceOverlaps(world,snapshot,selection,overlapOptions):undefined;
+      const firstOverlap=surfaceOverlaps?.findings[0];
+      const surfaceOverlapHighlight=overlapOptions?.highlight&&surfaceOverlaps?(()=>{
+        if(!firstOverlap)return {status:'unavailable' as const,reason:'no-finding',diagnostic:true as const};
+        try{return {status:'captured' as const,...captureSurfaceOverlap(world,firstOverlap)};}
+        catch{return {status:'unavailable' as const,reason:'capture-failed',diagnostic:true as const,findingId:firstOverlap.id};}
+      })():undefined;
       const hierarchy = () => {
         world.scene.updateMatrixWorld(true);
         const objects: ReturnType<typeof describe>[] = [];
@@ -145,6 +155,7 @@ function createBridge() {
           simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null,
         },
         commandsSupported: typeof world.execute === 'function',
+        ...(surfaceOverlaps?{surfaceOverlaps,...(surfaceOverlapHighlight?{surfaceOverlapHighlight}:{})}:{}),
         ...(includes('hierarchy') ? hierarchy() : {}),
         ...(includes('snapshot') ? {snapshot, characterContinuity: characterContinuity.read(world, snapshot)} : {}),
         ...(includes('description') ? {description: world.capabilities?.(selection) ?? null} : {}),

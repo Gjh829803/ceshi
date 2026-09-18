@@ -4,6 +4,7 @@ import { ThreePhysics } from './physics.js';
 import { createWorld } from './world.js';
 import type { WorldEngine } from './engine.js';
 import type { WorldObservation } from './contracts.js';
+import {emptyInput} from './humanoid-runtime/simulation';
 
 const root = () => new THREE.Group();
 function plane(y = 0) { const mesh = new THREE.Mesh(new THREE.PlaneGeometry(40, 40, 10, 10), new THREE.MeshBasicMaterial()); mesh.rotation.x = -Math.PI / 2; mesh.position.y = y; return mesh; }
@@ -287,6 +288,26 @@ it('preserves the complete authored relative pose when ordinary start placement 
  }finally{world.dispose();}
 });
 
+
+it('records native diving and depth hold through the same Episode input and snapshot owner',async()=>{
+ const {world,port}=await fixture(false,false,false,false,true,false,true);
+ try{
+  await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+  port.advance({},90);
+  const surface=world.getEntityState('player').positionWorldMetersXYZ[1];
+  expect((await port.execute({type:'humanoid.set-input',input:{...emptyInput(),lift:-1}})).status).toBe('applied');
+  port.advance({},30);
+  expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeLessThan(surface-.4);
+  expect(port.frame('image/png').snapshot.humanoid!.water.contact!.swimmingMode).toBe('underwater');
+  await port.execute({type:'humanoid.set-input',input:null});port.advance({},30);
+  const held=world.getEntityState('player').positionWorldMetersXYZ[1],before=world.snapshot();
+  port.frame('image/png');port.frame('image/png');expect(world.snapshot()).toEqual(before);
+  port.advance({},60);expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(held,3);
+  port.advance({humanoid:{...emptyInput(),lift:1}},90);port.advance({},60);
+  expect(world.snapshot().humanoid!.water.contact!.swimmingMode).toBe('surface');
+  expect(world.getEntityState('player').positionWorldMetersXYZ[1]).toBeCloseTo(surface,2);
+ }finally{port.release();world.dispose();}
+});
 
 it('keeps Episode explicit views pinned and opts into the same native swimming selection',async()=>{
  const {world,port}=await fixture(false,false,false,false,true,false,true);

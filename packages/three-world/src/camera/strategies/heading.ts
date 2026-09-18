@@ -9,7 +9,18 @@ export function cameraSubjectHeading(subject:CameraSubjectFacts, history?:Camera
     return subject.continuousHeadingSeedRadians;
   const delta = new Quaternion(...rotation).multiply(new Quaternion(...history.headingQuaternionWorldXYZW).invert());
   if(delta.w < 0) delta.set(-delta.x,-delta.y,-delta.z,-delta.w);
-  return history.headingRadians + (Math.hypot(delta.y,delta.w)>1e-8 ? 2*Math.atan2(delta.y,delta.w) : 0);
+  const predicted=history.headingRadians + (Math.hypot(delta.y,delta.w)>1e-8 ? 2*Math.atan2(delta.y,delta.w) : 0);
+  // A world-Y twist is only a continuity predictor, not an absolute heading:
+  // integrating it around a closed pitch/bank path accumulates false yaw.
+  const orientation=new Quaternion(...rotation);
+  const forward=new Vector3(0,0,-1).applyQuaternion(orientation);
+  if(Math.hypot(forward.x,forward.z)<1e-4)return predicted;
+  const measured=Math.atan2(-forward.x,-forward.z);
+  // Keep the continuous branch while inverted (a pitch loop must not force a
+  // half-turn at its pole). Once upright, the real forward is authoritative,
+  // including recovery by a half-roll after an inverted half-loop.
+  const period=new Vector3(0,1,0).applyQuaternion(orientation).y>=0?2*Math.PI:Math.PI;
+  return measured+Math.round((predicted-measured)/period)*period;
 }
 
 /** Independent world horizon, full subject orientation, or its continuous heading. */

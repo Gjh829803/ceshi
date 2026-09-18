@@ -20,6 +20,9 @@ imports or external model fetches are needed.
 
 ## Local diagnostics and reproduction
 
+For taking over another person's incident without conversation history, use the
+[Playground debugging skill](../../.agents/skills/playground-debugging/SKILL.md).
+
 The shared camera inspection, debug controls and input recording implementation
 comes from `@worldkit/three/debug`. Playground supplies scene lifecycle, UI and the
 loopback artifact service; these adapters are not imported by the SDK.
@@ -59,18 +62,29 @@ These controls do not restore arbitrary physics checkpoints.
 
 ### Incident capture and input replay
 
-In development, click **记录现场** in the upper-right viewport toolbar or press **F8**
-(or call `set_debug_history({enabled:true})`)
-before reproducing. This opts into the latest renderer-frame copy and the last
-600 consumed input ticks. When an issue appears, click **保存现场**, press **F8** again,
-or call `capture_debug_incident` to save that cached
-image, its displayed camera pose, fixed snapshot, camera diagnostics and source
-identity, and pauses by default. Capture never re-renders or advances the world;
-without a cached frame it reports unavailable. During a reproducible recording,
-saving an incident freezes the input prefix ending at that exact captured frame.
-The result reports whether that frame has a replayable trace; recent-input history
-alone has no reset anchor. Images keep aspect ratio with a
-maximum edge of 1600 pixels; enabling history adds frame-copy/observation overhead.
+In development, click **开始录制** in the upper-right viewport toolbar or press
+**F8**. The confirmation explains that recording resets scene vehicles/objects
+and preserves the current on-foot position and follow-camera setup. Exit the
+vehicle first; after confirming, gameplay resumes automatically, and you can
+mount it again to reproduce the issue. Press **F8** or **停止并保存** to pause and
+save. The toolbar shows elapsed simulation time, the two-minute maximum (or 20,000 events), and whether
+the saved trace is replayable. At the limit, click **保存录制** to save; failed saves
+retain the stopped trace for retry. **放弃并重录** offers a confirmed restart if a
+trace cannot be saved, for example after source changes. Avoid resetting, switching scenes or refreshing
+until saved. Replayability indicates a trace with a reset anchor; actual replay
+still checks for divergence.
+
+The separate **启用快照 / 保存快照** control does not reset the scene. Enabling it
+(or calling `set_debug_history({enabled:true})`) opts into the latest renderer-frame
+copy and the last 600 consumed input ticks. Continue gameplay until the issue
+appears, then save (or call `capture_debug_incident`). This saves the cached image,
+its displayed camera pose, fixed snapshot, camera diagnostics and source identity,
+and pauses by default. Capture never re-renders or advances the world; without a
+cached frame it reports unavailable. During a reproducible recording, an incident
+freezes the input prefix ending at that exact captured frame. Recent-input history
+alone has no reset anchor and cannot replace full recording. Images keep aspect
+ratio with a maximum edge of 1600 pixels; enabling history adds frame-copy and
+observation overhead.
 
 `start_debug_recording({maximumSeconds:30})` explicitly resets the scene baseline,
 then reapplies the current on-foot position, movement profile and follow-camera
@@ -100,7 +114,16 @@ input reproduction, not a claim that any live physical state can be restored.
 The **性能** panel stays open during gameplay until its button is toggled again.
 It floats above the bottom status bar, or above the shortcut window while that
 window is expanded. Its open/detail state is persisted with the other panels.
-Its FPS and interval graph measure browser animation callback cadence, not screen
+It contains the application's only FPS readout, **游戏实时 FPS**, labeled
+**主画面渲染计数 · 自动检测**. Sampling starts with the game and continues while
+the panel is closed, with no measurement button, on-canvas marker or native helper.
+FPS averages recent main-view render intervals over approximately one second and
+updates every 0.5 seconds, in both development and static production builds.
+Its FPS and render interval graph sample completed SDK realtime render cycles using
+`onFrameTiming` and a monotonic wall clock, excluding manual renders and captures.
+The graph publishes every 0.5 seconds and retains five seconds.
+Pausing clears the reading; missing realtime frames expire it after
+1–1.5 seconds. This measures game render submissions, not GPU completion or screen
 presentation. Expand **详细信息** for actual drawing-buffer resolution, renderer
 pixel ratio, mean CPU update and main-view render-submission times over each
 0.5-second reporting window, and the latest valid asynchronous GPU timer result.
@@ -123,30 +146,39 @@ The camera checkbox switches the main viewport to an external world camera and
 frames the current subject with the actual gameplay camera model. Frustum length
 does not push the world view farther away.
 Left-drag orbits, right/middle-drag pans and the wheel zooms this world view.
-Clicking the viewport retains keyboard gameplay: movement, mounting and T camera
+Clicking the viewport retains keyboard gameplay: movement, mounting and V camera
 switching still go to the SDK. Simulation continues; there is no observer toolbar
 or separate input mode. The world view shows full characters even when the gameplay
 camera uses first person. Unchecking restores the current gameplay view without
 resetting its mode or the controlled actor. Camera guides follow real camera poses
-and projection; the distance setting only caps their visual length. A live camera
+and projection. **取景范围显示距离 / 米** caps both the guide length and the live
+monitor's far clipping plane; objects beyond it disappear from the monitor without
+changing gameplay FOV or clipping. The monitor title shows its effective range.
+A live camera
 preview appears at the lower right of the world viewport; **放大 / 还原** changes
 its size without pausing or changing control. **定位摄像机** immediately reframes
 the current camera and subject, resetting the orbit centre. **跟随位置** (off by
-default) translates the world view with the gameplay camera while retaining the
-manually chosen viewing angle and distance. It does not inherit camera rotation.
-World-view pan and zoom respond faster; their scale remains distance-dependent. It copies the original gameplay
-frame at full source resolution, preserves its aspect ratio, follows T camera
+default) translates the world view with the displayed vehicle root when mounted,
+or the character root on foot, while retaining the manually chosen viewing angle
+and distance. Gameplay camera orbit, turn recentering, view switching and collision
+pull-in do not translate or rotate the observer.
+The observer resamples subjects through the SDK at the source frame's interpolation
+alpha, including mouse-only redraws. Vehicle bodies and the followed camera therefore
+share one display time; source-only body clipping/fading is omitted from this view.
+World-view pan and zoom respond faster; their scale remains distance-dependent.
+The monitor renders a camera copy during the same SDK display sample, preserves
+the gameplay aspect ratio and first-person visibility, follows V camera
 changes and disappears when camera display is disabled. It is UI only and is
 absent from model-input captures.
 With camera display and all-type colliders enabled together, cyan spheres and
 lines show the recorded camera sweep radius/path, orange marks blocked sweeps,
 and red marks returned surface contacts/normals. These are actual query samples,
 not added physics bodies. The world observer draws after the SDK restores its
-display transaction and shows committed subjects without gameplay body clipping
+display transaction and resamples displayed subjects without gameplay body clipping
 or fade. The camera model follows the actual displayed camera pose and uses the
 presentation sample from `world.inspectCamera().collisionQueries`, falling back
-to fixed only before a presentation sample exists. The live monitor copies the actual interpolated gameplay frame;
-the observer's committed subject poses may differ by up to one fixed tick.
+to fixed only before a presentation sample exists. The live monitor uses the actual interpolated gameplay pose;
+the observer uses that same interpolation alpha for its subjects.
 Each sample carries its source,
 simulation tick and sequence; first-person views without sweeps show no stale probe. Source captures
 omit these guides, and turning inspection off stops query recording.
@@ -173,7 +205,9 @@ isolation while retaining picture and helper choices. The optional diagnostic re
 shares the current scene and draws after source frames or world-view mouse changes.
 It never steps the SDK or writes the gameplay camera. Its canvas sits
 below Presentation UI/output. Original source pixels, model-input captures and
-streams remain unchanged. Temporary visibility, materials and lighting are restored
+streams remain unchanged. The range monitor reuses the diagnostic renderer at its
+window's pixel size before the world-observer pass; it adds no renderer or clock.
+Temporary visibility, materials and lighting are restored
 even on errors. Diagnostic passes omit source shadows to avoid rewriting shadow
 resources owned by the source renderer. Returning to defaults shows the original
 renderer directly. Map changes release cached diagnostic materials; disposal
@@ -225,6 +259,8 @@ camera/render status stays in the header and contextual hints in the slim footer
 Form focus releases driving input. Modal panels pause through the SDK callback;
 closing restores focus and the previous paused state. Configurations still need
 explicit export to `profiles.json` for delivery; local storage is a debug override.
+Aircraft profile scope and automatic active-instance binding are documented in
+[`docs/aircraft-flight-profile-scope.md`](../../docs/aircraft-flight-profile-scope.md).
 
 All editor popups use shadcn/Radix Dialog, Popover and Tooltip; transient
 notifications use the shadcn Sonner Toaster. No native dialogs or HTML title
@@ -273,7 +309,7 @@ The scene selector opens aircraft, flying-creature and space training in the sam
 SDK session. Deep links use `/#/scenes/flying-creature-training` and
 `/#/scenes/space-training`. The dragon scene starts with the supplied humanoid on
 the ground: **H** summons the existing dragon, **F** boards after it lands,
-**Space** takes off, and **F** requests landing before dismounting on the ground.
+**Q** takes off/ascends, **E** descends, and **F** requests landing before dismounting on the ground.
 The dragon selector uses the native D01–D11 model and animation variants. A variant
 change reloads the same scene route and preserves the unmounted person's position
 when the SDK validates it. `?dragon=D02#/scenes/flying-creature-training` selects a
@@ -288,7 +324,44 @@ pnpm verify:dragon-training -- http://127.0.0.1:5178
 ```
 
 This browser case exercises ground start, real summon/boarding/takeoff inputs,
-flight and flame, native variant loading, map/reset/reload and history navigation.
+flight, deferred keyboard flame input, native variant loading, map/reset/reload and history navigation.
+
+### Current input hints
+
+The local HUD reads current SDK bindings and the actual vehicle/aircraft subtype.
+On foot, hold Ctrl + WASD to walk slowly without crouching; release Ctrl to restore
+ordinary movement or held Shift sprint. Ctrl takes precedence when both are held.
+C still toggles crouching and Shift + C still requests a slide; mounted Ctrl is unchanged.
+Fixed-wing and pusher aircraft show W/S throttle, Q/E pitch down/up, Space ground brake, Ctrl throttle
+reduction/ground braking, and Shift as an additional throttle assist; Z/X is unused.
+Rotorcraft use Z/X bank-induced lateral movement, with W/S travel speed and Q/E
+vertical demand; Space/C is unused. Soaring aircraft use W/S airspeed trim without Q/E or Z/X,
+retaining Space special actions and C airbrake. Glider W starts finite tow and paraglider W starts
+run-up; Shift is not required. Wingsuit ground HUD instead shows WASD walking, optional Shift
+running, Ctrl slow walking, Space jump and F unequip. A real platform departure switches to flight;
+ordinary jumps do not, and a held jump cannot open the canopy without a new press. Landing
+automatically drops the suit flat; F can equip it again on level ground without returning to the platform.
+Balloons use Q/E heat/vent, not Space/C.
+Dragon, submarine and spacecraft use Space/C pitch up/down and Q/E vertical movement; Z evades on dragons, Z/X rolls
+spacecraft, and submarine Z/X is unused. Tank/hovercraft use Z/X turret/strafe.
+All arrows only observe, without the old additional ±10° limit; document pitch
+bounds and collision safety remain. Vertical observation speed is unchanged.
+Third-person vehicle recentering begins 1.5 seconds after observation input stops,
+including at rest/hover. Continuous aircraft heading corrects against actual forward
+direction so combined pitch/bank manoeuvres cannot accumulate a permanent yaw offset.
+Existing horizon/roll settings and person/first-person/shoulder calibration remain unchanged. Camera
+cycling uses the configured key (V by default); Backspace is a mounted, long-held
+scene reset, not vehicle-only recovery. The 1–6 shortcut is still local debug
+travel, not an equipment-slot implementation.
+
+Vehicle changes and rebinding refresh both control strips. Current flight prompts
+do not reuse legacy asset hint strings; offline catalog hints and mobile virtual
+buttons are outside this HUD update. Verify all 14 affected vehicle presets,
+actual keyboard routing, camera range and HUD with:
+
+```sh
+pnpm exec tsx apps/sdk-playground/scripts/input-hud-smoke.ts http://127.0.0.1:5178
+```
 
 ## Local camera configuration files
 

@@ -156,7 +156,7 @@ export class ActionSystem {
   });}
   hint(bindings:KeyBindings=DEFAULT_KEY_BINDINGS){
     if(this.seated)return `${bindingLabel('interact',bindings)} / ${bindingLabel('jump',bindings)} 起身`;
-    if(this.carrying)return `搬运中 · 靠近台面按 ${bindingLabel('putDown',bindings)} 放下`;
+    if(this.carrying)return `搬运中 · 靠近台面按 ${bindingLabel('interact',bindings)} 放下`;
     const target=this.nearest();return target?`${bindingLabel('interact',bindings)} ${target.definition.kind==='seat'?'坐下':'拾取'} · ${target.definition.label}`:null;
   }
   nearest(){return [...this.interactions.targets.values()].filter(t=>(t.state==='available'||t.state==='placed')&&new Vector3(...t.definition.approach).distanceTo(this.sim.position)<.95)
@@ -257,7 +257,7 @@ export class ActionSystem {
     const invoke=(action:SkillId,targetId?:string,slotId?:string)=>this.request({action,targetId,slotId,requestId:`key-${++this.sequence}`});
     if(commands.roll)invoke('roll');if(commands.slide)invoke('slide');if(commands.putDown)invoke('putDown');
     if(commands.interact||jump&&this.seated){
-      if(this.seated)invoke('standUp');else{const target=this.nearest();if(target)invoke(target.definition.kind==='seat'?'sit':'pickup',target.entityId,target.slotId);else this.sim.lastResult='附近没有可交互目标';}
+      if(this.seated)invoke('standUp');else if(this.carrying)invoke('putDown');else{const target=this.nearest();if(target)invoke(target.definition.kind==='seat'?'sit':'pickup',target.entityId,target.slotId);else this.sim.lastResult='附近没有可交互目标';}
     }
     const active=this.active;
     if(!active){
@@ -317,7 +317,7 @@ export class ActionSystem {
         if(!this.interactions.commit(active.target!,this,active.requestId,'held')){this.finish('cancelled','TARGET_UNAVAILABLE','目标预约已失效');return true;}
         active.attached=true;this.heldTarget=active.target!;
       }
-      if(active.elapsed>=DURATIONS.pickup!)this.finish('completed','ATTACHED','已拾取：WASD 搬运，靠近台面 G 放下');
+      if(active.elapsed>=DURATIONS.pickup!)this.finish('completed','ATTACHED','已拾取：WASD 搬运，靠近台面 F 放下');
     }else if(active.id==='sit'){
       this.move(new Vector3());this.pose={key:'sit-enter',time:Math.min(active.elapsed,1.3),phase:'sit-enter'};sim.state='sit';
       if(active.elapsed>=1.3){const blocked=this.seatContactReason(active.target!,sim.position,Math.atan2(sim.facing.x,sim.facing.z));if(blocked){this.invalidateTarget(active.target!,blocked[0]);return true;}if(!this.interactions.commit(active.target!,this,active.requestId,'occupied')){this.finish('cancelled','TARGET_UNAVAILABLE','座位预约已失效');return true;}this.seatedTarget=active.target!;if(active.cancelRequested){active.phase='cancel-exit';active.elapsed=0;}else this.finish('completed','SEATED','已坐下：按 E 或空格起身');}

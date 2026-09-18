@@ -9,7 +9,6 @@ import {PhysicsColliderBindings} from '../../physics-collider-bindings';
 import type {BorrowedPhysicsWorld} from '../../physics-host';
 import {DYNAMIC_PROP_COLLISION_GROUPS,DEFAULT_CHARACTER_OPTIONS} from '../../config/physics';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CameraCollisionSolver } from '@worldkit/camera-collision';
 import { Box3,Euler,Quaternion,Vector3 } from 'three';
 import type { Vec3 } from '../../contracts';
 import { probeHumanoidCamera } from '../camera-queries';
@@ -203,9 +202,18 @@ export class EnvironmentQueries {
   }
   wheelSweep(origin:Vector3,rotation:Quaternion,direction:Vector3,radius:number,width:number,distance:number){
     this.assertLive();
-    const hit=this.world.castShape(origin,rotation,direction,new RAPIER.Cylinder(width/2,radius),0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
-    if(!hit)return null;
-    return {distance:hit.time_of_impact,normal:new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z),point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z),friction:hit.collider.friction()};
+    const wheel=new RAPIER.Cylinder(width/2,radius),rejected=new Set<number>();
+    // A side wall may overlap the tire before its downward sweep reaches ground.
+    // Reject it as suspension support, then keep looking; chassis collisions are
+    // unchanged. Each retry excludes a distinct collider from this query only.
+    const filter=(collider:RAPIER.Collider)=>!rejected.has(collider.handle)&&this.environmentFilter(collider);
+    for(;;){
+      const hit=this.world.castShape(origin,rotation,direction,wheel,0,distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,filter);
+      if(!hit)return null;
+      const normal=new Vector3(hit.normal1.x,hit.normal1.y,hit.normal1.z);
+      if(normal.dot(direction)<-.3)return {distance:hit.time_of_impact,normal,point:new Vector3(hit.witness1.x,hit.witness1.y,hit.witness1.z),friction:hit.collider.friction()};
+      rejected.add(hit.collider.handle);
+    }
   }
   raycast(origin:Vector3,direction:Vector3,distance:number){
     this.assertLive();const hit=this.world.castRayAndGetNormal(new RAPIER.Ray(origin,direction),distance,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,undefined,this.environmentFilter);
@@ -590,10 +598,6 @@ export class EnvironmentQueries {
     // Preserve the vehicle query's historical 0.002 of the swept segment margin.
     const length=Math.hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
     return {...hit,...(hit.colliderEntityId?{colliderEntityId:this.colliderId(Number(hit.colliderEntityId))}:{}),distanceMeters:Math.max(0,hit.distanceMeters-(hit.colliderEntityId?length*.002:0))};
-  }
-  cameraCast(from:Vector3,to:Vector3,radius=.25):Vector3 {
-    const solver=new CameraCollisionSolver((a,b,r)=>this.cameraProbe(a,b,r));
-    return new Vector3(...solver.project({target:from.toArray(),eye:to.toArray(),current:to.toArray(),radius,armClearance:0}).position);
   }
 }
 export const createQueries=(map:EnvironmentDefinition)=>new EnvironmentQueries(map);

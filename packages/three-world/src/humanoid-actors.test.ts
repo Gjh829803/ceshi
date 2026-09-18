@@ -701,7 +701,7 @@ it.each(['rover','plane','boat','submarine','horse','dragon','spacecraft'])('des
  expect(await world.execute({type:'entity.despawn',entityId:'holder'})).toMatchObject({status:'rejected',error:{code:'HUMANOID_USE_RUNTIME_COMMANDS'}});
  expect(await world.execute({type:'entity.set-active',entityId:id,isActive:false})).toMatchObject({status:'applied'});
  expect(await world.execute({type:'entity.destroy',entityId:'holder'})).toMatchObject({status:'applied'});
- expect(r.audit().entities.some(e=>e.id===id)).toBe(false);expect(r.simulation.preparedVehicleSpawns.has(id)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.vehicles).toHaveLength(0);
+ expect(r.audit().entities.some(e=>e.id===id)).toBe(false);expect(r.simulation.preparedVehicleSpawns.has(id)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.vehicles).toHaveLength(0);expect(r.exportProfile().vehicles?.[id]).toBeUndefined();expect(r.exportProfile().aircraftFlight?.[id]).toBeUndefined();
  expect([...r.environment.cameraFallbackBounds().keys()].some(key=>key===id)).toBe(false);world.step({},3);await world.reset();world.step({},3);expect(r.simulation.vehicles).toHaveLength(0);expect(world.snapshot().errors).toEqual([]);
 });
 

@@ -30,13 +30,25 @@ import { HUMANOID_BODY } from './humanoid/controller';
 import { type VehicleSpec } from './config';
 import { EnvironmentQueries,vehicleBody } from './environment/queries';
 import type { MapSpawn } from './environment/types';
+import { VehicleConditionTracker, type VehicleConditionObservation } from './vehicle-condition';
 export const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n));
 export const damp=(a:number,b:number,k:number,dt:number)=>a+(b-a)*(1-Math.exp(-k*dt));
 export const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(b-a),Math.cos(b-a));
 export interface HumanoidActionInput {summonDragon?:boolean;toggleCrouch?:boolean;roll?:boolean;slide?:boolean;interact?:boolean;putDown?:boolean;prone?:boolean;climb?:boolean;releaseClimb?:boolean;toggleSwimStyle?:boolean;cancel?:boolean}
-export interface Input { primary?:boolean;secondary?:boolean; forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;actions?:HumanoidActionInput }
+export interface Input { primary?:boolean;secondary?:boolean; forward:number; steer:number; lift:number; roll:number; pitch:number; strafe:number; boost:boolean; brake:boolean; jump:boolean; slow:boolean;releaseControl?:boolean;actions?:HumanoidActionInput }
 export const emptyInput=():Input=>({forward:0,steer:0,lift:0,roll:0,pitch:0,strafe:0,boost:false,brake:false,jump:false,slow:false});
 export interface VehicleState {motion:MotionFamilyState;spec:VehicleSpec & MovementSettings;position:Vector3;velocity:Vector3;rotation:Quaternion;yaw:number;pitch:number;roll:number;steering:number;throttle:number;grounded:boolean;launched:boolean;speed:number;submerged:boolean}
+
+function releasedVehicleInput(v:VehicleState):Input {
+  if(v.motion.aircraft){
+    const rotary=['helicopter','multirotor','tiltrotor'].includes(v.motion.aircraft.subtype);
+    // A zero collective input means "hold the current collective" for rotorcraft.
+    // Once the pilot leaves, explicitly release powered lift so the aircraft can
+    // settle under its own inertia and gravity instead of continuing to climb.
+    return {...emptyInput(),brake:true,slow:true,lift:rotary?-1:0,releaseControl:true};
+  }
+  return {...emptyInput(),brake:!v.motion.flyingCreature,slow:!!v.motion.flyingCreature};
+}
 
 export function resolveVehicleSpec(spec:VehicleSpec):VehicleSpec & MovementSettings {
  if(spec.aircraftSubtype!==undefined&&spec.mode!=='plane')throw Error('VEHICLE_AIRCRAFT_SUBTYPE_INVALID');
@@ -86,6 +98,7 @@ export class Simulation {
   noteVehicleRelocation(id:string):void{this.vehicleRelocations.set(id,this.vehicleRelocationOccurrence(id)+1);}
   vehicleRelocationOccurrence(id:string):number{return this.vehicleRelocations.get(id)??0;}
   readonly vehicles:VehicleState[];
+  private readonly vehicleConditions=new VehicleConditionTracker();
   characterControl=defaultMovementSettings('character',DEFAULT_CHARACTER_CONTROL_BASE);
   time=0;
   private readonly inactive=new Set<string>();
@@ -140,37 +153,50 @@ export class Simulation {
   removeVehicle(id:string):number {
     const index=this.vehicles.findIndex(v=>v.spec.id===id);if(index<0)return -1;
     if([...this.actors.values()].some(actor=>actor.vehicleIndex===index))throw Error('HUMANOID_MOUNT_ACTIVE');
-    this.environment.releaseVehicleRig(id);this.vehicles.splice(index,1);
+    this.environment.releaseVehicleRig(id);this.vehicleConditions.reset(this.vehicles[index]!);this.vehicles.splice(index,1);
     for(const actor of this.actors.values())if(actor.vehicleIndex>index)actor.vehicleIndex--;
     this.preparedVehicleSpawns.delete(id);this.vehicleRelocations.delete(id);this.inactive.delete(id);this.pausedSeconds.delete(id);this.environment.setEntitySuspended(id,false);this.syncActorBodies();return index;
   }
   dispose():void {
     disposeInOrder([
       ...[...this.actors.keys()].map(id=>()=>this.removeActor(id)),
+      ()=>this.vehicleConditions.clear(),
       ...this.vehicles.map(v=>()=>this.environment.releaseVehicleRig(v.spec.id)),
     ]);
   }
   available(v:VehicleState){return this.isActive(v.spec.id)&&this.supports(v);}
-  syncActorBodies(){this.environment.retainVehicleRigs(new Set(this.vehicles.filter(v=>(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v))&&this.supports(v)).map(v=>v.spec.id)));this.environment.syncActorBodies(this.vehicles.filter(v=>this.available(v)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));}
+  vehicleCondition(v:VehicleState):VehicleConditionObservation{return this.vehicleConditions.inspect(v,this.environment);}
+  resetVehicleCondition(v:VehicleState):void{this.vehicleConditions.reset(v);}
+  syncActorBodies(){
+    // Suspended vehicles retain their bodies for resume; walking wingsuits use the character body.
+    const vehicles=this.vehicles.filter(v=>this.supports(v)&&!v.motion.aircraft?.wearable?.groundLocomotion);
+    this.environment.retainVehicleRigs(new Set(vehicles.filter(v=>v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)).map(v=>v.spec.id)));
+    this.environment.syncActorBodies(vehicles.filter(v=>this.isActive(v.spec.id)).flatMap(v=>creatureBodies(v).map((part,n)=>({id:`${v.spec.id}:${n}`,actorId:v.spec.id,physical:!!(v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||hasUnoccupiedBody(v)),...part}))));
+  }
   summonDragon(id?:string,actorId:string=this.controlledActor.id):boolean{return this.actor(actorId).summonDragon(id);}
   reset():void{
     const selected=this.controlledActorId===undefined?undefined:this.actors.get(this.controlledActorId),index=selected?.vehicleIndex??-1;
     for(const actor of this.actors.values()){const p=actor.controller.checkpoint;actor.resetAt(new Vector3(p.x,p.y,p.z),p.yaw+Math.PI);}
     this.environment.resetContents();
+    this.vehicleConditions.clear();
     if(selected&&index>=0)selected.visit(index);else if(selected)selected.message='人物与交互物已复位';
   }
 
   step(dt:number,inputs:ReadonlyMap<string,ActorInput>=new Map()):void{
-    const carry=this.environment.stepLifts(dt,[...this.actors.values()].filter(actor=>this.isActive(actor.id)&&!actor.vehicle).map(actor=>({id:actor.id,feet:actor.controller.position,grounded:actor.controller.grounded})));
+    const carry=this.environment.stepLifts(dt,[...this.actors.values()].filter(actor=>this.isActive(actor.id)&&(!actor.vehicle||actor.wingsuitGroundControl)).map(actor=>({id:actor.id,feet:actor.controller.position,grounded:actor.controller.grounded})));
     for(const [id,delta] of carry)this.actor(id).controller.carryPlatform(delta);
     const incidents=new Map([...this.actors].map(([id,actor])=>[id,actor.recoveryTrigger()]));
     this.environment.interactions.syncPhysicalState();this.time+=dt;for(const id of this.inactive)this.pausedSeconds.set(id,(this.pausedSeconds.get(id)??0)+dt);for(const actor of this.actors.values()){if(!this.isActive(actor.id))continue;if(inputs.get(actor.id)?.input.actions?.summonDragon)actor.summonDragon();actor.beginStep(dt);}this.syncActorBodies();
     const drivers=new Map<VehicleState,HumanoidActor>();for(const actor of this.actors.values())if(actor.vehicle)drivers.set(actor.vehicle,actor);
-    for(const v of this.vehicles){if(!this.isActive(v.spec.id))continue;const driver=drivers.get(v);this.stepVehicle(v,driver,inputs.get(driver?.id??'')?.input??emptyInput(),dt);}
+    const vehicleInputs=new Map<VehicleState,Input>();
+    for(const v of this.vehicles){if(!this.isActive(v.spec.id))continue;const driver=drivers.get(v),input=inputs.get(driver?.id??'')?.input??emptyInput();vehicleInputs.set(v,input);this.stepVehicle(v,driver,input,dt);}
     for(const [id,actor] of this.actors){if(!this.isActive(id))continue;const controls=inputs.get(id);actor.step(controls?.input??emptyInput(),controls?.yaw??0);}
-    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();for(const actor of this.actors.values()){if(!this.isActive(actor.id))continue;actor.finishStep();actor.recoverBoundary(incidents.get(actor.id)??actor.recoveryTrigger());}
+    this.syncActorBodies();this.environment.stepPhysics(dt);this.syncActorBodies();
+    for(const v of this.vehicles)if(this.isActive(v.spec.id))this.vehicleConditions.update(v,vehicleInputs.get(v)??emptyInput(),dt,this.environment);
+    for(const actor of this.actors.values()){if(!this.isActive(actor.id))continue;actor.finishStep();actor.recoverBoundary(incidents.get(actor.id)??actor.recoveryTrigger());}
   }
   private stepVehicle(v:VehicleState,driver:HumanoidActor|undefined,i:Input,dt:number):void{
+    if(driver?.wingsuitGroundControl)return;
     const vehicle=driver?.vehicle;
     const unoccupied=familyUnoccupiedPhysics(v.spec);
     if(!driver&&unoccupied&&this.available(v)){stepUnoccupiedBody(v,unoccupied,this.environment);return;}
@@ -185,7 +211,7 @@ export class Simulation {
       if (v === vehicle && driver?.transition === 0)
         stepVehicle(v, i, dt, this.entityTime(v.spec.id), this.environment);
       else if ((v.motion.wheelPhysics||v.motion.body||v.motion.aircraft||v.motion.flyingCreature)&&this.available(v))
-        stepVehicle(v,{...emptyInput(),brake:!v.motion.flyingCreature,slow:!!v.motion.flyingCreature},dt,this.entityTime(v.spec.id),this.environment);
+        stepVehicle(v,releasedVehicleInput(v),dt,this.entityTime(v.spec.id),this.environment);
       else if (
         (v !== vehicle || v.spec.mode === 'paddled_boat' || !!v.motion.jetski || !!v.motion.submersible) &&
         (!!v.motion.submersible || !!v.motion.jetski || v.spec.mode === "paddled_boat" || v.spec.mode === "mount" || v.spec.mode === "sled" || v.spec.mode === "ski") &&

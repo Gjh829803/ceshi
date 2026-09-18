@@ -105,7 +105,7 @@ export class WorldEngine {
   private readonly locomotionAnimations = new Map<string, LocomotionAnimation>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
   private readonly inputRouter: WorldInputRouter;
-  private readonly renders = new Set<() => void>();
+  private readonly renders = new Set<(interpolationAlpha:number) => void>();
   private readonly frameTimings = new Set<(sample:WorldFrameTiming)=>void>();
   private controlled: string | undefined;
   private tick = 0;
@@ -269,7 +269,7 @@ export class WorldEngine {
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
   clearInput():void{try{this.inputRouter.clear();}finally{this.clearPendingInput();}}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
-  private updateKeyboardOwner():void{this.keyboard.setHumanoidMode(this.controlledHumanoid?()=>this.controlledHumanoid?.simulation.controlledActor.vehicle?.spec.mode:undefined);}
+  private updateKeyboardOwner():void{this.keyboard.setHumanoidContext(this.controlledHumanoid?()=>{const actor=this.controlledHumanoid?.simulation.controlledActor,v=actor?.vehicle;return v?{mode:v.spec.mode,aircraftSubtype:v.spec.aircraftSubtype,instanceId:v.spec.id,groundLocomotion:actor.wingsuitGroundControl,canopyDeployed:(v.motion.aircraft?.canopy??0)>0}:undefined;}:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
   onUpdate(callback: (context: { world: WorldEngine; deltaSeconds: number; simulationTick: number }) => void): () => void { this.alive(); this.updates.add(callback); return () => { this.updates.delete(callback); }; }
   onReset(callback: () => void): () => void { this.alive(); this.resets.add(callback); return () => { this.resets.delete(callback); }; }
@@ -297,7 +297,7 @@ export class WorldEngine {
   }
   bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
   focusInput():void {this.inputRouter.focus();}
-  onRender(callback:()=>void):()=>void {this.alive();this.renders.add(callback);return()=>{this.renders.delete(callback);};}
+  onRender(callback:(interpolationAlpha:number)=>void):()=>void {this.alive();this.renders.add(callback);return()=>{this.renders.delete(callback);};}
   onFrameTiming(callback:(sample:WorldFrameTiming)=>void):()=>void {this.alive();this.frameTimings.add(callback);return()=>{this.frameTimings.delete(callback);};}
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
   onAfterUpdate(callback:()=>void):()=>void {this.alive();this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
@@ -772,6 +772,7 @@ export class WorldEngine {
         this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};
       }
       this.accumulatorSeconds -= this.fixedTimeStepSeconds; this.fixedStep(sampled);
+      if(input===undefined&&this.keyboard.advanceReset(this.fixedTimeStepSeconds))break;
     }
   }
   /** Seal the opening and compile its materials without starting or stepping the clock. */
@@ -812,10 +813,11 @@ export class WorldEngine {
       this.renderer?.render(this.scene,this.camera);
     },alpha);
     if(sample)this.emitRuntimeSample(sample);
-    try { for(const callback of this.renders)callback(); }
+    try { for(const callback of this.renders)callback(alpha); }
     catch(error){this.recordError('WORLD_FRAME_FAILED',error);this.stop();throw error;}
   }
   withPresentation<T>(callback:()=>T,alpha=1,view:'world'|'object'='world'):T {
+    if(!Number.isFinite(alpha)||alpha<0||alpha>1)throw new Error('WORLD_PRESENTATION_ALPHA_INVALID');
     this.alive();if(this.fixedTransaction||this.displayTransaction)throw new Error('WORLD_TRANSACTION_REENTRY');this.displayTransaction=true;
     let restore:(()=>void)|undefined;
     let restoreSubjectVisibility:(()=>void)|undefined;
@@ -935,4 +937,5 @@ export class WorldEngine {
     if(failed)throw firstError;
   }
 }
-export async function createWorld(options: WorldOptions = {}): Promise<WorldEngine> { return WorldEngine.create(options); }
+/** Internal engine factory. Public authors use `createWorld` from `world.ts`. */
+export async function createWorldEngine(options: WorldOptions = {}): Promise<WorldEngine> { return WorldEngine.create(options); }

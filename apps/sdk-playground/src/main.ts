@@ -1,3 +1,4 @@
+import {createRecordingControls} from './diagnostics/recording-controls';
 import {CameraEditorState} from "./camera/editor-state";
 import {inspectDebugCamera,createDebugRecording,createDebugControls} from '@worldkit/three/debug';
 import {createDebugFileClient} from './diagnostics/file-client';
@@ -22,7 +23,7 @@ import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
-import { controlsFor } from "@worldkit/preset-content/ui/shortcuts";
+import { controlsFor, controlSummaryFor, systemControlsFor } from "@worldkit/preset-content/ui/shortcuts";
 import { renderAssetThumbnails } from "@worldkit/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
 import { SPECS as PRESET_SPECS, vehicleControlFamily } from "@worldkit/preset-content/config";
@@ -56,6 +57,13 @@ import {
   type AssetEntry,
 } from "@worldkit/preset-content/platform/catalog";
 import { mountAssetLibrary } from "./library";
+import {
+  profileForTarget,
+  profileScopeKey,
+  restoreProjectProfiles,
+  scopeProfile,
+  type ProfileTarget,
+} from "./profile-scopes";
 import { mountWorkbench } from "./workbench";
 import {
   defaultRegion,
@@ -264,26 +272,56 @@ const sdkPresentation = sdk.createPresentation({
   container: canvas.parentElement!,
 });
 shell.attachViewport(sdkPresentation);
-const profiles = new Map<string, AssetProfile>();
-const exportedProfiles = new Map<string, string>();
-for (const id of ["person", ...SPECS.map((s) => s.id)]) {
-  const project = (
-    effectiveProfiles as { profiles: AssetProfile[] }
-  ).profiles.find((p) => p.assetId === id);
-  let profile = project ?? getDefaultProfile(id)!;
-  exportedProfiles.set(id, JSON.stringify(profile));
-  // Local overrides are visibly marked and never silently included in a delivery.
-  if (
-    new URLSearchParams(location.search).get("debugProfiles") === "1" &&
-    (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-  ) {
-    try {
-      profile = loadAssetProfile(localStorage, id) ?? profile;
-    } catch {}
-  }
-  profiles.set(id, profile);
-  applyControlProfile(runtime, profile);
+const profileDefaults = ["person", ...SPECS.map((s) => s.id)].map((id) => getDefaultProfile(id)!);
+const projectProfiles = (effectiveProfiles as { profiles: unknown[] }).profiles.map((profile) => parseAssetProfile(profile));
+const profiles = restoreProjectProfiles(profileDefaults, projectProfiles);
+const exportedProfiles = new Map([...profiles].map(([scope, profile]) => [scope, JSON.stringify(profile)]));
+const localProfileOverridesEnabled =
+  new URLSearchParams(location.search).get("debugProfiles") === "1" &&
+  (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+function profileAssetIdForIdentity(identity: { instanceId: string; assetId: string }): string {
+  const candidates = [
+    identity.assetId,
+    identity.assetId.replace(/^(?:vehicle|creature)\./, ""),
+    ...(identity.assetId.startsWith("creature.dragon") ? ["dragon"] : []),
+    identity.instanceId,
+  ];
+  return candidates.find((id) => getDefaultProfile(id) !== undefined) ?? identity.instanceId;
 }
+function profileTargetForVehicle(): ProfileTarget {
+  const vehicle = sim.controlledActor.vehicle;
+  if (!vehicle) return { assetId: "person" };
+  const identity = runtime.snapshot().vehicles.find(({ instanceId }) => instanceId === vehicle.spec.id);
+  return {
+    assetId: profileAssetIdForIdentity(identity ?? { instanceId: vehicle.spec.id, assetId: vehicle.spec.id }),
+    instanceId: vehicle.spec.id,
+  };
+}
+function profileForScopedTarget(target: ProfileTarget): AssetProfile {
+  const profile = profileForTarget(profiles, target);
+  if (!profile) throw new Error(`profile not found: ${target.assetId}`);
+  return profile;
+}
+function setScopedProfile(profile: AssetProfile): void {
+  profiles.set(profileScopeKey(profile), profile);
+}
+if (localProfileOverridesEnabled) for (const id of ["person", ...SPECS.map((s) => s.id)]) {
+  // Local overrides are visibly marked and never silently included in a delivery.
+  try {
+    const saved = loadAssetProfile(localStorage, id);
+    if (saved) setScopedProfile(saved);
+  } catch {}
+}
+// Restore every present instance override, not only the vehicle currently selected
+// by the inspector. Asset defaults above remain the fallback for untouched instances.
+if (localProfileOverridesEnabled) for (const identity of runtime.snapshot().vehicles) {
+  const target: ProfileTarget = { assetId: profileAssetIdForIdentity(identity), instanceId: identity.instanceId };
+  try {
+    const saved = loadAssetProfile(localStorage, target.assetId, target.instanceId);
+    if (saved) setScopedProfile(saved);
+  } catch {/* A stale developer override must not block Playground startup. */}
+}
+for (const profile of profiles.values()) applyControlProfile(runtime, profile);
 const pageLifetime = new AbortController();
 const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();
@@ -340,10 +378,15 @@ function refreshDisplayMetadata(force=false) {
 const displayPreview = createDisplayPreview({
   collisionDiagnostics:()=>selectDisplayCameraProbeSample(sdk.inspectCamera().collisionQueries,'presentation'),
   onRender:callback=>sdk.onRender(callback),
+  withPresentation:(draw,interpolationAlpha)=>sdk.withPresentation(draw,{interpolationAlpha,view:'object'}),
   inputSurface:sdkPresentation.inputSurface,
   focusGameplay:()=>{if(ready&&!paused&&!panelOpen)sdkPresentation.focus();},
   scene, camera, source: renderer, mount: canvas.parentElement!,
-  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[SPECS.findIndex(spec=>spec.id===sim.controlledActor.vehicle?.spec.id)]!.root]:[controlledCharacter().root]}),
+  context: () => {
+    const person=controlledCharacter().root;
+    const vehicle=runtime.options.vehicles.find(instance=>instance.instanceId===sim.controlledActor.vehicle?.spec.id)?.object;
+    return {...displayCatalog.context,subjects:vehicle?[person,vehicle]:[person],followTarget:vehicle??person};
+  },
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
     targets:displaySettings.anchors&&displaySettings.helperOnly==='none'?readDisplayTargets():[],colliderId:displayColliderId,
     colliderDistance:(handle,centers)=>{const c=sim.controlledActor.controller?.world.getCollider(handle);if(!c)return Infinity;
@@ -379,13 +422,26 @@ shell.on('displayChange', value => setDisplaySettings(JSON.parse(value!) as Disp
 shell.on('displayOpen', value => {clearInput();if(value==='true')refreshDisplayMetadata(true);});
 shell.on('displayPin', value => {shell.update({displayPinned:value==='true'});clearInput();});
 const fpsMeter = new FrameRateMeter();
-let pacingFrame = 0;
-function resetFPS(state: string) {
+let lastRenderedAt = 0;
+function resetFramePacing() {
+  lastRenderedAt = 0;
   fpsMeter.reset();
   shell.update({ pacing: null });
-  setText("fpsReadout", `渲染回调 —/s · ${state}`);
-  shell.flag("fpsSlow", false);
 }
+// The SDK emits this only after a successful realtime update/render cycle.
+// Manual renders/captures and unrelated browser callbacks are not game frames.
+const releaseFramePacing = sdk.onFrameTiming(() => {
+  if (paused || panelOpen || document.hidden || renderer.getContext().isContextLost()) return;
+  lastRenderedAt = performance.now();
+  const reading = fpsMeter.sample(lastRenderedAt);
+  if (reading) {
+    shell.update({ pacing: reading });
+  }
+});
+// Expire a frozen reading even when the SDK stops emitting frames after an error.
+const pacingExpiry = setInterval(() => {
+  if (lastRenderedAt && performance.now() - lastRenderedAt > 1000) resetFramePacing();
+}, 500);
 function input() {
   return panelOpen
     ? emptyInput()
@@ -395,7 +451,7 @@ function input() {
         jumpPressed,
         humanCommands,
         sdk.getKeyBindings(),
-        sim.controlledActor.vehicle?.spec.mode,
+        sim.controlledActor.vehicle?{mode:sim.controlledActor.vehicle.spec.mode,aircraftSubtype:sim.controlledActor.vehicle.spec.aircraftSubtype,groundLocomotion:sim.controlledActor.wingsuitGroundControl,canopyDeployed:(sim.controlledActor.vehicle.motion.aircraft?.canopy??0)>0}:undefined,
       );
 }
 function toast(text: string) {
@@ -459,20 +515,18 @@ function visit(n: number) {
   runtime.prepare(spec.id, spawn);
   syncTeleport();
 }
-function pause(value = !paused, showOverlay = true) {
+function pause(value = !paused) {
   if (value) sdk.stop();
   else if (ready && !preparingRender && !panelOpen) void sdk.start();
-  updatePausePresentation(value, showOverlay);
+  updatePausePresentation(value);
 }
-function updatePausePresentation(value: boolean, showOverlay: boolean) {
+function updatePausePresentation(value: boolean) {
   paused = value;
   visuals.forEach(resetVehicleWheels);
-  resetFPS(value ? "已暂停" : ready ? "采样中" : "加载中");
+  resetFramePacing();
   clearInput();
-  shell.flag("paused", value && showOverlay);
-  shell.text("pauseButton", value ? "继续" : "暂停");
-  const recordingState=shell.get().debugRecording;
-  if(!value&&recordingState?.saved)shell.update({debugRecording:{...recordingState,saved:false}});
+  shell.flag("paused", value);
+  shell.text("pauseButton", value ? "继续游玩" : "暂停世界");
   if (!value && !panelOpen) sdkPresentation.focus();
 }
 function setCameraView(viewId: string) {
@@ -530,7 +584,6 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (paused || !ready) return;
-    if(e.code==='KeyR'&&!e.ctrlKey&&sim.controlledActor.vehicle&&!Object.values(sdk.getKeyBindings()).some(codes=>codes.includes('KeyR'))){e.preventDefault();recoverVehicle();return;}
     if (
       /^Digit[1-6]$/.test(e.code) &&
       !Object.values(sdk.getKeyBindings()).some((codes) =>
@@ -591,7 +644,7 @@ const onPanelChange = (open: boolean) => {
   if (open) sdk.stop();
   else if (ready && !preparingRender && !paused) void sdk.start();
   clearInput();
-  resetFPS(open ? "面板暂停" : paused ? "已暂停" : "采样中");
+  resetFramePacing();
 };
 const onModalPanelChange=(id:typeof modalPanelIds[number],open:boolean)=>{
   if(open)for(const other of modalPanelIds)if(other!==id)panelState.update(other,{open:false});
@@ -647,9 +700,9 @@ function prepareSelection(mapId: string, regionId: string, assetId: string) {
     sdk.setCameraView(sdk.inspectCamera().document!.defaultViewId);
     sim.controlledActor.message='按 H 召唤飞龙 · 等待落稳后到鞍侧按 F 上龙';
   }else prepareCourse(sim, map, regionId, assetId);
-  pause(false, false);
+  pause(false);
   syncTeleport();
-  resetFPS("采样中");
+  resetFramePacing();
 }
 function humanoidState() {
   const h = sim.controlledActor.controller;
@@ -691,7 +744,7 @@ function prepareHumanTrial(mapId: string, trial: CharacterTrial, demo = false) {
     throw new Error(sim.controlledActor.message);
   sim.controlledActor.message = `${trial.name} · ${trial.description}`;
   humanDemo = null;
-  pause(false, false);
+  pause(false);
   syncTeleport();
   if (demo) {
     humanDemo = new HumanoidDemo(trial, sim.controlledActor.controller?.events.length ?? 0);
@@ -738,22 +791,30 @@ const workbench = mountWorkbench(document.body, {
   onOpenChange: open=>onModalPanelChange('workbench',open),
   onPrepare: prepareSelection,
   getMapId: () => session.map.id,
-  getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
-  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
+  getAssetId: () => profileTargetForVehicle().assetId,
+  getProfile: (id) => {
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    return readEditableProfile(runtime, profileForScopedTarget(target));
+  },
   applyProfile: (value) => {
-    const profile = parseAssetProfile(value);
+    const target = profileTargetForVehicle();
+    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
     applyControlProfile(runtime, profile);
-    profiles.set(profile.assetId, profile);
+    setScopedProfile(profile);
 
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
-    saveAssetProfile(localStorage, profile);
+    const target = profileTargetForVehicle();
+    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
   },
   resetProfile: (id) => {
-    clearAssetProfile(localStorage, id);
-    const profile = getDefaultProfile(id)!;
-    profiles.set(id, profile);
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    clearAssetProfile(localStorage, target.assetId, target.instanceId);
+    const profile = scopeProfile(getDefaultProfile(target.assetId)!, target);
+    setScopedProfile(profile);
     applyControlProfile(runtime, profile);
 
     if (paused) renderPausedState();
@@ -782,10 +843,10 @@ const workbench = mountWorkbench(document.body, {
         ? "程序姿势占位 · 待替换专用骑乘动作"
         : undefined,
   }),
-  togglePause: () => pause(!paused, false),
+  togglePause: () => pause(!paused),
   step: () => {
     if (!ready) return;
-    pause(true, false);
+    pause(true);
     clearInput();
     sdk.step({humanoid:emptyInput()}, 1);
     renderPausedState(FIXED_STEP);
@@ -806,7 +867,7 @@ function movementState() {
 const inspector = mountInspector(el("inspectorHost"), {
   panels:panelState,
   cameraEditor:getCameraEditor,
-  getAssetId: () => sim.controlledActor.vehicle?.spec.id ?? "person",
+  getAssetId: () => profileTargetForVehicle().assetId,
   getSubject: () => ({
     name: sim.controlledActor.vehicle?.spec.name ?? "主体人物",
     subtitle: sim.controlledActor.vehicle
@@ -815,25 +876,36 @@ const inspector = mountInspector(el("inspectorHost"), {
     state: paused ? "已暂停" : sim.controlledActor.vehicle ? "驾驶中" : controlledCharacter().clipLabel,
     color: sim.controlledActor.vehicle?.spec.color ?? "#b4d7c2",
   }),
-  getProfile: (id) => readEditableProfile(runtime, profiles.get(id)!),
+  getProfile: (id) => {
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    return readEditableProfile(runtime, profileForScopedTarget(target));
+  },
   applyProfile: (value, tab) => {
-    const profile = parseAssetProfile(value);
+    const target = profileTargetForVehicle();
+    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
     if (tab === "movement") applyControlProfile(runtime, profile);
 
-    profiles.set(profile.assetId, profile);
+    setScopedProfile(profile);
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
-    saveAssetProfile(localStorage, profile);
+    const target = profileTargetForVehicle();
+    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
   },
   resetProfile: (id, tab) => {
-    const profile = structuredClone(profiles.get(id)!),
-      defaults = getDefaultProfile(id)!;
+    const target = profileTargetForVehicle();
+    if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
+    clearAssetProfile(localStorage, target.assetId, target.instanceId);
+    const profile = scopeProfile(structuredClone(profileForScopedTarget(target)), target),
+      defaults = getDefaultProfile(target.assetId)!;
     if (tab === "movement") {
       profile.control = defaults.control;
+      if (defaults.aircraftFlight) profile.aircraftFlight = defaults.aircraftFlight;
+      else delete profile.aircraftFlight;
       applyControlProfile(runtime, profile);
     }
-    profiles.set(id, profile);
+    setScopedProfile(profile);
     if (paused) renderPausedState();
   },
   getMovement: movementState,
@@ -851,7 +923,15 @@ const inspector = mountInspector(el("inspectorHost"), {
     };
   },
   setCameraView,
-  getTelemetry: () => ({
+  getTelemetry: () => {
+    const aircraft = (() => {
+      const id = sim.controlledActor.vehicle?.spec.id;
+      return id === undefined
+        ? undefined
+        : sdk.inspectVehicles({ entityIds: [id] }).vehicles[0]?.aircraft ?? undefined;
+    })();
+    return {
+    ...(aircraft ? { aircraft } : {}),
     speedKmh:
       (sim.controlledActor.vehicle?.velocity.length() ?? sim.controlledActor.player.velocity.length()) * 3.6,
     altitudeMeters: (sim.controlledActor.vehicle?.position ?? sim.controlledActor.player.position).y,
@@ -860,7 +940,8 @@ const inspector = mountInspector(el("inspectorHost"), {
     headingDegrees:
       (((((sim.controlledActor.vehicle?.yaw ?? sim.controlledActor.player.yaw) * 180) / Math.PI) % 360) + 360) %
       360,
-  }),
+    };
+  },
   onInteract: clearInput,
 });
 function toggleInspector(show: boolean) {
@@ -996,7 +1077,8 @@ window.addEventListener(
     visuals.forEach((v) => v.creature?.dispose());
     library.dispose();
     workbench.dispose();
-    cancelAnimationFrame(pacingFrame);
+    releaseFramePacing();
+    clearInterval(pacingExpiry);
     performanceDetails.dispose();
     session.dispose();
     shell.dispose();
@@ -1156,15 +1238,21 @@ function updateUI(force = false) {
   const v = sim.controlledActor.vehicle,
     p = sim.controlledActor.player,
     nearest = sim.controlledActor.nearest(),
+    recoveryTarget = v ?? (nearest >= 0 ? sim.vehicles[nearest] : undefined),
+    recoveryDynamics = recoveryTarget ? runtime.snapshot().vehicleDynamics.find(dynamics => dynamics.instanceId === recoveryTarget.spec.id) : undefined,
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
   spacePanel.update(v?humanoid.spaceTelemetry(v):null);
   const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
-  shell.update({recoverable:!!v&&['wheeled','motorcycle','unicycle','skateboard'].includes(v.spec.mode),drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
+  shell.update({recoverable:!!recoveryDynamics?.recoveryAvailable,drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
   const h = sim.controlledActor.controller,
+    bindings = sdk.getKeyBindings(),
+    key = (action: humanoid.ControlAction) => humanoid.bindingLabel(action, bindings),
+    summon = session.map.id===DRAGON_TRAINING.id ? sim.vehicles.find(vehicle=>vehicle.motion.flyingCreature)?.motion.flyingCreature?.summon : undefined,
     traversalPrompt = humanoidTraversalReady(h)
-      ? `WASD + Space · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
+      ? `${key('forward')} / ${key('left')} / ${key('backward')} / ${key('right')} + ${key('jump')} · 朝向障碍${h!.swimming ? "攀上岸边" : h!.probe!.kind === "vault" ? "翻越" : "攀上"}`
       : null;
-  const bindingSignature = JSON.stringify({keys:sdk.getKeyBindings(),cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
+  const controlSubject=v?{...v.spec,groundLocomotion:sim.controlledActor.wingsuitGroundControl}:undefined;
+  const bindingSignature = JSON.stringify({keys:bindings,groundLocomotion:controlSubject?.groundLocomotion,cameraCycle:sdk.inspectCamera().document?.input?.cycleViewIds??[]});
   if (lastActive !== sim.controlledActor.vehicleIndex || lastBindings !== bindingSignature) {
     lastBindings = bindingSignature;
     library.setActive(libraryAssetId(v?.spec.id ?? "person"));
@@ -1177,31 +1265,23 @@ function updateUI(force = false) {
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
-    const controls=controlsFor(vehicleControlFamily(v?.spec),sdk.getKeyBindings());
+    const controls=controlsFor(controlSubject,bindings);
     const actionLabels=new Set([humanoid.INPUT_BINDINGS.roll.label,humanoid.INPUT_BINDINGS.interact.label,humanoid.INPUT_BINDINGS.putDown.label]);
-    const vehicleLabels=new Set([humanoid.INPUT_BINDINGS.vehicle.label,humanoid.INPUT_BINDINGS.summonDragon.label]);
-    shell.update({controls,controlGroups:v ? [{title:"载具操作",rows:controls}] : [
+    const vehicleLabels=new Set([humanoid.INPUT_BINDINGS.summonDragon.label]);
+    shell.update({controls,controlGroups:v ? [{title:controlSubject?.groundLocomotion?"翼装步行":"载具操作",rows:controls}] : [
       {title:"移动与姿态",rows:controls.filter(([,label])=>!actionLabels.has(label)&&!vehicleLabels.has(label))},
       {title:"动作与交互",rows:controls.filter(([,label])=>actionLabels.has(label))},
       {title:"载具与坐骑",rows:controls.filter(([,label])=>vehicleLabels.has(label))},
     ]});
-    setText("shortcutSubject", v ? "载具操作" : "人物操作");
+    setText("shortcutSubject", controlSubject?.groundLocomotion?"翼装步行":v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
-      ...(sdk.inspectCamera().document?.input?.cycleViewIds?.length ? [["T", "切换视角"] as [string,string]] : []),
-      ["点击 / 拖动", "观察"],
-      ["滚轮", "镜头距离"],
-      ["Esc", "释放 / 暂停"],
-      ["1–6", "快速前往"],
-      ...(import.meta.env.DEV ? [["F8", "记录 / 保存现场"] as [string,string]] : []),
+      ...systemControlsFor(v?.spec, bindings, !!sdk.inspectCamera().document?.input?.cycleViewIds?.length),
+      ...(import.meta.env.DEV ? [["F8", "开始录制 / 停止并保存"] as [string,string]] : []),
     ];
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
     setText(
       "cameraNote",
-      v
-        ? v.spec.mode === "spacecraft"
-          ? "相机随飞行器上方向旋转。拖动鼠标自由观察。"
-          : "方向键或鼠标环绕；停止环绕后，行驶中按调试设置自动回正。"
-        : "方向键或鼠标拖动环绕，滚轮调整距离。WASD 移动方向随镜头变化。",
+      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察，${key('cameraUp')} / ${key('cameraDown')} 上下观察；方向键不控制载具姿态。鼠标拖动兼容，滚轮调整距离。`,
     );
   }
   setText(
@@ -1228,7 +1308,7 @@ function updateUI(force = false) {
             : v.spec.mode === "glider" && !v.launched
               ? "等待释放"
               : v.spec.mode === "plane"
-                ? v.motion.aircraft?.wearable?humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy):v.motion.aircraft?.subtype==='balloon'?`热气球 · 热量 ${Math.round(v.motion.aircraft.temperatureKelvin-273.15)}°C`:`${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · 油门 ${Math.round(v.throttle * 100)}%`
+                ? v.motion.aircraft?.wearable?humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy,bindings):v.motion.aircraft?.subtype==='balloon'?`热气球 · 热量 ${Math.round(v.motion.aircraft.temperatureKelvin-273.15)}°C`:`${v.motion.aircraft?.hardLanding?"重着陆":v.motion.aircraft?.stalled?"失速":v.grounded?"地面":"飞行"} · ${['helicopter','multirotor','tiltrotor'].includes(v.spec.aircraftSubtype??'')?'垂直需求':'油门'} ${Math.round(v.throttle * 100)}%`
                 : "驾驶中"
       : p.swimming
         ? "游泳"
@@ -1246,34 +1326,38 @@ function updateUI(force = false) {
   if (v)
     setHTML(
       "interaction",
-      v.motion.flyingCreature
-        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?'F 下龙 · Space 起飞':v.motion.flyingCreature.groundPhase==='airborne'?'F 着陆':'起降中 · F 取消着陆'}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
+      recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具 · 再按一次${v ? '离开' : '进入'}`
+        : v.motion.flyingCreature
+        ? `体力 ${Math.round(v.motion.flyingCreature.staminaRatio*100)}% · ${sim.controlledActor.dragonTransition?(sim.controlledActor.dragonTransition.entering?'正在上龙':'正在下龙'):v.motion.flyingCreature.groundPhase==='grounded'?`${key('interact')} 下龙 · ${key('ascend')} 起飞`:v.motion.flyingCreature.groundPhase==='airborne'?`${key('interact')} 着陆`:`起降中 · ${key('interact')} 取消着陆`}${v.motion.flyingCreature.groundFailure?' · '+v.motion.flyingCreature.groundFailure:''}`
         : v.motion.submersible && v.motion.submersible.depth > .4
-        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · <kbd>Space</kbd>上浮 · 回到水面后可开舱离艇`
+        ? `深度 ${v.motion.submersible.depth.toFixed(1)} m · ${key('ascend')} 上浮 · ${key('descend')} 下潜 · ${key('slow')} 减速 · 回到水面后可开舱离艇`
         : v.submerged && v.spec.mode !== "submarine"
         ? "载具涉水 · 使用页面复位按钮继续训练"
+        : v.motion.aircraft?.wearable
+        ? humanoid.wearableHint(v.motion.aircraft.wearable,v.motion.aircraft.canopy,bindings)
         : v.spec.mode === "glider" && !v.launched
-          ? "<kbd>Shift</kbd>从高台释放，开始滑翔"
-          : v.spec.mode === "plane" && v.spec.aircraftSubtype && v.spec.aircraftSubtype!=="fixed-wing" && v.spec.aircraftSubtype!=="pusher"
-            ? v.spec.hint
-          : v.spec.mode === "plane" && v.grounded
-            ? "<kbd>Shift</kbd>加油门，约 90 km/h 轻按 S 拉起 · Ctrl 收油并刹车 · T 驾驶舱"
-            : v.spec.mode === "plane" ? "W / S 俯仰 · A / D 协调转弯 · 松开回平 · Ctrl 收油 · T 切视角" : `<kbd>F</kbd>${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
+          ? `${key('forward')} 从高台释放，开始滑翔 · ${key('forward')} / ${key('backward')} 空速配平`
+          : v.spec.mode === "plane"
+            ? controlSummaryFor(controlSubject!, bindings)
+            : `${key('interact')} ${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
     );
   else
     setHTML(
       "interaction",
-      (session.map.id===DRAGON_TRAINING.id
-        ? `${humanoid.bindingLabel('summonDragon',sdk.getKeyBindings())} 召唤飞龙 · ${sim.vehicles.find(v=>v.motion.flyingCreature)?.motion.flyingCreature?.summon?.message??'飞龙会降落在附近，落稳后到鞍侧按 F 上龙'}`
-        : undefined) ?? h?.skills.hint(sdk.getKeyBindings()) ??
+      (recoveryDynamics?.recoveryAvailable
+        ? `${key('interact')} ${recoveryDynamics.condition === 'stuck' ? '脱困' : '回正'}载具`
+        : session.map.id===DRAGON_TRAINING.id
+        ? `${key('summonDragon')} 召唤飞龙 · ${summon?.phase==='arrived'?`飞龙已抵达 · 靠近鞍侧按 ${key('interact')} 上龙`:summon?.message??`飞龙会降落在附近，落稳后到鞍侧按 ${key('interact')} 上龙`}`
+        : undefined) ?? h?.skills.hint(bindings) ??
         (h?.surface.mode === "climbing"
-          ? "Space 尝试翻上 · C 松手"
+          ? `${key('jump')} 尝试翻上 · ${key('crouch')} 松手`
           : runtime.characterCapabilities().find((c) => c.id === "climb")
                 ?.eligible
-            ? "E 进入攀爬"
+            ? `${key('interact')} 进入攀爬`
             : null) ??
         (nearest >= 0
-          ? `<kbd>F</kbd>进入 ${sim.vehicles[nearest]!.spec.name}`
+          ? `${key('interact')} ${sim.vehicles[nearest]!.spec.aircraftSubtype==='wingsuit'?'穿戴':'进入'} ${sim.vehicles[nearest]!.spec.name}`
           : (traversalPrompt ?? "")),
     );
   if (!v) {
@@ -1282,7 +1366,7 @@ function updateUI(force = false) {
       "bottomHint",
       humanDemo
         ? `演示：${humanDemo.trial.name} · WASD 接管`
-        : (h?.skills.hint(sdk.getKeyBindings()) ??
+        : (h?.skills.hint(bindings) ??
             traversalPrompt ??
             h?.lastResult ??
             "打开人物动作面板选择测试"),
@@ -1290,9 +1374,7 @@ function updateUI(force = false) {
   } else
     setText(
       "bottomHint",
-      sdk.inspectCamera().resolved?.kind === 'first-person'
-        ? "点击画面锁定鼠标 · 自由观察不改变车辆方向 · Esc 释放 / 暂停"
-        : "点击 / 拖动观察 · 滚轮调距离 · 页面复位按钮返回起点 · Esc 暂停",
+      `${key('cameraLeft')} / ${key('cameraRight')} 左右观察 · ${key('cameraUp')} / ${key('cameraDown')} 上下观察 · 长按 ${key('reset')} 场景复位 · Esc 暂停`,
     );
   const pos = v?.position ?? p.position;
   let zone = session.map.regions[0]!,
@@ -1431,7 +1513,7 @@ sdk.onReset(() => {
 // Seal only the persistent Playground content. Scene-local NPCs are recreated on reset.
 sdk.step({}, 0);
 npcLab = createNpcPlayground(sdk, {
-  focus: () => { pause(false, false); sdkPresentation.focus(); },
+  focus: () => { pause(false); sdkPresentation.focus(); },
   beforeControl: () => { clearInput(); humanDemo = null; },
   changed: () => { lastActive = -99; refreshDisplayMetadata(); },
 });
@@ -1470,19 +1552,6 @@ try {
   throw error;
 }
 window.addEventListener("hashchange", restoreMapFromHash, pageEventOptions);
-// Read-only browser callback cadence; no simulation, animation or camera writes.
-const observePacing = (now: number) => {
-  if (!paused && !panelOpen) {
-    const reading = fpsMeter.sample(now);
-    if (reading) {
-      shell.update({ pacing: reading });
-      setText("fpsReadout", `渲染回调 ${reading.fps.toFixed(0)}/s`);
-      shell.flag("fpsSlow", reading.fps < 45);
-    }
-  }
-  pacingFrame = requestAnimationFrame(observePacing);
-};
-pacingFrame = requestAnimationFrame(observePacing);
 // 太空深链接只选择太空实例；进入仍使用主项目 F 操作。
 const requestedSpace=new URLSearchParams(location.search).get('space');
 if(requestedSpace&&['spacecraft','survey-spacecraft'].includes(requestedSpace)&&session.map.regions.some(r=>r.modes.includes('spacecraft')))visit(SPECS.findIndex(s=>s.id===requestedSpace));
@@ -1533,7 +1602,7 @@ const debugControls = import.meta.env.DEV ? createDebugControls({
     if (!value && (preparingRender || panelOpen)) throw new Error('Close the editor panel and wait for scene preparation before resuming.');
     if (value) sdk.stop();
     else await sdk.start();
-    updatePausePresentation(value, false);
+    updatePausePresentation(value);
   },
   clearInput: () => { clearInput(); humanDemo = null; },
   render: () => renderPausedState(),
@@ -1595,6 +1664,7 @@ const labAPI = {
       viewKind: sdk.inspectCamera().resolved?.kind??null,
       yaw: (sdk.inspectCamera().intent?.yawRadians??0),
       pitch: (sdk.inspectCamera().intent?.pitchRadians??0),
+      controlForwardWorldXYZ: runtime.controlForwardWorldXYZ(),
       distance: (sdk.inspectCamera().current?.nominalDistanceMeters??0),
       position: camera.position.toArray(),
       target: cameraTargetPosition().toArray(),
@@ -1628,30 +1698,31 @@ const labAPI = {
     capabilities: runtime.characterCapabilities(),
   }),
 };
+let refreshRecordingControls:(()=>unknown)|undefined;
 const debugRecording=import.meta.env.DEV?createDebugRecording({
   world:sdk,canvas,ready:()=>ready&&!pageLifetime.signal.aborted,mapId:()=>session.map.id,
-  onStateChange:enabled=>{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled,busy:false,saved:enabled&&(shell.get().debugRecording?.saved??false)}});},
-  pause:()=>{sdk.stop();updatePausePresentation(true,false);},
+  onStateChange:()=>{if(!pageLifetime.signal.aborted)refreshRecordingControls?.();},
+  pause:()=>{sdk.stop();updatePausePresentation(true);},
   reset:()=>labAPI.reset(),clearInput:()=>{clearInput();humanDemo=null;},render:alpha=>sdk.render(alpha),
 },createDebugFileClient()):undefined;
 if(debugRecording){
-  shell.update({debugRecording:{enabled:false,busy:false,saved:false}});
-  const recordIncident=async()=>{
-    const state=debugRecording.inspect();if(state.busy||!ready)return;
-    shell.update({debugRecording:{enabled:state.enabled,busy:true,saved:false}});
-    let saved=false;
-    try{
-      if(!state.enabled){const result=await debugRecording.setHistory({enabled:true});if('error' in result)toast(String(result.error));else toast('现场记录已开启，复现异常后点击「保存现场」或按 F8');}
-      else{const result=await debugRecording.capture({pause:true});saved=result.status==='saved';toast(saved?'现场已保存，游戏已暂停。可以让 AI 查看并定位问题':String('error' in result?result.error:'保存失败'));}
-    }finally{if(!pageLifetime.signal.aborted)shell.update({debugRecording:{enabled:debugRecording.inspect().enabled,busy:false,saved}});}
-  };
-  shell.on('debugRecordButton',()=>{void recordIncident();});
+  const controls=createRecordingControls(debugRecording,{
+    ready:()=>ready,paused:()=>paused,resume:()=>pause(false),
+    publish:state=>{if(!pageLifetime.signal.aborted)shell.update({debugRecording:state});},notify:toast,
+  });
+  refreshRecordingControls=controls.sync;
+  const statusTimer=setInterval(controls.sync,250);
+  shell.on('debugRecordButton',()=>{void controls.record();});
+  shell.on('debugRecordingRestart',controls.requestRestart);
+  shell.on('debugRecordingStart',()=>{void controls.start();});
+  shell.on('debugRecordingCancel',controls.cancelStart);
+  shell.on('debugSnapshotButton',()=>{void controls.snapshot();});
   window.addEventListener('keydown',event=>{
     if(event.code!=='F8'||event.repeat||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||!ready||panelOpen)return;
     if(event.target instanceof HTMLElement&&event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role=dialog],[role=listbox],[data-slot=popover-content]'))return;
-    event.preventDefault();event.stopImmediatePropagation();void recordIncident();
+    event.preventDefault();event.stopImmediatePropagation();void controls.record();
   },{capture:true,signal:pageLifetime.signal});
-  pageLifetime.signal.addEventListener('abort',()=>{debugRecording.dispose();},{once:true});
+  pageLifetime.signal.addEventListener('abort',()=>{clearInterval(statusTimer);refreshRecordingControls=undefined;debugRecording.dispose();},{once:true});
 }
 Object.assign(window, { playground: {...labAPI,...(debugRecording?{recording:debugRecording}:{})} });
 type ModelContext = {
@@ -1694,11 +1765,11 @@ if (context?.registerTool) {
     }
   };
   if(import.meta.env.DEV)register('step_vehicle_controls','Pause and execute up to 600 fixed SDK input steps for a local vehicle regression; leaves the scene paused for inspection.',
-    {type:'object',properties:{frames:{type:'integer',minimum:1,maximum:600},input:{type:'object',properties:Object.fromEntries(['forward','steer','boost','slow','brake','primary','secondary'].map(key=>[key,{type:['forward','steer'].includes(key)?'number':'boolean'}])),additionalProperties:false}},required:['frames','input'],additionalProperties:false},false,(value)=>{
+    {type:'object',properties:{frames:{type:'integer',minimum:1,maximum:600},input:{type:'object',properties:Object.fromEntries(['forward','steer','pitch','roll','lift','strafe','boost','slow','brake','jump','primary','secondary'].map(key=>[key,{type:['forward','steer','pitch','roll','lift','strafe'].includes(key)?'number':'boolean'}])),additionalProperties:false}},required:['frames','input'],additionalProperties:false},false,(value)=>{
       const request=value as {frames:number;input:Partial<humanoid.Input>};
       if(!Number.isInteger(request.frames)||request.frames<1||request.frames>600)throw new Error('Invalid frame count');
       const input={...emptyInput(),...request.input};runtime.setInput(input)();
-      clearInput();pause(true,false);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
+      clearInput();pause(true);sdk.step({humanoid:input},request.frames);renderPausedState();return labAPI.getState();
     });
   for (const tool of [...(debugControls?.tools ?? []),...(debugRecording?.tools??[])]) {
     register(tool.name, tool.description, tool.inputSchema, tool.annotations.readOnlyHint, tool.execute);

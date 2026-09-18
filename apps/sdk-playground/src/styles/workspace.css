@@ -22,6 +22,8 @@ body {
   margin: 0;
   overflow: hidden;
 }
+/* Defaults stay below component utilities; variants own their colors and type. */
+@layer base {
 button,input {
   font: inherit;
 }
@@ -45,8 +47,9 @@ button,input {
 button {
   transition: background .14s,border-color .14s;
 }
-button:hover {
+button:not([data-slot="button"]):hover {
   filter: brightness(1.12);
+}
 }
 [hidden] {
   display: none!important;
@@ -219,6 +222,16 @@ button:hover {
   outline: none;
   touch-action: none;
 }
+.workspace-stage > :is(canvas#viewport, canvas[data-display-preview]) {
+  filter:grayscale(0);
+  transition:filter 220ms ease;
+}
+.workspace-stage[data-paused] > :is(canvas#viewport, canvas[data-display-preview]) {
+  filter:grayscale(.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-stage > :is(canvas#viewport, canvas[data-display-preview]) { transition:none; }
+}
 
 
 
@@ -230,11 +243,13 @@ button:hover {
   align-items: center;
   gap: 5px;
 }
+@layer components {
+  .subtle-button { background:var(--color-secondary); }
+}
 .subtle-button {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #0e2c33e8;
   border: 1px solid #afc7c43d;
   border-radius: 5px;
   font-size: 11px;
@@ -436,58 +451,19 @@ button:hover {
   z-index: 10;
   padding: 13px 20px 12px;
 }
-.shortcut-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid var(--line);
-}
-.shortcut-heading {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 98px;
-  color: #b5cdbb;
-  font-size: 11px;
-  padding-top: 3px;
-}
 .shortcut-list {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 18px;
   flex: 1;
 }
 .shortcut {
   display: flex;
   align-items: center;
-  gap: 6px;
   color: #c6d7d1;
-  font-size: 10px;
-  white-space: nowrap;
 }
 .shortcut .keys {
   display: flex;
-  gap: 3px;
-}
-.shortcut-system {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 9px 15px;
-  padding-top: 10px;
-}
-.system-keys {
-  display: flex;
-  gap: 13px;
-  align-items: center;
-  flex-wrap: wrap;
-  flex: 1;
-}
-.system-keys .shortcut {
-  color: #94b0ab;
-  font-size: 10px;
 }
 kbd {
   font: 10px/1.2 "Segoe UI",sans-serif;
@@ -513,16 +489,6 @@ kbd {
   padding: 6px 9px;
   font-size: 10px;
   color: #cee5b9;
-}
-.header-live-status #fpsReadout {
-  font: 10px/1.5 Consolas,"Segoe UI",sans-serif;
-  color: #92c4aa;
-  white-space: nowrap;
-  text-align: right;
-  min-width: 138px;
-}
-.header-live-status #fpsReadout[data-slow] {
-  color: #e5ba82;
 }
 .performance-panel {
   width: 260px;
@@ -599,20 +565,6 @@ kbd {
   height: 3px;
   background: #c5e2aa;
   animation: load 1s infinite alternate;
-}
-.pause-card {
-  width: min(440px,90vw);
-  padding: 30px;
-  text-align: center;
-}
-.pause-card h2 {
-  font-size: 25px;
-  font-weight: 500;
-}
-.pause-card p {
-  font-size: 13px;
-  line-height: 1.9;
-  color: #afc9bd;
 }
 .primary {
   border: 0;
@@ -737,15 +689,6 @@ kbd {
 .inspector-modes {
   font-size: 12px;
 }
-.shortcut {
-  font-size: 11px;
-}
-.shortcut-system .shortcut {
-  font-size: 11px;
-}
-kbd {
-  font-size: 11px;
-}
 .asset-library-name {
   font-size: 13px;
 }
@@ -768,14 +711,8 @@ kbd {
   .minimap {
     width: 228px;
   }
-  .shortcut {
-    font-size: 11px;
-  }
   .shortcut-footer {
     padding: 16px 24px;
-  }
-  .shortcut-list {
-    gap: 9px 22px;
   }
 }
 @media(max-width:1200px) {
@@ -807,17 +744,8 @@ kbd {
   .minimap {
     width: 175px;
   }
-  .shortcut-heading {
-    min-width: 80px;
-  }
-  .shortcut-list {
-    gap: 7px 12px;
-  }
   .shortcut-footer {
     padding: 10px 13px;
-  }
-  .system-keys {
-    gap: 10px;
   }
 }
 @media(max-width:1000px) {
@@ -844,9 +772,6 @@ kbd {
 ;
   }
   .local-status {
-    display: none;
-  }
-  .shortcut-heading {
     display: none;
   }
 
@@ -918,34 +843,14 @@ kbd {
     top:12px;
     left:12px;
   }
-  .shortcut-list {
-    gap: 5px 9px;
-  }
-  .shortcut {
-    font-size: 9px;
-    gap: 4px;
-  }
   kbd {
     font-size: 9px;
     min-width: 19px;
     min-height: 21px;
     padding: 2px 4px;
   }
-  .shortcut-main {
-    padding-bottom: 7px;
-  }
   .shortcut-footer {
     padding: 9px 10px;
-  }
-  .shortcut-system {
-    gap: 7px;
-    padding-top: 7px;
-  }
-  .system-keys {
-    gap: 6px 10px;
-  }
-  .system-keys .shortcut {
-    font-size: 9px;
   }
 
 
@@ -973,10 +878,6 @@ kbd {
   .camera-mode-button {
     padding: 4px 6px;
   }
-  .header-live-status #fpsReadout {
-    font-size: 9px;
-    min-width: 125px;
-  }
   .minimap.expanded {
     width: 75%;
     left: 12px;
@@ -994,9 +895,6 @@ kbd {
 @media(max-width:720px) {
   .stage-actions { max-width:calc(100% - 169px); flex-wrap:wrap; justify-content:flex-end; }
 
-  .shortcut-system .shortcut {
-    font-size: 9px;
-  }
   .inspector-shell .inspector-subject-name {
     font-size: 13px;
   }
@@ -1016,9 +914,6 @@ kbd {
   .shortcut-footer {
     padding-top: 9px;
     padding-bottom: 8px;
-  }
-  .shortcut-list {
-    gap: 5px 13px;
   }
   .stage-actions {
     top: 12px;
@@ -1260,29 +1155,27 @@ button svg {
 .controls-floating .shortcut-footer { left:calc(var(--rail) + 12px); right:12px; bottom:calc(var(--status-footer) + 12px); border:1px solid var(--line); border-radius:10px; background:#08242cf2; box-shadow:0 6px 24px #031e2744; }
 .shortcut-window-actions { position:absolute; top:6px; right:8px; display:flex; gap:4px; }
 .shortcut-window-actions .shortcut-window-button { width:24px; min-width:24px; height:24px; min-height:24px; padding:0; background:#173940; color:#b4cbc2; border:1px solid var(--line); }
-.shortcut-footer .shortcut-main { padding-right:56px; }
 
 .shortcut-footer { max-height:40vh; overflow-y:auto; scrollbar-width:thin; }
 .shortcut-panel-header { display:flex; align-items:center; flex-wrap:wrap; gap:6px 16px; padding:0 58px 7px 0; }
 .shortcut-panel-header h2 { display:flex; align-items:center; gap:7px; margin:0; font-size:12px; font-weight:600; }
 .shortcut-panel-header h2 small { color:var(--muted); font-size:10px; font-weight:400; }
-.shortcut-section { display:grid; grid-template-columns:76px minmax(0,1fr); align-items:start; gap:8px; padding:7px 0; border-top:1px solid var(--line); }
-.shortcut-section h3 { margin:4px 0 0; font-size:11px; font-weight:500; color:#a8c1b3; }
-.shortcut-section .shortcut-list { gap:5px 16px; }
-.shortcut-section .shortcut { white-space:normal; }
-.shortcut-section .keys { flex-shrink:0; }
+.shortcut-section { display:grid; grid-template-columns:68px minmax(0,1fr); align-items:start; gap:6px; padding:4px 0; border-top:1px solid var(--line); }
+.shortcut-section h3 { margin:3px 0 0; font-size:10px; line-height:1.3; font-weight:500; color:#a8c1b3; }
+.shortcut-section .shortcut-list { gap:3px 12px; }
+.shortcut-section .shortcut { gap:4px; font-size:10px; line-height:1.3; white-space:normal; }
+.shortcut-section .keys { flex-shrink:0; gap:2px; }
+.shortcut-section kbd { min-width:20px; min-height:20px; padding:1px 4px; font-size:10px; line-height:1.2; }
 @media(max-width:720px) {
   .shortcut-panel-header { padding-right:48px; }
-  .shortcut-section { grid-template-columns:1fr; gap:5px; }
+  .shortcut-section { grid-template-columns:1fr; gap:3px; }
 }
 
 .header-live-status { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .header-live-status .camera-mode-button { min-height:28px; height:28px; padding:3px 8px; font-size:11px; }
-.header-live-status #fpsReadout { min-width:112px; font-size:10px; font-variant-numeric:tabular-nums; }
 @media(max-width:1000px) and (min-width:721px) {
   .header-live-status { flex-direction:column; gap:1px; }
   .header-live-status .camera-mode-button { min-height:23px; height:23px; }
-  .header-live-status #fpsReadout { font-size:9px; line-height:12px; text-align:center; }
 }
 @media(max-width:720px) {
   :root { --header:80px; }
@@ -1305,3 +1198,15 @@ button svg {
 .workspace-performance-panel { position:absolute; left:calc(var(--rail) + 12px); bottom:var(--panel-bottom-gap); z-index:9; width:min(260px,calc(100vw - var(--rail) - 24px)); max-height:calc(100% - var(--header) - var(--panel-bottom-gap) - 12px); overflow-y:auto; scrollbar-width:thin; border:1px solid var(--line); border-radius:10px; background:#0b252df5; box-shadow:0 6px 24px #031e2744; }
 .performance-window-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; color:#b4cbc2; font-size:11px; }
 .performance-window-heading .plain-icon { width:22px; height:22px; min-height:22px; padding:0; }
+
+.recording-tools { display:flex; gap:6px; position:relative; align-items:center; pointer-events:auto; }
+.recording-tools > button { height:36px; min-height:36px; padding:0 10px; }
+.recording-status { position:absolute; right:0; top:calc(100% + 7px); display:flex; gap:8px; align-items:center; max-width:min(430px,80vw); padding:5px 9px; border-radius:6px; background:#102d32e8; color:#e5eddd; font-size:11px; line-height:1.5; pointer-events:none; }
+.recording-time { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.recording-start-dialog p { font-size:13px; line-height:1.7; }
+.recording-dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:8px; }
+/* Presentation UI is canvas-relative; the stage already reserves the docked footer. */
+.workspace-pause-status { position:absolute; left:50%; bottom:calc(var(--panel-bottom-gap) - var(--docked-footer)); transform:translateX(-50%); z-index:9; display:flex; align-items:center; gap:20px; width:max-content; max-width:calc(100% - var(--rail) - 32px); padding:14px 18px; border:1px solid #d5c48b; border-radius:10px; background:#102d32f5; box-shadow:0 6px 24px #031e2744; color:#f5f0dd; pointer-events:auto; }
+.workspace-pause-status strong { display:block; margin-bottom:4px; font-size:16px; color:#f1d590; }
+.workspace-pause-status span { display:block; font-size:12px; line-height:1.5; }
+.workspace-pause-status button { flex-shrink:0; }

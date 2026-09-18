@@ -1,14 +1,12 @@
-import { Quaternion,Vector3 } from 'three';
+import { Euler,Quaternion,Vector3 } from 'three';
 import { vehicleImpactMass } from '../../config';
 import { creatureBodies } from '../../creatures/controller';
 import { vehicleBody,type EnvironmentQueries,type MoveResult,type QueryBody } from '../../environment/queries';
 import type { Input,VehicleState } from '../../simulation';
-const UP = new Vector3(0, 1, 0);
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const approach = (a: number, b: number, amount: number) => a + clamp(b - a, -amount, amount);
-const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 const heading = (yaw: number) => new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-const rotationAt = (yaw: number) => new Quaternion().setFromAxisAngle(UP, yaw);
+const rotationAt = (yaw: number,pitch=0) => new Quaternion().setFromEuler(new Euler(-pitch,yaw,0,'YXZ'));
 function bodyBounds(position: Vector3, body: QueryBody, rotation: Quaternion) {
     const center = new Vector3(...body.offset).applyQuaternion(rotation).add(position), extent = new Vector3();
     if (body.kind === 'capsule')
@@ -45,19 +43,18 @@ function stopInWater(v: VehicleState) {
     v.motion.creature!.flying = false;
     v.motion.creature!.gait = 'rest';
 }
-/** Test the turning volume as well as the final box, so thin walls cannot be crossed by yaw. */
-function turnIsClear(position: Vector3, body: QueryBody, fromYaw: number, toYaw: number, q: EnvironmentQueries) {
-    const change = angleDelta(fromYaw, toYaw), samples = Math.max(1, Math.ceil(Math.abs(change) / .02));
+/** Sweep attitude as well as translation; pitch cannot rotate the hull through a wall. */
+function turnIsClear(position: Vector3, body: QueryBody, from: Quaternion, to: Quaternion, q: EnvironmentQueries) {
+    const samples = Math.max(1, Math.ceil(from.angleTo(to) / .02));
     for (let n = 1; n <= samples; n++)
-        if (!clearBody(position, body, rotationAt(fromYaw + change * n / samples), q))
+        if (!clearBody(position, body, from.clone().slerp(to,n/samples), q))
             return false;
     return true;
 }
-function moveBody(position: Vector3, delta: Vector3, body: QueryBody, yaw: number, walking: boolean, q: EnvironmentQueries, push: {
+function moveBody(position: Vector3, delta: Vector3, body: QueryBody, rotation: Quaternion, walking: boolean, q: EnvironmentQueries, push: {
     massKg: number;
     dt: number;
 }): MoveResult {
-    const rotation = rotationAt(yaw);
     if (!walking)
         return q.move(position, delta, body, rotation, 0, push);
     // Separate floor support from horizontal control: combined diagonal sweeps can
@@ -108,7 +105,7 @@ function moveBody(position: Vector3, delta: Vector3, body: QueryBody, yaw: numbe
     result.blocked = result.position.clone().sub(position).distanceToSquared(delta) > 1e-6;
     return result;
 }
-function desiredSpeed(v:VehicleState,i:Input,dt:number,airborne=false){const spec=v.spec,speed=v.velocity.dot(heading(v.yaw));const maximum=airborne?(i.boost?spec.maxSpeed:spec.speed):spec.groundSpeed,backward=airborne?spec.reverseSpeed:2.5;const target=clamp(i.forward,-1,1)*(i.forward<0?backward:maximum);const acceleration=Math.abs(i.forward)<.01?(!airborne?spec.groundDeceleration:spec.coastDeceleration):target*speed<0?spec.directionChangeDeceleration:spec.accel;return approach(speed,target,acceleration*dt);}
+function desiredSpeed(v:VehicleState,i:Input,dt:number,airborne=false){const spec=v.spec,speed=v.velocity.dot(heading(v.yaw));const maximum=airborne?(i.boost?spec.maxSpeed:spec.speed):spec.groundSpeed;const target=i.slow?0:clamp(i.forward,0,1)*maximum;const acceleration=i.slow||i.forward<0?spec.brakeDeceleration:Math.abs(i.forward)<.01?(!airborne?spec.groundDeceleration:spec.coastDeceleration):spec.accel;return approach(speed,target,acceleration*dt);}
 function updateGait(v: VehicleState, dt: number) {
     const state = v.motion.creature!, speed = Math.hypot(v.velocity.x, v.velocity.z);
     state.gait = state.flying ? (Math.abs(v.velocity.y) < .6 && speed > 10 ? 'glide' : 'flap') : speed > .12 ? 'walk' : 'rest';
@@ -119,19 +116,22 @@ function updateGait(v: VehicleState, dt: number) {
 }
 function stepDragon(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
     const state = v.motion.creature!, body = vehicleBody(v.spec), old = v.position.clone();
-    // Space and Ctrl are an axis, never a toggle. Neutral input keeps an airborne dragon hovering.
-    const lift = i.slow && (i.brake || i.jump) ? 0 : clamp(i.lift || (i.jump ? 1 : 0), -1, 1);
+    // Space/C is independent from longitudinal braking and arrow-key pitch.
+    const lift = clamp(i.lift || (i.jump ? 1 : 0), -1, 1);
     if (lift > 0 || !v.grounded)
         state.flying = true;
     const speed = desiredSpeed(v, i, dt, state.flying), turn = v.spec.steer * (state.flying ? 1 : .35);
     const yaw = v.yaw - v.steering * turn * dt * (speed < -.1 ? -1 : 1);
-    if (turnIsClear(old, body, v.yaw, yaw, q))
-        v.yaw = yaw;
-    const vertical = state.flying ? approach(v.velocity.y, lift * (i.boost ? 10 : 7), 18 * dt) : v.grounded ? -1 : v.velocity.y - 18 * dt;
+    const pitch=v.pitch+((state.flying?-i.pitch*.6:0)-v.pitch)*(1-Math.exp(-v.spec.pitchResponse*dt));
+    const rotation=rotationAt(yaw,pitch);
+    if (turnIsClear(old, body, v.rotation, rotation, q)) {
+        v.yaw = yaw;v.pitch=pitch;v.rotation.copy(rotation);
+    }
+    const vertical = state.flying ? approach(v.velocity.y, lift * (i.boost ? 10 : 7)+Math.sin(v.pitch)*speed, 18 * dt) : v.grounded ? -1 : v.velocity.y - 18 * dt;
     v.velocity.copy(heading(v.yaw)).multiplyScalar(speed);
     v.velocity.y = vertical;
-    const moved = moveBody(old, v.velocity.clone().multiplyScalar(dt), body, v.yaw, !state.flying, q, { massKg: vehicleImpactMass(v.spec), dt });
-    if (clearBody(moved.position, body, rotationAt(v.yaw), q))
+    const moved = moveBody(old, v.velocity.clone().multiplyScalar(dt), body, v.rotation, !state.flying, q, { massKg: vehicleImpactMass(v.spec), dt });
+    if (clearBody(moved.position, body, v.rotation, q))
         v.position.copy(moved.position);
     v.velocity.copy(v.position).sub(old).divideScalar(dt);
     v.grounded = moved.grounded;
@@ -141,9 +141,7 @@ function stepDragon(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries
     }
     else if (lift > 0 && v.velocity.y > 0)
         v.grounded = false;
-    v.pitch = 0;
     v.roll = 0;
-    v.rotation.copy(rotationAt(v.yaw));
 }
 export function stepGroundedFlight(v: VehicleState, i: Input, dt: number, q: EnvironmentQueries) {
     if (!Number.isFinite(dt) || dt <= 0)

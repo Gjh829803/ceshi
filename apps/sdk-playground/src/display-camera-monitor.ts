@@ -1,9 +1,9 @@
-/** 复用游玩渲染帧，不增加相机写入者或渲染循环。 */
+/** 显示同帧的范围预览，不拥有游玩相机或独立渲染循环。 */
 export function createCameraMonitor(source:HTMLCanvasElement,mount:HTMLElement,focusGameplay:()=>void,navigation:{locate():void;setFollowing(enabled:boolean):void}){
   const panel=document.createElement('section');panel.dataset.cameraMonitor='';panel.setAttribute('aria-label','实时取景预览');
   panel.style.cssText='position:absolute;right:16px;bottom:52px;width:min(360px,calc(100% - 32px));max-height:calc(100% - 112px);flex-direction:column;overflow:hidden;border:1px solid #547578;border-radius:8px;background:#0b252d;color:#d7e3de;box-shadow:0 8px 28px #0005;pointer-events:auto;font:12px sans-serif';
   const header=document.createElement('div');header.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px;flex:none;flex-wrap:wrap';
-  const title=document.createElement('span');title.textContent='游玩摄像机 · 实时取景';
+  const title=document.createElement('span');title.textContent='游玩摄像机 · 范围预览';
   const toggle=document.createElement('button');toggle.type='button';toggle.textContent='放大';toggle.setAttribute('aria-label','放大取景窗口');toggle.setAttribute('aria-expanded','false');
   toggle.style.cssText='padding:4px 10px;border:1px solid #547578;border-radius:4px;background:#183b40;color:inherit;cursor:pointer;font:inherit';
   const canvas=document.createElement('canvas');canvas.dataset.cameraMonitorFrame='';canvas.setAttribute('aria-label','游玩摄像机画面');
@@ -28,12 +28,14 @@ export function createCameraMonitor(source:HTMLCanvasElement,mount:HTMLElement,f
     toggle.textContent=expanded?'还原':'放大';toggle.setAttribute('aria-label',expanded?'还原取景窗口':'放大取景窗口');toggle.setAttribute('aria-expanded',String(expanded));focusGameplay();
   });
   return {
+    get width(){return canvas.clientWidth||360;},
+    setRange(meters:number){title.textContent=`游玩摄像机 · 范围预览 ${Number(meters.toFixed(2))} m`;},
     setEnabled(value:boolean){enabled=value;panel.hidden=!value;panel.style.display=value?'flex':'none';},
-    // 必须在原 WebGL 帧结束时复制；鼠标观察刷新不读取可能已被浏览器清空的源缓冲。
-    copyFrame(){
-      if(!enabled||!context||!source.width||!source.height)return;
-      if(canvas.width!==source.width||canvas.height!==source.height){canvas.width=source.width;canvas.height=source.height;}
-      context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(source,0,0);
+    // Copy before the shared diagnostic renderer draws its full world viewport.
+    copyFrame(frame=source,region={x:0,y:0,width:frame.width,height:frame.height}){
+      if(!enabled||!context||!region.width||!region.height)return;
+      if(canvas.width!==region.width||canvas.height!==region.height){canvas.width=region.width;canvas.height=region.height;}
+      context.clearRect(0,0,canvas.width,canvas.height);context.drawImage(frame,region.x,region.y,region.width,region.height,0,0,canvas.width,canvas.height);
     },
     dispose(){enabled=false;panel.remove();canvas.width=canvas.height=1;},
   };

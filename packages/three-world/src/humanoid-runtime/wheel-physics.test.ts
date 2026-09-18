@@ -22,6 +22,43 @@ beforeAll(initEnvironmentQueries);
 function fixture(extra:EnvironmentDefinition['boxes']=[],floorSize=400){return {q:new EnvironmentQueries({...map,boxes:[{...map.boxes[0]!,size:[floorSize,1,floorSize]},...extra]}),v:createVehicle(spec)};}
 function run(f:ReturnType<typeof fixture>,n:number,input=emptyInput()){for(let i=0;i<n;i++){stepVehicle(f.v,input,1/60,i/60,f.q);f.q.stepPhysics(1/60);}}
 describe('per-wheel road vehicle',()=>{
+ it('finds wheel support below an overlapping side wall',()=>{
+  const f=fixture([{id:'wall',position:[1.4,3,0],size:[.4,6,20]}]);
+  try{
+   const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);
+   const hit=f.q.wheelSweep(new Vector3(1.1,.77,0),rotation,new Vector3(0,-1,0),.52,.4,.275);
+   expect(hit?.normal.y).toBeGreaterThan(.99);
+   expect(hit?.distance).toBeCloseTo(.25,3);
+  }finally{f.q.dispose();}
+ });
+ it('selects the nearest support past two walls without treating walls alone as ground',()=>{
+  const walls:EnvironmentDefinition['boxes']=[
+   {id:'wall-x',position:[1.4,3,0],size:[.4,6,20]},
+   {id:'wall-z',position:[0,3,.6],size:[20,6,.4]},
+  ];
+  const rotation=new Quaternion().setFromAxisAngle(new Vector3(0,0,1),Math.PI/2);
+  const supported=fixture([...walls,{id:'low-platform',position:[0,.05,0],size:[4,.1,4]}]);
+  const unsupported=new EnvironmentQueries({...map,boxes:walls});
+  try{
+   const probe=(q:EnvironmentQueries)=>q.wheelSweep(new Vector3(1.1,.77,0),rotation,new Vector3(0,-1,0),.52,.4,.275);
+   const hit=probe(supported.q);
+   expect(hit?.normal.y).toBeGreaterThan(.99);
+   expect(hit?.distance).toBeCloseTo(.15,3);
+   expect(probe(unsupported)).toBeNull();
+  }finally{supported.q.dispose();unsupported.dispose();}
+ });
+ it.each([-1,1])('keeps the rover supported while driving beside a wall on side %s',side=>{
+  const f=fixture([{id:'wall',position:[side*1.4,3,0],size:[.4,6,200]}]);
+  f.v=createVehicle({...playgroundVehicles.find(v=>v.id==='rover')!,spawn:[0,0,0],yaw:0});
+  try{
+   run(f,180);run(f,240,{...emptyInput(),forward:1});run(f,180);
+   expect(f.v.position.y).toBeGreaterThan(-.04);
+   expect(Math.abs(f.v.roll)).toBeLessThan(.04);
+   expect(f.v.motion.wheelPhysics!.wheels.every(w=>w.contact)).toBe(true);
+   expect(f.v.position.z).toBeGreaterThan(5);
+   expect(side*f.v.position.x).toBeLessThan(.3);
+  }finally{f.q.dispose();}
+ });
  it.each(['rover','trail-rover'])('covers %s visible body vertices with persistent solver colliders',id=>{
   vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({beginPath(){},roundRect(){},fill(){},fillText(){}})})});
   const selected=playgroundVehicles.find(v=>v.id===id)!,visual=buildVehicle(selected),f=fixture();
@@ -59,7 +96,7 @@ describe('per-wheel road vehicle',()=>{
  });
  it.each(['rover','racer','trail-rover','atv','bus'])('holds S to brake into reverse, then W to drive forward again: %s',id=>{
   const f=fixture([],4000);f.v=createVehicle({...playgroundVehicles.find(v=>v.id===id)!,spawn:[0,0,0],yaw:0});
-  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.enabled=true;keyboard.setHumanoidMode(()=>f.v.spec.mode);
+  const keyboard=new WorldKeyboard(()=>0,()=>{});keyboard.enabled=true;keyboard.setHumanoidContext(()=>({mode:f.v.spec.mode}));
   const held=(frames:number)=>{for(let n=0;n<frames;n++)run(f,1,keyboard.sample().humanoid!);};
   try{
    held(180);keyboard.keyDown('KeyW');held(180);keyboard.keyUp('KeyW');const speed=f.v.velocity.z;

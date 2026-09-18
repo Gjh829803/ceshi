@@ -17,6 +17,15 @@ async function fixture(){
  await service.materializeRuntime();return service;
 }
 const call=(service:ThreeCreatorTools,name:string,args:Record<string,unknown>={})=>executeThreeCreatorTool(service,name,args) as Promise<any>;
+
+it('finds native diving and exposes its current-source input and water observation contracts',async()=>{
+ const service=await fixture();
+ const search=await call(service,'assets_search',{query:'潜水'});
+ expect(search.assets.map((asset:any)=>asset.id)).toContain('humanoid.uefn-mannequin');
+ const schema=await call(service,'creator_get_authoring_schema',{topic:'character-actions',sections:['humanoid','commands']});
+ expect(schema.runtimeDefinitions['humanoid-runtime/input-guidance.ts']).toContain('positive ascends, negative dives');
+ expect(schema.humanoidSourceContracts['humanoid-runtime/runtime.ts']).toContain('swimmingMode');
+});
 afterEach(async()=>{await Promise.all(services.splice(0).map(s=>s.close()));await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
 
 it('publishes a valid optional method parameter from the edited workspace runtime',async()=>{
@@ -108,7 +117,9 @@ it('exposes edited skill definitions as source and never advertises host thresho
 
 it('reads edited vehicle input guidance from the workspace instead of advertising the Host baseline',async()=>{
  const service=await fixture(),file=path.join(service.workspace,'sdk/three-world/src/humanoid-runtime/input-guidance.ts');
- await writeFile(file,(await readFile(file,'utf8')).replace('Brakes velocity through damping','Workspace-specific braking'));
+ const original=await readFile(file,'utf8'),needle='Brakes velocity; wheeled vehicles also loosen lateral grip for handbrake turns.';
+ expect(original).toContain(needle);
+ await writeFile(file,original.replace(needle,'Workspace-specific braking'));
  const schema=await call(service,'creator_get_authoring_schema',{topic:'control',sections:['humanoid']});
  expect(schema).not.toHaveProperty('humanoidInputGuides');
  expect(schema.runtimeDefinitions['humanoid-runtime/input-guidance.ts']).toContain('Workspace-specific braking');

@@ -275,10 +275,25 @@ export class ThreeCreatorTools {
   async inspect(query?: InspectionQuery) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate);
     const observation = await this.bridge(session, 'inspect', [query ?? null]);
+    let image:{path:string;sha256:string;byteLength:number}|undefined;
+    const highlight=observation.surfaceOverlapHighlight;
+    if(highlight?.imageDataUrl){
+      const data=highlight.imageDataUrl;delete highlight.imageDataUrl;
+      try{
+        const bytes=Buffer.from(data.replace(/^data:image\/png;base64,/,''),'base64');
+        const root=path.join(this.evidenceRoot,candidate.worldBuildHash,`surface-overlap-${randomUUID()}`);
+        await mkdir(root,{recursive:true});const file=path.join(root,'highlight.png');await writeFile(file,bytes);
+        image={path:file,sha256:sha256(bytes),byteLength:bytes.length};
+        await json(path.join(root,'inspection.json'),{sourceHash:candidate.sourceHash,worldBuildHash:candidate.worldBuildHash,
+          runtimeHash:candidate.runtimeHash,runtimeSourceHash:candidate.runtimeSourceHash,sample:observation.sample,
+          surfaceOverlaps:observation.surfaceOverlaps,highlight,image});
+      }catch{image=undefined;observation.surfaceOverlapHighlight={status:'unavailable',diagnostic:true,reason:'evidence-write-failed',findingId:highlight.findingId};}
+    }
     return {
       sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash,
       runtimeHash: candidate.runtimeHash, runtimeSourceHash: candidate.runtimeSourceHash, profile: this.profile,
       observation,
+      ...(image?{image}:{}),
       feedback: {
         characterContinuity: observation.characterContinuity,
         viewport: observation.viewport,

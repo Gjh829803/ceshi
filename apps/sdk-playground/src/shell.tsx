@@ -25,6 +25,8 @@ import type { AssetEntry } from "@worldkit/preset-content/platform/catalog";
 import { MAPS } from "@worldkit/preset-content/environment/maps";
 import type { WorldPresentation } from "@worldkit/three";
 import { DRAGON_VARIANTS } from '@worldkit/preset-content/dragon-variants';
+import {RecordingToolbar} from './diagnostics/recording-toolbar';
+import type {RecordingControlsState} from './diagnostics/recording-controls';
 import { DisplayPanel } from './display-panel';
 import { defaultDisplaySettings, type DisplayObjectRow } from './display-settings';
 
@@ -41,7 +43,6 @@ type Flags =
   | "paused"
   | "loading"
   | "contributionOpen"
-  | "fpsSlow"
   | "debugActive";
 export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanelStateStore()) {
   const libraryState=panels.read('assetLibrary'),inspectorState=panels.read('inspector'),displayState=panels.read('display');
@@ -66,7 +67,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
     controlGroups: [] as {title:string;rows:[string,string][]}[],
     system: [] as [string, string][],
     recoverable:false,
-    debugRecording: null as null | {enabled:boolean;busy:boolean;saved:boolean},
+    debugRecording: null as RecordingControlsState | null,
     drivetrain:null as null|{kind:'engine'|'pedal'|'paddle'|'push'|'motion';cadence:number;rpm:number;maxRpm:number;gear:string;speed:number;throttle:number;shifting:boolean},
     interaction: "",
     pacing: null as FrameRateReading | null,
@@ -139,27 +140,27 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
   const subscribe=(fn:()=>void)=>{listeners.add(fn);return ()=>{listeners.delete(fn);};};
   // Speed and frame diagnostics update independently of the menus/dialogs.
   // Building the entire Radix tree on every telemetry sample caused long frames.
-  const liveTexts=new Set(['fpsReadout','speed','height','heightLabel','stateValue']);
+  const liveTexts=new Set(['speed','height','heightLabel','stateValue']);
   let layout:typeof state|undefined;
   const layoutSnapshot=()=>{
     const texts=Object.fromEntries(Object.entries(state.texts).filter(([key])=>!liveTexts.has(key)));
-    const flags={...state.flags,fpsSlow:false};
+    const flags={...state.flags};
     if(!layout||Object.keys(texts).length!==Object.keys(layout.texts).length||Object.keys(texts).some(k=>texts[k]!==layout!.texts[k])
       ||Object.keys(flags).some(k=>flags[k as Flags]!==layout!.flags[k as Flags])
-      ||Object.keys(state).some(k=>!['texts','flags','pacing','drivetrain'].includes(k)&&state[k as keyof typeof state]!==layout![k as keyof typeof state]))
-      layout={...state,texts,flags,pacing:null,drivetrain:null};
+      ||Object.keys(state).some(k=>!['texts','flags','pacing','drivetrain','debugRecording'].includes(k)&&state[k as keyof typeof state]!==layout![k as keyof typeof state]))
+      layout={...state,texts,flags,pacing:null,drivetrain:null,debugRecording:null};
     return layout;
   };
   function LiveText({id,fallback=''}:{id:string;fallback?:string}){
     return useSyncExternalStore(subscribe,()=>state.texts[id]??fallback);
   }
   function Pacing(){const reading=useSyncExternalStore(subscribe,()=>state.pacing);return <FramePacingView reading={reading} panels={panels}/>;}
-  function FPS(){const slow=useSyncExternalStore(subscribe,()=>state.flags.fpsSlow);return <output id="fpsReadout" aria-label="渲染回调频率" aria-live="off" data-slow={slow||undefined}><LiveText id="fpsReadout" fallback="渲染回调 —/s"/></output>;}
   function Drivetrain(){
     const d=useSyncExternalStore(subscribe,()=>state.drivetrain);
     if(!d)return null;
     return <section className="powertrain-hud" aria-label={d.kind==='engine'?'发动机与变速箱':d.kind==='motion'?'载具操控':'人力驱动'}><strong>{d.kind==='engine'?d.gear:d.kind==='pedal'?'踩踏':d.kind==='paddle'?'划桨':d.kind==='motion'?'操控':'蹬地'}</strong>{d.kind!=='motion'&&<span>{Math.round(d.kind==='engine'?d.rpm:d.cadence)} {d.kind==='engine'?'RPM':'次/分'}</span>}<span>{d.speed} km/h</span><meter min={0} max={d.kind==='engine'?d.maxRpm:100} value={d.kind==='engine'?d.rpm:d.throttle}/><small>{d.kind==='engine'?`${d.shifting?'换挡中':'自动变速箱'} · 油门`:d.kind==='motion'?'输入':'用力'} {d.throttle}%</small></section>;
   }
+  function Recording(){const value=useSyncExternalStore(subscribe,()=>state.debugRecording);return value?<RecordingToolbar state={value} action={id=>action(id)}/>:null;}
   function Shell() {
     const s = useSyncExternalStore(
       subscribe,
@@ -178,6 +179,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
         <Button
           key={id}
           id={id}
+          variant="secondary"
           className={className}
           onClick={(e) => action(id, undefined, e)}
           {...props}
@@ -243,7 +245,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
               {DRAGON_VARIANTS.map(variant=><ChoiceOption key={variant.id} value={variant.id}>{variant.name}</ChoiceOption>)}
             </ChoiceSelect>
           </label>}
-          {s.recoverable&&btn("recoverButton","原地扶正 · R","subtle-button")}
+          {s.recoverable&&btn("recoverButton","回正 / 脱困 · F","subtle-button")}
           <DisplayPanel panels={panels} settings={s.display} available={s.displayAvailable} error={s.displayError}
             rows={s.displayRows} pinned={s.displayPinned} onPinnedChange={value=>action('displayPin',String(value))}
             open={!!f('displayOpen')} onOpenChange={open => { flag('displayOpen', open); action('displayOpen', String(open)); }}
@@ -281,6 +283,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
                 {s.quick.map((asset, n) => (
                   <Button
                     key={asset.id}
+                    variant="secondary"
                     className={`vehicle-button ${asset.id === s.activeId ? "selected" : ""}`}
                     data-vehicle-id={asset.id}
                     style={
@@ -309,27 +312,14 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
             "subtle-button",
             { title: "返回当前场景起点" },
           )}
-          {btn("pauseButton", t("pauseButton", "暂停"), "subtle-button")}
-          {s.debugRecording && (
-            <HoverHint side="bottom" content={s.debugRecording.saved
-              ? "现场已保存，游戏已暂停。告诉 AI「现场已保存」即可协助定位问题；点击「继续」后会继续记录，也可以按 F8 再次保存。"
-              : s.debugRecording.enabled
-              ? "正在记录。发现画面、相机或操作异常时，立即点击或按 F8 保存现场并暂停，再告诉 AI「现场已保存」，帮助 AI 定位并修复问题。"
-              : "帮助 AI 定位并修复问题：准备复现异常前，点击或按 F8 开启记录；异常出现后，再按一次保存截图、人物与相机状态及最近操作。"}>
-              <Button id="debugRecordButton" className="subtle-button debug-record-button" aria-keyshortcuts="F8"
-                data-state={s.debugRecording.saved ? "saved" : s.debugRecording.enabled ? "recording" : "idle"}
-                aria-label={s.debugRecording.saved ? "已保存现场" : s.debugRecording.enabled ? "保存现场" : "记录现场"}
-                aria-busy={s.debugRecording.busy}
-                disabled={s.debugRecording.busy}
-                onClick={() => action("debugRecordButton")}>
-                {s.debugRecording.saved
-                  ? <span aria-hidden="true">✓</span>
-                  : s.debugRecording.enabled && <span className="recording-dot" aria-hidden="true" />}
-                {s.debugRecording.busy ? (s.debugRecording.enabled ? "保存中…" : "开启中…") : s.debugRecording.saved ? "已保存" : s.debugRecording.enabled ? "保存现场" : "记录现场"} <kbd aria-hidden="true">F8</kbd>
-              </Button>
-            </HoverHint>
-          )}
+          {btn("pauseButton", <><Icon name={f("paused")?"play":"pause"} size={16}/>{t("pauseButton", "暂停世界")}</>, "subtle-button")}
+          <Recording/>
         </div>
+
+        {f("paused")&&!f("loading")&&<div className="workspace-pause-status" aria-label="场景暂停提示">
+          <div role="status"><strong>场景已暂停</strong><span>移动与交互已停止，继续游玩后恢复。</span></div>
+          <Button id="resumeButton" onClick={()=>action("resumeButton")}><Icon name="play" size={16}/>继续游玩</Button>
+        </div>}
 
         <Drivetrain/>
         {["left", "right"].map((side) => (
@@ -340,6 +330,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
             ).map((code) => (
               <Button
                 key={code}
+                variant="secondary"
                 data-key={code}
                 onPointerDown={(e) => {
                   e.preventDefault();
@@ -409,9 +400,8 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
               Creator界面
             </a>
             <div className="header-spacer" />
-            <div className="header-live-status" aria-label="相机与渲染状态">
+            <div className="header-live-status" aria-label="相机状态">
               {btn("cameraButton", t("cameraButton", "相机 · 跟随"), "camera-mode-button")}
-              <FPS/>
             </div>
             {btn(
               "contributeButton",
@@ -465,6 +455,7 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
           <section
             id="stage"
             className="workspace-stage"
+            data-paused={f("paused")||undefined}
             aria-label="实时训练视口"
           >
             <canvas
@@ -557,29 +548,6 @@ export function mountShell(host: HTMLElement, panels:PanelStateStore=createPanel
             <DialogDescription>
               {t("loadText", "正在准备场景、人物动作与载具…")}
             </DialogDescription>
-          </DialogContent>
-        </Dialog>
-        <Dialog
-          open={!!f("paused")}
-          onOpenChange={(open) => {
-            if (!open) action("resumeButton");
-          }}
-        >
-          <DialogContent
-            className="pause-card"
-            showCloseButton={false}
-            onCloseAutoFocus={(event) => { event.preventDefault(); action("viewportFocus"); }}
-            onEscapeKeyDown={(e) => e.stopPropagation()}
-          >
-            <ModalHeader title="训练已暂停" />
-            <div className="modal-body">
-              <DialogDescription>
-                从资产库选择主体，前往场景开始测试。底部显示当前主体操作，可在右侧调整相机。
-              </DialogDescription>
-            </div>
-            <ModalFooter>
-              {btn("resumeButton", "继续训练", "primary")}
-            </ModalFooter>
           </DialogContent>
         </Dialog>
         <Dialog

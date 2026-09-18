@@ -8,6 +8,11 @@ import {SDK_EXAMPLE} from '../../src/discovery/examples.js';
 const contracts = readFileSync(new URL('../../../three-world/src/contracts.ts', import.meta.url), 'utf8');
 const guide = readFileSync(new URL('../../../three-world/README.md', import.meta.url), 'utf8');
 
+it('publishes native water binding, signed diving input and observable mode to the action guide',()=>{
+ const selected=guideTopic(guide,'character-actions');
+ for(const text of ['map.water','humanoid.lift','water.contact.swimmingMode','underwater','C/Ctrl'])expect(selected).toContain(text);
+});
+
 it('publishes configuration-only camera authoring',()=>{
  const selected=publicContractTopic(contracts,'getting-started');
  expect(selected).toContain('setCameraView');expect(selected).toContain('CameraDocument');
@@ -198,6 +203,7 @@ it('publishes Player runtime methods as declarations consumable beside their rea
  const runtimeUrl=new URL('../../../three-world/src/humanoid-runtime/runtime.ts',import.meta.url);
  const runtimeSource=readFileSync(runtimeUrl,'utf8');
  expect(runtimeContractSource(runtimeSource)).toContain('createCharacter(): Promise<Character>');
+ expect(runtimeContractSource(runtimeSource)).not.toContain('setCameraFollow');
  const parsed=ts.createSourceFile('runtime.ts',runtimeSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
  const imports=parsed.statements.filter(ts.isImportDeclaration).map(node=>node.getText(parsed)).join('\n');
  const filename=fileURLToPath(new URL('../../../three-world/src/humanoid-runtime/.authoring-runtime-contract.ts',import.meta.url));

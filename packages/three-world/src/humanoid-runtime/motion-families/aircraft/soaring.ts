@@ -23,11 +23,15 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
   a.sample={physicsStepSequence:q.physicsStepSequence+1,phase:'pre-integration',deltaSeconds:h};
   const up=new Vector3(0,1,0).applyQuaternion(v.rotation),forward=new Vector3(0,0,1).applyQuaternion(v.rotation),right=new Vector3(1,0,0).applyQuaternion(v.rotation);
   const relative=v.velocity.clone().sub(airVelocity(q,v.position)),speed=relative.length(),force=new Vector3(),torque=new Vector3();
+  a.dynamicPressurePascals=0;a.liftNewtons=0;a.dragNewtons=0;a.controlAuthority=0;a.desiredLiftNewtons=0;a.totalRotorThrustNewtons=0;a.transitionFactor=0;
   const oldGround=v.grounded,hit=glider?undefined:q.support(v.position,2,.1);
   v.grounded=glider?gliderLandingGear(v,i,h,q,force,torque):!!hit&&v.position.y-hit.height<.15;
   // 斜坡上原点可能仍离地数十厘米；可穿戴装备以真实向上接触确认承重。
   if(a.wearable&&!v.grounded)v.grounded=q.hasUpwardContact(rig.colliders);
   if(!v.grounded)v.launched=true;
+  // Rotation locks stop torque/impulse response, not the angular velocity we
+  // explicitly restore above. Discard airborne pitch/roll momentum on support.
+  if(a.wearable&&v.grounded){a.angularVelocity.set(0,a.angularVelocity.y,0);body.setAngvel(a.angularVelocity,true);}
   if(!glider&&!balloon)body.setEnabledRotations(!v.grounded,true,!v.grounded,true);
   if(!oldGround&&v.grounded){a.landingSinkMetersPerSecond=Math.max(0,-v.velocity.y);a.hardLanding=a.landingSinkMetersPerSecond>4;v.launched=false;}
   const wear=a.wearable;
@@ -39,7 +43,7 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    else if(wear.hadFlight)wear.landingSeconds+=h;
    if(kind==='wingsuit'&&!v.grounded&&(i.brake||a.canopy>0))a.canopy=Math.min(1,a.canopy+h/C.canopySeconds);
    if(wear.landingSeconds>1)a.canopy=Math.max(0,a.canopy-h);
-   wear.phase=v.grounded?(wear.hadFlight?(wear.landingSeconds<2?'landing':'stowed'):i.boost?'runup':'ready')
+   wear.phase=v.grounded?(wear.hadFlight?(wear.landingSeconds<2?'landing':'stowed'):(i.forward>0||i.boost)&&!i.slow&&!i.brake?'runup':'ready')
     :kind==='wingsuit'&&a.canopy>0&&a.canopy<1?'deploying':kind==='paraglider'||a.canopy===1?'canopy':wear.airborneSeconds<.65?'leap':'glide';
    wear.spread=(kind==='wingsuit'?1:0)*smooth(wear.airborneSeconds/.65)*(1-smooth((a.canopy-.15)/.65))*(1-smooth(wear.landingSeconds/.7));
    wear.seated=(kind==='paraglider'?smooth(wear.airborneSeconds/.6):smooth((a.canopy-.15)/.65))*(1-smooth(wear.landingSeconds/1));
@@ -47,11 +51,11 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
   }
   v.steering+=(i.steer-v.steering)*(1-Math.exp(-6*h));
   if(balloon){
-   const b=C.balloon,burn=i.boost&&a.fuel>0?1:0;a.fuel=Math.max(0,a.fuel-burn*h/b.fuelSeconds);v.throttle=burn;
-   a.temperatureKelvin=clamp(a.temperatureKelvin+h*(b.heating*burn-b.cooling*(a.temperatureKelvin-b.ambientKelvin)-(i.slow?b.ventCooling:0)),b.ambientKelvin,b.maxKelvin);
+   const b=C.balloon,burn=a.fuel>0?Math.max(0,i.lift):0;a.fuel=Math.max(0,a.fuel-burn*h/b.fuelSeconds);v.throttle=burn;
+   a.temperatureKelvin=clamp(a.temperatureKelvin+h*(b.heating*burn-b.cooling*(a.temperatureKelvin-b.ambientKelvin)-Math.max(0,-i.lift)*b.ventCooling),b.ambientKelvin,b.maxKelvin);
    const rho=1.225*Math.exp(-Math.max(0,v.position.y)/8500),inside=rho*b.ambientKelvin/a.temperatureKelvin;
    force.y=(rho-inside)*b.volume*9.81;
-   force.addScaledVector(relative,-.5*rho*b.dragArea*speed);a.loadFactor=force.y/(mass*9.81);
+   const drag=.5*rho*b.dragArea*speed;force.addScaledVector(relative,-drag);a.dynamicPressurePascals=.5*rho*speed*speed;a.dragNewtons=drag;a.loadFactor=force.y/(mass*9.81);
    // 吊篮悬挂的回正力矩；没有可凭空横向推进的方向舵。
    torque.addScaledVector(right,inertia.x*(v.pitch*3-a.angularVelocity.dot(right)*3));
    torque.addScaledVector(forward,inertia.z*(-v.roll*3-a.angularVelocity.dot(forward)*3));
@@ -61,24 +65,31 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
    const area=base.area+(C.paraglider.area-base.area)*canopy,cl0=base.cl0+(C.paraglider.cl0-base.cl0)*canopy;
    const alpha=Math.atan2(-relative.dot(up),Math.max(.1,relative.dot(forward)))+base.trim;
    const cl=(cl0+(base.liftSlope+(C.paraglider.liftSlope-base.liftSlope)*canopy)*clamp(alpha,-.3,.35))*(glider?Math.exp(-Math.max(0,Math.abs(alpha)-.35)*4):1);
-   const dynamic=.5*1.225*speed*speed*area,lift=dynamic*cl*(glider&&i.slow?.6:1);
+   const airBrake=i.slow||i.lift<0;
+   const dynamic=.5*1.225*speed*speed*area,lift=dynamic*cl*(glider&&airBrake?.6:1);
    const liftAxis=up.clone();if(speed>.01)liftAxis.addScaledVector(relative,-up.dot(relative)/(speed*speed)).normalize();
    force.addScaledVector(liftAxis,lift);
-   const drag=dynamic*((!glider?Math.max(0,Math.abs(alpha)-.35)*.35:0)+base.drag+(C.paraglider.drag-base.drag)*canopy+(base.induced+(C.paraglider.induced-base.induced)*canopy)*cl*cl+(glider&&i.slow?.12:0));
+   const drag=dynamic*((!glider?Math.max(0,Math.abs(alpha)-.35)*.35:0)+base.drag+(C.paraglider.drag-base.drag)*canopy+(base.induced+(C.paraglider.induced-base.induced)*canopy)*cl*cl+(airBrake?.12:0));
    if(speed>.01)force.addScaledVector(relative,-Math.min(drag,mass*speed/h)/speed);
+   a.dynamicPressurePascals=.5*1.225*speed*speed;a.liftNewtons=lift;a.dragNewtons=drag;
    // 地面牵引/助跑后释放。翼装必须从高台离开，不能在平地持续获得推力。
-   if(i.boost&&a.towSeconds<C.towSeconds&&(!v.launched||glider&&v.position.y<20)){
+   if(glider&&v.launched&&a.towSeconds>0&&(!(i.boost||i.forward>0)||i.slow||i.brake||i.forward<0||v.position.y>=20||a.towSeconds>=C.towSeconds))a.towReleased=true;
+   if(!a.towReleased&&(i.boost||i.forward>0)&&i.forward>=0&&!i.slow&&!i.brake&&!wear?.hadFlight&&a.towSeconds<C.towSeconds&&(!v.launched||glider&&v.position.y<20)){
     force.addScaledVector(forward,mass*C.towAcceleration);a.towSeconds+=h;
    }
    const path=Math.atan2(relative.y,Math.max(1,Math.hypot(relative.x,relative.z)));
    // 侧倾时按实际倾角配平，低空速减小坡度；不凭空补速度或高度。
    const liftSlope=base.liftSlope+(C.paraglider.liftSlope-base.liftSlope)*canopy;
    const trim=clamp((mass*9.81/(Math.max(dynamic,1)*(wear?Math.max(.8,Math.cos(v.roll)):1))-cl0)/liftSlope,-.1,.25)-base.trim;
-   let pitchTarget=glider?(v.grounded?-i.forward*.27:clamp(path+trim-i.forward*.24,-.6,.5)):clamp((kind==='paraglider'||canopy>.8?-.12:path+trim)-i.forward*.24,-.35,.25),rollTarget=v.grounded?0:v.steering*.55+i.roll*.2;
+   const speedTarget=(glider?C.targetSpeed.glider:kind==='paraglider'||canopy>.8?C.targetSpeed.canopy:C.targetSpeed.wingsuit)*(1+i.forward*C.speedDemandRatio);
+   // During the finite tow, neutral trim allows W-only takeoff; W never adds thrust after release.
+   const towing=glider&&!a.towReleased&&a.towSeconds>0&&a.towSeconds<C.towSeconds&&v.position.y<20;
+   const speedTrim=!towing&&Math.abs(i.forward)>.001?clamp((speedTarget-speed)/speedTarget,-1,1)*C.speedTrimRadians:0;
+   let pitchTarget=glider?(v.grounded?-i.pitch*.27:clamp(path+trim-i.pitch*.24-speedTrim,-.6,.5)):clamp((kind==='paraglider'||canopy>.8?-.12:path+trim)-i.pitch*.24-speedTrim,-.35,.25),rollTarget=v.grounded?0:v.steering*.55+i.roll*.2;
    if(wear){
     const underCanopy=kind==='paraglider'||canopy>.8;
     const canopyTrim=-.12+Math.min(.08,Math.max(0,1/Math.max(.8,Math.cos(v.roll))-1)*.3);
-    pitchTarget=clamp((kind==='paraglider'?canopyTrim:(path+trim)*(1-canopy)+canopyTrim*canopy)-i.forward*.24,-.35,.25);
+    pitchTarget=clamp((kind==='paraglider'?canopyTrim:(path+trim)*(1-canopy)+canopyTrim*canopy)-i.pitch*.24-speedTrim,-.35,.25);
     rollTarget=v.grounded?0:(v.steering*.48+i.roll*.15)*(.45+.55*unit(speed/(underCanopy?8:16)));
     if(wear.lowSpeedAssist)pitchTarget=Math.min(pitchTarget,-.12-.12*unit((13-speed)/8));
     if(!v.grounded&&underCanopy&&i.brake){
@@ -87,13 +98,14 @@ export function stepSoaring(v:VehicleState,i:Input,_dt:number,q:EnvironmentQueri
      force.addScaledVector(relative,-mass*.4);
     }
    }
-   const authority=clamp(speed/(glider?20:7),0,1),yawRate=v.grounded?0:-9.81*Math.tan(v.roll)/Math.max(speed,6);
+   const authority=clamp(speed/(glider?20:7),0,1),yawRate=v.grounded?0:-9.81*Math.tan(v.roll)/Math.max(speed,6);a.controlAuthority=authority;
    torque.addScaledVector(right,inertia.x*clamp((v.pitch-pitchTarget)*8-a.angularVelocity.dot(right)*4,-3,3)*authority);
    torque.addScaledVector(forward,inertia.z*clamp((rollTarget-v.roll)*10-a.angularVelocity.dot(forward)*5,-3,3)*authority);
    torque.addScaledVector(up,inertia.y*(yawRate-a.angularVelocity.dot(up))*3*authority);
    v.throttle=0;a.angleOfAttackRadians=alpha;a.loadFactor=lift/(mass*9.81);a.stalled=speed>4&&Math.abs(alpha)>.35;
   }
-  if(v.grounded&&!glider){force.addScaledVector(v.velocity,-mass*(i.slow||i.brake?5:glider?.02:wear&&wear.hadFlight?5:wear&&i.boost?.08:1));torque.addScaledVector(a.angularVelocity,-mass);}
+  if(v.grounded&&i.forward<0)force.addScaledVector(v.velocity,-mass*5);
+  if(v.grounded&&!glider){force.addScaledVector(v.velocity,-mass*(i.slow||i.brake?5:wear&&wear.hadFlight?5:wear&&(i.boost||i.forward>0)?.08:1));torque.addScaledVector(a.angularVelocity,-mass);}
   body.resetForces(false);body.resetTorques(false);body.addForce(force,true);body.addTorque(torque,true);a.airspeedMetersPerSecond=speed;
  };
  rig.afterStep=()=>{const p=body.translation(),r=body.rotation(),vel=body.linvel(),w=body.angvel();v.position.set(p.x,p.y,p.z);v.rotation.set(r.x,r.y,r.z,r.w).normalize();v.velocity.set(vel.x,vel.y,vel.z);a.angularVelocity.set(w.x,w.y,w.z);const e=new Euler().setFromQuaternion(v.rotation,'YXZ');v.pitch=-e.x;v.yaw=e.y;v.roll=e.z;v.speed=v.velocity.length();};

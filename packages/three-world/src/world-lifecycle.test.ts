@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {createWorld} from './engine';
+import {WorldEngine} from './engine';
 
 // Drive the real world through browser callbacks, including callbacks delivered
 // after cancellation. No physics, animation or camera implementation is mocked.
@@ -21,7 +21,7 @@ function frames() {
   };
 }
 async function fixture() {
-  const world = await createWorld({navigation:false});
+  const world = await WorldEngine.create({navigation:false});
   const ground = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 40)); ground.position.y = -.5;
   world.addEntity({id:'ground',object:ground,physics:{kind:'fixed'}});
   world.addCharacter({id:'actor',object:new THREE.Group()});

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {createWorld, type WorldEngine} from './engine.js';
+import {createWorldEngine, type WorldEngine} from './engine.js';
 import {ThreePhysics} from './physics.js';
 import {ThreeNavigation} from './navigation.js';
 import {HumanoidRuntime, type HumanoidRuntimeOptions} from './humanoid-runtime/runtime.js';
@@ -14,7 +14,7 @@ function box(position: readonly [number, number, number], size: readonly [number
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshBasicMaterial()); mesh.position.fromArray(position); return mesh;
 }
 function actor(position: readonly [number, number, number]) { const object = new THREE.Group(); object.position.fromArray(position); return object; }
-async function world(options: Parameters<typeof createWorld>[0]) { const value = await createWorld(options); worlds.push(value); return value; }
+async function world(options: Parameters<typeof createWorldEngine>[0]) { const value = await createWorldEngine(options); worlds.push(value); return value; }
 afterEach(() => { for (const value of worlds.splice(0)) value.dispose(); for (const value of physicsInstances.splice(0)) value.dispose(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('generic world physical boundaries', () => {
@@ -121,14 +121,14 @@ describe('generic world physical boundaries', () => {
     expect(() => value.addEntity({id: 'divider:segment-0', object, role: 'obstacle'})).toThrow('WORLD_ENTITY_DUPLICATE');
     expect(object.parent).toBeNull(); expect(value.physics.probe([0, 1, 0], [1, 0, 0], 6)).toEqual(collision);
     const dispose = vi.spyOn(ThreePhysics.prototype, 'dispose');
-    await expect(createWorld({navigation: false, boundaries: [wall], physics: {maximumColliderCount: 1}})).rejects.toThrow('PHYSICS_COLLIDER_BUDGET_EXCEEDED');
+    await expect(createWorldEngine({navigation: false, boundaries: [wall], physics: {maximumColliderCount: 1}})).rejects.toThrow('PHYSICS_COLLIDER_BUDGET_EXCEEDED');
     expect(dispose).toHaveBeenCalledTimes(1);
-    await expect(createWorld({boundaries: null as unknown as BoundaryDefinition[]})).rejects.toThrow('BOUNDARY_INVALID');
+    await expect(createWorldEngine({boundaries: null as unknown as BoundaryDefinition[]})).rejects.toThrow('BOUNDARY_INVALID');
   });
 
   it('rejects top-level boundaries with Humanoid before creating a second physics owner', async () => {
     const createHumanoid = vi.spyOn(HumanoidRuntime, 'create');
-    await expect(createWorld({humanoid: {} as HumanoidRuntimeOptions, boundaries: []})).rejects.toThrow('WORLD_HUMANOID_BOUNDARIES_LOCATION');
+    await expect(createWorldEngine({humanoid: {} as HumanoidRuntimeOptions, boundaries: []})).rejects.toThrow('WORLD_HUMANOID_BOUNDARIES_LOCATION');
     expect(createHumanoid).not.toHaveBeenCalled();
   });
 

@@ -43,7 +43,7 @@ it('rests without thrust, pushes only to walking speed, and coasts after release
 it.each(['KeyA','KeyD'])('respects subtype stationary steering from %s',key=>{
  const {q,v,run}=fixture();
  try{run(2);const start=v.position.clone(),yaw=v.yaw;
-  run(2,readControls(new Set([key]),true,false,{},undefined,spec.mode));
+  run(2,readControls(new Set([key]),true,false,{},undefined,{mode:spec.mode}));
   if(spec.mode==='sled')expect((v.yaw-yaw)*(key==='KeyA'?1:-1)).toBeGreaterThan(.35);
   else expect(Math.abs(v.yaw-yaw)).toBeLessThan(.01);
   expect(v.position.distanceTo(start)).toBeLessThan(.06);
@@ -51,7 +51,7 @@ it.each(['KeyA','KeyD'])('respects subtype stationary steering from %s',key=>{
  }finally{q.dispose();}
 });
 it('reads S from rest and switches between forward, braking, and reverse without releasing the key',()=>{
- const {q,v,run}=fixture(),s=readControls(new Set(['KeyS']),true,false,{},undefined,spec.mode);
+ const {q,v,run}=fixture(),s=readControls(new Set(['KeyS']),true,false,{},undefined,{mode:spec.mode});
  try{run(2);const start=v.position.z;run(4,s);
   if(spec.mode==='sled'){
    expect(v.position.z-start).toBeLessThan(-1);expect(v.velocity.z).toBeLessThan(-.2);expect(v.speed).toBeLessThan(1.6);

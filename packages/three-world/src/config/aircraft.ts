@@ -1,4 +1,9 @@
 /** 轻型固定翼标定，米、千克、秒；维护者参数与运行算法分离。 */
+export interface AircraftFlightTuning {
+ pitchGain:number;rollGain:number;pitchRateDamping:number;rollRateDamping:number;yawRateDamping:number;
+}
+/** Fixed-wing attitude defaults. VehicleSpec.aircraftFlight may override these per aircraft. */
+export const DEFAULT_AIRCRAFT_FLIGHT:Readonly<AircraftFlightTuning>=Object.freeze({pitchGain:9,rollGain:14,pitchRateDamping:5,rollRateDamping:6,yawRateDamping:4});
 export const AIRCRAFT = {
  turnRate:.32, maxBank:1.0, turnResponse:8, verticalResponse:.8,
  mass:850, area:16.2, density:1.225, center:[0,1.1,.35] as const,
@@ -14,7 +19,7 @@ export const AIRCRAFT = {
 export const AIRCRAFT_SUBTYPES=['fixed-wing','pusher','helicopter','multirotor','tiltrotor','glider','paraglider','wingsuit','balloon'] as const;
 export type AircraftSubtype=typeof AIRCRAFT_SUBTYPES[number];
 export const ROTOR_FLIGHT={
- governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70,
+  governorRate:2.5, rotorSpeed:38, motorRate:10, propellerSpeed:70, releaseDamping:1.8,
  climbSpeed:8, verticalResponse:1.8, maxLift:2.1, pitchLimit:.32, bankLimit:.38,
  attitudeGain:8, rateDamping:4, yawRate:.65, drag:.12,
  transitionStart:12, transitionEnd:32, tiltRate:.22,
@@ -33,12 +38,14 @@ export function aircraftCollisionBoxes(subtype:AircraftSubtype){
 }
 
 export const SOARING={
+ targetSpeed:{glider:28,canopy:8,wingsuit:20},speedDemandRatio:.3,speedTrimRadians:.18,
  glider:{mass:850,area:22,cl0:.25,liftSlope:4.7,drag:.017,induced:.035,trim:.045},
  paraglider:{mass:110,area:25,cl0:.45,liftSlope:2.8,drag:.10,induced:.13,trim:.12},
  // Training preset: effective low-speed lifting area; not a certified wingsuit model.
  wingsuit:{mass:95,area:3.2,cl0:.55,liftSlope:3.0,drag:.09,induced:.09,trim:.15},
  balloon:{mass:300,volume:1200,ambientKelvin:288.15,maxKelvin:410,heating:20,cooling:.025,ventCooling:10,fuelSeconds:180,dragArea:120},
  towSeconds:8,towAcceleration:10,canopySeconds:2,
+ wingsuitLaunchClearanceMeters:3,wingsuitLaunchFallSeconds:.15,
 } as const;
 
 /** 动力飞机训练小类的航迹转向响应；教练机及其他飞机继续使用各自原有配置。 */

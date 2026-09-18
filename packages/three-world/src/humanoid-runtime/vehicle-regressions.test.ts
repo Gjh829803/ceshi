@@ -29,6 +29,14 @@ function cameraController(v:ReturnType<typeof createVehicle>,q:EnvironmentQuerie
  return new CameraController({sampleSubject:()=>cameraSubject(v),geometry:()=>({probe:(from,to,radius)=>probeHumanoidCamera(q.borrowPhysics().world,from,to,radius,undefined,filter)})});
 }
 beforeAll(initEnvironmentQueries);
+it.each(['rover','bus','tank','hovercraft','boat','patrol-boat','kayak','submarine'])('%s slows through the Ctrl input without propulsion',id=>{
+ const water=['boat','patrol-boat','kayak','submarine'].includes(id);
+ const run=(slow:boolean)=>{const f=fixture(id,water?pool:flat);try{f.run(180,{forward:1});const before=f.v.speed;f.run(60,{slow});return {before,after:f.v.speed};}finally{f.q.dispose();}};
+ const coast=run(false),braked=run(true);expect(braked.before).toBeGreaterThan(.1);expect(braked.after).toBeLessThan(coast.after*.85);
+});
+it('mount jumps once from support, lands, and cannot gain height from held airborne jump',()=>{
+ const f=fixture('horse');try{f.run(90);const floor=f.v.position.y;f.run(1,{jump:true});expect(f.v.velocity.y).toBeGreaterThan(2);f.run(12,{jump:true});expect(f.v.position.y).toBeGreaterThan(floor+.4);f.run(180);expect(Math.abs(f.v.position.y-floor)).toBeLessThan(.15);expect(f.v.grounded).toBe(true);}finally{f.q.dispose();}
+});
 it('rover pushes the empty rescue hovercraft, backs away and collides again',()=>{
  const specs=['rover','rescue-hovercraft'].map(id=>SPECS.find(s=>s.id===id)!),map=structuredClone(flat);
  map.regions=[{id:'test',name:'Test',description:'',center:[0,0,0],size:[300,300],color:'#ccc',modes:['wheeled','hover']}];
@@ -83,7 +91,7 @@ it.each(['boat','patrol-boat'])('%s turns in place with A/D without creating pro
   try{
    f.run(60);
    const keys=new Set([key,...(travel==='forward'?['KeyW']:travel==='reverse'?['KeyS']:[])]);
-   const input=readControls(keys,true,false,{},undefined,'boat');
+   const input=readControls(keys,true,false,{},undefined,{mode:'boat'});
    const yaw=f.v.yaw,position=f.v.position.clone();f.run(120,input);
    expect((f.v.yaw-yaw)*direction*(travel==='reverse'?-1:1),key+':'+travel).toBeGreaterThan(.4);
    if(travel==='stationary'){
@@ -142,7 +150,7 @@ it.each(['horse','boat','patrol-boat','submarine','hovercraft','rescue-hovercraf
 it.each(['plane','trainer-plane','glider'])('%s does not rebuild rigid camera geometry during flight',id=>{
  const f=fixture(id),root=new Group(),mesh=new Mesh(new BoxGeometry(2,1,3),new MeshStandardMaterial());root.add(mesh);
  const query=new VehicleCameraQueries([{instanceId:id,object:root}]),spy=vi.spyOn(RAPIER.TriMesh.prototype,'intoRaw');
- try{for(let n=0;n<600;n++){f.run(1,{forward:-1,boost:true});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();expect(query.probe(new Vector3(4,0,0).applyQuaternion(root.quaternion).add(root.position).toArray(),root.position.toArray(),.1).distanceMeters).toBeCloseTo(2.9,4);}expect(f.v.position.y).toBeGreaterThan(2);expect(spy).toHaveBeenCalledTimes(2);expect(f.v.rotation.lengthSq()).toBeCloseTo(1,12);}
+ try{for(let n=0;n<600;n++){f.run(1,{pitch:-1,boost:true});root.position.copy(f.v.position);root.quaternion.copy(f.v.rotation);query.sync();expect(query.probe(new Vector3(4,0,0).applyQuaternion(root.quaternion).add(root.position).toArray(),root.position.toArray(),.1).distanceMeters).toBeCloseTo(2.9,4);}expect(f.v.position.y).toBeGreaterThan(2);expect(spy).toHaveBeenCalledTimes(2);expect(f.v.rotation.lengthSq()).toBeCloseTo(1,12);}
  finally{spy.mockRestore();query.dispose();mesh.geometry.dispose();mesh.material.dispose();f.q.dispose();}
 });
 it.each(['tank','sled','ski','unicycle','horse','skateboard'])('%s follows both cross slopes with real support',id=>{

@@ -491,8 +491,12 @@ export interface World {
  registerEntityLifecycle(entityId:string,callbacks:EntityLifecycleCallbacks):()=>void;
  /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
- /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */
- onRender(callback:()=>void):()=>void;
+ /** After temporary presentation restores; supplies the rendered interpolation alpha (0–1). */
+ onRender(callback:(interpolationAlpha:number)=>void):()=>void;
+ /** Synchronous auxiliary display transaction; defaults to the current fixed sample.
+  * Reuse onRender's alpha for a matching frame. Object views retain the complete body.
+  * Does not render or advance simulation; the callback must not mutate world state. */
+ withPresentation<T>(work:()=>T,options?:{readonly interpolationAlpha?:number;readonly view?:'world'|'object'}):T;
  /** Subscribe while alive; reset preserves registrations until unsubscribed or disposed. */
  onReset(callback:()=>void):()=>void;
  /** Subscribe while alive; called once at world cleanup, then released. Unsubscribe remains safe after disposal. */
@@ -525,6 +529,8 @@ export interface WorldObservation {
  /** Same active presentation for application transport/UI integration; absent when no presentation layer is installed. */
  readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
+ /** Read-only registry lookup for geometry diagnostics; physics classification is known only for registered entities. Does not change capture selection. */
+ getEntityGeometry?(entityId:string):{readonly object:THREE.Object3D;readonly physicsKind:'none'|'fixed'|'kinematic'|'dynamic'|'character'}|undefined;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
  readonly captureTargetIds?:readonly string[];
  readonly targetRepresentativesById?:Readonly<Record<string,CaptureTargetRepresentative>>;
