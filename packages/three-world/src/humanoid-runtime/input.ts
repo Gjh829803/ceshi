@@ -64,10 +64,10 @@ export function pitchControlActions(context:MountedInputContext):readonly [Contr
 }
 /** Only the current controller may consume a key; cross-context reuse is intentional. */
 export function activeControlActions(context?:MountedInputContext):ControlAction[]{
-  const common:ControlAction[]=['interact','cameraToggle','cameraLeft','cameraRight','cameraUp','cameraDown'];
+  const common:ControlAction[]=['interact','cameraToggle','cameraLeft','cameraRight','cameraUp','cameraDown','reset'];
   if(!context)return [...common,'forward','backward','left','right','sprint','slow','jump','crouch','prone','roll','putDown','summonDragon','swimStyle'];
-  if(context.aircraftSubtype==='balloon')return [...common,'ascend','descend','reset'];
-  const actions:ControlAction[]=[...common,'forward','backward','left','right','slow','reset'];
+  if(context.aircraftSubtype==='balloon')return [...common,'ascend','descend'];
+  const actions:ControlAction[]=[...common,'forward','backward','left','right','slow'];
   if(context.aircraftSubtype==='wingsuit'&&context.groundLocomotion)return [...actions,'sprint','jump'];
   if(hasVerticalControls(context))actions.push('ascend','descend');
   else actions.push('jump');

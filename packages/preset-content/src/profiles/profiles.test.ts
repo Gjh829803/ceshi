@@ -33,7 +33,17 @@ describe('asset aircraft profiles',()=>{
   expect(glider).not.toHaveProperty('aircraftFlight');
   expect(()=>parseAssetProfile({...glider,aircraftFlight:humanoid.DEFAULT_AIRCRAFT_FLIGHT})).toThrow('aircraftFlight unsupported');
   const plane=getDefaultProfile('plane')!;
-  expect(()=>parseAssetProfile({...plane,aircraftFlight:{pitchGain:9}})).toThrow('complete aircraftFlight profile required');
+ expect(()=>parseAssetProfile({...plane,aircraftFlight:{pitchGain:9}})).toThrow('complete aircraftFlight profile required');
+ });
+ it('matches creature catalog identities when applying mount profiles',()=>{
+  const applied: unknown[]=[];
+  const runtime={
+   snapshot:()=>({vehicles:[{instanceId:'horse',assetId:'creature.horse'}]}),
+   applyProfile:(profile:unknown)=>{applied.push(profile);},
+  } as unknown as humanoid.HumanoidRuntime;
+  applyControlProfile(runtime,getDefaultProfile('horse')!);
+  expect(applied).toHaveLength(1);
+  expect((applied[0] as {vehicles:Record<string,unknown>}).vehicles).toHaveProperty('horse');
  });
 });
 

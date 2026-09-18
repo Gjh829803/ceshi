@@ -10,6 +10,7 @@ function matchesProfileAsset(assetId: string, vehicle: ReturnType<Runtime['snaps
   return vehicle.assetId===assetId
     || !!spec&&vehicle.assetId===assetIdForPreset(spec)
     || vehicle.assetId===`vehicle.${assetId}`
+    || vehicle.assetId===`creature.${assetId}`
     || assetId==='dragon'&&vehicle.assetId.startsWith('creature.dragon');
 }
 

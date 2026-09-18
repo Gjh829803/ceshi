@@ -21,7 +21,7 @@ export const INPUT_BINDINGS = Object.freeze({
   fixedWingPitchUp:binding(['KeyE'],'动力固定翼抬头'),
   rollLeft:binding(['KeyZ'],'横滚左 / 炮塔左 / 侧倾侧移左 / 飞龙闪避'),
   rollRight:binding(['KeyX'],'横滚右 / 炮塔右 / 侧倾侧移右'),
-  reset:binding(['Backspace'],'长按 0.8 秒复位（挂载时）'),
+  reset:binding(['Backspace'],'长按 0.8 秒场景复位'),
   cameraToggle:binding(['KeyV'],'切换视角（需启用）'),
   cameraLeft:binding(['ArrowLeft'],'视角左转'),
   cameraRight:binding(['ArrowRight'],'视角右转'),
