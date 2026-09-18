@@ -4,7 +4,7 @@ import { getSharedControlDefaults } from '../../control/defaults';
 
 /** Reference-inspired 5.8 m minibus; +Z forward, metres and seconds. */
 export const BUS_SPEC:VehicleSpec={
-  id:'bus',name:'复古小巴',en:'MINIBUS',mode:'bus',archetype:'bus',kernel:'K15',color:'#83c7bb',
+  id:'bus',controlProfileId:'preset.bus',name:'复古小巴',en:'MINIBUS',mode:'bus',archetype:'bus',kernel:'K15',color:'#83c7bb',
   spawn:[-226,0,64],yaw:0,...getSharedControlDefaults('bus')!,
   wheelbaseMeters:3.3,rearAxleZMeters:-1.45,
   radius:2.15,seat:[.47,1.13,1.38],

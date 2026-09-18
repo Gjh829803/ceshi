@@ -2,7 +2,7 @@ import {ATV_POWERTRAIN} from '../powertrains';
 import type {VehicleSpec} from '../../config';
 import { getSharedControlDefaults } from '../../control/defaults';
 export const ATV_SPEC:VehicleSpec={
- id:'atv',name:'全地形车',en:'QUAD ATV',mode:'wheeled',archetype:'atv',kernel:'K01',color:'#bc3543',
+ id:'atv',controlProfileId:'preset.atv',name:'全地形车',en:'QUAD ATV',mode:'wheeled',archetype:'atv',kernel:'K01',color:'#bc3543',
  spawn:[-212,0,64],yaw:0,...getSharedControlDefaults('atv')!,
  radius:1.48,seat:[0,1,-.15],characterPose:'atv',wheelbaseMeters:1.6,rearAxleZMeters:-.8,
  wheelPhysics:{chassis:{kind:'box',halfExtents:[.85,.5,1.2],offset:[0,.88,0]},mass:360,radius:.39,halfTrack:.7,halfWheelbase:.8,hubHeight:.39,centerOfMassHeight:.25,tireFriction:1.4,maxRaise:.03,maxDrop:.04,wheelWidth:.28,wheels:[{x:.7,z:.8,steering:true,driven:true},{x:-.7,z:.8,steering:true,driven:true},{x:.7,z:-.8,steering:false,driven:true},{x:-.7,z:-.8,steering:false,driven:true}],powertrain:ATV_POWERTRAIN},

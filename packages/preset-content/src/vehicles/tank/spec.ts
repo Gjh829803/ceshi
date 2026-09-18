@@ -4,7 +4,7 @@ import { getSharedControlDefaults } from '../../control/defaults';
 
 /** Enlarged humanoid tank. +Z nose. Metres, seconds, m/s, m/s², rad/s. */
 export const TANK_SPEC:VehicleSpec={
-  id:'tank',name:'履带坦克',en:'TANK',mode:'tank',archetype:'tank',kernel:'K16',color:'#7c8061',
+  id:'tank',controlProfileId:'preset.tank',name:'履带坦克',en:'TANK',mode:'tank',archetype:'tank',kernel:'K16',color:'#7c8061',
   spawn:[-240,0,64],yaw:0,...getSharedControlDefaults('tank')!,
   radius:5.4,seat:[0,1.45,2.1],characterPose:'tank',
   hint:'W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角',

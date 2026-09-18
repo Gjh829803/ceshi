@@ -1,7 +1,7 @@
 import type {VehicleSpec} from '../../config';
 import { getSharedControlDefaults } from '../../control/defaults';
 export const UNICYCLE_SPEC:VehicleSpec={
-  id:'unicycle',name:'独轮车',en:'UNICYCLE',mode:'unicycle',archetype:'unicycle',kernel:'K02',color:'#d9bd36',
+  id:'unicycle',controlProfileId:'preset.unicycle',name:'独轮车',en:'UNICYCLE',mode:'unicycle',archetype:'unicycle',kernel:'K02',color:'#d9bd36',
   spawn:[-170,0,64],yaw:0,...getSharedControlDefaults('unicycle')!,
   radius:.55,seat:[0,.94,0],characterPose:'unicycle',
   bodyPhysics:{kind:'unicycle',mass:90,centerOfMassHeight:0.6},

@@ -1,6 +1,6 @@
 import type {VehicleSpec} from '../../config';
 import { getSharedControlDefaults } from '../../control/defaults';
-export const KAYAK_SPEC:VehicleSpec={id:'kayak',name:'单人皮划艇',en:'KAYAK',mode:'paddled_boat',archetype:'kayak',kernel:'K17',color:'#b84047',
+export const KAYAK_SPEC:VehicleSpec={id:'kayak',controlProfileId:'preset.kayak',name:'单人皮划艇',en:'KAYAK',mode:'paddled_boat',archetype:'kayak',kernel:'K17',color:'#b84047',
  spawn:[205,-1.93,-124],yaw:Math.PI/2,...getSharedControlDefaults('kayak')!,radius:.48,seat:[0,.23,-.35],characterPose:'paddling',
  hint:'W 交替划桨 · S 倒划 · A / D 单侧转向 · Space 压桨制动 · F 上下艇 · T 切换视角',
  bodyPhysics:{kind:'paddle',mass:105,centerOfMassHeight:0.15,water:{displacement:.23,depth:.35,bottom:.23,damping:5.5}},

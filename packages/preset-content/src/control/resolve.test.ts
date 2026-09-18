@@ -24,4 +24,17 @@ describe('control profile resolution', () => {
     expect(resolved.sources['control.maxSpeed']).toBe('debug-instance');
     expect(resolved.sources['aircraftFlight.pitchGain']).toBe('debug-instance');
   });
+
+  it('rejects layers whose instance identity does not match their scope', () => {
+    const shared = getDefaultControlProfile('plane')!;
+    const plane01 = { ...structuredClone(shared), instanceId: 'plane-01' };
+    const plane02 = { ...structuredClone(shared), instanceId: 'plane-02' };
+
+    expect(() => resolveControlProfile({ shared: plane01 })).toThrow('shared control profile cannot target an instance');
+    expect(() => resolveControlProfile({ shared, projectAsset: plane01 })).toThrow('project asset control profile cannot target an instance');
+    expect(() => resolveControlProfile({ shared, debugAsset: plane01 })).toThrow('debug asset control profile cannot target an instance');
+    expect(() => resolveControlProfile({ shared, projectInstance: structuredClone(shared) })).toThrow('project instance control profile must target an instance');
+    expect(() => resolveControlProfile({ shared, debugInstance: structuredClone(shared) })).toThrow('debug instance control profile must target an instance');
+    expect(() => resolveControlProfile({ shared, projectInstance: plane01, debugInstance: plane02 })).toThrow('control profile instance layer mismatch');
+  });
 });
