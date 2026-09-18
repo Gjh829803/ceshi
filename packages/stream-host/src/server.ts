@@ -147,6 +147,12 @@ export async function startStreamHost(options:StreamHostOptions):Promise<StreamH
     sockets.handleUpgrade(req,socket,head,ws=>{
       if(channel==='producer-control'){
         if(s.control?.readyState===WebSocket.OPEN){ws.close(1008,'duplicate producer');return;}s.control=ws;
+        ws.on('close',()=>{
+          if(s.control!==ws||s.status!=='running')return;
+          // Includes exhausted producer media recovery: dispose closes control.
+          s.status='failed';broadcast(s,{type:'session.ended',reason:s.error??'producer-control-closed'});
+          void s.context?.close().catch(()=>{});scheduleIdle(s);
+        });
         ws.on('message',(data,isBinary)=>{try{
           if(isBinary||(Array.isArray(data)?Buffer.concat(data).length:data.byteLength)>MAX_CONTROL_BYTES)throw new Error('STREAM_CONTROL_INVALID');const m=parseJsonMessage(data.toString()) as unknown as ProducerMessage;
           if(m.type==='producer.ready'){s.ready?.();return;}
@@ -162,7 +168,7 @@ export async function startStreamHost(options:StreamHostOptions):Promise<StreamH
         s.producerMedia?.close();s.producerMedia=ws;send(s.control,{type:'media.keyframe',epoch:s.epoch});
         ws.on('message',(data,isBinary)=>{try{
           if(!isBinary)throw new Error('STREAM_MEDIA_BINARY_REQUIRED');const packet=Buffer.isBuffer(data)?data:Buffer.from(data as ArrayBuffer);const {header}=decodeFrame(packet);
-          if(header.sessionId!==s.id||header.epoch!==s.epoch)return;
+          if(s.producerMedia!==ws||header.sessionId!==s.id||header.epoch!==s.epoch)return;
           for(const v of s.viewers.values())if(v.media?.readyState===WebSocket.OPEN){if(v.media.bufferedAmount>MAX_MEDIA_BYTES)v.media.close(1013,'slow media consumer');else v.media.send(packet);}
         }catch(error){ws.close(1008,String(error).slice(0,100));}});
       }else{

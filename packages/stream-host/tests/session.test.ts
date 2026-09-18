@@ -1,4 +1,8 @@
-import {test,expect} from 'vitest';
+import {test,expect,vi} from 'vitest';
+import * as browserCapture from '@worldkit/browser-capture/browser';
+import {WebSocket as NodeWebSocket} from 'ws';
+import {ProducerMediaConnection} from '../src/media-connection.js';
+import {decodeFrame,type FrameHeader,type CodecConfig} from '@worldkit/stream-protocol';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdtemp,rm,cp,readFile,writeFile} from 'node:fs/promises';
@@ -186,3 +190,147 @@ test('real encoded stream, custom UI actions, input, reconnect and epoch reset',
     expect(await page.locator('[data-world-id]').isEnabled()).toBe(true);
   }finally{await browser.close();await host.close();await rm(output,{recursive:true,force:true});await rm(worldDirectory,{recursive:true,force:true});}
 },120000);
+
+
+test('producer recovers backpressure without repeated encoder metadata or Host keyframe hints',async()=>{
+  const browser=await launchChromiumWithSystemFallback({headless:true});
+  const launch=vi.spyOn(browserCapture,'launchChromiumWithSystemFallback').mockResolvedValue(browser);
+  const newContext=browser.newContext.bind(browser);
+  const contextSpy=vi.spyOn(browser,'newContext').mockImplementation(async options=>{
+    const context=await newContext(options);
+    await context.addInitScript(()=>{
+      const OriginalSocket=window.WebSocket,OriginalEncoder=window.VideoEncoder;
+      const probe={sockets:[] as WebSocket[],congested:false,configs:0,rejectConnections:0};
+      Object.assign(window,{__mediaProbe:probe});
+      window.WebSocket=class extends OriginalSocket{
+        constructor(url:string|URL,protocols?:string|string[]){
+          const media=String(url).includes('/producer-media');
+          if(media&&probe.rejectConnections>0){probe.rejectConnections--;url=String(url).replace('/producer-media','/reject-media');}
+          super(url,protocols);if(media)probe.sockets.push(this);
+        }
+        get bufferedAmount(){return probe.congested&&String(this.url).includes('/producer-media')?5*1024*1024:super.bufferedAmount;}
+        addEventListener(type:string,listener:any,options?:any){
+          // Recovery must not rely on the separate control-channel hint racing open.
+          if(type==='message'&&String(this.url).includes('/producer-control'))super.addEventListener(type,event=>{
+            if(JSON.parse(String((event as MessageEvent).data)).type!=='media.keyframe')listener(event);
+          },options);else super.addEventListener(type,listener,options);
+        }
+      };
+      window.VideoEncoder=class extends OriginalEncoder{
+        constructor(init:VideoEncoderInit){let first=true;super({...init,output:(chunk,metadata)=>{
+          if(first&&metadata?.decoderConfig){first=false;probe.configs++;init.output(chunk,metadata);}
+          else init.output(chunk,{});
+        }});}
+      };
+    });
+    return context;
+  });
+  let host:Awaited<ReturnType<typeof startStreamHost>>|undefined;
+  const clients:NodeWebSocket[]=[];
+  try{
+    host=await startStreamHost({worldsDirectory:path.resolve('examples/three-creator/streaming-ui'),port:0,width:640,height:360,fps:12});
+    const [world]=await (await fetch(host.baseUrl+'/v1/worlds')).json() as {id:string}[];
+    const response=await fetch(host.baseUrl+'/v1/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({worldId:world!.id})});
+    expect(response.status).toBe(201);const session=await response.json() as {sessionId:string;accessToken:string};
+    const configs=new Map<number,CodecConfig>(),frames:{header:FrameHeader;payload:number[]}[]=[],errors:string[]=[],ended:string[]=[];
+    const connect=(channel:string)=>{
+      const url=new URL(`/v1/sessions/${session.sessionId}/${channel}`,host!.baseUrl);url.protocol='ws:';url.searchParams.set('token',session.accessToken);url.searchParams.set('clientId','recovery-test');
+      const socket=new NodeWebSocket(url);clients.push(socket);return socket;
+    };
+    const control=connect('control');control.on('message',data=>{const m=JSON.parse(data.toString());if(m.type==='media.config')configs.set(m.mediaGeneration,m.config);if(m.type==='error')errors.push(m.code);if(m.type==='session.ended')ended.push(m.reason);});
+    const media=connect('media');media.on('message',data=>{const packet=decodeFrame(Buffer.from(data as ArrayBuffer));frames.push({header:packet.header,payload:[...packet.payload]});});
+    await expect.poll(()=>frames.filter(f=>f.header.type==='key').length,{timeout:15000}).toBeGreaterThan(0);
+    const page=browser.contexts()[0]!.pages()[0]!;
+    const initial=frames.at(-1)!.header.mediaGeneration;
+    await page.evaluate(()=>{(window as any).__mediaProbe.congested=true;});
+    await expect.poll(()=>page.evaluate(()=>(window as any).__mediaProbe.sockets[0].readyState)).not.toBe(1);
+    await page.evaluate(()=>{(window as any).__mediaProbe.congested=false;});
+    await expect.poll(()=>frames.filter(f=>f.header.mediaGeneration>initial).length,{timeout:10000}).toBeGreaterThan(3);
+    const recovered=frames.filter(f=>f.header.mediaGeneration>initial),generation=recovered[0]!.header.mediaGeneration;
+    expect(recovered[0]!.header.type).toBe('key');expect(configs.has(generation)).toBe(true);
+    expect(await page.evaluate(()=>(window as any).__mediaProbe.configs)).toBe(1);
+    // Exercise actual WebCodecs decoding, not just packet arrival.
+    expect(await page.evaluate(async ({config,packets})=>{
+      let decoded=0,failure:unknown;const decoder=new VideoDecoder({output:frame=>{decoded++;frame.close();},error:error=>{failure=error;}});
+      try{const {description,...settings}=config;decoder.configure({...settings,...(description?{description:new Uint8Array(description)}:{})});
+        for(const packet of packets)decoder.decode(new EncodedVideoChunk({type:packet.header.type,timestamp:packet.header.outputPtsUs,data:new Uint8Array(packet.payload)}));
+        await decoder.flush();if(failure)throw failure;return decoded;
+      }finally{decoder.close();}
+    },{config:configs.get(generation)!,packets:recovered.filter(f=>f.header.mediaGeneration===generation)})).toBeGreaterThan(3);
+    // A transport close followed by one refused upgrade recovers within the same session.
+    await page.evaluate(()=>{const p=(window as any).__mediaProbe;p.rejectConnections=1;p.sockets.at(-1).close();});
+    await expect.poll(()=>frames.filter(f=>f.header.mediaGeneration>generation+1).length,{timeout:10000}).toBeGreaterThan(3);
+    const afterError=frames.filter(f=>f.header.mediaGeneration>generation+1);
+    expect(afterError[0]!.header.type).toBe('key');expect(configs.has(afterError[0]!.header.mediaGeneration)).toBe(true);
+    expect(host.sessions()[0]!.status).toBe('running');expect(errors).toEqual([]);
+    // Persistent refusal must terminate explicitly instead of leaving status running.
+    await page.evaluate(()=>{const p=(window as any).__mediaProbe;p.rejectConnections=100;p.sockets.at(-1).close();});
+    await expect.poll(()=>host!.sessions()[0]?.status,{timeout:20000}).toBe('failed');
+    await expect.poll(()=>ended.some(reason=>reason.includes('STREAM_MEDIA_RECONNECT_EXHAUSTED'))).toBe(true);
+    expect(errors.some(reason=>reason.includes('STREAM_MEDIA_RECONNECT_EXHAUSTED'))).toBe(true);
+  }finally{for(const client of clients)client.terminate();await host?.close();contextSpy.mockRestore();launch.mockRestore();await browser.close();}
+},60000);
+
+
+class TestMediaSocket {
+  static OPEN=1;static CONNECTING=0;
+  static instances:TestMediaSocket[]=[];
+  readyState=0;bufferedAmount=0;sent:Uint8Array[]=[];
+  onopen:(()=>void)|null=null;onclose:(()=>void)|null=null;onerror:(()=>void)|null=null;
+  constructor(){TestMediaSocket.instances.push(this);}
+  open(){this.readyState=1;this.onopen?.();}
+  close(){this.readyState=3;this.onclose?.();}
+  send(bytes:Uint8Array){if(this.readyState!==1)throw new Error('closed');this.sent.push(bytes);}
+}
+const mediaHeader=(generation:number,type:'key'|'delta'='key'):FrameHeader=>({protocolVersion:1,sessionId:'test',epoch:0,mediaGeneration:generation,outputFrameId:1,outputPtsUs:1,type,source:{presentationId:'p',sdkEpoch:0,sourceFrameId:1,sourceTimeUs:1,simulationTick:1,worldRevision:0},uiRevision:0,uiCompleteThroughUs:1,widthPixels:640,heightPixels:360,payloadBytes:1});
+
+test('media generations reject stale callbacks/frames, replay updated config, and cancel retry on disposal',async()=>{
+  vi.useFakeTimers();vi.stubGlobal('WebSocket',TestMediaSocket);TestMediaSocket.instances=[];
+  const publish=vi.fn(()=>true),fail=vi.fn(),connection=new ProducerMediaConnection({url:'ws://test',publishConfig:publish,invalidate:vi.fn(),fail});
+  const config={codec:'vp8',codedWidth:640,codedHeight:360},payload=new Uint8Array([1]);
+  try{
+    const ready=connection.start(),first=TestMediaSocket.instances[0]!;first.open();await ready;
+    connection.setConfig(config);connection.send(mediaHeader(1),payload);expect(first.sent).toHaveLength(1);
+    const staleOpen=first.onopen!,staleClose=first.onclose!;
+    first.bufferedAmount=5*1024*1024;connection.send(mediaHeader(1),payload);
+    expect(connection.state).toBe('reconnecting');expect(connection.canCapture).toBe(false);
+    await vi.advanceTimersByTimeAsync(250);const second=TestMediaSocket.instances[1]!;
+    expect(publish).toHaveBeenCalledTimes(1);second.open();
+    expect(publish).toHaveBeenLastCalledWith(2,config);
+    staleOpen();staleClose();expect(connection.state).toBe('waiting-keyframe');
+    connection.send(mediaHeader(1),payload);connection.send(mediaHeader(2,'delta'),payload);expect(second.sent).toHaveLength(0);
+    connection.send(mediaHeader(2),payload);expect(second.sent).toHaveLength(1);
+    // A settings change during reconnect must replace, not replay, the old codec config.
+    second.close();connection.resetEncoder();const resized={...config,codedWidth:1280,codedHeight:720};connection.setConfig(resized);
+    await vi.advanceTimersByTimeAsync(500);const third=TestMediaSocket.instances[2]!;third.open();
+    expect(publish).toHaveBeenLastCalledWith(4,resized);
+    connection.send(mediaHeader(2),payload);expect(third.sent).toHaveLength(0);
+    third.close();connection.dispose();await vi.runAllTimersAsync();expect(TestMediaSocket.instances).toHaveLength(3);expect(fail).not.toHaveBeenCalled();
+  }finally{connection.dispose();vi.unstubAllGlobals();vi.useRealTimers();}
+});
+
+test('media connect timeouts and repeated open-close flapping have a bounded retry budget',async()=>{
+  vi.useFakeTimers();vi.stubGlobal('WebSocket',TestMediaSocket);TestMediaSocket.instances=[];
+  const failed=vi.fn(),connection=new ProducerMediaConnection({url:'ws://test',publishConfig:()=>true,invalidate:vi.fn(),fail:failed});
+  try{
+    const ready=connection.start().catch(error=>error);
+    TestMediaSocket.instances[0]!.onerror!(); // error followed by close counts only once
+    TestMediaSocket.instances[0]!.close();await vi.runAllTimersAsync();
+    expect((await ready).message).toContain('STREAM_MEDIA_RECONNECT_EXHAUSTED');
+    expect(TestMediaSocket.instances).toHaveLength(6);expect(failed).toHaveBeenCalledTimes(1);expect(connection.state).toBe('failed');
+    connection.dispose();await vi.runAllTimersAsync();expect(TestMediaSocket.instances).toHaveLength(6);
+  }finally{connection.dispose();vi.unstubAllGlobals();vi.useRealTimers();}
+
+  vi.useFakeTimers();vi.stubGlobal('WebSocket',TestMediaSocket);TestMediaSocket.instances=[];
+  const exhausted=vi.fn(),flapping=new ProducerMediaConnection({url:'ws://test',publishConfig:()=>true,invalidate:vi.fn(),fail:exhausted});
+  try{
+    const ready=flapping.start();TestMediaSocket.instances[0]!.open();await ready;
+    flapping.setConfig({codec:'vp8',codedWidth:640,codedHeight:360});
+    for(const delay of [250,500,1000,2000,4000]){
+      flapping.send(mediaHeader(flapping.generation),new Uint8Array([1]));TestMediaSocket.instances.at(-1)!.close();
+      await vi.advanceTimersByTimeAsync(delay);TestMediaSocket.instances.at(-1)!.open();
+    }
+    TestMediaSocket.instances.at(-1)!.close();await vi.runAllTimersAsync();
+    expect(exhausted).toHaveBeenCalledTimes(1);expect(TestMediaSocket.instances).toHaveLength(6);
+  }finally{flapping.dispose();vi.unstubAllGlobals();vi.useRealTimers();}
+});

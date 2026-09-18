@@ -46,6 +46,18 @@ The current layout supports approximately matching aspect ratios (including the
 The descriptor includes current video settings; connected players receive
 `session.video`. Bitrate is an encoder target, not guaranteed measured throughput.
 
+Producer media recovery keeps the encoder's last codec configuration across socket
+replacements. A replacement must open before the Host receives that configuration
+for its new media generation; only a keyframe can start that generation. Stale
+capture/encoder completions and superseded producer sockets cannot forward frames.
+Backpressure above 4 MiB, socket close/error and a 5-second open timeout enter the
+same reconnect path. Retries back off at 250/500/1000/2000/4000 ms; the budget resets
+only after 10 seconds of successful streaming, not merely after a socket opens.
+Exhaustion reports `STREAM_MEDIA_RECONNECT_EXHAUSTED`, releases producer resources,
+and marks the Host session failed with `session.ended`. Disposal cancels pending
+retries. Video setting changes replace the cached configuration as well as the
+media generation, including when they occur during reconnection.
+
 The default demo catalog is [`examples/worlds`](../../examples/worlds/README.md).
 Each direct child containing `project.json` is a world; dot directories are ignored.
 Optional `case.json` metadata supplies a friendly title (`schemaVersion: 1`,
