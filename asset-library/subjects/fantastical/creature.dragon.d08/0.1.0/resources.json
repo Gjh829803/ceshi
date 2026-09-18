@@ -1,0 +1,1762 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+  "preview": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "sha256": "6b201c045d0fa163fc5f1cad6ed223230e8f081e02a6c9b2f0201ed1633c8ada",
+      "byte_length": 10829320,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/dragon-training/__creature-assets/D08.glb",
+      "reused_by": [
+        "creature.dragon.d08"
+      ],
+      "logical_paths": [
+        "flying-creatures/D08/model.glb"
+      ]
+    },
+    {
+      "path": "shared/materials/5195300ad4aee7ef-FireGenLoop01_8x8.png",
+      "sha256": "5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7",
+      "byte_length": 1584772,
+      "format": "png",
+      "role": "texture",
+      "source_path": "assets/dragon-training/__creature-assets/FireGenLoop01_8x8.png",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/flame.png"
+      ]
+    },
+    {
+      "path": "shared/source_documents/1766bea48e627306-README.md",
+      "sha256": "1766bea48e62730608cba2407365757ee9db1c01d26bef547391714dab9952b4",
+      "byte_length": 9156,
+      "format": "md",
+      "role": "source",
+      "source_path": "assets/dragon-training/README.md",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/README.md"
+      ]
+    },
+    {
+      "path": "shared/source_documents/4d2d962aae5df830-variants.json",
+      "sha256": "4d2d962aae5df8306346f5869f040aa284404be60f5484d318555151ef3ee68b",
+      "byte_length": 50069,
+      "format": "json",
+      "role": "source",
+      "source_path": "assets/dragon-training/__creature-assets/variants.json",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/variants.json"
+      ]
+    },
+    {
+      "path": "shared/source_documents/520d710224bb6461-variant-sources.json",
+      "sha256": "520d710224bb6461763da7cab3f3753e5f52954a0857b5a30b689ef40e4e4a14",
+      "byte_length": 573950,
+      "format": "json",
+      "role": "source",
+      "source_path": "assets/dragon-training/__creature-assets/variant-sources.json",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/variant-sources.json"
+      ]
+    },
+    {
+      "path": "shared/source_documents/6408d76a6b0d6718-ground-sources.json",
+      "sha256": "6408d76a6b0d67189a9e15d749bd09e52f66da516f27d3fbfcb59976bcde0faa",
+      "byte_length": 39219,
+      "format": "json",
+      "role": "source",
+      "source_path": "assets/dragon-training/__creature-assets/ground-sources.json",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/ground-sources.json"
+      ]
+    },
+    {
+      "path": "shared/source_documents/49fdc10d4169bcec-manifest.json",
+      "sha256": "49fdc10d4169bcec3ee83a96746e1d138ef423da7427774571707ab40216039d",
+      "byte_length": 7158,
+      "format": "json",
+      "role": "source",
+      "source_path": "assets/dragon-training/__creature-assets/manifest.json",
+      "reused_by": [
+        "creature.dragon.d01",
+        "creature.dragon.d02",
+        "creature.dragon.d03",
+        "creature.dragon.d04",
+        "creature.dragon.d05",
+        "creature.dragon.d06",
+        "creature.dragon.d07",
+        "creature.dragon.d08",
+        "creature.dragon.d09",
+        "creature.dragon.d10",
+        "creature.dragon.d11"
+      ],
+      "logical_paths": [
+        "flying-creatures/manifest.json"
+      ]
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/thumbnail.webp",
+      "sha256": "754bff981a232298d09a6da1c6e15c30f43b45f7e06704fb89847f402f546596",
+      "byte_length": 10600,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "creature.dragon.d08"
+      ]
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/selector.png",
+      "sha256": "d6e74f5826e2484baa1fcefa716ed4a3585cc604db5b023d35f41906a35cd9f1",
+      "byte_length": 51854,
+      "format": "png",
+      "role": "preview",
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D08.png",
+      "reused_by": [
+        "creature.dragon.d08"
+      ],
+      "logical_paths": [
+        "flying-creatures/D08/thumbnail.png"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 131,
+    "meshes": 2,
+    "materials": 4,
+    "skins": 1,
+    "bones": [
+      {
+        "node_index": 127,
+        "name": "Master_Move",
+        "parent_index": 130,
+        "translation": [
+          12.256515502929688,
+          352.3741149902344,
+          0
+        ]
+      },
+      {
+        "node_index": 126,
+        "name": "Pelvis",
+        "parent_index": 127,
+        "translation": [
+          0.0000171661376953125,
+          0,
+          -11.07330322265625
+        ]
+      },
+      {
+        "node_index": 86,
+        "name": "Spine1",
+        "parent_index": 126,
+        "translation": [
+          71.867431640625,
+          0.00000762939453125,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 84,
+        "name": "Spine2",
+        "parent_index": 86,
+        "translation": [
+          71.8674545288086,
+          -0.00002288818359375,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 82,
+        "name": "Spine3",
+        "parent_index": 84,
+        "translation": [
+          71.86741638183594,
+          0.00000762939453125,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 20,
+        "name": "Neck1",
+        "parent_index": 82,
+        "translation": [
+          71.86750793457031,
+          0,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 19,
+        "name": "Neck2",
+        "parent_index": 20,
+        "translation": [
+          67.53323364257812,
+          0.00000762939453125,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 18,
+        "name": "Neck3",
+        "parent_index": 19,
+        "translation": [
+          49.8394775390625,
+          -0.000007748603820800781,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 17,
+        "name": "Neck4",
+        "parent_index": 18,
+        "translation": [
+          61.626190185546875,
+          0.00000774860291130608,
+          0
+        ]
+      },
+      {
+        "node_index": 16,
+        "name": "Head",
+        "parent_index": 17,
+        "translation": [
+          68.3358154296875,
+          0.000011444091796875,
+          0
+        ]
+      },
+      {
+        "node_index": 4,
+        "name": "Jaw",
+        "parent_index": 16,
+        "translation": [
+          10.77490234375,
+          -0.000011444091796875,
+          -4.13848876953125
+        ]
+      },
+      {
+        "node_index": 1,
+        "name": "Tongue1",
+        "parent_index": 4,
+        "translation": [
+          6.6735992431640625,
+          -0.000011444090887380298,
+          1.26470947265625
+        ]
+      },
+      {
+        "node_index": 0,
+        "name": "Tongue2",
+        "parent_index": 1,
+        "translation": [
+          47.041648864746094,
+          9.094947017729282e-13,
+          0
+        ]
+      },
+      {
+        "node_index": 5,
+        "name": "Eyebrow_R",
+        "parent_index": 16,
+        "translation": [
+          48.063232421875,
+          -11.982848167419434,
+          24.967193603515625
+        ]
+      },
+      {
+        "node_index": 6,
+        "name": "nose_L",
+        "parent_index": 16,
+        "translation": [
+          81.84228515625,
+          4.267251968383789,
+          11.313873291015625
+        ]
+      },
+      {
+        "node_index": 7,
+        "name": "nose_R",
+        "parent_index": 16,
+        "translation": [
+          81.77496337890625,
+          -4.309190273284912,
+          11.362762451171875
+        ]
+      },
+      {
+        "node_index": 8,
+        "name": "UpEyeLid_R",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          -15.300009727478027,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 9,
+        "name": "Eye_R",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          -15.300009727478027,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 10,
+        "name": "DwnEyeLid_R",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          -15.300009727478027,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 11,
+        "name": "UpEyeLid_L",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          15.299986839294434,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 12,
+        "name": "Eye_L",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          15.299986839294434,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 13,
+        "name": "DwnEyeLid_L",
+        "parent_index": 16,
+        "translation": [
+          48.48443603515625,
+          15.299986839294434,
+          16.320159912109375
+        ]
+      },
+      {
+        "node_index": 14,
+        "name": "Eyebrow_L",
+        "parent_index": 16,
+        "translation": [
+          50.770751953125,
+          16.02645492553711,
+          24.96282958984375
+        ]
+      },
+      {
+        "node_index": 21,
+        "name": "ShieldBone1_L",
+        "parent_index": 82,
+        "translation": [
+          15.588485717773438,
+          51.58308792114258,
+          72.15789794921875
+        ]
+      },
+      {
+        "node_index": 81,
+        "name": "UnSk_BipArms_Bip",
+        "parent_index": 82,
+        "translation": [
+          32.95881652832031,
+          0,
+          -64.863525390625
+        ]
+      },
+      {
+        "node_index": 80,
+        "name": "UnSk_BipArms_Pelvis",
+        "parent_index": 81,
+        "translation": [
+          0,
+          0,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 79,
+        "name": "UnSk_BipArms_Spine",
+        "parent_index": 80,
+        "translation": [
+          22.0325927734375,
+          -0.079315185546875,
+          0.00006355384539347142
+        ]
+      },
+      {
+        "node_index": 60,
+        "name": "UnSk_BipArms_Neck",
+        "parent_index": 79,
+        "translation": [
+          100.95164489746094,
+          -1.0280448198318481,
+          -0.03940912336111069
+        ]
+      },
+      {
+        "node_index": 40,
+        "name": "Clavicle_L",
+        "parent_index": 60,
+        "translation": [
+          -20.231199264526367,
+          25.883649826049805,
+          -28.191003799438477
+        ]
+      },
+      {
+        "node_index": 39,
+        "name": "UpperArm_L",
+        "parent_index": 40,
+        "translation": [
+          62.775482177734375,
+          -0.000040034050471149385,
+          0.00012648165284190327
+        ]
+      },
+      {
+        "node_index": 35,
+        "name": "ForeArm_L",
+        "parent_index": 39,
+        "translation": [
+          205.34788513183594,
+          -0.00023656825942452997,
+          0.000449232233222574
+        ]
+      },
+      {
+        "node_index": 34,
+        "name": "Hand_L",
+        "parent_index": 35,
+        "translation": [
+          388.3178405761719,
+          0.005953737534582615,
+          -0.0000016836565919220448
+        ]
+      },
+      {
+        "node_index": 24,
+        "name": "FingerIndex1_L",
+        "parent_index": 34,
+        "translation": [
+          41.56319808959961,
+          -5.569178104400635,
+          14.802507400512695
+        ]
+      },
+      {
+        "node_index": 23,
+        "name": "FingerIndex2_L",
+        "parent_index": 24,
+        "translation": [
+          620.7994384765625,
+          0.005421804264187813,
+          0.008566763252019882
+        ]
+      },
+      {
+        "node_index": 22,
+        "name": "FingerIndex3_L",
+        "parent_index": 23,
+        "translation": [
+          517.7786865234375,
+          -0.009652165696024895,
+          -0.003138866275548935
+        ]
+      },
+      {
+        "node_index": 27,
+        "name": "FingerRing1_L",
+        "parent_index": 34,
+        "translation": [
+          -0.7683627009391785,
+          -6.56427001953125,
+          15.413189888000488
+        ]
+      },
+      {
+        "node_index": 26,
+        "name": "FingerRing2_L",
+        "parent_index": 27,
+        "translation": [
+          455.8608703613281,
+          -0.0797223150730133,
+          0.0048005650751292706
+        ]
+      },
+      {
+        "node_index": 25,
+        "name": "FingerRing3_L",
+        "parent_index": 26,
+        "translation": [
+          234.50180053710938,
+          -0.26857706904411316,
+          0.00036510080099105835
+        ]
+      },
+      {
+        "node_index": 30,
+        "name": "FingerMiddle1_L",
+        "parent_index": 34,
+        "translation": [
+          24.077762603759766,
+          -5.620554447174072,
+          25.104223251342773
+        ]
+      },
+      {
+        "node_index": 29,
+        "name": "FingerMiddle2_L",
+        "parent_index": 30,
+        "translation": [
+          556.653564453125,
+          -0.24799874424934387,
+          -0.004517018795013428
+        ]
+      },
+      {
+        "node_index": 28,
+        "name": "FingerMiddle3_L",
+        "parent_index": 29,
+        "translation": [
+          306.0716857910156,
+          -0.306656152009964,
+          -0.00009196251630783081
+        ]
+      },
+      {
+        "node_index": 32,
+        "name": "Claw1_L",
+        "parent_index": 34,
+        "translation": [
+          31.655284881591797,
+          -3.2178759574890137,
+          -22.553678512573242
+        ]
+      },
+      {
+        "node_index": 31,
+        "name": "Claw11_L",
+        "parent_index": 32,
+        "translation": [
+          30.31005859375,
+          -0.05726581811904907,
+          -0.0002709925174713135
+        ]
+      },
+      {
+        "node_index": 33,
+        "name": "Claw2_L",
+        "parent_index": 34,
+        "translation": [
+          53.99569320678711,
+          -4.4415483474731445,
+          -0.7020847201347351
+        ]
+      },
+      {
+        "node_index": 36,
+        "name": "FingerArmpit_L",
+        "parent_index": 39,
+        "translation": [
+          108.46005249023438,
+          14.728569030761719,
+          5.71193265914917
+        ]
+      },
+      {
+        "node_index": 38,
+        "name": "Finger_Elbow1_L",
+        "parent_index": 39,
+        "translation": [
+          214.76651000976562,
+          31.69910430908203,
+          2.7503600120544434
+        ]
+      },
+      {
+        "node_index": 37,
+        "name": "Finger_Elbow2_L",
+        "parent_index": 38,
+        "translation": [
+          209.74253845214844,
+          -0.13824450969696045,
+          -0.0015232563018798828
+        ]
+      },
+      {
+        "node_index": 59,
+        "name": "Clavicle_R",
+        "parent_index": 60,
+        "translation": [
+          -20.272201538085938,
+          -25.772178649902344,
+          -28.190738677978516
+        ]
+      },
+      {
+        "node_index": 58,
+        "name": "UpperArm_R",
+        "parent_index": 59,
+        "translation": [
+          62.775489807128906,
+          0.00002955491072498262,
+          -0.0000017577694961801171
+        ]
+      },
+      {
+        "node_index": 54,
+        "name": "ForeArm_R",
+        "parent_index": 58,
+        "translation": [
+          205.34788513183594,
+          -0.0009308084845542908,
+          0.00013864683569408953
+        ]
+      },
+      {
+        "node_index": 53,
+        "name": "Hand_R",
+        "parent_index": 54,
+        "translation": [
+          388.3177185058594,
+          0.0020302790217101574,
+          0.0010796941351145506
+        ]
+      },
+      {
+        "node_index": 43,
+        "name": "FingerIndex1_R",
+        "parent_index": 53,
+        "translation": [
+          41.56345748901367,
+          -5.568943500518799,
+          -14.801472663879395
+        ]
+      },
+      {
+        "node_index": 42,
+        "name": "FingerIndex2_R",
+        "parent_index": 43,
+        "translation": [
+          620.7992553710938,
+          0.002136245369911194,
+          0.008639074862003326
+        ]
+      },
+      {
+        "node_index": 41,
+        "name": "FingerIndex3_R",
+        "parent_index": 42,
+        "translation": [
+          517.7783203125,
+          0.01783096417784691,
+          -0.003058057278394699
+        ]
+      },
+      {
+        "node_index": 46,
+        "name": "FingerRing1_R",
+        "parent_index": 53,
+        "translation": [
+          -0.7680231332778931,
+          -6.564122200012207,
+          -15.41326904296875
+        ]
+      },
+      {
+        "node_index": 45,
+        "name": "FingerRing2_R",
+        "parent_index": 46,
+        "translation": [
+          455.8607177734375,
+          -0.07771647721529007,
+          0.005894644185900688
+        ]
+      },
+      {
+        "node_index": 44,
+        "name": "FingerRing3_R",
+        "parent_index": 45,
+        "translation": [
+          234.50164794921875,
+          -0.27472350001335144,
+          0.0005016028881072998
+        ]
+      },
+      {
+        "node_index": 47,
+        "name": "Claw2_R",
+        "parent_index": 53,
+        "translation": [
+          53.995628356933594,
+          -4.441562652587891,
+          0.7034732699394226
+        ]
+      },
+      {
+        "node_index": 49,
+        "name": "Claw1_R",
+        "parent_index": 53,
+        "translation": [
+          31.639158248901367,
+          -3.2268216609954834,
+          22.564477920532227
+        ]
+      },
+      {
+        "node_index": 48,
+        "name": "Claw11_R",
+        "parent_index": 49,
+        "translation": [
+          30.3099308013916,
+          -0.057577311992645264,
+          0.00043010711669921875
+        ]
+      },
+      {
+        "node_index": 52,
+        "name": "FingerMiddle1_R",
+        "parent_index": 53,
+        "translation": [
+          24.07822036743164,
+          -5.620235919952393,
+          -25.103553771972656
+        ]
+      },
+      {
+        "node_index": 51,
+        "name": "FingerMiddle2_R",
+        "parent_index": 52,
+        "translation": [
+          556.6532592773438,
+          -0.246070995926857,
+          0.002452149987220764
+        ]
+      },
+      {
+        "node_index": 50,
+        "name": "FingerMiddle3_R",
+        "parent_index": 51,
+        "translation": [
+          306.0714416503906,
+          -0.2859688401222229,
+          0.000048801302909851074
+        ]
+      },
+      {
+        "node_index": 55,
+        "name": "FingerArmpit_R",
+        "parent_index": 58,
+        "translation": [
+          108.46015167236328,
+          14.728218078613281,
+          -5.71160888671875
+        ]
+      },
+      {
+        "node_index": 57,
+        "name": "Finger_Elbow1_R",
+        "parent_index": 58,
+        "translation": [
+          214.7666778564453,
+          31.698394775390625,
+          -2.7497198581695557
+        ]
+      },
+      {
+        "node_index": 56,
+        "name": "Finger_Elbow2_R",
+        "parent_index": 57,
+        "translation": [
+          209.74253845214844,
+          -0.13816320896148682,
+          -0.00015354156494140625
+        ]
+      },
+      {
+        "node_index": 69,
+        "name": "UseL_BipArms_Thigh_L",
+        "parent_index": 79,
+        "translation": [
+          -22.032814025878906,
+          0.09658144414424896,
+          73.63192749023438
+        ]
+      },
+      {
+        "node_index": 68,
+        "name": "UseL_BipArms_Calf_L",
+        "parent_index": 69,
+        "translation": [
+          100.19316101074219,
+          -0.0016398429870605469,
+          -0.0015773773193359375
+        ]
+      },
+      {
+        "node_index": 65,
+        "name": "UseL_BipArms_Foot_L",
+        "parent_index": 68,
+        "translation": [
+          60.65864944458008,
+          -0.00008392333984375,
+          0.000003814697265625
+        ]
+      },
+      {
+        "node_index": 61,
+        "name": "UseL_BipArms_Toe1_L",
+        "parent_index": 65,
+        "translation": [
+          20.275243759155273,
+          1.092018485069275,
+          -14.380435943603516
+        ]
+      },
+      {
+        "node_index": 62,
+        "name": "UseL_BipArms_Toe2_L",
+        "parent_index": 65,
+        "translation": [
+          23.495525360107422,
+          9.015951156616211,
+          -6.770874977111816
+        ]
+      },
+      {
+        "node_index": 63,
+        "name": "UseL_BipArms_Toe3_L",
+        "parent_index": 65,
+        "translation": [
+          24.616165161132812,
+          11.473494529724121,
+          4.666306018829346
+        ]
+      },
+      {
+        "node_index": 64,
+        "name": "UseL_BipArms_Toe4_L",
+        "parent_index": 65,
+        "translation": [
+          12.944002151489258,
+          0.1220332607626915,
+          15.007832527160645
+        ]
+      },
+      {
+        "node_index": 67,
+        "name": "UnSk_BipArms_Bip-LCalfTwist",
+        "parent_index": 68,
+        "translation": [
+          0,
+          -0.00000762939453125,
+          0.0000095367431640625
+        ]
+      },
+      {
+        "node_index": 66,
+        "name": "LCalfTwist",
+        "parent_index": 67,
+        "translation": [
+          41.16055679321289,
+          0.00016689300537109375,
+          -0.0000095367431640625
+        ]
+      },
+      {
+        "node_index": 78,
+        "name": "UseL_BipArms_Thigh_R",
+        "parent_index": 79,
+        "translation": [
+          -22.03223419189453,
+          0.09699979424476624,
+          -73.63211059570312
+        ]
+      },
+      {
+        "node_index": 77,
+        "name": "UseL_BipArms_Calf_R",
+        "parent_index": 78,
+        "translation": [
+          100.19317626953125,
+          -0.0010695457458496094,
+          -0.0013713836669921875
+        ]
+      },
+      {
+        "node_index": 74,
+        "name": "UseL_BipArms_Foot_R",
+        "parent_index": 77,
+        "translation": [
+          60.658653259277344,
+          -0.00023651123046875,
+          0.000034332275390625
+        ]
+      },
+      {
+        "node_index": 70,
+        "name": "UseL_BipArms_Toe1_R",
+        "parent_index": 74,
+        "translation": [
+          20.2751522064209,
+          1.0920530557632446,
+          14.380477905273438
+        ]
+      },
+      {
+        "node_index": 71,
+        "name": "UseL_BipArms_Toe2_R",
+        "parent_index": 74,
+        "translation": [
+          23.495447158813477,
+          9.015961647033691,
+          6.770900726318359
+        ]
+      },
+      {
+        "node_index": 72,
+        "name": "UseL_BipArms_Toe3_R",
+        "parent_index": 74,
+        "translation": [
+          24.616090774536133,
+          11.473518371582031,
+          -4.666237831115723
+        ]
+      },
+      {
+        "node_index": 73,
+        "name": "UseL_BipArms_Toe4_R",
+        "parent_index": 74,
+        "translation": [
+          12.943999290466309,
+          0.12204832583665848,
+          -15.007800102233887
+        ]
+      },
+      {
+        "node_index": 76,
+        "name": "UnSk_BipArms_Bip-RCalfTwist",
+        "parent_index": 77,
+        "translation": [
+          0.00000762939453125,
+          -0.000003814697265625,
+          -0.00000762939453125
+        ]
+      },
+      {
+        "node_index": 75,
+        "name": "RCalfTwist",
+        "parent_index": 76,
+        "translation": [
+          41.3792610168457,
+          -0.0002727508544921875,
+          0.0011844635009765625
+        ]
+      },
+      {
+        "node_index": 83,
+        "name": "Seat",
+        "parent_index": 84,
+        "translation": [
+          -1.2031707763671875,
+          0.0000152587890625,
+          63.947235107421875
+        ]
+      },
+      {
+        "node_index": 85,
+        "name": "Lantern",
+        "parent_index": 86,
+        "translation": [
+          15.999992370605469,
+          0,
+          88.92672729492188
+        ]
+      },
+      {
+        "node_index": 108,
+        "name": "UnSk_Root_Tail",
+        "parent_index": 126,
+        "translation": [
+          0.00000286102294921875,
+          0,
+          0
+        ]
+      },
+      {
+        "node_index": 107,
+        "name": "UnSk_BipLegs_Bip",
+        "parent_index": 108,
+        "translation": [
+          -31.82973861694336,
+          0,
+          -11.761962890625
+        ]
+      },
+      {
+        "node_index": 106,
+        "name": "UnSk_BipLegs_Pelvis",
+        "parent_index": 107,
+        "translation": [
+          0,
+          0,
+          0.000030517578125
+        ]
+      },
+      {
+        "node_index": 105,
+        "name": "UseL_BipLegs_Spine",
+        "parent_index": 106,
+        "translation": [
+          9.6419677734375,
+          -0.07456856220960617,
+          0.000026755742510431446
+        ]
+      },
+      {
+        "node_index": 95,
+        "name": "Thigh_L",
+        "parent_index": 105,
+        "translation": [
+          -9.642087936401367,
+          0.08206581324338913,
+          56.10626983642578
+        ]
+      },
+      {
+        "node_index": 93,
+        "name": "Calf_L",
+        "parent_index": 95,
+        "translation": [
+          142.28610229492188,
+          0.0010281801223754883,
+          -0.0010236501693725586
+        ]
+      },
+      {
+        "node_index": 91,
+        "name": "HorseLink_L",
+        "parent_index": 93,
+        "translation": [
+          88.78289031982422,
+          0.00002372264862060547,
+          0.00016598403453826904
+        ]
+      },
+      {
+        "node_index": 90,
+        "name": "Foot_L",
+        "parent_index": 91,
+        "translation": [
+          101.06414031982422,
+          -0.00009918212890625,
+          0.0004363059997558594
+        ]
+      },
+      {
+        "node_index": 87,
+        "name": "Toe2_L",
+        "parent_index": 90,
+        "translation": [
+          26.83378791809082,
+          18.33526039123535,
+          -20.270200729370117
+        ]
+      },
+      {
+        "node_index": 88,
+        "name": "Toe1_L",
+        "parent_index": 90,
+        "translation": [
+          26.833763122558594,
+          22.639568328857422,
+          -0.5748796463012695
+        ]
+      },
+      {
+        "node_index": 89,
+        "name": "UnSk_BipLegs_Bip-L-Toe2",
+        "parent_index": 90,
+        "translation": [
+          26.833738327026367,
+          14.953276634216309,
+          22.50234031677246
+        ]
+      },
+      {
+        "node_index": 92,
+        "name": "Lug_L",
+        "parent_index": 93,
+        "translation": [
+          98.53632354736328,
+          -2.369974136352539,
+          0.0001163966953754425
+        ]
+      },
+      {
+        "node_index": 94,
+        "name": "Lug1_L",
+        "parent_index": 95,
+        "translation": [
+          153.9571990966797,
+          5.471344947814941,
+          -2.3809752464294434
+        ]
+      },
+      {
+        "node_index": 104,
+        "name": "Thigh_R",
+        "parent_index": 105,
+        "translation": [
+          -9.641589164733887,
+          0.0823713019490242,
+          -56.10637283325195
+        ]
+      },
+      {
+        "node_index": 102,
+        "name": "Calf_R",
+        "parent_index": 104,
+        "translation": [
+          142.2860565185547,
+          0.0010925531387329102,
+          -0.0008999109268188477
+        ]
+      },
+      {
+        "node_index": 100,
+        "name": "HorseLink_R",
+        "parent_index": 102,
+        "translation": [
+          88.7828598022461,
+          0.000232696533203125,
+          0.000027701258659362793
+        ]
+      },
+      {
+        "node_index": 99,
+        "name": "Foot_R",
+        "parent_index": 100,
+        "translation": [
+          101.06410217285156,
+          -0.00015044212341308594,
+          0.0003535747528076172
+        ]
+      },
+      {
+        "node_index": 96,
+        "name": "Toe2_R",
+        "parent_index": 99,
+        "translation": [
+          26.833707809448242,
+          18.335241317749023,
+          20.27031898498535
+        ]
+      },
+      {
+        "node_index": 97,
+        "name": "Toe1_R",
+        "parent_index": 99,
+        "translation": [
+          26.83374786376953,
+          22.639551162719727,
+          0.5749874114990234
+        ]
+      },
+      {
+        "node_index": 98,
+        "name": "UnSk_BipLegs_Bip-R-Toe2",
+        "parent_index": 99,
+        "translation": [
+          26.833776473999023,
+          14.9533052444458,
+          -22.502246856689453
+        ]
+      },
+      {
+        "node_index": 101,
+        "name": "Lug_R",
+        "parent_index": 102,
+        "translation": [
+          98.53627014160156,
+          -2.3697359561920166,
+          0.00011042691767215729
+        ]
+      },
+      {
+        "node_index": 103,
+        "name": "Lug1_R",
+        "parent_index": 104,
+        "translation": [
+          153.95716857910156,
+          5.471432209014893,
+          2.378880023956299
+        ]
+      },
+      {
+        "node_index": 125,
+        "name": "Tail1",
+        "parent_index": 126,
+        "translation": [
+          -9.5367431640625e-7,
+          0,
+          0
+        ]
+      },
+      {
+        "node_index": 124,
+        "name": "Tail2",
+        "parent_index": 125,
+        "translation": [
+          71.86742401123047,
+          0.00002485513687133789,
+          -5.684341886080802e-14
+        ]
+      },
+      {
+        "node_index": 123,
+        "name": "Tail3",
+        "parent_index": 124,
+        "translation": [
+          71.86749267578125,
+          0.000023484228222514503,
+          0
+        ]
+      },
+      {
+        "node_index": 122,
+        "name": "Tail4",
+        "parent_index": 123,
+        "translation": [
+          71.86741638183594,
+          0.00002217293149442412,
+          0
+        ]
+      },
+      {
+        "node_index": 121,
+        "name": "Tail5",
+        "parent_index": 122,
+        "translation": [
+          71.86750793457031,
+          0.000020802028302568942,
+          0
+        ]
+      },
+      {
+        "node_index": 120,
+        "name": "Tail6",
+        "parent_index": 121,
+        "translation": [
+          71.86742401123047,
+          0.000018537044525146484,
+          0.000005155918188393116
+        ]
+      },
+      {
+        "node_index": 119,
+        "name": "Tail7",
+        "parent_index": 120,
+        "translation": [
+          71.86751556396484,
+          0.00001662968861637637,
+          0.000015079858712852001
+        ]
+      },
+      {
+        "node_index": 118,
+        "name": "Tail8",
+        "parent_index": 119,
+        "translation": [
+          71.86741638183594,
+          0.000016570105799473822,
+          0.000010270858183503151
+        ]
+      },
+      {
+        "node_index": 117,
+        "name": "Tail9",
+        "parent_index": 118,
+        "translation": [
+          71.867431640625,
+          0.000018656253814697266,
+          0
+        ]
+      },
+      {
+        "node_index": 116,
+        "name": "Tail10",
+        "parent_index": 117,
+        "translation": [
+          71.8675308227539,
+          0.000023424639948643744,
+          0.000025402550818398595
+        ]
+      },
+      {
+        "node_index": 115,
+        "name": "Tail11",
+        "parent_index": 116,
+        "translation": [
+          71.8675765991211,
+          0.00002676250005606562,
+          0.0000051053648348897696
+        ]
+      },
+      {
+        "node_index": 114,
+        "name": "Tail12",
+        "parent_index": 115,
+        "translation": [
+          71.867431640625,
+          0.00002503396535757929,
+          0
+        ]
+      },
+      {
+        "node_index": 113,
+        "name": "Tail13",
+        "parent_index": 114,
+        "translation": [
+          71.86749267578125,
+          0.000020623221644200385,
+          0
+        ]
+      },
+      {
+        "node_index": 112,
+        "name": "Tail14",
+        "parent_index": 113,
+        "translation": [
+          71.86746978759766,
+          0.000018894672393798828,
+          0.000055830751080065966
+        ]
+      },
+      {
+        "node_index": 111,
+        "name": "Tail15",
+        "parent_index": 112,
+        "translation": [
+          71.86737060546875,
+          0.000019073515431955457,
+          0
+        ]
+      },
+      {
+        "node_index": 110,
+        "name": "Tail16",
+        "parent_index": 111,
+        "translation": [
+          71.8674087524414,
+          0.00002229216624982655,
+          0.000025313114747405052
+        ]
+      },
+      {
+        "node_index": 109,
+        "name": "Tail17",
+        "parent_index": 110,
+        "translation": [
+          71.86763000488281,
+          0.000019967585103586316,
+          0.000050783855840563774
+        ]
+      }
+    ],
+    "clips": [
+      {
+        "index": 0,
+        "name": "D08_Flight_Base",
+        "duration_seconds": 1.6,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 1,
+        "name": "D08_Flight_Base_L",
+        "duration_seconds": 1.6,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 2,
+        "name": "D08_Flight_Base_R",
+        "duration_seconds": 1.6,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 3,
+        "name": "D08_Flight_Base_U",
+        "duration_seconds": 1.6,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 4,
+        "name": "D08_Flight_Base_D",
+        "duration_seconds": 1.6,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 5,
+        "name": "D08_Flight_Fast",
+        "duration_seconds": 0.6666666666666666,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 6,
+        "name": "D08_Flight_BoostLoop",
+        "duration_seconds": 7.833333333333333,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 7,
+        "name": "D08_Flight_Dive",
+        "duration_seconds": 1.4666666666666666,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 8,
+        "name": "D08_Flight_Hovering",
+        "duration_seconds": 0.6666666666666666,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 9,
+        "name": "D08_Dodge_L",
+        "duration_seconds": 0.8,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 10,
+        "name": "D08_Dodge_R",
+        "duration_seconds": 0.8,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 11,
+        "name": "D08_Shoot_FlameThrower",
+        "duration_seconds": 0.3,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 12,
+        "name": "D08_Shoot_FlameThrowerLoop",
+        "duration_seconds": 0.6666666666666666,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 13,
+        "name": "D08_Shoot_FlameThrowerEnd",
+        "duration_seconds": 0.3,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 14,
+        "name": "D08_TPOSE_Closed",
+        "duration_seconds": 0.03333333333333333,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      },
+      {
+        "index": 15,
+        "name": "D08_Ground_Idle",
+        "duration_seconds": 4.666666666666667,
+        "channels": 375,
+        "loop": null,
+        "root_motion": "unknown"
+      }
+    ],
+    "triangles": 62386,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [
+    {
+      "index": 0,
+      "name": "D08_Flight_Base",
+      "duration_seconds": 1.6,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 1,
+      "name": "D08_Flight_Base_L",
+      "duration_seconds": 1.6,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 2,
+      "name": "D08_Flight_Base_R",
+      "duration_seconds": 1.6,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 3,
+      "name": "D08_Flight_Base_U",
+      "duration_seconds": 1.6,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 4,
+      "name": "D08_Flight_Base_D",
+      "duration_seconds": 1.6,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 5,
+      "name": "D08_Flight_Fast",
+      "duration_seconds": 0.6666666666666666,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 6,
+      "name": "D08_Flight_BoostLoop",
+      "duration_seconds": 7.833333333333333,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 7,
+      "name": "D08_Flight_Dive",
+      "duration_seconds": 1.4666666666666666,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 8,
+      "name": "D08_Flight_Hovering",
+      "duration_seconds": 0.6666666666666666,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 9,
+      "name": "D08_Dodge_L",
+      "duration_seconds": 0.8,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 10,
+      "name": "D08_Dodge_R",
+      "duration_seconds": 0.8,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 11,
+      "name": "D08_Shoot_FlameThrower",
+      "duration_seconds": 0.3,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 12,
+      "name": "D08_Shoot_FlameThrowerLoop",
+      "duration_seconds": 0.6666666666666666,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 13,
+      "name": "D08_Shoot_FlameThrowerEnd",
+      "duration_seconds": 0.3,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 14,
+      "name": "D08_TPOSE_Closed",
+      "duration_seconds": 0.03333333333333333,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    },
+    {
+      "index": 15,
+      "name": "D08_Ground_Idle",
+      "duration_seconds": 4.666666666666667,
+      "channels": 375,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "format": "glb",
+      "binding_status": "embedded"
+    }
+  ],
+  "model_logical_path": "flying-creatures/D08/model.glb"
+}

@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-17T10:57:05.409Z",
+  "branch": "codex/subject-library-demo",
+  "sole_source": "asset-library",
+  "removed_source_files": 192,
+  "removed_source_bytes": 173918843,
+  "all_bytes_retained": true,
+  "old_assets_absent": true,
+  "old_preview_source_absent": true,
+  "viewer_models": 54,
+  "playground_passed": true,
+  "playground_resource_requests": 50,
+  "creator_passed": true,
+  "creator_world_build_hash": "db095e0438b281e8a18c8d64f6bea8461e053938d3c824991a74d34109d20127",
+  "tampered_remote_build_rejected": true,
+  "full_ci_passed": false,
+  "limits": "Windows symlink/OS path fixtures and Linux capsule/Python assumptions not fully passing; no full Linux CI or Docker validation."
+}

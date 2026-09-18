@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "air",
+      "support": "aerodynamic_lift",
+      "propulsion": "flapping",
+      "degrees_of_freedom": "full_3d",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Uses the simple dragon vehicle controller; the numbered flying-creature landing, summon, rope-ladder and flame integration does not apply."
+  ]
+}

@@ -1,0 +1,2668 @@
+{
+  "source": "@worldkit/preset-content/config",
+  "specs": [
+    {
+      "id": "rover",
+      "name": "越野车",
+      "en": "ROVER",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 44.44444444444444,
+      "accel": 10,
+      "grip": 11,
+      "steer": 1,
+      "radius": 1.65,
+      "seat": [
+        0,
+        1.108,
+        0
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹漂移",
+      "archetype": "rover",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      },
+      "reverseSpeed": 8.4,
+      "maxSpeed": 55.55555555555556,
+      "wheelPhysics": {
+        "mass": 1600,
+        "radius": 0.52,
+        "hubHeight": 0.52,
+        "halfTrack": 1.1,
+        "halfWheelbase": 1.27,
+        "maxRaise": 0.025,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.4,
+        "centerOfMassHeight": 0.65,
+        "tireFriction": 1.4,
+        "wheels": [
+          {
+            "x": -1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              230
+            ],
+            [
+              1800,
+              330
+            ],
+            [
+              3200,
+              380
+            ],
+            [
+              4500,
+              360
+            ],
+            [
+              6200,
+              250
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 4.1,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 65,
+          "dragArea": 1.1,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 3
+        },
+        "bodyParts": [
+          {
+            "kind": "box",
+            "halfExtents": [
+              1,
+              0.125,
+              1.9
+            ],
+            "offset": [
+              0,
+              0.605,
+              0
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1,
+              0.2,
+              0.9
+            ],
+            "offset": [
+              0,
+              0.88,
+              0
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1.1,
+              0.1,
+              0.09
+            ],
+            "offset": [
+              0,
+              0.5,
+              2
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1.1,
+              0.1,
+              0.09
+            ],
+            "offset": [
+              0,
+              0.5,
+              -2
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.9,
+              0.125,
+              0.65
+            ],
+            "offset": [
+              0,
+              1.22,
+              1.1
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.95,
+              0.09,
+              0.4
+            ],
+            "offset": [
+              0,
+              1.27,
+              -1.25
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.99,
+              0.605,
+              0.96
+            ],
+            "offset": [
+              0,
+              1.625,
+              0.1
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.88,
+              0.09,
+              0.035
+            ],
+            "offset": [
+              0,
+              0.85,
+              1.94
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.81,
+              0.07,
+              0.03
+            ],
+            "offset": [
+              0,
+              0.8,
+              -1.94
+            ]
+          }
+        ],
+        "coastBrakeDeceleration": 1.2
+      }
+    },
+    {
+      "id": "racer",
+      "name": "公路赛车",
+      "en": "APEX",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 50,
+      "accel": 12,
+      "grip": 14,
+      "steer": 1.08,
+      "radius": 1.6,
+      "seat": [
+        0,
+        0.968,
+        0
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹漂移",
+      "archetype": "racer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9400000000000001,
+          2.15
+        ],
+        "offset": [
+          0,
+          1.26,
+          0
+        ]
+      },
+      "reverseSpeed": 10.799999999999999,
+      "maxSpeed": 61.11111111111111,
+      "wheelPhysics": {
+        "mass": 1250,
+        "radius": 0.39,
+        "hubHeight": 0.39,
+        "halfTrack": 1.1,
+        "halfWheelbase": 1.27,
+        "maxRaise": 0.02,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.32,
+        "centerOfMassHeight": 0.5,
+        "tireFriction": 1.55,
+        "wheels": [
+          {
+            "x": -1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 7200,
+          "upshiftRpm": 6200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              219.6
+            ],
+            [
+              2500,
+              341.59999999999997
+            ],
+            [
+              4500,
+              414.8
+            ],
+            [
+              6000,
+              390.4
+            ],
+            [
+              7200,
+              292.8
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 3.9,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.24,
+          "engineBrakeTorque": 65,
+          "dragArea": 0.65,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 2.459016393442623
+        },
+        "cabin": {
+          "kind": "box",
+          "halfExtents": [
+            0.99,
+            0.47,
+            0.9
+          ],
+          "offset": [
+            0,
+            1.49,
+            0.1
+          ]
+        },
+        "coastBrakeDeceleration": 1.2
+      }
+    },
+    {
+      "id": "motorcycle",
+      "name": "两轮摩托",
+      "en": "LEAN",
+      "mode": "motorcycle",
+      "kernel": "K02",
+      "speed": 41.666666666666664,
+      "accel": 12,
+      "grip": 13,
+      "steer": 1.12,
+      "radius": 0.85,
+      "seat": [
+        0,
+        1.135,
+        -0.19999999999999996
+      ],
+      "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
+      "archetype": "motorcycle",
+      "characterPose": "ride",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      },
+      "wheelPhysics": {
+        "mass": 260,
+        "radius": 0.48,
+        "hubHeight": 0.48,
+        "halfTrack": 0.3,
+        "halfWheelbase": 1.1,
+        "wheelWidth": 0.28,
+        "maxRaise": 0.055,
+        "maxDrop": 0.065,
+        "balanceAssist": true,
+        "wheels": [
+          {
+            "x": 0,
+            "z": -1.1,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 0,
+            "z": 1.1,
+            "steering": true,
+            "driven": false
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 1200,
+          "maxRpm": 10500,
+          "upshiftRpm": 9000,
+          "downshiftRpm": 3200,
+          "torqueCurve": [
+            [
+              1200,
+              24
+            ],
+            [
+              3500,
+              48
+            ],
+            [
+              6500,
+              65
+            ],
+            [
+              9000,
+              58
+            ],
+            [
+              10500,
+              42
+            ]
+          ],
+          "forwardRatios": [
+            2.8,
+            2.1,
+            1.6,
+            1.3,
+            1.1,
+            0.95
+          ],
+          "reverseRatio": 2.8,
+          "finalDrive": 5.5,
+          "efficiency": 0.9,
+          "shiftSeconds": 0.22,
+          "engineBrakeTorque": 12,
+          "dragArea": 0.55,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.6
+        }
+      },
+      "maxSpeed": 50,
+      "reverseSpeed": 2
+    },
+    {
+      "id": "skateboard",
+      "name": "贴面滑板",
+      "en": "SKIM",
+      "mode": "skateboard",
+      "kernel": "K04",
+      "speed": 22,
+      "accel": 8,
+      "grip": 2.8,
+      "steer": 1.65,
+      "radius": 0.7,
+      "seat": [
+        0,
+        0.2,
+        0
+      ],
+      "hint": "W / S 推进 · A / D 转向 · Space 强制减速",
+      "characterPose": "stand",
+      "archetype": "skateboard",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.45,
+          1.05,
+          1.2
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "hovercraft",
+      "name": "定高悬浮艇",
+      "en": "FLOAT",
+      "mode": "hover",
+      "kernel": "K05",
+      "speed": 28,
+      "accel": 11,
+      "grip": 4.8,
+      "steer": 1.5,
+      "radius": 1.5,
+      "seat": [
+        0,
+        0.48,
+        -0.1
+      ],
+      "hint": "W / S 推进 · A / D 转向 · Q / E 侧移 · Space 制动",
+      "archetype": "hover",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.7,
+          1.15,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    {
+      "id": "boat",
+      "name": "水上快艇",
+      "en": "WAKE",
+      "mode": "boat",
+      "kernel": "K06",
+      "speed": 24,
+      "accel": 7,
+      "grip": 3,
+      "steer": 1.05,
+      "radius": 1.7,
+      "seat": [
+        0,
+        0.35,
+        -0.3
+      ],
+      "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
+      "archetype": "boat",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.25,
+          2.85
+        ],
+        "offset": [
+          0,
+          0.5,
+          0
+        ]
+      }
+    },
+    {
+      "id": "submarine",
+      "name": "探索潜艇",
+      "en": "DEEP",
+      "mode": "submarine",
+      "kernel": "K07",
+      "speed": 16,
+      "accel": 6.5,
+      "grip": 2.4,
+      "steer": 1.15,
+      "radius": 1.7,
+      "seat": [
+        0,
+        0.1,
+        0.5
+      ],
+      "hint": "W / S 推进 · A / D 转向 · Space 上浮 · Ctrl 下潜 · Q / E 横滚 · Shift 制动",
+      "archetype": "submarine",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.8,
+          1.6,
+          2.9
+        ],
+        "offset": [
+          0,
+          0.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "glider",
+      "name": "无动力滑翔机",
+      "en": "SOAR",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 牵引起飞（最多 8 秒） · S 拉起 / W 低头 · A/D 转弯 · Ctrl 扰流板 · Space 地面刹车",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.2,
+          1.25,
+          3.35
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      },
+      "aircraftSubtype": "glider"
+    },
+    {
+      "id": "plane",
+      "name": "动力飞机",
+      "en": "AERO",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.2,
+          1.25,
+          3.35
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    {
+      "id": "spacecraft",
+      "name": "轻型穿梭机",
+      "en": "SHUTTLE",
+      "mode": "spacecraft",
+      "kernel": "K10",
+      "speed": 36,
+      "accel": 14,
+      "grip": 2.4,
+      "steer": 1.45,
+      "radius": 2.1,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "W/S 推进 · A/D 左右转向 · ↑↓ 俯仰 / ←→ 侧移 · Space/Ctrl 升降 · Q/E 横滚 · Shift 制动 · F 上下船 · T 三视角",
+      "archetype": "spacecraft",
+      "spaceFlight": {
+        "massKilograms": 2160,
+        "thrustNewtonsXYZ": [
+          12000,
+          16000,
+          28000
+        ],
+        "reverseThrustNewtons": 18000,
+        "torqueNewtonMetersXYZ": [
+          14000,
+          24000,
+          10000
+        ],
+        "driveMode": "assisted",
+        "hull": "box",
+        "dockingPorts": [
+          {
+            "id": "home",
+            "name": "穿梭机泊位",
+            "positionMetersXYZ": [
+              -84,
+              0.8,
+              -70
+            ],
+            "rotationXYZW": [
+              0,
+              0,
+              0,
+              1
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.1,
+          1.5,
+          3.8
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "trail-rover",
+      "name": "远征保障车",
+      "en": "TRAIL",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 44.44444444444444,
+      "accel": 8,
+      "grip": 12,
+      "steer": 0.95,
+      "radius": 1.75,
+      "seat": [
+        0,
+        1.108,
+        0
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹",
+      "archetype": "rover",
+      "visualVariant": "utility",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          0.9899999999999999,
+          2.25
+        ],
+        "offset": [
+          0,
+          1.3099999999999998,
+          0
+        ]
+      },
+      "reverseSpeed": 7.199999999999999,
+      "maxSpeed": 55.55555555555556,
+      "wheelPhysics": {
+        "mass": 1900,
+        "radius": 0.52,
+        "hubHeight": 0.52,
+        "halfTrack": 1.1,
+        "halfWheelbase": 1.27,
+        "maxRaise": 0.04,
+        "maxDrop": 0.045,
+        "wheelWidth": 0.4,
+        "centerOfMassHeight": 0.75,
+        "tireFriction": 1.4,
+        "wheels": [
+          {
+            "x": -1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": -1.27,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.1,
+            "z": 1.27,
+            "steering": true,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              290
+            ],
+            [
+              1800,
+              410
+            ],
+            [
+              2800,
+              440
+            ],
+            [
+              4500,
+              350
+            ],
+            [
+              6200,
+              230
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 4.6,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 65,
+          "dragArea": 1.3,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 3
+        },
+        "bodyParts": [
+          {
+            "kind": "box",
+            "halfExtents": [
+              1,
+              0.125,
+              1.9
+            ],
+            "offset": [
+              0,
+              0.605,
+              0
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1,
+              0.2,
+              0.9
+            ],
+            "offset": [
+              0,
+              0.88,
+              0
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1.1,
+              0.1,
+              0.09
+            ],
+            "offset": [
+              0,
+              0.5,
+              2
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              1.1,
+              0.1,
+              0.09
+            ],
+            "offset": [
+              0,
+              0.5,
+              -2
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.9,
+              0.125,
+              0.65
+            ],
+            "offset": [
+              0,
+              1.22,
+              1.1
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.95,
+              0.09,
+              0.4
+            ],
+            "offset": [
+              0,
+              1.27,
+              -1.25
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.99,
+              0.605,
+              0.96
+            ],
+            "offset": [
+              0,
+              1.625,
+              0.1
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.95,
+              0.39,
+              0.65
+            ],
+            "offset": [
+              0,
+              1.39,
+              -0.75
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.88,
+              0.09,
+              0.035
+            ],
+            "offset": [
+              0,
+              0.85,
+              1.94
+            ]
+          },
+          {
+            "kind": "box",
+            "halfExtents": [
+              0.81,
+              0.07,
+              0.03
+            ],
+            "offset": [
+              0,
+              0.8,
+              -1.94
+            ]
+          }
+        ],
+        "coastBrakeDeceleration": 1
+      }
+    },
+    {
+      "id": "touring-motorcycle",
+      "name": "长途巡航摩托",
+      "en": "TOURER",
+      "mode": "motorcycle",
+      "kernel": "K02",
+      "speed": 41.666666666666664,
+      "accel": 9,
+      "grip": 14,
+      "steer": 1.05,
+      "radius": 0.9,
+      "seat": [
+        0,
+        1.135,
+        -0.19999999999999996
+      ],
+      "hint": "W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车",
+      "archetype": "motorcycle",
+      "characterPose": "ride",
+      "visualVariant": "touring",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          1.2,
+          1.65
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      },
+      "wheelPhysics": {
+        "mass": 320,
+        "radius": 0.48,
+        "hubHeight": 0.48,
+        "halfTrack": 0.3,
+        "halfWheelbase": 1.1,
+        "wheelWidth": 0.28,
+        "maxRaise": 0.055,
+        "maxDrop": 0.065,
+        "balanceAssist": true,
+        "wheels": [
+          {
+            "x": 0,
+            "z": -1.1,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 0,
+            "z": 1.1,
+            "steering": true,
+            "driven": false
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 1200,
+          "maxRpm": 10500,
+          "upshiftRpm": 9000,
+          "downshiftRpm": 3200,
+          "torqueCurve": [
+            [
+              1200,
+              24
+            ],
+            [
+              3500,
+              48
+            ],
+            [
+              6500,
+              65
+            ],
+            [
+              9000,
+              58
+            ],
+            [
+              10500,
+              42
+            ]
+          ],
+          "forwardRatios": [
+            2.8,
+            2.1,
+            1.6,
+            1.3,
+            1.1,
+            0.95
+          ],
+          "reverseRatio": 2.8,
+          "finalDrive": 5.5,
+          "efficiency": 0.9,
+          "shiftSeconds": 0.22,
+          "engineBrakeTorque": 12,
+          "dragArea": 0.55,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.6
+        }
+      },
+      "maxSpeed": 50,
+      "reverseSpeed": 2
+    },
+    {
+      "id": "rescue-hovercraft",
+      "name": "救援悬浮艇",
+      "en": "LIFTER",
+      "mode": "hover",
+      "kernel": "K05",
+      "speed": 24,
+      "accel": 9,
+      "grip": 6,
+      "steer": 1.3,
+      "radius": 1.65,
+      "seat": [
+        0,
+        0.48,
+        -0.1
+      ],
+      "hint": "W / S 推进 · A / D 转向 · Q / E 侧移 · Space 制动",
+      "archetype": "hover",
+      "visualVariant": "rescue",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.75,
+          1.15,
+          2.3
+        ],
+        "offset": [
+          0,
+          0.775,
+          0
+        ]
+      }
+    },
+    {
+      "id": "patrol-boat",
+      "name": "水域巡逻艇",
+      "en": "PATROL",
+      "mode": "boat",
+      "kernel": "K06",
+      "speed": 21,
+      "accel": 7.5,
+      "grip": 3.8,
+      "steer": 1.15,
+      "radius": 1.85,
+      "seat": [
+        0,
+        0.35,
+        -0.3
+      ],
+      "hint": "W / S 推进与倒船 · A / D 船舵 · Space 减速",
+      "archetype": "boat",
+      "visualVariant": "patrol",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.45,
+          1.4,
+          3
+        ],
+        "offset": [
+          0,
+          0.65,
+          0
+        ]
+      }
+    },
+    {
+      "id": "trainer-plane",
+      "name": "稳定教练机",
+      "en": "MENTOR",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 46,
+      "accel": 10,
+      "grip": 1.4,
+      "steer": 0.9,
+      "radius": 2.1,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 加油门 / Ctrl 减油门 · W / S 俯仰 · A / D 转弯 · Q / E 横滚",
+      "archetype": "plane",
+      "visualVariant": "trainer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.6,
+          1.25,
+          3.5
+        ],
+        "offset": [
+          0,
+          1.25,
+          0
+        ]
+      }
+    },
+    {
+      "id": "survey-spacecraft",
+      "name": "星环飞碟",
+      "en": "SAUCER",
+      "mode": "spacecraft",
+      "kernel": "K10",
+      "speed": 28,
+      "accel": 7,
+      "grip": 2,
+      "steer": 1,
+      "radius": 5.5,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "W/S 推进 · A/D 左右转向 · ↑↓ 俯仰 / ←→ 侧移 · Space/Ctrl 升降 · Q/E 横滚 · Shift 制动 · F 上下船 · T 三视角",
+      "archetype": "spacecraft",
+      "spaceFlight": {
+        "massKilograms": 8450,
+        "thrustNewtonsXYZ": [
+          24000,
+          36000,
+          60000
+        ],
+        "reverseThrustNewtons": 36000,
+        "torqueNewtonMetersXYZ": [
+          48000,
+          80000,
+          30000
+        ],
+        "driveMode": "assisted",
+        "hull": "disc",
+        "dockingPorts": [
+          {
+            "id": "home",
+            "name": "飞碟泊位",
+            "positionMetersXYZ": [
+              -68,
+              0.8,
+              -70
+            ],
+            "rotationXYZW": [
+              0,
+              0,
+              0,
+              1
+            ]
+          }
+        ]
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          1.5,
+          5.5
+        ],
+        "offset": [
+          0,
+          1.2,
+          0
+        ]
+      }
+    },
+    {
+      "id": "supercar",
+      "name": "超跑",
+      "en": "VELOCITY",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 65,
+      "accel": 17,
+      "grip": 18,
+      "steer": 0.88,
+      "radius": 1.7,
+      "seat": [
+        0,
+        0.778,
+        -0.3
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速",
+      "archetype": "racer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.3,
+          0.74,
+          2.5
+        ],
+        "offset": [
+          0,
+          1.06,
+          0
+        ]
+      },
+      "reverseSpeed": 19.5,
+      "maxSpeed": 74.75,
+      "wheelPhysics": {
+        "mass": 1250,
+        "radius": 0.37,
+        "hubHeight": 0.37,
+        "halfTrack": 1.02,
+        "halfWheelbase": 1.5,
+        "maxRaise": 0.02,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.32,
+        "centerOfMassHeight": 0.45,
+        "tireFriction": 1.55,
+        "wheels": [
+          {
+            "x": -1.02,
+            "z": -1.5,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.02,
+            "z": 1.5,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 1.02,
+            "z": -1.5,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.02,
+            "z": 1.5,
+            "steering": true,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 7200,
+          "upshiftRpm": 6200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              297
+            ],
+            [
+              2500,
+              462
+            ],
+            [
+              4500,
+              561
+            ],
+            [
+              6000,
+              528
+            ],
+            [
+              7200,
+              396
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 3.9,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.24,
+          "engineBrakeTorque": 65,
+          "dragArea": 0.65,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.8181818181818183
+        },
+        "coastBrakeDeceleration": 1.2
+      }
+    },
+    {
+      "id": "kart",
+      "name": "卡丁车",
+      "en": "KART",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 24,
+      "accel": 10,
+      "grip": 19,
+      "steer": 1.65,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.6679999999999999,
+        -0.32
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速",
+      "archetype": "racer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1,
+          0.69,
+          1.45
+        ],
+        "offset": [
+          0,
+          1.01,
+          0
+        ]
+      },
+      "reverseSpeed": 7.199999999999999,
+      "maxSpeed": 27.599999999999998,
+      "wheelPhysics": {
+        "mass": 180,
+        "radius": 0.24,
+        "hubHeight": 0.24,
+        "halfTrack": 0.78,
+        "halfWheelbase": 0.87,
+        "maxRaise": 0.02,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.24,
+        "centerOfMassHeight": 0.3,
+        "tireFriction": 1.4,
+        "wheels": [
+          {
+            "x": -0.78,
+            "z": -0.89,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -0.78,
+            "z": 0.85,
+            "steering": true,
+            "driven": false
+          },
+          {
+            "x": 0.78,
+            "z": -0.89,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 0.78,
+            "z": 0.85,
+            "steering": true,
+            "driven": false
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 7200,
+          "upshiftRpm": 6200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              14.4
+            ],
+            [
+              2500,
+              22.400000000000002
+            ],
+            [
+              4500,
+              27.2
+            ],
+            [
+              6000,
+              25.6
+            ],
+            [
+              7200,
+              19.2
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 3.9,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.24,
+          "engineBrakeTorque": 5,
+          "dragArea": 0.45,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.6
+        },
+        "coastBrakeDeceleration": 1.2
+      }
+    },
+    {
+      "id": "pusher-plane",
+      "name": "机尾推进式飞机",
+      "en": "PUSHER",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "pusher"
+    },
+    {
+      "id": "helicopter",
+      "name": "单主旋翼直升机",
+      "en": "HELI",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          4.1
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "helicopter"
+    },
+    {
+      "id": "multirotor",
+      "name": "四旋翼载人飞行器",
+      "en": "QUAD",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "multirotor"
+    },
+    {
+      "id": "tiltrotor",
+      "name": "倾转旋翼飞机",
+      "en": "TILT",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾 · 前飞加速自动倾转，减速恢复悬停",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "tiltrotor"
+    },
+    {
+      "id": "paraglider",
+      "name": "滑翔伞",
+      "en": "CANOPY",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 0.6,
+      "seat": [
+        0,
+        1,
+        0
+      ],
+      "hint": "Shift 助跑离开高台 · W/S 调整滑翔角 · A/D 转向 · Space 刹车缓降着陆",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.5,
+          1,
+          0.5
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "paraglider",
+      "characterPose": "paraglider"
+    },
+    {
+      "id": "wingsuit",
+      "name": "翼装飞行",
+      "en": "WINGSUIT",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 0.6,
+      "seat": [
+        0,
+        1,
+        0
+      ],
+      "hint": "Shift 助跑离开高台 · W/S 调整俯仰 · A/D 转向 · Space 开伞减速着陆",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.5,
+          1,
+          0.5
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "wingsuit",
+      "characterPose": "wingsuit"
+    },
+    {
+      "id": "balloon",
+      "name": "热气球",
+      "en": "BALLOON",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 1.2,
+      "seat": [
+        0,
+        0.18,
+        0
+      ],
+      "hint": "Shift 按住加热 · 松开自然冷却 · Ctrl 放热气下降 · 水平随风漂移",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.85,
+          1.4,
+          0.85
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "balloon",
+      "characterPose": "stand"
+    },
+    {
+      "id": "horse",
+      "name": "骑乘骏马",
+      "en": "STEED",
+      "mode": "mount",
+      "kernel": "K11",
+      "speed": 12,
+      "accel": 5,
+      "grip": 9,
+      "steer": 1.6,
+      "radius": 1.9,
+      "seat": [
+        0,
+        1.65,
+        0
+      ],
+      "hint": "W / S 前进与后退 · A / D 转向 · Shift 疾驰 · Ctrl 慢走 · Space 停步",
+      "archetype": "horse",
+      "characterPose": "ride",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.8,
+          1.65,
+          1.9
+        ],
+        "offset": [
+          0,
+          1.65,
+          0
+        ]
+      }
+    },
+    {
+      "id": "carriage",
+      "name": "双轴马车",
+      "en": "CARRIAGE",
+      "mode": "carriage",
+      "kernel": "K12",
+      "speed": 9,
+      "accel": 3.5,
+      "grip": 8,
+      "steer": 1.15,
+      "radius": 2.3,
+      "seat": [
+        0,
+        1.45,
+        0.55
+      ],
+      "hint": "W / S 驱马与倒车 · A / D 牵引转向 · Shift 加速 · Ctrl 慢行 · Space 停车",
+      "archetype": "carriage",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.35,
+          1.4,
+          1.8
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      }
+    },
+    {
+      "id": "dragon",
+      "name": "进化龙",
+      "en": "Evolved dragon",
+      "mode": "dragon",
+      "kernel": "K13",
+      "speed": 28,
+      "accel": 10,
+      "grip": 3,
+      "steer": 1.25,
+      "radius": 5.5,
+      "seat": [
+        0,
+        2.1,
+        0.4
+      ],
+      "hint": "W / S 前进与制动 · A / D 转向 · Space 起飞 / 上升 · Ctrl 下降 / 落地 · Shift 加速",
+      "archetype": "dragon",
+      "characterPose": "ride",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          5.5,
+          2.8,
+          4.5
+        ],
+        "offset": [
+          0,
+          2.6,
+          0
+        ]
+      }
+    },
+    {
+      "id": "unicycle",
+      "name": "独轮车",
+      "en": "UNICYCLE",
+      "mode": "unicycle",
+      "archetype": "unicycle",
+      "kernel": "K02",
+      "speed": 4.2,
+      "maxSpeed": 5.5,
+      "reverseSpeed": 1.8,
+      "accel": 2.2,
+      "grip": 12,
+      "steer": 1.3,
+      "coastDeceleration": 2.8,
+      "brakeDeceleration": 4.5,
+      "steeringResponse": 5,
+      "steeringReturn": 7,
+      "throttleResponse": 5,
+      "pitchResponse": 8,
+      "rollResponse": 7,
+      "radius": 0.55,
+      "seat": [
+        0,
+        0.94,
+        0
+      ],
+      "characterPose": "unicycle",
+      "bodyPhysics": {
+        "kind": "unicycle",
+        "mass": 90,
+        "centerOfMassHeight": 0.6
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.34,
+          0.49,
+          0.39
+        ],
+        "offset": [
+          0,
+          0.49,
+          0
+        ]
+      },
+      "hint": "W 前进 · S 制动后倒骑 · A / D 平衡转向 · 松开自动减速、单脚撑地 · 再按 W 收脚踩踏 · Space 制动 · F 上下车"
+    },
+    {
+      "id": "observation-submarine",
+      "name": "单人观景潜艇",
+      "en": "SUBMERSIBLE",
+      "mode": "submarine",
+      "archetype": "submarine",
+      "visualVariant": "bubble-sub",
+      "kernel": "K07",
+      "speed": 5,
+      "accel": 2.1,
+      "grip": 1.4,
+      "steer": 0.75,
+      "radius": 1.6,
+      "seat": [
+        0,
+        0.24,
+        0.25
+      ],
+      "characterPose": "submarine",
+      "maxSpeed": 5,
+      "reverseSpeed": 2.2,
+      "drag": 0.18,
+      "dragQuadratic": 0.08,
+      "linearDamping": 0.5,
+      "verticalAcceleration": 4.5,
+      "verticalDamping": 2.6,
+      "brakeDamping": 2.8,
+      "throttleResponse": 2.5,
+      "steeringResponse": 2.5,
+      "steeringReturn": 3,
+      "pitchResponse": 3,
+      "rollResponse": 3,
+      "hint": "W / S 前进倒航 · A / D 转向 · Ctrl 下潜 · Space 上浮 · Q / E 横滚 · Shift 减速 · 水面 F 上下艇 · T 视角",
+      "bodyPhysics": {
+        "kind": "submersible",
+        "mass": 720,
+        "centerOfMassHeight": 0,
+        "driveRadius": 0.4,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              552.5
+            ],
+            [
+              1800,
+              765
+            ],
+            [
+              3200,
+              850
+            ],
+            [
+              4500,
+              807.5
+            ],
+            [
+              6200,
+              552.5
+            ]
+          ],
+          "forwardRatios": [
+            1.5
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 2,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 127.5,
+          "dragArea": 2,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        },
+        "water": {
+          "displacement": 2.4,
+          "depth": 2.2,
+          "bottom": 0.78,
+          "damping": 2.6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.55,
+          1.2,
+          1.55
+        ],
+        "offset": [
+          0,
+          0.15,
+          0
+        ]
+      }
+    },
+    {
+      "id": "canoe",
+      "name": "单桨木舟",
+      "en": "CANOE",
+      "mode": "paddled_boat",
+      "archetype": "canoe",
+      "kernel": "K17",
+      "speed": 3.1,
+      "accel": 1.9,
+      "grip": 1.2,
+      "steer": 1.7,
+      "radius": 0.7,
+      "seat": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "characterPose": "paddling",
+      "maxSpeed": 3.1,
+      "reverseSpeed": 1.2,
+      "coastDeceleration": 0.11,
+      "dragQuadratic": 0.11,
+      "brakeDamping": 1.8,
+      "steeringResponse": 2.8,
+      "steeringReturn": 3,
+      "pitchResponse": 3,
+      "rollResponse": 2.5,
+      "hint": "W 单侧划桨 · S 倒划 · A / D 换侧扫桨转向 · Space 压桨减速 · F 上下舟 · T 切换视角",
+      "bodyPhysics": {
+        "kind": "paddle",
+        "mass": 165,
+        "centerOfMassHeight": 0.22,
+        "water": {
+          "displacement": 0.38,
+          "depth": 0.48,
+          "bottom": 0.32,
+          "damping": 6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.6,
+          0.34,
+          2.4
+        ],
+        "offset": [
+          0,
+          0.1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "kayak",
+      "name": "单人皮划艇",
+      "en": "KAYAK",
+      "mode": "paddled_boat",
+      "archetype": "kayak",
+      "kernel": "K17",
+      "speed": 4.6,
+      "accel": 2.7,
+      "grip": 1.8,
+      "steer": 3,
+      "radius": 0.48,
+      "seat": [
+        0,
+        0.23,
+        -0.35
+      ],
+      "characterPose": "paddling",
+      "maxSpeed": 4.6,
+      "reverseSpeed": 1.8,
+      "coastDeceleration": 0.16,
+      "dragQuadratic": 0.08,
+      "brakeDamping": 2.1,
+      "steeringResponse": 5,
+      "steeringReturn": 5,
+      "pitchResponse": 4,
+      "rollResponse": 4,
+      "hint": "W 交替划桨 · S 倒划 · A / D 单侧转向 · Space 压桨制动 · F 上下艇 · T 切换视角",
+      "bodyPhysics": {
+        "kind": "paddle",
+        "mass": 105,
+        "centerOfMassHeight": 0.15,
+        "water": {
+          "displacement": 0.23,
+          "depth": 0.35,
+          "bottom": 0.23,
+          "damping": 5.5
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.4,
+          0.24,
+          2.2
+        ],
+        "offset": [
+          0,
+          0.01,
+          0
+        ]
+      }
+    },
+    {
+      "id": "raft",
+      "name": "橡皮艇",
+      "en": "INFLATABLE BOAT",
+      "mode": "paddled_boat",
+      "archetype": "raft",
+      "kernel": "K17",
+      "speed": 6.944444444444445,
+      "maxSpeed": 6.944444444444445,
+      "reverseSpeed": 2,
+      "accel": 7.5,
+      "grip": 1.4,
+      "steer": 1.8,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "characterPose": "paddling",
+      "coastDeceleration": 0.08,
+      "dragQuadratic": 0.045,
+      "brakeDamping": 7,
+      "brakeDeceleration": 5,
+      "steeringResponse": 3.5,
+      "steeringReturn": 4,
+      "pitchResponse": 6,
+      "rollResponse": 6,
+      "hint": "W 划桨 · S 倒划 · A / D 换侧转向 · Shift 快划 · Space 压桨/拖地制动 · F 上下艇 · T 视角",
+      "bodyPhysics": {
+        "kind": "paddle",
+        "mass": 160,
+        "centerOfMassHeight": 0.22,
+        "restitution": 0.36,
+        "water": {
+          "displacement": 0.55,
+          "depth": 0.5,
+          "bottom": 0.32,
+          "damping": 6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.84,
+          0.34,
+          2.15
+        ],
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "jetski",
+      "name": "水上摩托",
+      "en": "JET SKI",
+      "mode": "boat",
+      "archetype": "jetski",
+      "kernel": "K06",
+      "speed": 23,
+      "maxSpeed": 29,
+      "reverseSpeed": 5,
+      "accel": 6.5,
+      "grip": 4,
+      "steer": 1.15,
+      "coastDeceleration": 0.65,
+      "brakeDeceleration": 8,
+      "steeringResponse": 7,
+      "steeringReturn": 9,
+      "throttleResponse": 5,
+      "pitchResponse": 6,
+      "rollResponse": 6,
+      "radius": 1.8,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "characterPose": "atv",
+      "bodyPhysics": {
+        "kind": "jet",
+        "mass": 330,
+        "centerOfMassHeight": 0.3,
+        "driveRadius": 0.35,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              195
+            ],
+            [
+              1800,
+              270
+            ],
+            [
+              3200,
+              300
+            ],
+            [
+              4500,
+              285
+            ],
+            [
+              6200,
+              195
+            ]
+          ],
+          "forwardRatios": [
+            1.5
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 2,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 45,
+          "dragArea": 0.6,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        },
+        "water": {
+          "displacement": 0.7,
+          "depth": 0.6,
+          "bottom": 0.3,
+          "damping": 6
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.72,
+          0.84,
+          1.65
+        ],
+        "offset": [
+          0,
+          0.54,
+          0
+        ]
+      },
+      "hint": "W 推进 · S 制动后倒船 · A / D 喷口转向 · Shift 加速 · Space 水阻制动 · F 上下车 · T 视角"
+    },
+    {
+      "id": "atv",
+      "name": "全地形车",
+      "en": "QUAD ATV",
+      "mode": "wheeled",
+      "archetype": "atv",
+      "kernel": "K01",
+      "speed": 30.555555555555554,
+      "maxSpeed": 34.72222222222222,
+      "reverseSpeed": 6,
+      "accel": 7.5,
+      "grip": 8,
+      "steer": 0.42,
+      "coastDeceleration": 1.25,
+      "brakeDeceleration": 6,
+      "steeringResponse": 7,
+      "steeringReturn": 9,
+      "throttleResponse": 5,
+      "pitchResponse": 8,
+      "rollResponse": 7,
+      "radius": 1.48,
+      "seat": [
+        0,
+        1,
+        -0.15
+      ],
+      "characterPose": "atv",
+      "wheelbaseMeters": 1.6,
+      "rearAxleZMeters": -0.8,
+      "wheelPhysics": {
+        "chassis": {
+          "kind": "box",
+          "halfExtents": [
+            0.85,
+            0.5,
+            1.2
+          ],
+          "offset": [
+            0,
+            0.88,
+            0
+          ]
+        },
+        "mass": 360,
+        "radius": 0.39,
+        "halfTrack": 0.7,
+        "halfWheelbase": 0.8,
+        "hubHeight": 0.39,
+        "centerOfMassHeight": 0.25,
+        "tireFriction": 1.4,
+        "maxRaise": 0.03,
+        "maxDrop": 0.04,
+        "wheelWidth": 0.28,
+        "wheels": [
+          {
+            "x": 0.7,
+            "z": 0.8,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": -0.7,
+            "z": 0.8,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 0.7,
+            "z": -0.8,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -0.7,
+            "z": -0.8,
+            "steering": false,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              97.5
+            ],
+            [
+              1800,
+              135
+            ],
+            [
+              3200,
+              150
+            ],
+            [
+              4500,
+              142.5
+            ],
+            [
+              6200,
+              97.5
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 4.1,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 22.5,
+          "dragArea": 0.65,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.91,
+          0.71,
+          1.25
+        ],
+        "offset": [
+          0,
+          0.71,
+          0
+        ]
+      },
+      "hint": "W 前进 · S 制动后倒车 · A / D 转向 · Shift 加速 · Space 手刹 · F 上下车 · T 视角"
+    },
+    {
+      "id": "ski",
+      "name": "双板滑雪",
+      "en": "ALPINE",
+      "mode": "ski",
+      "archetype": "ski",
+      "kernel": "K14",
+      "speed": 24,
+      "accel": 5,
+      "grip": 4.5,
+      "steer": 1.1,
+      "groundSpeed": 3,
+      "coastDeceleration": 0.18,
+      "brakeDeceleration": 7,
+      "dragQuadratic": 0.004,
+      "steeringResponse": 3.5,
+      "steeringReturn": 5,
+      "pitchResponse": 12,
+      "rollResponse": 10,
+      "radius": 1.1,
+      "seat": [
+        0,
+        0.91,
+        0
+      ],
+      "characterPose": "ski",
+      "hint": "W 低速撑杖 · A / D 压刃转弯 · S / Space 刹停 · 松键顺坡滑行 · F 穿脱双板",
+      "bodyPhysics": {
+        "kind": "sled",
+        "mass": 85,
+        "centerOfMassHeight": 0.65
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.9,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.9,
+          0
+        ]
+      }
+    },
+    {
+      "id": "sled",
+      "name": "木座雪橇",
+      "en": "SLED",
+      "mode": "sled",
+      "archetype": "sled",
+      "kernel": "K14",
+      "speed": 24,
+      "accel": 4,
+      "grip": 2.2,
+      "steer": 0.9,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.63,
+        -0.22
+      ],
+      "characterPose": "sled",
+      "hint": "W 蹬地前进 · S 制动后倒退 · A / D 转向（静止可转） · Space 双脚制动 · 松键顺坡滑行 · F 上下雪橇",
+      "bodyPhysics": {
+        "kind": "sled",
+        "mass": 100,
+        "centerOfMassHeight": 0.35
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.65,
+          0.78,
+          1.05
+        ],
+        "offset": [
+          0,
+          0.78,
+          0
+        ]
+      }
+    },
+    {
+      "id": "tank",
+      "name": "履带坦克",
+      "en": "TANK",
+      "mode": "tank",
+      "archetype": "tank",
+      "kernel": "K16",
+      "speed": 12,
+      "accel": 3,
+      "grip": 10,
+      "steer": 0.75,
+      "maxSpeed": 18,
+      "reverseSpeed": 4,
+      "coastDeceleration": 1.4,
+      "brakeDeceleration": 7,
+      "steeringResponse": 3,
+      "steeringReturn": 5,
+      "throttleResponse": 2,
+      "pitchResponse": 5,
+      "rollResponse": 5,
+      "radius": 5.4,
+      "seat": [
+        0,
+        1.45,
+        2.1
+      ],
+      "characterPose": "tank",
+      "hint": "W 前进 · S 制动后倒车 · A / D 差速转向（可原地）· Shift 加速 · Space 刹车 · Q / E 炮塔 · ↑ / ↓ 炮管 · F 进出 · T 视角",
+      "bodyPhysics": {
+        "kind": "tracks",
+        "mass": 30000,
+        "centerOfMassHeight": 1.4,
+        "driveRadius": 0.72,
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              1560
+            ],
+            [
+              1800,
+              2160
+            ],
+            [
+              3200,
+              2400
+            ],
+            [
+              4500,
+              2280
+            ],
+            [
+              6200,
+              1560
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 8,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 360,
+          "dragArea": 8,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.25
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          2.9,
+          2.08,
+          4.65
+        ],
+        "offset": [
+          0,
+          2.08,
+          0
+        ]
+      }
+    },
+    {
+      "id": "bus",
+      "name": "复古小巴",
+      "en": "MINIBUS",
+      "mode": "bus",
+      "archetype": "bus",
+      "kernel": "K15",
+      "speed": 22,
+      "accel": 2.1,
+      "grip": 12,
+      "steer": 0.52,
+      "maxSpeed": 22,
+      "reverseSpeed": 2.5,
+      "coastDeceleration": 0.55,
+      "brakeDeceleration": 3.8,
+      "brakeDamping": 3.8,
+      "steeringResponse": 2.5,
+      "steeringReturn": 3.2,
+      "throttleResponse": 1.6,
+      "pitchResponse": 3,
+      "rollResponse": 2.5,
+      "wheelbaseMeters": 3.3,
+      "rearAxleZMeters": -1.45,
+      "radius": 2.15,
+      "seat": [
+        0.47,
+        1.13,
+        1.38
+      ],
+      "hint": "W 油门 · S 制动后倒车 · A / D 转向 · Space 刹车 · F 上下车 · T 切换视角",
+      "wheelPhysics": {
+        "chassis": {
+          "kind": "box",
+          "halfExtents": [
+            1.14,
+            1.21,
+            2.96
+          ],
+          "offset": [
+            0,
+            1.44,
+            0
+          ]
+        },
+        "mass": 3400,
+        "radius": 0.46,
+        "halfTrack": 1.035,
+        "halfWheelbase": 1.65,
+        "hubHeight": 0.46,
+        "centerOfMassHeight": 0.8,
+        "maxRaise": 0.1,
+        "maxDrop": 0.15,
+        "wheelWidth": 0.22,
+        "wheels": [
+          {
+            "x": -1.035,
+            "z": -1.45,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.035,
+            "z": 1.85,
+            "steering": true,
+            "driven": false
+          },
+          {
+            "x": 1.035,
+            "z": -1.45,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.035,
+            "z": 1.85,
+            "steering": true,
+            "driven": false
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 6200,
+          "upshiftRpm": 5200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              143
+            ],
+            [
+              1800,
+              198
+            ],
+            [
+              3200,
+              220
+            ],
+            [
+              4500,
+              209
+            ],
+            [
+              6200,
+              143
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 4.5,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.38,
+          "engineBrakeTorque": 33,
+          "dragArea": 3.5,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1
+        }
+      },
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.22,
+          1.34,
+          2.96
+        ],
+        "offset": [
+          0,
+          1.34,
+          0
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "usage": "diagnostic",
+  "recommendedFor": [
+    "static asset loading diagnostic"
+  ],
+  "recommendedBody": null,
+  "locomotionBindingIds": [],
+  "empty_fields": []
+}

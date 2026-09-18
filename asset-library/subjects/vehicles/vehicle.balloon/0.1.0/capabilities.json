@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "air",
+      "support": "buoyancy",
+      "propulsion": "external_force",
+      "degrees_of_freedom": "full_3d",
+      "control_archetype": "target_position",
+      "gaits": [],
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "target_position",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.balloon/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "外观与当前宿主控制参数已导出；独立库中的控制适配尚未重验。"
+  ]
+}

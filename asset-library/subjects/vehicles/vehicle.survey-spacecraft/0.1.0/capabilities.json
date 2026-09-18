@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "space",
+      "support": "none",
+      "propulsion": "thruster",
+      "degrees_of_freedom": "full_3d",
+      "gaits": [],
+      "control_archetype": "space_6dof",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "space_6dof",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。"
+  ]
+}

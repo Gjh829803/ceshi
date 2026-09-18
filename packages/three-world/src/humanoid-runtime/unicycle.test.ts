@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,expect,it,vi} from 'vitest';
 import {Group,PerspectiveCamera,Vector3,SkinnedMesh,Box3} from 'three';
@@ -59,7 +60,7 @@ it('retains the original skeleton and holds a fixed seated pose while pedals and
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();
   try{
-    await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+    await rider.load(testAssetResourceUrl);
     const identities=new Map<SkinnedMesh,unknown>();rider.root.traverse(n=>{if(n instanceof SkinnedMesh)identities.set(n,n.geometry);});
     const frame={position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand' as const,swimming:false,swimStyle:'freestyle' as const,animationEvent:null,surface:null,skills:null,mounted:'unicycle' as const};
     const hands:Vector3[]=[];

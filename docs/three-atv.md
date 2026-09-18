@@ -47,8 +47,16 @@ SDK 时钟和碰撞世界。短轴距为 1.6 米；前轮分别转向，每个�
 
 ## 构建与验证
 
-修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-atv.ts`，更新
-[atv.glb](../assets/three-creator/presets/vehicles/atv.glb)及资产目录。
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-atv.ts --output .codex-tmp/atv.glb`，
+只生成待入库的 GLB 和 `.intake.json` 转换记录；输出已存在时请改用新文件名。
+按[入库流程](../asset-library/CONTRIBUTING.md)，使用 `asset-library/tools/ingest.mjs` 将候选模型
+以稳定 ID `vehicle.atv`、`--group vehicles` 和新的 `--version` 入库，审查并补齐原有
+bindings、profiles、来源与验证记录，然后在仓库根运行 `pnpm content:sync` 和 `pnpm content:check`。
+
+当前登记版本位于 `asset-library/subjects/vehicles/vehicle.atv/0.1.0/`。
+模型、挂点与参数的权威数据在主体中；包内 spec 读取生成快照。
+导出器不会替换这个版本或自动更新目录，新版本完成绑定和验证后才用于交付。
+
 运行 `pnpm build` 重建 SDK；重启训练预览加载最新运行时。
 
 [ATV 测试](../packages/three-world/src/humanoid-runtime/atv.test.ts)覆盖驾驶、制动、加速、倒车、

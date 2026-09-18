@@ -7,6 +7,27 @@ may already be mounted. Follow [initial state and camera](../../programming.md#i
 Inspect the actual SDK configuration
 before choosing vehicle dimensions, wheel layout, collision shape and seat anchors.
 
+An explicitly allowed registered vehicle is the narrow exception: select its ID
+in `project.json`, load its verified visual with `world.assets.load(asset.id)`,
+attach that object to the `VehicleInstance`, and clone the composed
+`asset.vehicle.spec` so measured seats and envelopes stay intact. The public
+aircraft factory is `humanoid.createAircraftSpec('plane')`; helicopter mechanics
+come from `spec.aircraftSubtype = 'helicopter'`. Follow the selected asset's
+`integrationMetadata.visual` node bindings for mechanical animation, using
+`humanoid.onVisualUpdate` rather than a second simulation or animation clock.
+Resolve each declared source node name with
+`node.userData.name ?? node.name`: `GLTFLoader` may suffix duplicate runtime
+names. Preserve the node's authored parent orientation and apply the declared
+phase only on its local rotation axis. For `vehicle.helicopter`, traversal finds
+`aircraft-rotor` and `aircraft-rotor_1`, both with original name
+`aircraft-rotor`; map them in traversal order to rotor phases 0 and 1 on local Y.
+`rotorPhases` is empty before the first simulation update and after reset. Treat a
+missing or non-finite phase as zero before assigning the rotation, matching the
+SDK preset shell: `const phase =
+sample.vehicles[vehicleIndex]?.aircraft?.rotorPhases[index] ?? 0;
+pivot.rotation.y = Number.isFinite(phase) ? phase : 0`. This keeps initial and
+reset matrices finite and leaves both blades visible.
+
 | Layer | Details |
 | --- | --- |
 | Type/configuration | topic:'humanoid', sections:['humanoid']; car/motorcycle use humanoid.createRoadVehicleSpec; the supported custom aircraft factory is humanoid.createAircraftSpec('plane'), which is a fixed-wing aircraft. Read actual contracts for other types |

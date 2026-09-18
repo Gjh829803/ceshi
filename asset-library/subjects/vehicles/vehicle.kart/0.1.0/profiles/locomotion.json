@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "kart",
+    "name": "卡丁车",
+    "en": "KART",
+    "radius": 1.15,
+    "seat": [
+      0,
+      0.6679999999999999,
+      -0.32
+    ],
+    "archetype": "racer",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1,
+        0.69,
+        1.45
+      ],
+      "offset": [
+        0,
+        1.01,
+        0
+      ]
+    },
+    "wheelPhysics": {
+      "radius": 0.24,
+      "hubHeight": 0.24,
+      "halfTrack": 0.78,
+      "halfWheelbase": 0.87,
+      "wheelWidth": 0.24,
+      "wheels": [
+        {
+          "x": -0.78,
+          "z": -0.89,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": -0.78,
+          "z": 0.85,
+          "steering": true,
+          "driven": false
+        },
+        {
+          "x": 0.78,
+          "z": -0.89,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": 0.78,
+          "z": 0.85,
+          "steering": true,
+          "driven": false
+        }
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

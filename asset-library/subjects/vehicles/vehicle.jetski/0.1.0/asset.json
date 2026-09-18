@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.jetski",
+  "asset_version": "0.1.0",
+  "display_name": "水上摩托 / Personal watercraft",
+  "aliases": [
+    "jetski",
+    "水上摩托"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.boat",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Jet propelled personal watercraft with buoyancy, independent handlebars and world-space water spray. Single original straddle rider; no fuel, damage or ocean wave simulation.",
+  "default_assembly": "subjects/vehicles/vehicle.jetski/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

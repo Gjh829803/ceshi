@@ -226,6 +226,18 @@ importers:
         specifier: ^8.2.2
         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
 
+  packages/asset-client:
+    dependencies:
+      '@worldkit/asset-contracts':
+        specifier: workspace:*
+        version: link:../asset-contracts
+
+  packages/asset-contracts:
+    dependencies:
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
+
   packages/browser-capture:
     dependencies:
       playwright:
@@ -261,6 +273,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
         version: 1.30.0(zod@4.5.4)
+      '@worldkit/asset-client':
+        specifier: workspace:*
+        version: link:../asset-client
+      '@worldkit/asset-contracts':
+        specifier: workspace:*
+        version: link:../asset-contracts
       '@worldkit/browser-capture':
         specifier: workspace:*
         version: link:../browser-capture
@@ -350,6 +368,9 @@ importers:
       '@types/three':
         specifier: 0.185.4
         version: 0.185.4
+      '@worldkit/preset-content':
+        specifier: workspace:*
+        version: link:../preset-content
       tsx:
         specifier: ^4.23.12
         version: 4.23.12

@@ -35,7 +35,7 @@ describe("Three repository layout", () => {
   });
 
   it("keeps exactly the runtime packages and current Creator applications", async () => {
-    expect(await packageManifests()).toEqual(["browser-capture", "camera-collision", "cloud-generation-client", "creator-host", "episode-pipeline", "preset-content", "stream-host", "stream-player", "stream-protocol", "three-world", "world-ui"]);
+    expect(await packageManifests()).toEqual(["asset-client", "asset-contracts", "browser-capture", "camera-collision", "cloud-generation-client", "creator-host", "episode-pipeline", "preset-content", "stream-host", "stream-player", "stream-protocol", "three-world", "world-ui"]);
     for (const application of ["apps/creator-evaluation-site", "apps/stream-web", "packages/creator-host/src/browser"]) {
       expect((await stat(path.join(REPOSITORY_ROOT, application))).isDirectory()).toBe(true);
     }

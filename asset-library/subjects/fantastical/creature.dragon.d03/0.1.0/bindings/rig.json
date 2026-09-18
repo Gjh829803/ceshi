@@ -1,0 +1,1176 @@
+{
+  "schema_version": "1.0",
+  "semantic_bones": {},
+  "mapping_status": "unmapped",
+  "bones": [
+    {
+      "node_index": 118,
+      "name": "MasterMove",
+      "parent_index": 121,
+      "translation": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "node_index": 117,
+      "name": "Pelvis",
+      "parent_index": 118,
+      "translation": [
+        -0.00006315627251751721,
+        -0.00004792213439941406,
+        0.000012829148545279168
+      ]
+    },
+    {
+      "node_index": 79,
+      "name": "Spine1",
+      "parent_index": 117,
+      "translation": [
+        68.52881622314453,
+        -5.959909898933802e-8,
+        -1.2078086308875413e-9
+      ]
+    },
+    {
+      "node_index": 78,
+      "name": "Spine2",
+      "parent_index": 79,
+      "translation": [
+        65.2823486328125,
+        -0.000004172320132056484,
+        0.000015256977349054068
+      ]
+    },
+    {
+      "node_index": 77,
+      "name": "Spine3",
+      "parent_index": 78,
+      "translation": [
+        71.15408325195312,
+        0.000050127495342167094,
+        3.35850991461939e-8
+      ]
+    },
+    {
+      "node_index": 75,
+      "name": "UnSk_BipArms_Root",
+      "parent_index": 77,
+      "translation": [
+        71.20759582519531,
+        -0.000017404556274414062,
+        -0.00000764002379582962
+      ]
+    },
+    {
+      "node_index": 74,
+      "name": "UnSk_BipArms_Bip",
+      "parent_index": 75,
+      "translation": [
+        0.0273139551281929,
+        0.00439220666885376,
+        0.002026301808655262
+      ]
+    },
+    {
+      "node_index": 73,
+      "name": "UnSk_BipArms_Pelvis",
+      "parent_index": 74,
+      "translation": [
+        -0.000029795304726576433,
+        3.126121583818531e-11,
+        -2.721460390375796e-9
+      ]
+    },
+    {
+      "node_index": 72,
+      "name": "UnSk_BipArms_Spine",
+      "parent_index": 73,
+      "translation": [
+        0.0000031303354717238108,
+        -0.00006029923679307103,
+        8.883753821464779e-7
+      ]
+    },
+    {
+      "node_index": 29,
+      "name": "Neck1",
+      "parent_index": 72,
+      "translation": [
+        -0.000020759140170412138,
+        -0.00003141431079711765,
+        -0.0000018582271650302573
+      ]
+    },
+    {
+      "node_index": 28,
+      "name": "Neck2",
+      "parent_index": 29,
+      "translation": [
+        47.903953552246094,
+        -0.039215087890625,
+        0.0006213064189068973
+      ]
+    },
+    {
+      "node_index": 27,
+      "name": "Neck3",
+      "parent_index": 28,
+      "translation": [
+        48.48173904418945,
+        -0.03614898398518562,
+        0.0006266284035518765
+      ]
+    },
+    {
+      "node_index": 26,
+      "name": "Head",
+      "parent_index": 27,
+      "translation": [
+        44.62145233154297,
+        -0.0005688183009624481,
+        0.000576827151235193
+      ]
+    },
+    {
+      "node_index": 4,
+      "name": "Jaw",
+      "parent_index": 26,
+      "translation": [
+        1.2301887273788452,
+        16.751529693603516,
+        0.06880848109722137
+      ]
+    },
+    {
+      "node_index": 1,
+      "name": "Tongue1",
+      "parent_index": 4,
+      "translation": [
+        5.885031223297119,
+        -5.710371494293213,
+        0.06985151022672653
+      ]
+    },
+    {
+      "node_index": 0,
+      "name": "Tongue2",
+      "parent_index": 1,
+      "translation": [
+        40.00000762939453,
+        0.00003939813905162737,
+        -0.000005665014668920776
+      ]
+    },
+    {
+      "node_index": 5,
+      "name": "Eyebrow_R",
+      "parent_index": 26,
+      "translation": [
+        21.60814666748047,
+        44.60886764526367,
+        -12.128543853759766
+      ]
+    },
+    {
+      "node_index": 6,
+      "name": "UpEyeLid_R",
+      "parent_index": 26,
+      "translation": [
+        13.850005149841309,
+        44.63992691040039,
+        -11.75964069366455
+      ]
+    },
+    {
+      "node_index": 7,
+      "name": "Eye_R",
+      "parent_index": 26,
+      "translation": [
+        13.608674049377441,
+        45.44865036010742,
+        -14.74278736114502
+      ]
+    },
+    {
+      "node_index": 8,
+      "name": "DwnEyeLid_R",
+      "parent_index": 26,
+      "translation": [
+        13.850005149841309,
+        44.63992691040039,
+        -11.759637832641602
+      ]
+    },
+    {
+      "node_index": 9,
+      "name": "CheekBone_R",
+      "parent_index": 26,
+      "translation": [
+        5.699343204498291,
+        42.0304069519043,
+        -15.362086296081543
+      ]
+    },
+    {
+      "node_index": 10,
+      "name": "LipsUp_R",
+      "parent_index": 26,
+      "translation": [
+        -5.918022155761719,
+        28.08875274658203,
+        -22.857492446899414
+      ]
+    },
+    {
+      "node_index": 11,
+      "name": "HeadSpike_R",
+      "parent_index": 26,
+      "translation": [
+        -3.0354888439178467,
+        6.7573771476745605,
+        -29.62141227722168
+      ]
+    },
+    {
+      "node_index": 12,
+      "name": "LipsDwn_R",
+      "parent_index": 26,
+      "translation": [
+        -19.885692596435547,
+        30.9091739654541,
+        -25.201171875
+      ]
+    },
+    {
+      "node_index": 13,
+      "name": "LipsDwn_L",
+      "parent_index": 26,
+      "translation": [
+        -19.885486602783203,
+        30.909099578857422,
+        25.201292037963867
+      ]
+    },
+    {
+      "node_index": 14,
+      "name": "Nose_L",
+      "parent_index": 26,
+      "translation": [
+        0.013926747255027294,
+        86.1011734008789,
+        2.5608224868774414
+      ]
+    },
+    {
+      "node_index": 15,
+      "name": "Nose_R",
+      "parent_index": 26,
+      "translation": [
+        0.013957973569631577,
+        86.10120391845703,
+        -2.5607669353485107
+      ]
+    },
+    {
+      "node_index": 16,
+      "name": "Eyebrow_L",
+      "parent_index": 26,
+      "translation": [
+        21.60824203491211,
+        44.60892105102539,
+        12.128451347351074
+      ]
+    },
+    {
+      "node_index": 17,
+      "name": "LipsUp_L",
+      "parent_index": 26,
+      "translation": [
+        -5.917902946472168,
+        28.08880043029785,
+        22.857540130615234
+      ]
+    },
+    {
+      "node_index": 18,
+      "name": "CheekBone_L",
+      "parent_index": 26,
+      "translation": [
+        5.699464321136475,
+        42.03045654296875,
+        15.362110137939453
+      ]
+    },
+    {
+      "node_index": 19,
+      "name": "Eye_L",
+      "parent_index": 26,
+      "translation": [
+        13.608795166015625,
+        45.448638916015625,
+        14.742715835571289
+      ]
+    },
+    {
+      "node_index": 20,
+      "name": "UpEyeLid_L",
+      "parent_index": 26,
+      "translation": [
+        13.850096702575684,
+        44.63998031616211,
+        11.759539604187012
+      ]
+    },
+    {
+      "node_index": 21,
+      "name": "DwnEyeLid_L",
+      "parent_index": 26,
+      "translation": [
+        13.850096702575684,
+        44.63991928100586,
+        11.759540557861328
+      ]
+    },
+    {
+      "node_index": 22,
+      "name": "HeadSpike_L",
+      "parent_index": 26,
+      "translation": [
+        -3.035277843475342,
+        6.757360935211182,
+        29.621444702148438
+      ]
+    },
+    {
+      "node_index": 23,
+      "name": "Horn_L",
+      "parent_index": 26,
+      "translation": [
+        25.88966941833496,
+        8.88444995880127,
+        21.509918212890625
+      ]
+    },
+    {
+      "node_index": 24,
+      "name": "Horn_R",
+      "parent_index": 26,
+      "translation": [
+        25.889638900756836,
+        8.884369850158691,
+        -21.510780334472656
+      ]
+    },
+    {
+      "node_index": 50,
+      "name": "Clavicle_L",
+      "parent_index": 72,
+      "translation": [
+        1.6571359634399414,
+        -28.292631149291992,
+        30.899873733520508
+      ]
+    },
+    {
+      "node_index": 49,
+      "name": "UpperArm_L",
+      "parent_index": 50,
+      "translation": [
+        56.0743293762207,
+        0.00006683962419629097,
+        0.0000133514404296875
+      ]
+    },
+    {
+      "node_index": 43,
+      "name": "ForeArm_L",
+      "parent_index": 49,
+      "translation": [
+        257.11895751953125,
+        0.0005126595497131348,
+        -0.00005817413330078125
+      ]
+    },
+    {
+      "node_index": 41,
+      "name": "Hand_L",
+      "parent_index": 43,
+      "translation": [
+        347.6086120605469,
+        0.003356337547302246,
+        -0.0009899139404296875
+      ]
+    },
+    {
+      "node_index": 32,
+      "name": "FingerIndex1_L",
+      "parent_index": 41,
+      "translation": [
+        42.88650894165039,
+        -0.0038876542821526527,
+        -5.682322025299072
+      ]
+    },
+    {
+      "node_index": 31,
+      "name": "FingerIndex2_L",
+      "parent_index": 32,
+      "translation": [
+        271.4296569824219,
+        0.0017323195934295654,
+        -0.000034746015444397926
+      ]
+    },
+    {
+      "node_index": 30,
+      "name": "FingerIndex3_L",
+      "parent_index": 31,
+      "translation": [
+        258.24920654296875,
+        0.005401385948061943,
+        -0.0006074566626921296
+      ]
+    },
+    {
+      "node_index": 33,
+      "name": "Claw1_L",
+      "parent_index": 41,
+      "translation": [
+        8.720643997192383,
+        -7.341177463531494,
+        -11.409603118896484
+      ]
+    },
+    {
+      "node_index": 35,
+      "name": "FingerMiddle1_L",
+      "parent_index": 41,
+      "translation": [
+        30.252363204956055,
+        -4.23368501663208,
+        -0.3991723358631134
+      ]
+    },
+    {
+      "node_index": 34,
+      "name": "FingerMiddle2_L",
+      "parent_index": 35,
+      "translation": [
+        238.8280792236328,
+        0.005343989469110966,
+        0.001610100269317627
+      ]
+    },
+    {
+      "node_index": 37,
+      "name": "FingerRing1_L",
+      "parent_index": 41,
+      "translation": [
+        25.79705810546875,
+        -4.421032428741455,
+        2.126744270324707
+      ]
+    },
+    {
+      "node_index": 36,
+      "name": "FingerRing2_L",
+      "parent_index": 37,
+      "translation": [
+        172.87486267089844,
+        -0.0003008125349879265,
+        0.0007640570402145386
+      ]
+    },
+    {
+      "node_index": 39,
+      "name": "FingerPinky1_L",
+      "parent_index": 41,
+      "translation": [
+        6.321162700653076,
+        -4.8889570236206055,
+        0.7989681959152222
+      ]
+    },
+    {
+      "node_index": 38,
+      "name": "FingerPinky2_L",
+      "parent_index": 39,
+      "translation": [
+        171.47007751464844,
+        -0.003869985695928335,
+        -0.00105971097946167
+      ]
+    },
+    {
+      "node_index": 40,
+      "name": "Claw2_L",
+      "parent_index": 41,
+      "translation": [
+        29.397502899169922,
+        0.9482079148292542,
+        -12.749661445617676
+      ]
+    },
+    {
+      "node_index": 42,
+      "name": "ForeArmTwist_L",
+      "parent_index": 43,
+      "translation": [
+        173.13160705566406,
+        0.0004424452781677246,
+        -0.00030994415283203125
+      ]
+    },
+    {
+      "node_index": 45,
+      "name": "FingerElbow1_L",
+      "parent_index": 49,
+      "translation": [
+        265.2218322753906,
+        11.002882957458496,
+        -3.3860011100769043
+      ]
+    },
+    {
+      "node_index": 44,
+      "name": "FingerElbow2_L",
+      "parent_index": 45,
+      "translation": [
+        74.5803451538086,
+        0.00022278912365436554,
+        0.0001474188466090709
+      ]
+    },
+    {
+      "node_index": 46,
+      "name": "UpperArmTwist_L",
+      "parent_index": 49,
+      "translation": [
+        126.87562561035156,
+        -0.00045743584632873535,
+        -0.000017404556274414062
+      ]
+    },
+    {
+      "node_index": 48,
+      "name": "FingerArmpit1_L",
+      "parent_index": 49,
+      "translation": [
+        5.544512748718262,
+        37.39846420288086,
+        27.841842651367188
+      ]
+    },
+    {
+      "node_index": 47,
+      "name": "FingerArmpit2_L",
+      "parent_index": 48,
+      "translation": [
+        150.79031372070312,
+        0.00006133317947387695,
+        0.0006809830665588379
+      ]
+    },
+    {
+      "node_index": 71,
+      "name": "Clavicle_R",
+      "parent_index": 72,
+      "translation": [
+        1.6573975086212158,
+        -28.292421340942383,
+        -30.900114059448242
+      ]
+    },
+    {
+      "node_index": 70,
+      "name": "UpperArm_R",
+      "parent_index": 71,
+      "translation": [
+        56.074310302734375,
+        0.000017126556485891342,
+        0.000002384185791015625
+      ]
+    },
+    {
+      "node_index": 64,
+      "name": "ForeArm_R",
+      "parent_index": 70,
+      "translation": [
+        257.1189270019531,
+        -0.0008644461631774902,
+        0.0002543926239013672
+      ]
+    },
+    {
+      "node_index": 62,
+      "name": "Hand_R",
+      "parent_index": 64,
+      "translation": [
+        347.6087951660156,
+        0.0132521390914917,
+        0.000972747802734375
+      ]
+    },
+    {
+      "node_index": 53,
+      "name": "FingerIndex1_R",
+      "parent_index": 62,
+      "translation": [
+        42.88629913330078,
+        -0.005351701285690069,
+        5.6821184158325195
+      ]
+    },
+    {
+      "node_index": 52,
+      "name": "FingerIndex2_R",
+      "parent_index": 53,
+      "translation": [
+        271.4298095703125,
+        0.0019046831876039505,
+        -0.00003230292350053787
+      ]
+    },
+    {
+      "node_index": 51,
+      "name": "FingerIndex3_R",
+      "parent_index": 52,
+      "translation": [
+        258.2485656738281,
+        -0.0019885916262865067,
+        0.0005704499781131744
+      ]
+    },
+    {
+      "node_index": 54,
+      "name": "Claw1_R",
+      "parent_index": 62,
+      "translation": [
+        8.719226837158203,
+        -7.434021472930908,
+        11.412728309631348
+      ]
+    },
+    {
+      "node_index": 56,
+      "name": "FingerPinky1_R",
+      "parent_index": 62,
+      "translation": [
+        6.320845127105713,
+        -4.888992786407471,
+        -0.8006501793861389
+      ]
+    },
+    {
+      "node_index": 55,
+      "name": "FingerPinky2_R",
+      "parent_index": 56,
+      "translation": [
+        171.4666748046875,
+        0.0024631742853671312,
+        0.0005729794502258301
+      ]
+    },
+    {
+      "node_index": 58,
+      "name": "FingerRing1_R",
+      "parent_index": 62,
+      "translation": [
+        25.796676635742188,
+        -4.422626495361328,
+        -2.1338272094726562
+      ]
+    },
+    {
+      "node_index": 57,
+      "name": "FingerRing2_R",
+      "parent_index": 58,
+      "translation": [
+        172.8750457763672,
+        0.0006396605167537928,
+        -0.0011463984847068787
+      ]
+    },
+    {
+      "node_index": 60,
+      "name": "FingerMiddle1_R",
+      "parent_index": 62,
+      "translation": [
+        30.251827239990234,
+        -4.234488487243652,
+        0.3919250965118408
+      ]
+    },
+    {
+      "node_index": 59,
+      "name": "FingerMiddle2_R",
+      "parent_index": 60,
+      "translation": [
+        238.82809448242188,
+        -0.005365380551666021,
+        -0.0010485649108886719
+      ]
+    },
+    {
+      "node_index": 61,
+      "name": "Claw2_R",
+      "parent_index": 62,
+      "translation": [
+        29.397260665893555,
+        1.0276644229888916,
+        12.74238109588623
+      ]
+    },
+    {
+      "node_index": 63,
+      "name": "ForeArmTwist_R",
+      "parent_index": 64,
+      "translation": [
+        173.13131713867188,
+        0.006588280200958252,
+        0.00046253204345703125
+      ]
+    },
+    {
+      "node_index": 65,
+      "name": "UpperArmTwist_R",
+      "parent_index": 70,
+      "translation": [
+        126.87571716308594,
+        -0.000437319278717041,
+        0.00017690658569335938
+      ]
+    },
+    {
+      "node_index": 67,
+      "name": "FingerElbow1_R",
+      "parent_index": 70,
+      "translation": [
+        265.2218322753906,
+        11.002503395080566,
+        3.3863110542297363
+      ]
+    },
+    {
+      "node_index": 66,
+      "name": "FingerElbow2_R",
+      "parent_index": 67,
+      "translation": [
+        74.58014678955078,
+        0.0003907569916918874,
+        0.00018490987713448703
+      ]
+    },
+    {
+      "node_index": 69,
+      "name": "FingerArmpit1_R",
+      "parent_index": 70,
+      "translation": [
+        5.54490327835083,
+        37.398658752441406,
+        -27.841970443725586
+      ]
+    },
+    {
+      "node_index": 68,
+      "name": "FingerArmpit2_R",
+      "parent_index": 69,
+      "translation": [
+        150.93409729003906,
+        0.0004518229980021715,
+        -0.0005064010620117188
+      ]
+    },
+    {
+      "node_index": 97,
+      "name": "Tail1",
+      "parent_index": 117,
+      "translation": [
+        -0.003935174085199833,
+        0.000002145769030903466,
+        -10.906002044677734
+      ]
+    },
+    {
+      "node_index": 96,
+      "name": "Tail2",
+      "parent_index": 97,
+      "translation": [
+        69.99999237060547,
+        -0.00021088124776724726,
+        0.000004172335593466414
+      ]
+    },
+    {
+      "node_index": 93,
+      "name": "Tail3",
+      "parent_index": 96,
+      "translation": [
+        70.0000228881836,
+        -0.00018036366964224726,
+        2.3840331664359837e-7
+      ]
+    },
+    {
+      "node_index": 92,
+      "name": "Tail4",
+      "parent_index": 93,
+      "translation": [
+        69.99995422363281,
+        -0.00014209748769644648,
+        9.536529432807583e-7
+      ]
+    },
+    {
+      "node_index": 91,
+      "name": "Tail5",
+      "parent_index": 92,
+      "translation": [
+        69.99995422363281,
+        -0.00008118153346003965,
+        0.0000014304869182524271
+      ]
+    },
+    {
+      "node_index": 90,
+      "name": "Tail6",
+      "parent_index": 91,
+      "translation": [
+        59.99992370605469,
+        -0.00003564366852515377,
+        -0.000002861048642444075
+      ]
+    },
+    {
+      "node_index": 89,
+      "name": "Tail7",
+      "parent_index": 90,
+      "translation": [
+        70.00001525878906,
+        0.00004851820631301962,
+        0.0000047683492994110566
+      ]
+    },
+    {
+      "node_index": 88,
+      "name": "Tail8",
+      "parent_index": 89,
+      "translation": [
+        69.99996185302734,
+        0.00015544895722996444,
+        -9.536884135741275e-7
+      ]
+    },
+    {
+      "node_index": 87,
+      "name": "Tail9",
+      "parent_index": 88,
+      "translation": [
+        69.99999237060547,
+        0.0001859664625953883,
+        0.000002861018856492592
+      ]
+    },
+    {
+      "node_index": 86,
+      "name": "Tail10",
+      "parent_index": 87,
+      "translation": [
+        70,
+        0.00014024972915649414,
+        3.4496849821152864e-12
+      ]
+    },
+    {
+      "node_index": 85,
+      "name": "Tail11",
+      "parent_index": 86,
+      "translation": [
+        59.999942779541016,
+        0.00003302099139546044,
+        0.0000047683774937468115
+      ]
+    },
+    {
+      "node_index": 84,
+      "name": "Tail12",
+      "parent_index": 85,
+      "translation": [
+        69.9999771118164,
+        -0.00002002714063564781,
+        9.536798870612984e-7
+      ]
+    },
+    {
+      "node_index": 83,
+      "name": "Tail13",
+      "parent_index": 84,
+      "translation": [
+        69.99983215332031,
+        -0.00003528596425894648,
+        0.000004768376129504759
+      ]
+    },
+    {
+      "node_index": 82,
+      "name": "Tail14",
+      "parent_index": 83,
+      "translation": [
+        70.00010681152344,
+        -0.000027656571546685882,
+        0.000002861027041944908
+      ]
+    },
+    {
+      "node_index": 81,
+      "name": "Tail15",
+      "parent_index": 82,
+      "translation": [
+        69.99970245361328,
+        -0.00002002715518756304,
+        -0.000004768367489305092
+      ]
+    },
+    {
+      "node_index": 80,
+      "name": "Tail16",
+      "parent_index": 81,
+      "translation": [
+        70.0001220703125,
+        -0.000012397780665196478,
+        0.000007629399078723509
+      ]
+    },
+    {
+      "node_index": 94,
+      "name": "FingerTail_R",
+      "parent_index": 96,
+      "translation": [
+        43.78220748901367,
+        7.428589344024658,
+        28.283411026000977
+      ]
+    },
+    {
+      "node_index": 95,
+      "name": "FingerTail_L",
+      "parent_index": 96,
+      "translation": [
+        43.78221893310547,
+        -7.42816162109375,
+        28.283401489257812
+      ]
+    },
+    {
+      "node_index": 116,
+      "name": "UnSk_Root_Tail",
+      "parent_index": 117,
+      "translation": [
+        -0.003813110990449786,
+        0.0000025034012196556432,
+        -10.906003952026367
+      ]
+    },
+    {
+      "node_index": 115,
+      "name": "UnSk_BipLegs_Bip",
+      "parent_index": 116,
+      "translation": [
+        -9.411086082458496,
+        -0.00004595518112182617,
+        -10.816303253173828
+      ]
+    },
+    {
+      "node_index": 114,
+      "name": "UnSk_BipLegs_Pelvis",
+      "parent_index": 115,
+      "translation": [
+        1.1307174929697794e-7,
+        1.1920948850274726e-7,
+        0.0000015290498822650989
+      ]
+    },
+    {
+      "node_index": 105,
+      "name": "Thigh_L",
+      "parent_index": 114,
+      "translation": [
+        -0.000032213531085290015,
+        0.00006323838897515088,
+        45.45028305053711
+      ]
+    },
+    {
+      "node_index": 104,
+      "name": "Calf_L",
+      "parent_index": 105,
+      "translation": [
+        106.19905853271484,
+        -0.00001691281795501709,
+        0.000002384185791015625
+      ]
+    },
+    {
+      "node_index": 102,
+      "name": "HorseLink_L",
+      "parent_index": 104,
+      "translation": [
+        75.75318145751953,
+        0.0002658367156982422,
+        -0.00013434886932373047
+      ]
+    },
+    {
+      "node_index": 101,
+      "name": "Foot_L",
+      "parent_index": 102,
+      "translation": [
+        60.30073547363281,
+        0.00011184811592102051,
+        -0.000003516674041748047
+      ]
+    },
+    {
+      "node_index": 98,
+      "name": "Toe3_L",
+      "parent_index": 101,
+      "translation": [
+        29.859113693237305,
+        38.1737174987793,
+        -14.128110885620117
+      ]
+    },
+    {
+      "node_index": 99,
+      "name": "Toe2_L",
+      "parent_index": 101,
+      "translation": [
+        29.859121322631836,
+        40.2198486328125,
+        -0.015478206798434258
+      ]
+    },
+    {
+      "node_index": 100,
+      "name": "Toe1_L",
+      "parent_index": 101,
+      "translation": [
+        29.859100341796875,
+        34.183387756347656,
+        13.700430870056152
+      ]
+    },
+    {
+      "node_index": 103,
+      "name": "Lug_L",
+      "parent_index": 104,
+      "translation": [
+        75.38508605957031,
+        -1.8375740051269531,
+        -4.106490612030029
+      ]
+    },
+    {
+      "node_index": 113,
+      "name": "Thigh_R",
+      "parent_index": 114,
+      "translation": [
+        0.000032866999390535057,
+        -0.00006262121314648539,
+        -45.45028305053711
+      ]
+    },
+    {
+      "node_index": 112,
+      "name": "Calf_R",
+      "parent_index": 113,
+      "translation": [
+        106.19906616210938,
+        0.000010266900062561035,
+        -0.0000026226043701171875
+      ]
+    },
+    {
+      "node_index": 110,
+      "name": "HorseLink_R",
+      "parent_index": 112,
+      "translation": [
+        75.75320434570312,
+        -0.0002677440643310547,
+        -0.00016435980796813965
+      ]
+    },
+    {
+      "node_index": 109,
+      "name": "Foot_R",
+      "parent_index": 110,
+      "translation": [
+        60.30072784423828,
+        0.00006300210952758789,
+        -0.000014543533325195312
+      ]
+    },
+    {
+      "node_index": 106,
+      "name": "Toe3_R",
+      "parent_index": 109,
+      "translation": [
+        29.858970642089844,
+        38.173851013183594,
+        14.128091812133789
+      ]
+    },
+    {
+      "node_index": 107,
+      "name": "Toe2_R",
+      "parent_index": 109,
+      "translation": [
+        29.858999252319336,
+        40.21994400024414,
+        0.01544333528727293
+      ]
+    },
+    {
+      "node_index": 108,
+      "name": "Toe1_R",
+      "parent_index": 109,
+      "translation": [
+        29.859024047851562,
+        34.183441162109375,
+        -13.700448989868164
+      ]
+    },
+    {
+      "node_index": 111,
+      "name": "Lug_R",
+      "parent_index": 112,
+      "translation": [
+        75.38528442382812,
+        -1.8381860256195068,
+        4.106159687042236
+      ]
+    }
+  ],
+  "skin_count": 1,
+  "selected_node_indices": null,
+  "source_transform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  }
+}

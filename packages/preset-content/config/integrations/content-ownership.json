@@ -1,0 +1,39 @@
+{
+  "id": true,
+  "name": true,
+  "en": true,
+  "radius": true,
+  "seat": true,
+  "envelope": true,
+  "archetype": true,
+  "visualVariant": true,
+  "wheelbaseMeters": true,
+  "rearAxleZMeters": true,
+  "wheelPhysics": {
+    "radius": true,
+    "hubHeight": true,
+    "halfTrack": true,
+    "halfWheelbase": true,
+    "wheelWidth": true,
+    "chassis": true,
+    "cabin": true,
+    "bodyParts": true,
+    "wheels": true
+  },
+  "flyingCreatureCollision": true,
+  "flyingCreatureGround": {
+    "rootHeight": true,
+    "seat": true,
+    "probes": true,
+    "support": true
+  },
+  "bodyPhysics": {
+    "water": {
+      "depth": true,
+      "bottom": true
+    }
+  },
+  "spaceFlight": {
+    "hull": true
+  }
+}

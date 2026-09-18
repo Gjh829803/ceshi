@@ -38,9 +38,16 @@
 粒子坐标与生命周期。零时间进入及左右满舵时，原人物手脚与控制锚点偏差小于 2 mm，
 检查了蒙皮顶点与车身的净空。脚踏顶面为 0.2505 m，实测脚底最低点约 0.2544 m。
 
-修改[模型](../packages/preset-content/src/vehicles/jetski/model.ts)后运行
-`node node_modules/tsx/dist/cli.mjs packages/creator-host/scripts/assets/export-jetski.ts`，
-重新生成 [GLB](../assets/three-creator/presets/vehicles/jetski.glb) 和资产目录。
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-jetski.ts --output .codex-tmp/jetski.glb`，
+只生成待入库的 GLB 和 `.intake.json` 转换记录；输出已存在时请改用新文件名。
+按[入库流程](../asset-library/CONTRIBUTING.md)，使用 `asset-library/tools/ingest.mjs` 将候选模型
+以稳定 ID `vehicle.jetski`、`--group vehicles` 和新的 `--version` 入库，审查并补齐原有
+bindings、profiles、来源与验证记录，然后在仓库根运行 `pnpm content:sync` 和 `pnpm content:check`。
+
+当前登记版本位于 `asset-library/subjects/vehicles/vehicle.jetski/0.1.0/`。
+模型、挂点与参数的权威数据在主体中；包内 spec 读取生成快照。
+导出器不会替换这个版本或自动更新目录，新版本完成绑定和验证后才用于交付。
+
 运行 `pnpm build` 重建 SDK，重启预览加载新字节。
 
 [浏览器验收](../packages/creator-host/scripts/smoke/jetski-browser-smoke.ts)从训练场资产库入口操作，

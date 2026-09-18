@@ -1,4 +1,4 @@
-import {test,expect} from 'vitest';
+import {test,expect,vi} from 'vitest';
 import {mkdtemp,cp,readFile,writeFile,rm,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,6 +8,9 @@ import {executeThreeCreatorTool} from '../../src/tools/tool-dispatch.js';
 import {compileWorldUi} from '../../src/compiler/world-ui.js';
 import {readExampleFiles} from '../../src/discovery/example-files.js';
 import {readAgentDocument,documentNavigation} from '../../src/discovery/agent-docs.js';
+import {publishLibrary} from '../../../../asset-library/tools/publish.mjs';
+import {createServer} from '../../../../asset-library/tools/serve.mjs';
+import {prepareAssetLibrary} from '../../src/assets/library-source.mjs';
 
 test('UI compiler delivers isolated factory, catalog types and hashed assets; rejects foreign imports',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'world-ui-build-'));
@@ -46,8 +49,17 @@ test('UI compiler delivers isolated factory, catalog types and hashed assets; re
 
 
 test('Agent discovers UI guidance and consumes the public UI example through compilation and delivery',async()=>{
-  const root=await mkdtemp(path.join(os.tmpdir(),'ui-authoring-tool-')),tools=new ThreeCreatorTools(root,'three-sdk');
+  const root=await mkdtemp(path.join(os.tmpdir(),'ui-authoring-tool-'));
+  let tools:ThreeCreatorTools|undefined;
+  const registryRoot=await mkdtemp(path.join(os.tmpdir(),'ui-asset-registry-'));
+  let registry:ReturnType<typeof createServer>|undefined;
   try{
+    await publishLibrary(path.resolve('asset-library'),{output:registryRoot});
+    registry=createServer(registryRoot,{staticFiles:[]});
+    await new Promise<void>(resolve=>registry!.listen(0,'127.0.0.1',resolve));
+    vi.stubEnv('ASSET_REGISTRY_URL',`http://127.0.0.1:${(registry.address() as {port:number}).port}/`);
+    await prepareAssetLibrary(path.resolve('.'));
+    tools=new ThreeCreatorTools(root,'three-sdk');
     const environment=await tools.environment();expect(environment.uiAuthoring).toBeDefined();
     const navigation=environment.uiAuthoring!;
     const guide:any=await executeThreeCreatorTool(tools,navigation.guide.tool,navigation.guide.arguments);
@@ -76,8 +88,11 @@ test('Agent discovers UI guidance and consumes the public UI example through com
     await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[]}));
     expect((await tools.validate()).ui).toMatchObject({status:'not-configured',next:navigation});
     for(const [name,source]of Object.entries(example.files)){if(name==='main.ts')continue;await mkdir(path.dirname(path.join(root,name)),{recursive:true});await writeFile(path.join(root,name),source as string);}
-    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:[],ui:example.projectUi}));
-    expect((await tools.validate()).ui).toMatchObject({status:'compiled',declaration:example.projectUi});
+    await writeFile(path.join(root,'project.json'),JSON.stringify({schemaVersion:1,assetIds:['humanoid.uefn-mannequin'],ui:example.projectUi}));
+    const compiled=await tools.validate();
+    expect(compiled.ui).toMatchObject({status:'compiled',declaration:example.projectUi});
+    const assetLock=JSON.parse(await readFile(path.join(compiled.playableRoot,'project.assets.lock.json'),'utf8'));
+    expect(assetLock.assets.some((asset:{asset_id:string})=>asset.asset_id==='humanoid.uefn-mannequin')).toBe(true);
     const preview=await tools.preview('opening');expect(preview.ui.included).toBe(true);
     await writeFile(path.join(root,'episode.json'),JSON.stringify({schemaVersion:1,steps:[{keysDown:['w'],durationSeconds:.7},{keysUp:['w'],durationSeconds:.2}],targets:[]}));
     const playtest=await tools.playtest('ui-authoring-delivery',undefined,3);expect(playtest.status).toBe('passed');
@@ -90,5 +105,9 @@ test('Agent discovers UI guidance and consumes the public UI example through com
     await writeFile(path.join(root,'ui/components.tsx'),'export const components={};');
     await writeFile(path.join(root,'scene.ts'),scene.slice(0,scene.indexOf('Object.assign(window'))+'Object.assign(window,{__WORLDKIT_STREAM_WORLD__:{world,readUiState:()=>({}),actions:{}}});');
     expect((await tools.preview('opening')).ui.included).toBe(true);
-  }finally{await tools.close();await rm(root,{recursive:true,force:true});}
+  }finally{
+    await tools?.close();vi.unstubAllEnvs();
+    if(registry){registry.closeAllConnections();await new Promise<void>(resolve=>registry!.close(()=>resolve()));}
+    await rm(root,{recursive:true,force:true});await rm(registryRoot,{recursive:true,force:true});
+  }
 },60000);

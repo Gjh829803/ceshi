@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.boat/0.1.0/model/boat.glb",
+  "preview": "subjects/vehicles/vehicle.boat/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.boat/0.1.0/model/boat.glb",
+      "sha256": "9f3f8b2fe78dd614086d12b468a10a1d397095accfac210a42b8e3be2153a4b0",
+      "byte_length": 39092,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/boat.glb",
+      "reused_by": [
+        "vehicle.boat"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.boat/0.1.0/preview/thumbnail.webp",
+      "sha256": "3eda30d0e2d836e57e22f8dbb1e372f64a30e09546280e9def1d8771ce2bf498",
+      "byte_length": 8016,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.boat"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 11,
+    "meshes": 9,
+    "materials": 5,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 900,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/boat.glb"
+}

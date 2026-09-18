@@ -3,16 +3,18 @@ import {defineConfig} from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const browserFiles = ['apps/creator-evaluation-site/**/*.{js,mjs}', 'packages/episode-pipeline/src/review/web/human-review-ui.js', 'packages/episode-pipeline/src/reporting/presentation-runtime.js'];
+const browserFiles = ['apps/creator-evaluation-site/**/*.{js,mjs}', 'packages/episode-pipeline/src/review/web/human-review-ui.js', 'packages/episode-pipeline/src/reporting/presentation-runtime.js', 'asset-library/viewer/**/*.mjs', 'asset-library/client/asset-library.mjs', 'packages/asset-client/src/registry-client.mjs'];
 
 export default defineConfig([
   {
     ignores: [
       '**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.three-creator/**',
       '**/.worktrees/**', '**/.codex-tmp/**', '**/.playwright-cli/**',
+      '.superpowers/**',
       '**/agent-home/**', '**/agent-tmp/**', '**/.agent-home/**', '**/.agent-tmp/**',
-      // Versioned prebuilt distribution; verify its bytes with the dragon-training manifest.
-      'assets/dragon-training/**',
+      // Unmodified vendored distributions retain upstream bytes and licenses.
+      'asset-library/tools/vendor/**', 'asset-library/viewer/vendor/**',
+      'asset-library/client/registry-client.mjs', 'asset-library/client/materialize.mjs', 'asset-library/client/cli.mjs',
       'outputs/**', 'output/**', 'artifacts/episodes/**', 'artifacts/scenes/**',
     ],
   },
@@ -33,13 +35,18 @@ export default defineConfig([
     },
   },
   {
-    files: ['*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'deploy/**/*.{js,mjs,cjs}', 'apps/*/scripts/**/*.{js,mjs,cjs}', 'apps/creator-cloud/**/*.{js,mjs,cjs}', 'packages/{creator-host,episode-pipeline,browser-capture,cloud-generation-client}/**/*.{js,mjs,cjs}'],
+    files: ['*.{js,mjs,cjs}', 'scripts/**/*.{js,mjs,cjs}', 'deploy/**/*.{js,mjs,cjs}', 'apps/*/scripts/**/*.{js,mjs,cjs}', 'apps/creator-cloud/**/*.{js,mjs,cjs}', 'packages/{creator-host,episode-pipeline,browser-capture,cloud-generation-client,asset-contracts,asset-client,preset-content}/**/*.{js,mjs,cjs}', 'asset-library/tools/**/*.mjs', 'asset-library/tests/**/*.mjs', 'asset-library/client/**/*.mjs'],
     ignores: browserFiles,
     languageOptions: {globals: globals.node},
   },
   {
     files: browserFiles,
     languageOptions: {globals: globals.browser},
+  },
+  {
+    // Playwright evaluate callbacks run in the browser; the harness runs in Node.
+    files: ['asset-library/tests/*check.mjs'],
+    languageOptions: {globals: {...globals.node, ...globals.browser}},
   },
   {
     files: ['**/*.{ts,tsx,mts,cts}'],

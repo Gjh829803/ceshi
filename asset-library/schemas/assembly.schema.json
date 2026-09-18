@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "assembly",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "assembly_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._-]*$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "asset_id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bindings": {
+      "type": "object",
+      "properties": {
+        "rig": {
+          "type": "string"
+        },
+        "animations": {
+          "type": "string"
+        },
+        "sockets": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rig",
+        "animations",
+        "sockets"
+      ],
+      "additionalProperties": false
+    },
+    "profiles": {
+      "type": "object",
+      "properties": {
+        "control": {
+          "type": "string"
+        },
+        "camera": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "control",
+        "camera"
+      ],
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]*$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          }
+        },
+        "required": [
+          "asset_id",
+          "version"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "authority": {
+      "type": "object",
+      "properties": {
+        "root_transform": {
+          "type": "string"
+        },
+        "animation": {
+          "type": "string"
+        },
+        "camera": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "root_transform",
+        "animation",
+        "camera"
+      ],
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "assets_ready",
+        "integrated",
+        "verified",
+        "deprecated"
+      ]
+    },
+    "runtime_ready": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "assembly_id",
+    "subject",
+    "model",
+    "bindings",
+    "profiles",
+    "modules",
+    "authority",
+    "stage",
+    "runtime_ready"
+  ],
+  "additionalProperties": false
+}

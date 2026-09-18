@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "browse_group": {
+    "characters": "人物",
+    "animals": "动物",
+    "vehicles": "载具",
+    "robots": "机器人",
+    "fantastical": "幻想生物",
+    "objects": "物件"
+  }
+}

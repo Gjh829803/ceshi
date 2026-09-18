@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "skateboard",
+    "name": "贴面滑板",
+    "en": "SKIM",
+    "radius": 0.7,
+    "seat": [
+      0,
+      0.2,
+      0
+    ],
+    "archetype": "skateboard",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.45,
+        1.05,
+        1.2
+      ],
+      "offset": [
+        0,
+        1,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

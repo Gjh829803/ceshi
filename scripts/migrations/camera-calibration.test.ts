@@ -20,6 +20,9 @@ it('hash-checks all exporter inputs before writes and reports each exact source'
   const input={baselinePath:join(root,names[0]!),variantPath:join(root,names[1]!),subjectFactsPath:join(root,names[2]!)};
   const plan=await planCameraCalibrationExport(input),repeat=await planCameraCalibrationExport(input);
   expect(plan.outputs).toEqual(repeat.outputs);
+  // A historical exporter must never recreate retired authoring paths in this checkout.
+  await expect(writeCameraCalibrationExport({...plan,outputs:{}},process.cwd())).rejects.toThrow('CALIBRATION_ARCHIVE_OUTPUT_REQUIRED');
+  await expect(writeCameraCalibrationExport({...plan,outputs:{}},join(process.cwd(),'asset-library','accidental-export'))).rejects.toThrow('CALIBRATION_ARCHIVE_OUTPUT_REQUIRED');
   const report=JSON.parse(plan.outputs['packages/preset-content/config/cameras/migration-report.json']!);
   expect(report.sources).toHaveLength(3);for(const source of plan.sources)expect(report.sources).toContainEqual(expect.objectContaining({sourceHash:source.sourceHash}));
   for(const source of plan.sources){
@@ -30,5 +33,6 @@ it('hash-checks all exporter inputs before writes and reports each exact source'
   }
   await writeCameraCalibrationExport(plan,join(root,'output'));
   expect(await readFile(join(root,'output/apps/sdk-playground/config/camera.json'),'utf8')).toBe(plan.outputs['apps/sdk-playground/config/camera.json']);
+  await expect(writeCameraCalibrationExport(plan,join(root,'output'))).rejects.toThrow('CALIBRATION_ARCHIVE_OUTPUT_MUST_BE_NEW');
  }finally{await rm(root,{recursive:true,force:true});}
 });

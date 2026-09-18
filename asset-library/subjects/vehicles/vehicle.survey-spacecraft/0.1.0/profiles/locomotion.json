@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "survey-spacecraft",
+    "name": "星环飞碟",
+    "en": "SAUCER",
+    "radius": 5.5,
+    "seat": [
+      0,
+      1.3,
+      0.1
+    ],
+    "archetype": "spacecraft",
+    "spaceFlight": {
+      "hull": "disc"
+    },
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        5.5,
+        1.5,
+        5.5
+      ],
+      "offset": [
+        0,
+        1.2,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "subjects": [
+    {
+      "path": "subjects/vehicles/vehicle.rover/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.racer/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.skateboard/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.hovercraft/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.boat/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.submarine/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.glider/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.plane/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.1",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.1"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.multirotor/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.paraglider/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.balloon/0.1.0"
+    },
+    {
+      "path": "subjects/animals/creature.horse/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.carriage/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon-evolved/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.canoe/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kayak/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.raft/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.atv/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.ski/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.sled/0.1.0"
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tank/0.1.0",
+      "model": true
+    },
+    {
+      "path": "subjects/vehicles/vehicle.bus/0.1.0"
+    }
+  ],
+  "dragon_variants": [
+    {
+      "path": "subjects/fantastical/creature.dragon.d01/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d02/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d03/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d04/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d05/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d06/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d07/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d09/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d10/0.1.0"
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d11/0.1.0"
+    }
+  ],
+  "person": "subjects/characters/humanoid.uefn-mannequin/0.1.0"
+}

@@ -9,9 +9,16 @@ import {getMap} from '@worldkit/preset-content/environment/maps';
 import {GRAND_PRIX} from '@worldkit/preset-content/environment/grand-prix';
 import {SPECS} from '@worldkit/preset-content/config';
 import {defaultRegion,prepareCourse} from '@worldkit/preset-content/platform/scenarios';
+import {composeContentSpec,composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 
 describe('player workspace configuration',()=>{
- it('inherits road factory defaults while preserving authored tuning and wheel layout',async()=>{
+ it('keeps composed engine tuning and content geometry stable when SDK factory defaults change',async()=>{
+  const bindings=JSON.parse(readFileSync(new URL('../../../../packages/preset-content/config/integrations/whitebox.json',import.meta.url),'utf8'));
+  const authored=(id:string)=>{
+   const version=bindings.assets['vehicle.'+id].asset_version;
+   const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/profiles/locomotion.json`,import.meta.url);
+   return composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters});
+  };
   vi.resetModules();
   vi.doMock('@worldkit/three',async()=>{
    const actual=await vi.importActual<typeof import('@worldkit/three')>('@worldkit/three');
@@ -22,19 +29,27 @@ describe('player workspace configuration',()=>{
    }}};
   });
   try{
+   const sdk=await import('@worldkit/three');
+   const changedDefaults=sdk.humanoid.createRoadVehicleSpec('car').wheelPhysics;
+   expect(changedDefaults.mass).toBe(1617);expect(changedDefaults.powertrain.idleRpm).toBe(867);
    const {SPECS:specs}=await import('@worldkit/preset-content/config');
    const rover=specs.find(s=>s.id==='rover')!.wheelPhysics!;
    const supercar=specs.find(s=>s.id==='supercar')!.wheelPhysics!;
-   expect(rover.mass).toBe(1617);expect(rover.powertrain!.idleRpm).toBe(867);
-   expect(supercar.mass).toBe(1250);expect(supercar.powertrain!.idleRpm).toBe(867);
+   for(const id of ['rover','supercar','kart']){
+    const {spawn,yaw,color,...parameters}=specs.find(s=>s.id===id)!;
+    expect(parameters).toEqual(authored(id));
+   }
+   expect(rover.mass).not.toBe(changedDefaults.mass);
+   expect(rover.powertrain!.idleRpm).not.toBe(changedDefaults.powertrain.idleRpm);
+   expect(supercar.powertrain!.idleRpm).not.toBe(changedDefaults.powertrain.idleRpm);
    expect(supercar.wheels).toEqual([-1.02,1.02].flatMap(x=>[-1.5,1.5].map(z=>({x,z,steering:z>0,driven:true}))));
    expect(specs.find(s=>s.id==='kart')!.wheelPhysics!.wheels).toEqual([-.78,.78].flatMap(x=>[-.89,.85].map(z=>({x,z,steering:z>0,driven:z<0}))));
   }finally{vi.doUnmock('@worldkit/three');vi.resetModules();}
  });
 
  it('exports the explicit bus brake profile without replacing it with family defaults',()=>{
-  const catalog=JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8'));
-  const exported=catalog.assets.find((asset:{id:string})=>asset.id==='vehicle.bus').vehicle.spec;
+  const catalog=JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json',import.meta.url),'utf8'));
+  const exported=composeAssetCatalog(catalog.assets).find((asset:{id:string})=>asset.id==='vehicle.bus')!.vehicle!.spec;
   const profile=getDefaultProfile('bus')!;
   expect(exported.brakeDamping).toBeGreaterThan(0);
   expect(exported.brakeDamping).toBe(profile.control.brakeDamping);

@@ -18,7 +18,7 @@ import { mountShell } from "./shell";
 import {createPanelStateStore} from "./panel-state";
 import { performanceDetails } from "./performance-details";
 import { DRAGON_TRAINING } from "./training-destinations";
-import { DRAGON_VARIANTS, readDragonVariant } from '@worldkit/preset-content/dragon-variants';
+import { DRAGON_VARIANTS, readDragonVariant, readDragonSpec } from '@worldkit/preset-content/dragon-variants';
 import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
@@ -123,9 +123,7 @@ const camera = new T.PerspectiveCamera(
 );
 const dragonVariant=readDragonVariant(location.search);
 shell.update({dragonId:dragonVariant.id});
-const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,...(dragonVariant.ground?{flyingCreatureGround:dragonVariant.ground}:{}),
-  ...(dragonVariant.seat?{seat:dragonVariant.seat}:{}),...(dragonVariant.envelope?{envelope:dragonVariant.envelope}:{}),
-  ...(dragonVariant.collisionProbes?{flyingCreatureCollision:dragonVariant.collisionProbes}:{}),spawn:[80,40,35] as [number,number,number]}:spec);
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...spec,...readDragonSpec(dragonVariant.id),id:'dragon',name:dragonVariant.name,spawn:[80,40,35] as [number,number,number]}:spec);
 function getDefaultProfile(id:string):AssetProfile|undefined{
   const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
@@ -141,7 +139,7 @@ const visuals:VehicleVisual[] = SPECS.map(spec=>{
 try {
   await Promise.all([
     character.load(resolvePresetResource),
-    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,loadTextures:true,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
+    nativeDragon.load({dragonUrl:resolvePresetResource('flying-creatures/'+dragonVariant.id+'/model.glb'),loadTextures:true,animationPrefix:dragonVariant.id,flameTextureUrl:resolvePresetResource('flying-creatures/flame.png')}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -645,7 +643,7 @@ const onModalPanelChange=(id:typeof modalPanelIds[number],open:boolean)=>{
   panelState.update(id,{open});onPanelChange(open);
 };
 const catalog = buildWorkspaceCatalog(SPECS).map(asset=>asset.dragonVariantId
-  ? {...asset,thumbnail:`./dragon-thumbnails/${asset.dragonVariantId}.png`} : asset);
+  ? {...asset,thumbnail:resolvePresetResource('flying-creatures/'+asset.dragonVariantId+'/thumbnail.png')} : asset);
 function libraryAssetId(instanceId:string):string {
   return instanceId==='dragon' ? catalog.find(asset=>asset.dragonVariantId===dragonVariant.id)?.id??instanceId : instanceId;
 }

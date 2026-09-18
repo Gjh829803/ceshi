@@ -1,0 +1,6137 @@
+{
+  "schema_version": "1.0",
+  "subjects": [
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.akita-inu",
+      "asset_version": "0.1.0",
+      "display_name": "秋田犬 · 待入库",
+      "aliases": [
+        "Akita Inu"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.canid",
+      "semantic_subtypes": [
+        "quadruped/mammal/canid"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.akita-inu/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.akita-inu/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.akita-inu/0.1.0/preview/Akita Inu.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.animalia-brown-bear-male",
+      "asset_version": "0.1.0",
+      "display_name": "棕熊 · 待入库",
+      "aliases": [
+        "Animalia Brown Bear male"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.ursid",
+      "semantic_subtypes": [
+        "quadruped/mammal/ursid"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源 FBX 样本，可检查模型与骨架；贴图、单位、语义和 Runtime 接入待完成。",
+      "default_assembly": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0",
+      "model": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
+      "preview": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/preview/thumbnail.webp",
+      "resource_count": 3,
+      "bone_count": 36,
+      "clip_count": 1,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "fbx_source_unvalidated",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "limitations": [
+          "FBX 是未规范化的来源样本，贴图可能缺失。"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.animalia-wild-boar-young",
+      "asset_version": "0.1.0",
+      "display_name": "幼年野猪 · 待入库",
+      "aliases": [
+        "Animalia - Wild Boar young"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.ungulate",
+      "semantic_subtypes": [
+        "quadruped/mammal/ungulate"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/preview/Animalia - Wild Boar young.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.animals-rat",
+      "asset_version": "0.1.0",
+      "display_name": "鼠 · 待入库",
+      "aliases": [
+        "Animals Rat"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.rodent",
+      "semantic_subtypes": [
+        "quadruped/mammal/rodent"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.animals-rat/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.animals-rat/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.animals-rat/0.1.0/preview/Animals Rat.jpg",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.animx-advanced-cats-427",
+      "asset_version": "0.1.0",
+      "display_name": "猫 · 待入库",
+      "aliases": [
+        "AnimX Advanced Cats 427"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.felid",
+      "semantic_subtypes": [
+        "quadruped/mammal/felid"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/preview/AnimX Advanced Cats 427.jpg",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.crab-animated-creature",
+      "asset_version": "0.1.0",
+      "display_name": "蟹 · 待入库",
+      "aliases": [
+        "Crab - Animated Creature"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.arthropod.crustacean",
+      "semantic_subtypes": [
+        "arthropod/crustacean"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.crab-animated-creature/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.crab-animated-creature/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.crab-animated-creature/0.1.0/preview/Crab - Animated Creature.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.crocodile",
+      "asset_version": "0.1.0",
+      "display_name": "鳄鱼 · 待入库",
+      "aliases": [
+        "CROCODILE"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.reptile",
+      "semantic_subtypes": [
+        "quadruped/reptile"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.crocodile/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.crocodile/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.crocodile/0.1.0/preview/CROCODILE.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.elephant",
+      "asset_version": "0.1.0",
+      "display_name": "大象 · 待入库",
+      "aliases": [
+        "ELEPHANT"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.quadruped.mammal.proboscidean",
+      "semantic_subtypes": [
+        "quadruped/mammal/proboscidean"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.elephant/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.elephant/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.elephant/0.1.0/preview/ELEPHANT.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.giant-scorpion",
+      "asset_version": "0.1.0",
+      "display_name": "巨蝎 · 待入库",
+      "aliases": [
+        "Giant Scorpion"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.arthropod.arachnid",
+      "semantic_subtypes": [
+        "arthropod/arachnid"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.giant-scorpion/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.giant-scorpion/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.giant-scorpion/0.1.0/preview/Giant Scorpion.jpg",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.giant-viper",
+      "asset_version": "0.1.0",
+      "display_name": "蝰蛇 · 待入库",
+      "aliases": [
+        "Giant Viper"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.serpentine.reptile",
+      "semantic_subtypes": [
+        "serpentine/reptile"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "serpentine"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.giant-viper/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.giant-viper/0.1.0",
+      "model": null,
+      "preview": "subjects/animals/animal.giant-viper/0.1.0/preview/Giant Viper.png",
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.harpy-eagle",
+      "asset_version": "0.1.0",
+      "display_name": "角雕 · 待入库",
+      "aliases": [
+        "Harpy Eagle"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.biped.bird",
+      "semantic_subtypes": [
+        "biped/bird"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "biped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源 FBX 样本，可检查模型与骨架；贴图、单位、语义和 Runtime 接入待完成。",
+      "default_assembly": "subjects/animals/animal.harpy-eagle/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.harpy-eagle/0.1.0",
+      "model": "subjects/animals/animal.harpy-eagle/0.1.0/model/HarpyEagleModelLowPoly.FBX",
+      "preview": "subjects/animals/animal.harpy-eagle/0.1.0/preview/thumbnail.webp",
+      "resource_count": 3,
+      "bone_count": 223,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "fbx_source_unvalidated",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "limitations": [
+          "FBX 是未规范化的来源样本，贴图可能缺失。"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.megalodon",
+      "asset_version": "0.1.0",
+      "display_name": "巨齿鲨 · 待入库",
+      "aliases": [
+        "Megalodon"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.aquatic.fish",
+      "semantic_subtypes": [
+        "aquatic/fish"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.megalodon/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.megalodon/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "animal.tyannosaurus-rex-sue-rd",
+      "asset_version": "0.1.0",
+      "display_name": "霸王龙 · 待入库",
+      "aliases": [
+        "Tyannosaurus_Rex_Sue_RD"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.dinosaur.biped",
+      "semantic_subtypes": [
+        "dinosaur/biped"
+      ],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+      "default_assembly": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon-evolved",
+      "asset_version": "0.1.0",
+      "display_name": "进化龙 / Evolved dragon",
+      "aliases": [
+        "dragon-evolved",
+        "进化龙"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Uses the simple dragon vehicle controller; the numbered flying-creature landing, summon, rope-ladder and flame integration does not apply.",
+      "default_assembly": "subjects/fantastical/creature.dragon-evolved/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon-evolved/0.1.0",
+      "model": "subjects/fantastical/creature.dragon-evolved/0.1.0/model/dragon.glb",
+      "preview": "subjects/fantastical/creature.dragon-evolved/0.1.0/preview/thumbnail.webp",
+      "resource_count": 5,
+      "bone_count": 46,
+      "clip_count": 8,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d01",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D01 / Flying dragon D01",
+      "aliases": [
+        "d01",
+        "飞龙 D01"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d01/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d01/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d01/0.1.0/model/dragon.glb",
+      "preview": "subjects/fantastical/creature.dragon.d01/0.1.0/preview/thumbnail.webp",
+      "resource_count": 10,
+      "bone_count": 107,
+      "clip_count": 21,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d01/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d02",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D02 / Flying dragon D02",
+      "aliases": [
+        "d02",
+        "飞龙 D02"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d02/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d02/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d02/0.1.0/model/D02.glb",
+      "preview": "subjects/fantastical/creature.dragon.d02/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 117,
+      "clip_count": 18,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d02/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d03",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D03 / Flying dragon D03",
+      "aliases": [
+        "d03",
+        "飞龙 D03"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d03/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d03/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d03/0.1.0/model/D03.glb",
+      "preview": "subjects/fantastical/creature.dragon.d03/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 115,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d03/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d04",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D04 / Flying dragon D04",
+      "aliases": [
+        "d04",
+        "飞龙 D04"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d04/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d04/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d04/0.1.0/model/D04.glb",
+      "preview": "subjects/fantastical/creature.dragon.d04/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 104,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d04/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d05",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D05 / Flying dragon D05",
+      "aliases": [
+        "d05",
+        "飞龙 D05"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d05/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d05/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d05/0.1.0/model/D05.glb",
+      "preview": "subjects/fantastical/creature.dragon.d05/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 108,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d05/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d06",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D06 / Flying dragon D06",
+      "aliases": [
+        "d06",
+        "飞龙 D06"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d06/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d06/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d06/0.1.0/model/D06.glb",
+      "preview": "subjects/fantastical/creature.dragon.d06/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 121,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d06/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d07",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D07 / Flying dragon D07",
+      "aliases": [
+        "d07",
+        "飞龙 D07"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d07/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d07/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d07/0.1.0/model/D07.glb",
+      "preview": "subjects/fantastical/creature.dragon.d07/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 116,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d07/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d08",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D08 / Flying dragon D08",
+      "aliases": [
+        "d08",
+        "飞龙 D08"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d08/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "preview": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 125,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d08/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d09",
+      "asset_version": "0.1.0",
+      "display_name": "长身飞龙 D09 / Long-bodied flying dragon D09",
+      "aliases": [
+        "d09",
+        "长身飞龙 D09"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d09/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d09/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d09/0.1.0/model/D09.glb",
+      "preview": "subjects/fantastical/creature.dragon.d09/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 104,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d09/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d10",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D10 / Flying dragon D10",
+      "aliases": [
+        "d10",
+        "飞龙 D10"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d10/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d10/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d10/0.1.0/model/D10.glb",
+      "preview": "subjects/fantastical/creature.dragon.d10/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 134,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d10/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.dragon.d11",
+      "asset_version": "0.1.0",
+      "display_name": "飞龙 D11 / Flying dragon D11",
+      "aliases": [
+        "d11",
+        "飞龙 D11"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.dragon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped",
+          "winged"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+      "default_assembly": "subjects/fantastical/creature.dragon.d11/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/creature.dragon.d11/0.1.0",
+      "model": "subjects/fantastical/creature.dragon.d11/0.1.0/model/D11.glb",
+      "preview": "subjects/fantastical/creature.dragon.d11/0.1.0/preview/thumbnail.webp",
+      "resource_count": 9,
+      "bone_count": 128,
+      "clip_count": 16,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "flapping",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/fantastical/creature.dragon.d11/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.horse",
+      "asset_version": "0.1.0",
+      "display_name": "骑乘骏马 / Horse",
+      "aliases": [
+        "horse",
+        "骑乘骏马"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.mammal.equine.horse",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Walk also serves trot; no distinct trot clip. The supplied humanoid uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection.",
+      "default_assembly": "subjects/animals/creature.horse/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/creature.horse/0.1.0",
+      "model": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "preview": "subjects/animals/creature.horse/0.1.0/preview/thumbnail.webp",
+      "resource_count": 5,
+      "bone_count": 50,
+      "clip_count": 13,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "foot_contact",
+          "propulsion": "legged_step",
+          "degrees_of_freedom": "surface_2d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/animals/creature.horse/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "creature.quadruped-static-diagnostic",
+      "asset_version": "0.1.0",
+      "display_name": "静态四足动物（诊断用） / Static quadruped (diagnostic)",
+      "aliases": [
+        "quadruped-static-diagnostic",
+        "静态四足动物（诊断用）"
+      ],
+      "browse_group": "animals",
+      "semantic_type": "animal.mammal.quadruped",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            -1.1497997045516968,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Static six-mesh diagnostic animal; no skeleton or authored animation. The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal. Not a fox or nine-tailed fox reference; do not recommend it for matching those characters. A character controller can translate this object but cannot supply leg motion.",
+      "default_assembly": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0",
+      "model": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/model/quadruped-animal.glb",
+      "preview": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "foot_contact",
+          "propulsion": "legged_step",
+          "degrees_of_freedom": "surface_2d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "fantastical.slime-placeholder",
+      "asset_version": "0.1.0",
+      "display_name": "史莱姆 · 分类占位",
+      "aliases": [
+        "史莱姆 · 分类占位"
+      ],
+      "browse_group": "fantastical",
+      "semantic_type": "fantastical.slime",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "分类模板占位，待引入真实资源。",
+      "default_assembly": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "humanoid.uefn-mannequin",
+      "asset_version": "0.1.0",
+      "display_name": "UEFN 白色黑关节人形 / UEFN mannequin, white with black joints",
+      "aliases": [
+        "uefn-mannequin",
+        "UEFN 白色黑关节人形"
+      ],
+      "browse_group": "characters",
+      "semantic_type": "character.humanoid",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "skinned_articulated",
+        "profiles": [
+          "biped"
+        ],
+        "appendages": [],
+        "stance": "upright"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            3.141592653589793,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/characters/humanoid.uefn-mannequin/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0",
+      "model": "subjects/characters/humanoid.uefn-mannequin/0.1.0/model/model.glb",
+      "preview": "subjects/characters/humanoid.uefn-mannequin/0.1.0/preview/thumbnail.webp",
+      "resource_count": 79,
+      "bone_count": 101,
+      "clip_count": 53,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "foot_contact",
+          "propulsion": "legged_step",
+          "degrees_of_freedom": "surface_2d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/characters/humanoid.uefn-mannequin/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "object.ball-placeholder",
+      "asset_version": "0.1.0",
+      "display_name": "滚动球 · 分类占位",
+      "aliases": [
+        "滚动球 · 分类占位"
+      ],
+      "browse_group": "objects",
+      "semantic_type": "object.ball",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "分类模板占位，待引入真实资源。",
+      "default_assembly": "subjects/objects/object.ball-placeholder/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/objects/object.ball-placeholder/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "robot.dog-placeholder",
+      "asset_version": "0.1.0",
+      "display_name": "机器狗 · 分类占位",
+      "aliases": [
+        "机器狗 · 分类占位"
+      ],
+      "browse_group": "robots",
+      "semantic_type": "robot.quadruped",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "quadruped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "分类模板占位，待引入真实资源。",
+      "default_assembly": "subjects/robots/robot.dog-placeholder/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/robots/robot.dog-placeholder/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "robot.humanoid-placeholder",
+      "asset_version": "0.1.0",
+      "display_name": "人形机器人 · 分类占位",
+      "aliases": [
+        "人形机器人 · 分类占位"
+      ],
+      "browse_group": "robots",
+      "semantic_type": "robot.humanoid",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "unknown",
+        "profiles": [
+          "biped"
+        ],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "unknown",
+        "up_axis": "unknown",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "placeholder",
+      "placeholder": true,
+      "description": "分类模板占位，待引入真实资源。",
+      "default_assembly": "subjects/robots/robot.humanoid-placeholder/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/robots/robot.humanoid-placeholder/0.1.0",
+      "model": null,
+      "preview": null,
+      "resource_count": 0,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [],
+      "control": {
+        "archetype": "unknown",
+        "stage": "planned",
+        "profile": null
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "not_applicable",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json"
+        ],
+        "limitations": [
+          "尚无可加载三维资源。"
+        ],
+        "source_hashes": "passed"
+      },
+      "license": {
+        "status": "unknown",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.atv",
+      "asset_version": "0.1.0",
+      "display_name": "全地形车 / All-terrain vehicle",
+      "aliases": [
+        "atv",
+        "全地形车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Racing quad inspired by PUBG; short-wheelbase four-wheel drive with front-wheel steering and original straddle rider. Single active driver under the current Training contract. Rear passenger socket is reserved; no fuel, damage or multiplayer passenger simulation.",
+      "default_assembly": "subjects/vehicles/vehicle.atv/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.atv/0.1.0",
+      "model": "subjects/vehicles/vehicle.atv/0.1.0/model/atv.glb",
+      "preview": "subjects/vehicles/vehicle.atv/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.atv/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.balloon",
+      "asset_version": "0.1.0",
+      "display_name": "热气球",
+      "aliases": [
+        "热气球"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.balloon",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.balloon/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.balloon/0.1.0",
+      "model": "subjects/vehicles/vehicle.balloon/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.balloon/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "buoyancy",
+          "propulsion": "external_force",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "target_position",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "target_position",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.balloon/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.boat",
+      "asset_version": "0.1.0",
+      "display_name": "水上快艇 / Motorboat",
+      "aliases": [
+        "boat",
+        "水上快艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.boat/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.boat/0.1.0",
+      "model": "subjects/vehicles/vehicle.boat/0.1.0/model/boat.glb",
+      "preview": "subjects/vehicles/vehicle.boat/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.boat/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.bus",
+      "asset_version": "0.1.0",
+      "display_name": "复古小巴 / Bus",
+      "aliases": [
+        "bus",
+        "复古小巴"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.bus",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation. W throttle; S brakes before reversing; Space brakes. Shift adds no boost.",
+      "default_assembly": "subjects/vehicles/vehicle.bus/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.bus/0.1.0",
+      "model": "subjects/vehicles/vehicle.bus/0.1.0/model/bus.glb",
+      "preview": "subjects/vehicles/vehicle.bus/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.bus/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.canoe",
+      "asset_version": "0.1.0",
+      "display_name": "单桨木舟 / Canoe",
+      "aliases": [
+        "canoe",
+        "单桨木舟"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.paddled_boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation. W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion.",
+      "default_assembly": "subjects/vehicles/vehicle.canoe/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.canoe/0.1.0",
+      "model": "subjects/vehicles/vehicle.canoe/0.1.0/model/canoe.glb",
+      "preview": "subjects/vehicles/vehicle.canoe/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "paddling",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.canoe/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.carriage",
+      "asset_version": "0.1.0",
+      "display_name": "双轴马车 / Horse-drawn carriage",
+      "aliases": [
+        "carriage",
+        "双轴马车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.carriage",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.carriage/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.carriage/0.1.0",
+      "model": "subjects/vehicles/vehicle.carriage/0.1.0/model/carriage.glb",
+      "preview": "subjects/vehicles/vehicle.carriage/0.1.0/preview/thumbnail.webp",
+      "resource_count": 6,
+      "bone_count": 0,
+      "clip_count": 13,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "external_force",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.carriage/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.glider",
+      "asset_version": "0.1.0",
+      "display_name": "无动力滑翔机 / Glider",
+      "aliases": [
+        "glider",
+        "无动力滑翔机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.glider",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.glider/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.glider/0.1.0",
+      "model": "subjects/vehicles/vehicle.glider/0.1.0/model/glider.glb",
+      "preview": "subjects/vehicles/vehicle.glider/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "gravity",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "aircraft",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.glider/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.helicopter",
+      "asset_version": "0.1.0",
+      "display_name": "单主旋翼直升机",
+      "aliases": [
+        "单主旋翼直升机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.helicopter",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.helicopter/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.0",
+      "model": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.helicopter/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "rotor_lift",
+          "propulsion": "rotor",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "rotorcraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "rotorcraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.helicopter/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.helicopter",
+      "asset_version": "0.1.1",
+      "display_name": "单主旋翼直升机 / Helicopter",
+      "aliases": [
+        "单主旋翼直升机",
+        "helicopter",
+        "rotorcraft"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.helicopter",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [
+          "rotorcraft"
+        ],
+        "appendages": [
+          {
+            "role": "rotor",
+            "count": 2
+          }
+        ],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "+Z",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由 Whitebox 单主旋翼直升机构造导出的可复用 GLB；0.1.1 接通 Creator 资产加载与 SDK helicopter 控制合同，模型字节复用 0.1.0。",
+      "default_assembly": "subjects/vehicles/vehicle.helicopter/0.1.1/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.1",
+      "model": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.helicopter/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "rotor_lift",
+          "propulsion": "rotor",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "rotorcraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "rotorcraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Reuses the exact 0.1.0 GLB and preview bytes. Browser loading and nonempty mesh scene were previously checked; helicopter control and mounted gameplay remain unverified."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.hovercraft",
+      "asset_version": "0.1.0",
+      "display_name": "定高悬浮艇 / Hovercraft",
+      "aliases": [
+        "hovercraft",
+        "定高悬浮艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.hover",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.hovercraft/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.hovercraft/0.1.0",
+      "model": "subjects/vehicles/vehicle.hovercraft/0.1.0/model/hover.glb",
+      "preview": "subjects/vehicles/vehicle.hovercraft/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "suspension",
+          "propulsion": "thruster",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.hovercraft/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.jetski",
+      "asset_version": "0.1.0",
+      "display_name": "水上摩托 / Personal watercraft",
+      "aliases": [
+        "jetski",
+        "水上摩托"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Jet propelled personal watercraft with buoyancy, independent handlebars and world-space water spray. Single original straddle rider; no fuel, damage or ocean wave simulation.",
+      "default_assembly": "subjects/vehicles/vehicle.jetski/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0",
+      "model": "subjects/vehicles/vehicle.jetski/0.1.0/model/jetski.glb",
+      "preview": "subjects/vehicles/vehicle.jetski/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.jetski/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.kart",
+      "asset_version": "0.1.0",
+      "display_name": "卡丁车",
+      "aliases": [
+        "卡丁车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.kart/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.kart/0.1.0",
+      "model": "subjects/vehicles/vehicle.kart/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.kart/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "control_archetype": "throttle_steer",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.kart/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.kart",
+      "asset_version": "0.1.1",
+      "display_name": "卡丁车",
+      "aliases": [
+        "卡丁车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.kart/0.1.1/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.kart/0.1.1",
+      "model": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
+      "preview": null,
+      "resource_count": 1,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "control_archetype": "throttle_steer",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.kart/0.1.1/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "not_run",
+        "runtime": "not_run",
+        "checked_at": null,
+        "evidence": [],
+        "source_hashes": "passed",
+        "visual_scope": "New content version for dev 8b6854ea kart cushion, pelvis anchor and compound chassis; validation is recorded separately."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.kayak",
+      "asset_version": "0.1.0",
+      "display_name": "单人皮划艇 / Kayak",
+      "aliases": [
+        "kayak",
+        "单人皮划艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.paddled_boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Four-sample hydrostatic buoyancy and stroke-driven drag approximation; no waves, current or capsize simulation. W paddles, S back-paddles, A/D sweep, Space braces to slow; propulsion requires immersion.",
+      "default_assembly": "subjects/vehicles/vehicle.kayak/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.kayak/0.1.0",
+      "model": "subjects/vehicles/vehicle.kayak/0.1.0/model/kayak.glb",
+      "preview": "subjects/vehicles/vehicle.kayak/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "paddling",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.kayak/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.motorcycle",
+      "asset_version": "0.1.0",
+      "display_name": "两轮摩托 / Motorcycle",
+      "aliases": [
+        "motorcycle",
+        "两轮摩托"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.motorcycle",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.motorcycle/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0",
+      "model": "subjects/vehicles/vehicle.motorcycle/0.1.0/model/bike.glb",
+      "preview": "subjects/vehicles/vehicle.motorcycle/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "bike_balance",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "bike_balance",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.motorcycle/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.multirotor",
+      "asset_version": "0.1.0",
+      "display_name": "四旋翼载人飞行器",
+      "aliases": [
+        "四旋翼载人飞行器"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.multirotor",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.multirotor/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.multirotor/0.1.0",
+      "model": "subjects/vehicles/vehicle.multirotor/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.multirotor/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "rotor_lift",
+          "propulsion": "rotor",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "rotorcraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "rotorcraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.multirotor/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.observation-submarine",
+      "asset_version": "0.1.0",
+      "display_name": "单人观景潜艇 / Observation submarine",
+      "aliases": [
+        "observation-submarine",
+        "单人观景潜艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.submarine",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Hydrostatic buoyancy and ballast approximation; no fluid solver or pressure damage. W/S propulsion, A/D yaw, Ctrl dives with ballast, Space surfaces, Q/E roll, Shift slows; hatch opens only at the surface.",
+      "default_assembly": "subjects/vehicles/vehicle.observation-submarine/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0",
+      "model": "subjects/vehicles/vehicle.observation-submarine/0.1.0/model/observation-sub.glb",
+      "preview": "subjects/vehicles/vehicle.observation-submarine/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "underwater",
+          "support": "buoyancy",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "marine_3d",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "marine_3d",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.observation-submarine/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.paraglider",
+      "asset_version": "0.1.0",
+      "display_name": "滑翔伞",
+      "aliases": [
+        "滑翔伞"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.paraglider",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.paraglider/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.paraglider/0.1.0",
+      "model": "subjects/vehicles/vehicle.paraglider/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.paraglider/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "gravity",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "aircraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.paraglider/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.patrol-boat",
+      "asset_version": "0.1.0",
+      "display_name": "水域巡逻艇 / Patrol boat",
+      "aliases": [
+        "patrol-boat",
+        "水域巡逻艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.patrol-boat/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0",
+      "model": "subjects/vehicles/vehicle.patrol-boat/0.1.0/model/patrol-boat.glb",
+      "preview": "subjects/vehicles/vehicle.patrol-boat/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.patrol-boat/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.plane",
+      "asset_version": "0.1.0",
+      "display_name": "动力飞机 / Powered airplane",
+      "aliases": [
+        "plane",
+        "动力飞机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.plane",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.plane/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.plane/0.1.0",
+      "model": "subjects/vehicles/vehicle.plane/0.1.0/model/plane.glb",
+      "preview": "subjects/vehicles/vehicle.plane/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "aircraft",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.plane/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.pusher-plane",
+      "asset_version": "0.1.0",
+      "display_name": "机尾推进式飞机",
+      "aliases": [
+        "机尾推进式飞机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.pusher",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.pusher-plane/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0",
+      "model": "subjects/vehicles/vehicle.pusher-plane/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.pusher-plane/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "aircraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.pusher-plane/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.racer",
+      "asset_version": "0.1.0",
+      "display_name": "公路赛车 / Race car",
+      "aliases": [
+        "racer",
+        "公路赛车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.racer/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.racer/0.1.0",
+      "model": "subjects/vehicles/vehicle.racer/0.1.0/model/racer.glb",
+      "preview": "subjects/vehicles/vehicle.racer/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.racer/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.raft",
+      "asset_version": "0.1.0",
+      "display_name": "橡皮艇 / Inflatable boat",
+      "aliases": [
+        "raft",
+        "橡皮艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.paddled_boat",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Unpowered inflatable boat; paddle propulsion on water, gravity sliding on land and damped contact restitution. Single active driver; passenger anchors reserved. W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion.",
+      "default_assembly": "subjects/vehicles/vehicle.raft/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.raft/0.1.0",
+      "model": "subjects/vehicles/vehicle.raft/0.1.0/model/raft.glb",
+      "preview": "subjects/vehicles/vehicle.raft/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "water_surface",
+          "support": "buoyancy",
+          "propulsion": "paddling",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.raft/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.rescue-hovercraft",
+      "asset_version": "0.1.0",
+      "display_name": "救援悬浮艇 / Rescue hovercraft",
+      "aliases": [
+        "rescue-hovercraft",
+        "救援悬浮艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.hover",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0",
+      "model": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/model/rescue-hover.glb",
+      "preview": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "suspension",
+          "propulsion": "thruster",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.rover",
+      "asset_version": "0.1.0",
+      "display_name": "越野车 / Off-road car",
+      "aliases": [
+        "rover",
+        "越野车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.rover/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.rover/0.1.0",
+      "model": "subjects/vehicles/vehicle.rover/0.1.0/model/rover.glb",
+      "preview": "subjects/vehicles/vehicle.rover/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.rover/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.skateboard",
+      "asset_version": "0.1.0",
+      "display_name": "贴面滑板 / Skateboard",
+      "aliases": [
+        "skateboard",
+        "贴面滑板"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.skateboard",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.skateboard/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.skateboard/0.1.0",
+      "model": "subjects/vehicles/vehicle.skateboard/0.1.0/model/slide.glb",
+      "preview": "subjects/vehicles/vehicle.skateboard/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "external_force",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.skateboard/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.ski",
+      "asset_version": "0.1.0",
+      "display_name": "双板滑雪 / Skis",
+      "aliases": [
+        "ski",
+        "双板滑雪"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.ski",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Unpowered parallel skiing on packed snow; no deep-snow deformation, independent leg physics or ski tricks. W pole pushes only below groundSpeed; turns retain momentum, S / Space brakes, gravity drives downhill.",
+      "default_assembly": "subjects/vehicles/vehicle.ski/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.ski/0.1.0",
+      "model": "subjects/vehicles/vehicle.ski/0.1.0/model/ski.glb",
+      "preview": "subjects/vehicles/vehicle.ski/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "body_contact",
+          "propulsion": "gravity",
+          "degrees_of_freedom": "surface_2d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.ski/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.sled",
+      "asset_version": "0.1.0",
+      "display_name": "木座雪橇 / Sled",
+      "aliases": [
+        "sled",
+        "木座雪橇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.sled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Unpowered packed-snow approximation; no deep-snow deformation or rollover simulation. W pushes only below groundSpeed; downhill speed comes from gravity.",
+      "default_assembly": "subjects/vehicles/vehicle.sled/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.sled/0.1.0",
+      "model": "subjects/vehicles/vehicle.sled/0.1.0/model/sled.glb",
+      "preview": "subjects/vehicles/vehicle.sled/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "body_contact",
+          "propulsion": "gravity",
+          "degrees_of_freedom": "surface_2d",
+          "gaits": [],
+          "control_archetype": "directional",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "directional",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.sled/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.spacecraft",
+      "asset_version": "0.1.0",
+      "display_name": "无重力飞行器 / Spacecraft",
+      "aliases": [
+        "spacecraft",
+        "无重力飞行器"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.spacecraft",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.spacecraft/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0",
+      "model": "subjects/vehicles/vehicle.spacecraft/0.1.0/model/space.glb",
+      "preview": "subjects/vehicles/vehicle.spacecraft/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "space",
+          "support": "none",
+          "propulsion": "thruster",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "space_6dof",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "space_6dof",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.spacecraft/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.submarine",
+      "asset_version": "0.1.0",
+      "display_name": "探索潜艇 / Submarine",
+      "aliases": [
+        "submarine",
+        "探索潜艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.submarine",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.submarine/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.submarine/0.1.0",
+      "model": "subjects/vehicles/vehicle.submarine/0.1.0/model/sub.glb",
+      "preview": "subjects/vehicles/vehicle.submarine/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "underwater",
+          "support": "buoyancy",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "marine_3d",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "marine_3d",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.submarine/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.supercar",
+      "asset_version": "0.1.0",
+      "display_name": "超跑",
+      "aliases": [
+        "超跑"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.supercar/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0",
+      "model": "subjects/vehicles/vehicle.supercar/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.supercar/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "control_archetype": "throttle_steer",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.supercar/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.survey-spacecraft",
+      "asset_version": "0.1.0",
+      "display_name": "轨道测绘艇 / Survey spacecraft",
+      "aliases": [
+        "survey-spacecraft",
+        "轨道测绘艇"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.spacecraft",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0",
+      "model": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/model/survey-space.glb",
+      "preview": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "space",
+          "support": "none",
+          "propulsion": "thruster",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "space_6dof",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "space_6dof",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.tank",
+      "asset_version": "0.1.0",
+      "display_name": "履带坦克 / Tank",
+      "aliases": [
+        "tank",
+        "履带坦克"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.tank",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation. No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point.",
+      "default_assembly": "subjects/vehicles/vehicle.tank/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.tank/0.1.0",
+      "model": "subjects/vehicles/vehicle.tank/0.1.0/model/tank.glb",
+      "preview": "subjects/vehicles/vehicle.tank/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "track_contact",
+          "propulsion": "track_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "differential_drive",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "differential_drive",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.tank/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.tiltrotor",
+      "asset_version": "0.1.0",
+      "display_name": "倾转旋翼飞机",
+      "aliases": [
+        "倾转旋翼飞机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.tiltrotor",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.tiltrotor/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0",
+      "model": "subjects/vehicles/vehicle.tiltrotor/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.tiltrotor/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "rotor_lift",
+          "propulsion": "rotor",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "rotorcraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "rotorcraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.tiltrotor/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.touring-motorcycle",
+      "asset_version": "0.1.0",
+      "display_name": "长途巡航摩托 / Touring motorcycle",
+      "aliases": [
+        "touring-motorcycle",
+        "长途巡航摩托"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.motorcycle",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0",
+      "model": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/model/touring-bike.glb",
+      "preview": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "bike_balance",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "bike_balance",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.trail-rover",
+      "asset_version": "0.1.0",
+      "display_name": "远征保障车 / Expedition car",
+      "aliases": [
+        "trail-rover",
+        "远征保障车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wheeled",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.trail-rover/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0",
+      "model": "subjects/vehicles/vehicle.trail-rover/0.1.0/model/trail-rover.glb",
+      "preview": "subjects/vehicles/vehicle.trail-rover/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "throttle_steer",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "throttle_steer",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.trail-rover/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.trainer-plane",
+      "asset_version": "0.1.0",
+      "display_name": "稳定教练机 / Trainer airplane",
+      "aliases": [
+        "trainer-plane",
+        "稳定教练机"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.plane",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "已从 whitebox 登记资源复制，保留原字节。",
+      "default_assembly": "subjects/vehicles/vehicle.trainer-plane/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0",
+      "model": "subjects/vehicles/vehicle.trainer-plane/0.1.0/model/trainer-plane.glb",
+      "preview": "subjects/vehicles/vehicle.trainer-plane/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "propeller",
+          "degrees_of_freedom": "full_3d",
+          "gaits": [],
+          "control_archetype": "aircraft",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.trainer-plane/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.unicycle",
+      "asset_version": "0.1.0",
+      "display_name": "独轮车 / Unicycle",
+      "aliases": [
+        "unicycle",
+        "独轮车"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.unicycle",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "horizontal"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": {
+          "positionMetersXYZ": [
+            0,
+            0,
+            0
+          ],
+          "rotationEulerRadiansXYZ": [
+            0,
+            0,
+            0
+          ],
+          "scaleXYZ": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "Direct-drive single wheel with original humanoid balance and terrain-checked left-foot support. Assisted balance, not a free-falling single-wheel rigid-body simulation. No aerial tricks.",
+      "default_assembly": "subjects/vehicles/vehicle.unicycle/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0",
+      "model": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
+      "preview": "subjects/vehicles/vehicle.unicycle/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "ground",
+          "support": "wheel_contact",
+          "propulsion": "wheel_drive",
+          "degrees_of_freedom": "planar_2d_yaw",
+          "gaits": [],
+          "control_archetype": "bike_balance",
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "bike_balance",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "limitations": [
+          "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+        ],
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "see_source_notices",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "asset_id": "vehicle.wingsuit",
+      "asset_version": "0.1.0",
+      "display_name": "翼装飞行",
+      "aliases": [
+        "翼装飞行"
+      ],
+      "browse_group": "vehicles",
+      "semantic_type": "vehicle.wingsuit",
+      "semantic_subtypes": [],
+      "morphology": {
+        "architecture": "rigid_articulated",
+        "profiles": [],
+        "appendages": [],
+        "stance": "unknown"
+      },
+      "scale": {
+        "units": "meter",
+        "up_axis": "Y",
+        "forward_axis": "unknown",
+        "dimensions_m": null,
+        "source_transform": null
+      },
+      "lifecycle": "assets_ready",
+      "placeholder": false,
+      "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+      "default_assembly": "subjects/vehicles/vehicle.wingsuit/0.1.0/assemblies/default.json",
+      "dependencies": [],
+      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0",
+      "model": "subjects/vehicles/vehicle.wingsuit/0.1.0/model/model.glb",
+      "preview": "subjects/vehicles/vehicle.wingsuit/0.1.0/preview/thumbnail.webp",
+      "resource_count": 2,
+      "bone_count": 0,
+      "clip_count": 0,
+      "movement_modes": [
+        {
+          "id": "primary",
+          "environment": "air",
+          "support": "aerodynamic_lift",
+          "propulsion": "gravity",
+          "degrees_of_freedom": "full_3d",
+          "control_archetype": "aircraft",
+          "gaits": [],
+          "stage": "assets_ready"
+        }
+      ],
+      "control": {
+        "archetype": "aircraft",
+        "stage": "assets_ready",
+        "profile": "subjects/vehicles/vehicle.wingsuit/0.1.0/profiles/locomotion.json"
+      },
+      "interactions": [],
+      "readiness": {
+        "schema_version": "1.0",
+        "structure": "passed",
+        "format": "passed",
+        "visual": "preview_loaded",
+        "runtime": "not_run",
+        "checked_at": "2026-09-17T10:20:41.744Z",
+        "evidence": [
+          "tests/evidence/gltf-validation.json",
+          "tests/evidence/browser.json"
+        ],
+        "source_hashes": "passed",
+        "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+      },
+      "license": {
+        "status": "whitebox_authored_procedural",
+        "commercial_use": "unknown",
+        "redistribution": "unknown",
+        "editable_distribution": "unknown",
+        "user_export": "unknown"
+      }
+    }
+  ]
+}

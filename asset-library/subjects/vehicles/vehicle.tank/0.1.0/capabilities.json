@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "track_contact",
+      "propulsion": "track_drive",
+      "degrees_of_freedom": "planar_2d_yaw",
+      "gaits": [],
+      "control_archetype": "differential_drive",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "differential_drive",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.tank/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation.",
+    "No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point."
+  ]
+}

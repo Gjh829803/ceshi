@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "underwater",
+      "support": "buoyancy",
+      "propulsion": "propeller",
+      "degrees_of_freedom": "full_3d",
+      "gaits": [],
+      "control_archetype": "marine_3d",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "marine_3d",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.submarine/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。"
+  ]
+}

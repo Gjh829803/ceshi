@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "foot_contact",
+      "propulsion": "legged_step",
+      "degrees_of_freedom": "surface_2d",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Static six-mesh diagnostic animal; no skeleton or authored animation.",
+    "The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal.",
+    "Not a fox or nine-tailed fox reference; do not recommend it for matching those characters.",
+    "A character controller can translate this object but cannot supply leg motion."
+  ]
+}

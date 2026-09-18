@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "creature.quadruped-static-diagnostic",
+  "asset_version": "0.1.0",
+  "display_name": "静态四足动物（诊断用） / Static quadruped (diagnostic)",
+  "aliases": [
+    "quadruped-static-diagnostic",
+    "静态四足动物（诊断用）"
+  ],
+  "browse_group": "animals",
+  "semantic_type": "animal.mammal.quadruped",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [
+      "quadruped"
+    ],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        -1.1497997045516968,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Static six-mesh diagnostic animal; no skeleton or authored animation. The source GLB contains three size specimens. Use exactly the listed glTF node indices to select one animal. Not a fox or nine-tailed fox reference; do not recommend it for matching those characters. A character controller can translate this object but cannot supply leg motion.",
+  "default_assembly": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

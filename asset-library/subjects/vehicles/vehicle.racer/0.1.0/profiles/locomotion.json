@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "racer",
+    "name": "公路赛车",
+    "en": "APEX",
+    "radius": 1.6,
+    "seat": [
+      0,
+      0.968,
+      0
+    ],
+    "archetype": "racer",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.35,
+        0.9400000000000001,
+        2.15
+      ],
+      "offset": [
+        0,
+        1.26,
+        0
+      ]
+    },
+    "wheelPhysics": {
+      "radius": 0.39,
+      "hubHeight": 0.39,
+      "halfTrack": 1.1,
+      "halfWheelbase": 1.27,
+      "wheelWidth": 0.32,
+      "wheels": [
+        {
+          "x": -1.1,
+          "z": -1.27,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": -1.1,
+          "z": 1.27,
+          "steering": true,
+          "driven": true
+        },
+        {
+          "x": 1.1,
+          "z": -1.27,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": 1.1,
+          "z": 1.27,
+          "steering": true,
+          "driven": true
+        }
+      ],
+      "cabin": {
+        "kind": "box",
+        "halfExtents": [
+          0.99,
+          0.47,
+          0.9
+        ],
+        "offset": [
+          0,
+          1.49,
+          0.1
+        ]
+      }
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "horse",
+    "name": "骑乘骏马",
+    "en": "STEED",
+    "radius": 1.9,
+    "seat": [
+      0,
+      1.65,
+      0
+    ],
+    "archetype": "horse",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.8,
+        1.65,
+        1.9
+      ],
+      "offset": [
+        0,
+        1.65,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

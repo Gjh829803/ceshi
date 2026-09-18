@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.observation-submarine",
+  "asset_version": "0.1.0",
+  "display_name": "单人观景潜艇 / Observation submarine",
+  "aliases": [
+    "observation-submarine",
+    "单人观景潜艇"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.submarine",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Hydrostatic buoyancy and ballast approximation; no fluid solver or pressure damage. W/S propulsion, A/D yaw, Ctrl dives with ballast, Space surfaces, Q/E roll, Shift slows; hatch opens only at the surface.",
+  "default_assembly": "subjects/vehicles/vehicle.observation-submarine/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

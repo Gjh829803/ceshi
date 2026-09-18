@@ -1,7 +1,7 @@
-import {writeCatalogSources,syncAssetCatalog} from '../../src/assets/catalog-sources.js';
+import {exportDestination,writeIntakeExport} from './export-intake.js';
+const sourcePath=exportDestination();
 /** Rebuild only the local tank asset; never re-import the donor project. */
 import { createHash } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildTankModel } from '@worldkit/preset-content/tank-model';
@@ -14,9 +14,6 @@ Object.assign(globalThis,{FileReader:class {
 const model=buildTankModel();
 const bytes=Buffer.from(await new GLTFExporter().parseAsync(model,{binary:true}) as ArrayBuffer);
 const sha256=createHash('sha256').update(bytes).digest('hex');
-const sourcePath='assets/three-creator/presets/vehicles/tank.glb';
-await mkdir('assets/three-creator/presets/vehicles',{recursive:true});
-await writeFile(sourcePath,bytes);
 const asset={id:'vehicle.tank',displayName:"履带坦克 / Tank",path:'vehicles/tank.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
@@ -24,6 +21,4 @@ const asset={id:'vehicle.tank',displayName:"履带坦克 / Tank",path:'vehicles/
   provenance:{source:'Local procedural geometry',generator:'packages/creator-host/scripts/assets/export-tank.ts'},resources:[],
   locomotionBindingIds:["locomotion.tank"],vehicle:{schemaVersion:1,spec:{...TANK_SPEC,id:"tank",name:"履带坦克",en:"Tank"}},
   sockets:Object.entries(TANK_SOCKETS).map(([node,positionMetersXYZ])=>({id:node,node,positionMetersXYZ})).concat([{id:'muzzle',node:'socket.muzzle',positionMetersXYZ:[0,0,5]}]),collision:TANK_SPEC.envelope};
-await writeCatalogSources(process.cwd(),[asset]);
-await syncAssetCatalog(process.cwd());
-console.log(JSON.stringify({sourcePath,sha256,byteLength:bytes.length}));
+await writeIntakeExport(sourcePath,bytes,asset);

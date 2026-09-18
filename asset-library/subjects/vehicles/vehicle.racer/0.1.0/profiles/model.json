@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "roadCushion": {
+    "center": [
+      0,
+      0.77,
+      0
+    ],
+    "size": [
+      0.72,
+      0.13,
+      0.5
+    ]
+  }
+}

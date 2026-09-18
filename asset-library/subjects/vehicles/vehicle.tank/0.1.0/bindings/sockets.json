@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        1.45,
+        2.1
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0.213968,
+        1.735009,
+        2.518638
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        -0.194585,
+        1.743792,
+        2.495255
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.169582,
+        0.948443,
+        2.590657
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.169582,
+        0.948443,
+        2.590659
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        3.25,
+        0.025,
+        0
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -3.25,
+        0.025,
+        0
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0.000542,
+        2.083,
+        2.330046
+      ]
+    },
+    {
+      "id": "muzzle",
+      "node": "socket.muzzle",
+      "positionMetersXYZ": [
+        0,
+        0,
+        5
+      ]
+    }
+  ],
+  "source_seat": [
+    0,
+    1.45,
+    2.1
+  ]
+}

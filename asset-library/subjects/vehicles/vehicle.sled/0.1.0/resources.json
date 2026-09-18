@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.sled/0.1.0/model/sled.glb",
+  "preview": "subjects/vehicles/vehicle.sled/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.sled/0.1.0/model/sled.glb",
+      "sha256": "6ad37ef92b9c5aeda2c28660a892c8e907a3709e7e95c7a5f57f8c6e2e1f12a3",
+      "byte_length": 68180,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/sled.glb",
+      "reused_by": [
+        "vehicle.sled"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.sled/0.1.0/preview/thumbnail.webp",
+      "sha256": "cbdc6ad3f40826dcab7e6b6d8a3fb408622721c607129001108d25ddba7e6f3d",
+      "byte_length": 14018,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.sled"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 17,
+    "meshes": 15,
+    "materials": 3,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1712,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/sled.glb"
+}

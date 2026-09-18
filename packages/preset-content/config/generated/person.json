@@ -1,0 +1,12 @@
+{
+  "envelope": {
+    "kind": "capsule",
+    "radius": 0.28,
+    "halfHeight": 0.56,
+    "offset": [
+      0,
+      0.84,
+      0
+    ]
+  }
+}

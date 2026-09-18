@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.raft/0.1.0/model/raft.glb",
+  "preview": "subjects/vehicles/vehicle.raft/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.raft/0.1.0/model/raft.glb",
+      "sha256": "24c2f27c8599781ef1cc01837d0c0d0206ea6a9af09ed3e6a480d421bd6bcffd",
+      "byte_length": 59988,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/raft.glb",
+      "reused_by": [
+        "vehicle.raft"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.raft/0.1.0/preview/thumbnail.webp",
+      "sha256": "18dcb64d199cd0769f69235c8977c667369f5ff5f8c25d9dcb7e174de014f288",
+      "byte_length": 8362,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.raft"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 22,
+    "meshes": 9,
+    "materials": 2,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1844,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/raft.glb"
+}

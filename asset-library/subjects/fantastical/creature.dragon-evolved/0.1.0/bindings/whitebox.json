@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.dragon-evolved"
+  ],
+  "recommendedFor": [
+    "Evolved dragon model with Flying_Idle and Fast_Flying clips; simple dragon vehicle control."
+  ],
+  "empty_fields": [
+    "sockets"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

@@ -1,17 +1,16 @@
-import type {humanoid} from '@worldkit/three';
-type Powertrain=humanoid.PowertrainConfig;
-// Authored engine torque in N·m; the SDK owns gearing, braking and integration.
-const engine=(torque:number,finalDrive:number,ratios:readonly number[],dragArea:number):Powertrain=>({
-  idleRpm:850,maxRpm:6200,upshiftRpm:5200,downshiftRpm:2100,
-  torqueCurve:[[850,torque*.65],[1800,torque*.9],[3200,torque],[4500,torque*.95],[6200,torque*.65]],
-  forwardRatios:ratios,reverseRatio:3.3,finalDrive,efficiency:.88,shiftSeconds:.38,engineBrakeTorque:torque*.15,
-  dragArea,rollingResistance:.018,boostTorqueMultiplier:1.25,
-});
-export const ATV_POWERTRAIN=engine(150,4.1,[3.8,2.3,1.55,1.1,.85],.65);
-export const BUS_POWERTRAIN={...engine(220,4.5,[3.8,2.3,1.55,1.1,.85],3.5),boostTorqueMultiplier:1};
-export const TANK_POWERTRAIN=engine(2400,8,[3.8,2.3,1.55,1.1,.85],8);
-export const JET_POWERTRAIN=engine(300,2,[1.5],.6);
-// Size thrust for the 2,400 kg fully ballasted craft, not only its 720 kg dry mass.
-// At launch rpm: 850 N·m × .9 × 3 × .88 / .4 m ≈ 5,050 N (2.1 m/s²).
-export const SUB_POWERTRAIN=engine(850,2,[1.5],2);
+import {readSubjectSpec} from '../assets/subject-data';
 
+function powertrain(id: string) {
+  const spec = readSubjectSpec(id);
+  const value = spec.wheelPhysics?.powertrain ?? spec.bodyPhysics?.powertrain;
+  if (!value) throw new Error(`Missing preset powertrain: ${id}`);
+  return value;
+}
+export const ATV_POWERTRAIN = powertrain('atv');
+const busPowertrain = powertrain('bus');
+const busBoost = busPowertrain.boostTorqueMultiplier;
+if (typeof busBoost !== 'number' || !Number.isFinite(busBoost)) throw new Error('Missing bus boost torque multiplier');
+export const BUS_POWERTRAIN = {...busPowertrain, boostTorqueMultiplier: busBoost};
+export const TANK_POWERTRAIN = powertrain('tank');
+export const JET_POWERTRAIN = powertrain('jetski');
+export const SUB_POWERTRAIN = powertrain('observation-submarine');

@@ -28,6 +28,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
   Object.freeze([
     { path: "apps/creator-cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
     { path: "apps/creator-cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
+    { path: "apps/creator-cloud/three-capsule.test.mjs", lane: "node" },
     { path: "apps/creator-cloud/three-eval-asset-policy.test.mjs", lane: "node" },
     { path: "apps/creator-cloud/three-eval-effort.test.mjs", lane: "node" },
     { path: "apps/creator-cloud/three-eval-progress.test.mjs", lane: "node" },
@@ -36,7 +37,11 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "apps/creator-cloud/three-ray-cleanup.test.mjs", lane: "node" },
     { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
     { path: "deploy/three-creator-runtime/capsule.test.mjs", lane: "node" },
+    { path: "packages/asset-client/tests/client.test.mjs", lane: "node" },
+    { path: "packages/asset-contracts/tests/contracts.test.mjs", lane: "node" },
     { path: "packages/cloud-generation-client/lwdp-generation-client.test.mjs", lane: "node" },
+    { path: "packages/creator-host/tests/assets/registry-compiler.test.mjs", lane: "node" },
+    { path: "packages/creator-host/tests/assets/registry-source.test.mjs", lane: "node" },
     { path: "packages/episode-pipeline/tests/batch/batch-resources.test.mjs", lane: "node" },
     { path: "packages/episode-pipeline/tests/batch/cloud-production-run.test.mjs", lane: "node" },
     { path: "packages/episode-pipeline/tests/batch/gpu-capture-batch.test.mjs", lane: "node" },
@@ -58,6 +63,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "packages/episode-pipeline/tests/visuals/episode-style-variants.test.mjs", lane: "node" },
     { path: "packages/episode-pipeline/tests/visuals/vertex-event-director.test.mjs", lane: "node" },
     { path: "packages/episode-pipeline/tests/visuals/visuals.test.mjs", lane: "node" },
+    { path: "packages/preset-content/src/assets/host-adapter.test.mjs", lane: "node" },
   ]);
 
 function fail(code: string, detail: string): never {

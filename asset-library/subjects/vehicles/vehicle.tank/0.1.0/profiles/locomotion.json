@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "tank",
+    "name": "履带坦克",
+    "en": "TANK",
+    "archetype": "tank",
+    "radius": 5.4,
+    "seat": [
+      0,
+      1.45,
+      2.1
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.9,
+        2.08,
+        4.65
+      ],
+      "offset": [
+        0,
+        2.08,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

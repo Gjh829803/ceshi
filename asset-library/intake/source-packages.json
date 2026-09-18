@@ -1,0 +1,637 @@
+{
+  "schema_version": "1.0",
+  "packages": [
+    {
+      "id": "intake.animal.african-animals-pack",
+      "name": "AFRICAN ANIMALS PACK",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AFRICAN ANIMALS PACK",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AFRICAN ANIMALS PACK.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AFRICAN ANIMALS PACK.zip"
+      ],
+      "source_file_count": 229,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.akita-inu",
+      "name": "Akita Inu",
+      "category": "quadruped/mammal/canid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Akita Inu.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Akita Inu.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animx-advanced-cats-427",
+      "name": "AnimX Advanced Cats 427",
+      "category": "quadruped/mammal/felid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AnimX Advanced Cats 427.jpg",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AnimX Advanced Cats 427.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animal-pack-ultra",
+      "name": "Animal Pack Ultra",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animal Pack Ultra.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animal Pack Ultra.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animal-pack-ultra-2",
+      "name": "Animal Pack Ultra 2",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animal Pack Ultra 2.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animal Pack Ultra 2.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animalia-wild-boar-young",
+      "name": "Animalia - Wild Boar young",
+      "category": "quadruped/mammal/ungulate",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia - Wild Boar young.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia - Wild Boar young.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animalia-brown-bear-male",
+      "name": "Animalia Brown Bear male",
+      "category": "quadruped/mammal/ursid",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Brown Bear male.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Brown Bear male.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": [
+        "imports/animals/quadruped/mammal/ursid/animalia-brown-bear-male/0.1.0/exported-samples/SK-AnimalsBear_Bear.FBX"
+      ]
+    },
+    {
+      "id": "intake.animal.animalia-red-deer-male",
+      "name": "Animalia Red Deer male",
+      "category": "quadruped/mammal/ungulate",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Red Deer male.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Red Deer male.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animals-rat",
+      "name": "Animals Rat",
+      "category": "quadruped/mammal/rodent",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Rat.jpg",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Rat.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animals-vol-01-forest-animals",
+      "name": "Animals Vol 01 Forest Animals",
+      "category": "mixed-pack/animals",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Vol 01 Forest Animals.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Vol 01 Forest Animals.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.animals-wolf",
+      "name": "Animals Wolf",
+      "category": "quadruped/mammal/canid",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Wolf.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Wolf.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.asian-animal-tiger",
+      "name": "Asian Animal Tiger",
+      "category": "quadruped/mammal/felid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Asian Animal Tiger.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Asian Animal Tiger.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.bears-pack",
+      "name": "Bears pack",
+      "category": "quadruped/mammal/ursid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Bears pack.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Bears pack.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.bird-band",
+      "name": "Bird Band",
+      "category": "biped/bird",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Bird Band.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Bird Band.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.crocodile",
+      "name": "CROCODILE",
+      "category": "quadruped/reptile",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/CROCODILE.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/CROCODILE.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.cats-big-pack",
+      "name": "Cats Big Pack",
+      "category": "quadruped/mammal/felid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Cats Big Pack.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Cats Big Pack.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.complete-animals",
+      "name": "Complete Animals",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Complete Animals.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Complete Animals.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.crab-animated-creature",
+      "name": "Crab - Animated Creature",
+      "category": "arthropod/crustacean",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Crab - Animated Creature.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Crab - Animated Creature.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.cute-kitten",
+      "name": "Cute Kitten",
+      "category": "quadruped/mammal/felid",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Cute Kitten.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Cute Kitten.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.dog-husky",
+      "name": "Dog - Husky",
+      "category": "quadruped/mammal/canid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Dog - Husky.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Dog - Husky.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.elephant",
+      "name": "ELEPHANT",
+      "category": "quadruped/mammal/proboscidean",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/ELEPHANT.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/ELEPHANT.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.farm-animals-pack",
+      "name": "FARM ANIMALS PACK",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/FARM ANIMALS PACK.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/FARM ANIMALS PACK.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.forest-animals-pack",
+      "name": "FOREST ANIMALS PACK",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/FOREST ANIMALS PACK.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/FOREST ANIMALS PACK.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.flamingo-animated",
+      "name": "Flamingo Animated",
+      "category": "biped/bird",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Flamingo Animated.jpg",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Flamingo Animated.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.forestcreaturekit",
+      "name": "ForestCreatureKit",
+      "category": "mixed-pack/animals",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/ForestCreatureKit.jpg",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/ForestCreatureKit.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.giant-scorpion",
+      "name": "Giant Scorpion",
+      "category": "arthropod/arachnid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Giant Scorpion.jpg",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Giant Scorpion.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.giant-viper",
+      "name": "Giant Viper",
+      "category": "serpentine/reptile",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Giant Viper.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Giant Viper.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.harpy-eagle",
+      "name": "Harpy Eagle",
+      "category": "biped/bird",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Harpy Eagle.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Harpy Eagle.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": [
+        "imports/animals/biped/bird/harpy-eagle/0.1.0/exported-samples/HarpyEagleModelLowPoly.FBX"
+      ]
+    },
+    {
+      "id": "intake.animal.megalodon",
+      "name": "Megalodon",
+      "category": "aquatic/fish",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Megalodon.zip"
+      ],
+      "source_file_count": 1,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.poly-art-cougars-and-panthers",
+      "name": "Poly Art Cougars and Panthers",
+      "category": "quadruped/mammal/felid",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Poly Art Cougars and Panthers.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Poly Art Cougars and Panthers.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.tyannosaurus-rex-sue-rd",
+      "name": "Tyannosaurus_Rex_Sue_RD",
+      "category": "dinosaur/biped",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Tyannosaurus_Rex_Sue_RD.rar"
+      ],
+      "source_file_count": 1,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.velociraptor",
+      "name": "Velociraptor",
+      "category": "dinosaur/biped",
+      "status": "needs-export",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Velociraptor.png",
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Velociraptor.zip"
+      ],
+      "source_file_count": 2,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": []
+    },
+    {
+      "id": "intake.animal.kl",
+      "name": "kl",
+      "category": "dinosaur/mixed-pack",
+      "status": "needs-normalization",
+      "source": [
+        "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/kl.zip"
+      ],
+      "source_file_count": 1,
+      "license": {
+        "status": "unknown",
+        "internal_use": "unknown",
+        "redistribution": "unknown",
+        "source_export": "unknown",
+        "training": "unknown"
+      },
+      "sample_paths": [
+        "imports/animals/dinosaur/mixed-pack/kl/0.1.0/exported-samples/Move-Fwd.FBX"
+      ]
+    }
+  ],
+  "note": "来源登记，原始大包留在制作目录；库内占位预览与选定样本已经复制。来源路径仅用于追溯，不是运行依赖。"
+}

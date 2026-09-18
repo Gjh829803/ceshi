@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.ski/0.1.0/model/ski.glb",
+  "preview": "subjects/vehicles/vehicle.ski/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.ski/0.1.0/model/ski.glb",
+      "sha256": "c4b2cec03488be64fa53fa1090af488fd062977f62b6b8c6c4f629c532eced05",
+      "byte_length": 32588,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/ski.glb",
+      "reused_by": [
+        "vehicle.ski"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.ski/0.1.0/preview/thumbnail.webp",
+      "sha256": "c11d7681536142d0c29ef954cfb1b3b509e315abbee4bf7a60d78aa22bb73e8e",
+      "byte_length": 10914,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.ski"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 20,
+    "meshes": 14,
+    "materials": 3,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 288,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/ski.glb"
+}

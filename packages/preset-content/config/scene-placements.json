@@ -1,0 +1,387 @@
+{
+  "rover": {
+    "spawn": [
+      -24,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#f0b64d"
+  },
+  "racer": {
+    "spawn": [
+      -10,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#f37659"
+  },
+  "motorcycle": {
+    "spawn": [
+      4,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#a4d479"
+  },
+  "skateboard": {
+    "spawn": [
+      17,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#f39eae"
+  },
+  "hovercraft": {
+    "spawn": [
+      32,
+      1.3,
+      64
+    ],
+    "yaw": 0,
+    "color": "#55cec5"
+  },
+  "boat": {
+    "spawn": [
+      207,
+      -1.9,
+      10
+    ],
+    "yaw": 0,
+    "color": "#68baf1"
+  },
+  "submarine": {
+    "spawn": [
+      230,
+      -3.1,
+      45
+    ],
+    "yaw": 0,
+    "color": "#f4ca58"
+  },
+  "glider": {
+    "spawn": [
+      -302,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#e2e8eb"
+  },
+  "plane": {
+    "spawn": [
+      -285,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#e27e58"
+  },
+  "spacecraft": {
+    "spawn": [
+      -84,
+      0.8,
+      -70
+    ],
+    "yaw": 0,
+    "color": "#a398eb",
+    "dockingPorts": [
+      {
+        "id": "home",
+        "name": "穿梭机泊位",
+        "positionMetersXYZ": [
+          -84,
+          0.8,
+          -70
+        ],
+        "rotationXYZW": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ]
+  },
+  "trail-rover": {
+    "spawn": [
+      -38,
+      0,
+      35
+    ],
+    "yaw": 0,
+    "color": "#568f72"
+  },
+  "touring-motorcycle": {
+    "spawn": [
+      -24,
+      0,
+      35
+    ],
+    "yaw": 0,
+    "color": "#507fc4"
+  },
+  "rescue-hovercraft": {
+    "spawn": [
+      -10,
+      1.3,
+      35
+    ],
+    "yaw": 0,
+    "color": "#e36b55"
+  },
+  "patrol-boat": {
+    "spawn": [
+      207,
+      -1.9,
+      24
+    ],
+    "yaw": 0,
+    "color": "#315f91"
+  },
+  "trainer-plane": {
+    "spawn": [
+      -270,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#f0d04f"
+  },
+  "survey-spacecraft": {
+    "spawn": [
+      -68,
+      0.8,
+      -70
+    ],
+    "yaw": 0,
+    "color": "#64c8d0",
+    "dockingPorts": [
+      {
+        "id": "home",
+        "name": "飞碟泊位",
+        "positionMetersXYZ": [
+          -68,
+          0.8,
+          -70
+        ],
+        "rotationXYZW": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    ]
+  },
+  "supercar": {
+    "spawn": [
+      -52,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#e66048"
+  },
+  "kart": {
+    "spawn": [
+      -66,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#e9bf4f"
+  },
+  "pusher-plane": {
+    "spawn": [
+      -250,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#639ac2"
+  },
+  "helicopter": {
+    "spawn": [
+      -234,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#e4b251"
+  },
+  "multirotor": {
+    "spawn": [
+      -218,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#6dbca9"
+  },
+  "tiltrotor": {
+    "spawn": [
+      -202,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#9993ca"
+  },
+  "paraglider": {
+    "spawn": [
+      -138,
+      120,
+      -138
+    ],
+    "yaw": 0,
+    "color": "#e3b958"
+  },
+  "wingsuit": {
+    "spawn": [
+      -122,
+      120,
+      -170
+    ],
+    "yaw": 0,
+    "color": "#dfb550"
+  },
+  "balloon": {
+    "spawn": [
+      -120,
+      0,
+      -205
+    ],
+    "yaw": 0,
+    "color": "#db9369"
+  },
+  "horse": {
+    "spawn": [
+      38,
+      0,
+      35
+    ],
+    "yaw": 0,
+    "color": "#a46942"
+  },
+  "carriage": {
+    "spawn": [
+      56,
+      0,
+      35
+    ],
+    "yaw": 0,
+    "color": "#6b4b31"
+  },
+  "dragon": {
+    "spawn": [
+      80,
+      0.225,
+      35
+    ],
+    "yaw": 0,
+    "color": "#527a59"
+  },
+  "unicycle": {
+    "spawn": [
+      -170,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#d9bd36"
+  },
+  "observation-submarine": {
+    "spawn": [
+      205,
+      -1.88,
+      -105
+    ],
+    "yaw": 1.5707963267948966,
+    "color": "#d4ad38"
+  },
+  "canoe": {
+    "spawn": [
+      205,
+      -1.888,
+      -140.5
+    ],
+    "yaw": 1.5707963267948966,
+    "color": "#95643a"
+  },
+  "kayak": {
+    "spawn": [
+      205,
+      -1.93,
+      -124
+    ],
+    "yaw": 1.5707963267948966,
+    "color": "#b84047"
+  },
+  "raft": {
+    "spawn": [
+      201,
+      -1.88,
+      -176
+    ],
+    "yaw": 1.5707963267948966,
+    "color": "#343b40"
+  },
+  "jetski": {
+    "spawn": [
+      220,
+      -1.98,
+      -145
+    ],
+    "yaw": 0,
+    "color": "#bad43e"
+  },
+  "atv": {
+    "spawn": [
+      -212,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#bc3543"
+  },
+  "ski": {
+    "spawn": [
+      -184,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#e67839"
+  },
+  "sled": {
+    "spawn": [
+      -198,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#b89465"
+  },
+  "tank": {
+    "spawn": [
+      -240,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#7c8061"
+  },
+  "bus": {
+    "spawn": [
+      -226,
+      0,
+      64
+    ],
+    "yaw": 0,
+    "color": "#83c7bb"
+  }
+}

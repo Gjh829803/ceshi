@@ -1,0 +1,565 @@
+{
+  "checked_at": "2026-09-17T15:31:06.867Z",
+  "source": "published Registry / real Chrome / verified Three.js preview",
+  "snapshot_id": "b10e823e2e562b055cacd7829cda17c53318dfc390e33cb40b285bc1ea7576e9",
+  "models": [
+    {
+      "id": "animal.animalia-brown-bear-male",
+      "bones": 36,
+      "meshes": 1,
+      "clips": 1,
+      "frames": 75,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "animal.harpy-eagle",
+      "bones": 223,
+      "meshes": 1,
+      "clips": 0,
+      "frames": 198,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon-evolved",
+      "bones": 46,
+      "meshes": 1,
+      "clips": 8,
+      "frames": 282,
+      "time": 0.06249999999999955,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d01",
+      "bones": 107,
+      "meshes": 4,
+      "clips": 21,
+      "frames": 317,
+      "time": 0.05839999999999963,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d02",
+      "bones": 117,
+      "meshes": 4,
+      "clips": 18,
+      "frames": 360,
+      "time": 0.058300000000000185,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d03",
+      "bones": 115,
+      "meshes": 5,
+      "clips": 16,
+      "frames": 399,
+      "time": 0.058300000000000185,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d04",
+      "bones": 104,
+      "meshes": 5,
+      "clips": 16,
+      "frames": 447,
+      "time": 0.05809999999999946,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d05",
+      "bones": 108,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 483,
+      "time": 0.06239999999999873,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d06",
+      "bones": 121,
+      "meshes": 2,
+      "clips": 16,
+      "frames": 510,
+      "time": 0.05829999999999927,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d07",
+      "bones": 116,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 543,
+      "time": 0.05809999999999946,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d08",
+      "bones": 125,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 580,
+      "time": 0.06239999999999964,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d09",
+      "bones": 104,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 615,
+      "time": 0.07069999999999892,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d10",
+      "bones": 134,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 665,
+      "time": 0.05820000000000074,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.dragon.d11",
+      "bones": 128,
+      "meshes": 4,
+      "clips": 16,
+      "frames": 714,
+      "time": 0.0585,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.horse",
+      "bones": 50,
+      "meshes": 8,
+      "clips": 13,
+      "frames": 746,
+      "time": 0.0583000000000011,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "creature.quadruped-static-diagnostic",
+      "bones": 0,
+      "meshes": 18,
+      "clips": 0,
+      "frames": 756,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "humanoid.uefn-mannequin",
+      "bones": 101,
+      "meshes": 1,
+      "clips": 53,
+      "frames": 811,
+      "time": 0.05839999999999964,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.atv",
+      "bones": 0,
+      "meshes": 135,
+      "clips": 0,
+      "frames": 825,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.balloon",
+      "bones": 0,
+      "meshes": 12,
+      "clips": 0,
+      "frames": 854,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.boat",
+      "bones": 0,
+      "meshes": 9,
+      "clips": 0,
+      "frames": 878,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.bus",
+      "bones": 0,
+      "meshes": 137,
+      "clips": 0,
+      "frames": 908,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.canoe",
+      "bones": 0,
+      "meshes": 13,
+      "clips": 0,
+      "frames": 939,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.carriage",
+      "bones": 0,
+      "meshes": 85,
+      "clips": 13,
+      "frames": 978,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.glider",
+      "bones": 0,
+      "meshes": 10,
+      "clips": 0,
+      "frames": 1008,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.helicopter",
+      "bones": 0,
+      "meshes": 45,
+      "clips": 0,
+      "frames": 1039,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.hovercraft",
+      "bones": 0,
+      "meshes": 12,
+      "clips": 0,
+      "frames": 1066,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.jetski",
+      "bones": 0,
+      "meshes": 16,
+      "clips": 0,
+      "frames": 1094,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.kart",
+      "bones": 0,
+      "meshes": 23,
+      "clips": 0,
+      "frames": 1120,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.kayak",
+      "bones": 0,
+      "meshes": 8,
+      "clips": 0,
+      "frames": 1146,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.motorcycle",
+      "bones": 0,
+      "meshes": 13,
+      "clips": 0,
+      "frames": 1177,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.multirotor",
+      "bones": 0,
+      "meshes": 60,
+      "clips": 0,
+      "frames": 1206,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.observation-submarine",
+      "bones": 0,
+      "meshes": 24,
+      "clips": 0,
+      "frames": 1231,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.paraglider",
+      "bones": 0,
+      "meshes": 1,
+      "clips": 0,
+      "frames": 1250,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.patrol-boat",
+      "bones": 0,
+      "meshes": 12,
+      "clips": 0,
+      "frames": 1270,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.plane",
+      "bones": 0,
+      "meshes": 17,
+      "clips": 0,
+      "frames": 1290,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.pusher-plane",
+      "bones": 0,
+      "meshes": 53,
+      "clips": 0,
+      "frames": 1320,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.racer",
+      "bones": 0,
+      "meshes": 33,
+      "clips": 0,
+      "frames": 1347,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.raft",
+      "bones": 0,
+      "meshes": 9,
+      "clips": 0,
+      "frames": 1378,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.rescue-hovercraft",
+      "bones": 0,
+      "meshes": 15,
+      "clips": 0,
+      "frames": 1405,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.rover",
+      "bones": 0,
+      "meshes": 30,
+      "clips": 0,
+      "frames": 1434,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.skateboard",
+      "bones": 0,
+      "meshes": 11,
+      "clips": 0,
+      "frames": 1458,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.ski",
+      "bones": 0,
+      "meshes": 14,
+      "clips": 0,
+      "frames": 1484,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.sled",
+      "bones": 0,
+      "meshes": 15,
+      "clips": 0,
+      "frames": 1514,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.spacecraft",
+      "bones": 0,
+      "meshes": 12,
+      "clips": 0,
+      "frames": 1540,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.submarine",
+      "bones": 0,
+      "meshes": 12,
+      "clips": 0,
+      "frames": 1567,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.supercar",
+      "bones": 0,
+      "meshes": 48,
+      "clips": 0,
+      "frames": 1594,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.survey-spacecraft",
+      "bones": 0,
+      "meshes": 15,
+      "clips": 0,
+      "frames": 1623,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.tank",
+      "bones": 0,
+      "meshes": 190,
+      "clips": 0,
+      "frames": 1653,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.tiltrotor",
+      "bones": 0,
+      "meshes": 56,
+      "clips": 0,
+      "frames": 1683,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.touring-motorcycle",
+      "bones": 0,
+      "meshes": 16,
+      "clips": 0,
+      "frames": 1709,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.trail-rover",
+      "bones": 0,
+      "meshes": 32,
+      "clips": 0,
+      "frames": 1734,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.trainer-plane",
+      "bones": 0,
+      "meshes": 20,
+      "clips": 0,
+      "frames": 1764,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.unicycle",
+      "bones": 0,
+      "meshes": 25,
+      "clips": 0,
+      "frames": 1794,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    },
+    {
+      "id": "vehicle.wingsuit",
+      "bones": 0,
+      "meshes": 9,
+      "clips": 0,
+      "frames": 1821,
+      "time": 0,
+      "skeleton": false,
+      "error": null
+    }
+  ],
+  "interactions": {
+    "pagination": true,
+    "metadata_without_models": true,
+    "animation_advances": true,
+    "pause": true,
+    "scrub": true,
+    "skeleton": true,
+    "engine_ownership": true,
+    "external_clip": true,
+    "placeholder": true,
+    "verified_thumbnails": true,
+    "mobile_no_overflow": true
+  },
+  "page_errors": [],
+  "http_errors": [],
+  "warnings": [
+    "THREE.FBXLoader: Vertex has more than 4 skinning weights assigned to vertex. Deleting additional weights."
+  ]
+}

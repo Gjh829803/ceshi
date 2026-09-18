@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.plane"
+  ],
+  "integrationMetadata": {
+    "classification": "registered-vehicle",
+    "documentation": "assets/vehicles/README.md",
+    "requiredAssetIds": [
+      "vehicle.helicopter"
+    ],
+    "useWhen": "Use the supplied single-main-rotor helicopter visual with the SDK helicopter flight subtype.",
+    "binding": "Select vehicle.helicopter in project.json, load its verified GLB with world.assets.load('vehicle.helicopter'), attach the returned object to the VehicleInstance object, and use the composed vehicle.spec. The public factory signature remains humanoid.createAircraftSpec('plane'); custom rotorcraft set aircraftSubtype to 'helicopter'. The SDK owns flight physics and the fixed simulation tick.",
+    "visual": {
+      "load": "world.assets.load",
+      "modelAssetId": "vehicle.helicopter",
+      "rotors": [
+        {
+          "nodeName": "aircraft-rotor",
+          "occurrence": 0,
+          "phaseIndex": 0,
+          "rotationAxis": "y"
+        },
+        {
+          "nodeName": "aircraft-rotor",
+          "occurrence": 1,
+          "phaseIndex": 1,
+          "rotationAxis": "y"
+        }
+      ],
+      "animationBinding": "Collect both aircraft-rotor pivots in traversal order and, in humanoid.onVisualUpdate, assign sample.vehicles[vehicleIndex].aircraft.rotorPhases[phaseIndex] to each pivot's local rotation.y. Do not start a second simulation or animation clock."
+    },
+    "capabilities": [
+      "SDK helicopter lift, hover, forward flight, yaw, roll, landing and wheel braking through aircraftSubtype helicopter.",
+      "Verified hash-locked GLB loading through world.assets.load; the model has no embedded animation clips.",
+      "Driver seat uses the composed local pelvis anchor [0, 1.3, 0.1]."
+    ]
+  },
+  "empty_fields": [
+    "resources"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

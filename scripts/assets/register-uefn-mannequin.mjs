@@ -1,23 +1,6 @@
-/** 更新人物资源闭包；保留其他资产及原始动画文件。 */
-import fs from 'node:fs';
+/** Regenerate maintained humanoid descriptors from canonical library metadata. New bytes use tools/ingest.mjs. */
 import path from 'node:path';
-import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
-const write=(p,v)=>fs.writeFileSync(path.join(root,p),JSON.stringify(v,null,2)+'\n');
-const manifestPath='assets/three-creator/presets/humanoid/source/manifest.json';
-const manifest=read(manifestPath);manifest.model='uefn-mannequin-lod1.glb';write(manifestPath,manifest);
-const catalogPath='assets/three-creator/catalog/humanoid.uefn-mannequin.json',importsPath='assets/three-creator/presets/import-manifest.json';
-const character=read(catalogPath),imports=read(importsPath);
-for(const logical of ['humanoid/source/manifest.json','humanoid/source/uefn-mannequin-lod1.glb']){
- const sourcePath='assets/three-creator/presets/'+logical,bytes=fs.readFileSync(path.join(root,sourcePath)),sha256=createHash('sha256').update(bytes).digest('hex');
- const resource={path:logical,uri:`./assets/resources/${sha256}${path.extname(logical)}`,sha256,byteLength:bytes.length,sourcePath};
- for(const owner of [character,imports]){const index=owner.resources.findIndex(r=>r.path===logical);if(index<0)owner.resources.push(resource);else owner.resources[index]=resource;}
-}
-character.displayName='UEFN 白色黑关节人形 / UEFN mannequin, white with black joints';
-character.provenance={...character.provenance,importedWithoutChangingAssetBytes:false,modelModification:'User-supplied UEFN BlackJoints LOD1 skin bound offline to preserved Source101 animation rig.'};
-imports.provenance={...imports.provenance,importedWithoutChangingAssetBytes:false,modelModification:character.provenance.modelModification};
-write(catalogPath,character);write(importsPath,imports);
-execFileSync('pnpm',['content:sync'],{cwd:root,stdio:'inherit'});
+execFileSync(process.execPath,['--import','tsx',path.join(root,'packages/creator-host/src/cli/content-cli.ts'),...process.argv.slice(2)],{cwd:root,stdio:'inherit'});

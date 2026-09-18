@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { realpathSync, readFileSync, lstatSync } from 'node:fs';
 import { PROJECT_SCHEMA, type Project, type CreatorProfile, sha256 } from '../contracts.js';
 import { catalogResources, publicCatalogValue, readCatalogResource } from '../assets/asset-resources.js';
+import {readLibraryCatalog,readLibraryCatalogSync,readLibraryDeniedHashes,resolveLibrarySelection,materializeLibrarySelection} from '../assets/library-source.mjs';
 import { createAssetPolicySnapshot, validateAssetPolicySnapshot, assetPolicyHash, verifyAssetPolicySources, verifyAssetPolicyBundle, type AssetPolicySnapshot } from '../assets/asset-policy.mjs';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -47,11 +48,7 @@ export async function verifyFiles(root: string, expected: Record<string, string>
   if (JSON.stringify(await hashTree(root)) !== JSON.stringify(expected)) throw new Error('THREE_ARTIFACT_CHANGED: sealed content differs');
 }
 export async function readCatalog(): Promise<AssetCatalogEntry[]> {
-  try {
-    const catalog = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json'), 'utf8'));
-    if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.assets)) throw new Error('THREE_CATALOG_INVALID');
-    return catalog.assets;
-  } catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
+  return readLibraryCatalog(REPOSITORY_ROOT);
 }
 export function publicAsset(entry: AssetCatalogEntry): Record<string, unknown> { return publicCatalogValue(entry); }
 async function copyTree(from: string, to: string) {
@@ -81,9 +78,7 @@ export class ThreeCompiler {
     if(this.policyContext)return this.policyContext;
     const options=this.policyOptions;
     let frozenPolicy:AssetPolicySnapshot;
-    const catalog = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'assets/three-creator/asset-catalog.json'),'utf8'));
-    if(catalog.schemaVersion!==1||!Array.isArray(catalog.assets))throw new Error('THREE_CATALOG_INVALID');
-    const frozenCatalog:AssetCatalogEntry[]=catalog.assets;
+    const frozenCatalog:AssetCatalogEntry[]=readLibraryCatalogSync(REPOSITORY_ROOT);
     const hasPin=options.assetPolicySnapshotPath!==undefined||options.assetPolicySha256!==undefined;
     if(hasPin&&(!options.assetPolicySnapshotPath||!options.assetPolicySha256))throw new Error('THREE_ASSET_POLICY_PIN_REQUIRED');
     if(options.assetPolicySnapshotPath){
@@ -91,9 +86,10 @@ export class ThreeCompiler {
       if(!stat.isFile()||stat.isSymbolicLink()||file===this.workspace||isWithin(this.workspace,file))throw new Error('THREE_ASSET_POLICY_HOST_PATH_REQUIRED');
       frozenPolicy=validateAssetPolicySnapshot(JSON.parse(readFileSync(file,'utf8')));
       if(assetPolicyHash(frozenPolicy)!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_HASH_MISMATCH');
-      if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
+      if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog,readLibraryDeniedHashes(REPOSITORY_ROOT,frozenPolicy.policy.allowedAssetIds)))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
     }else{
-      frozenPolicy=createAssetPolicySnapshot(JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'packages/creator-host/config/asset-policy.json'),'utf8')),frozenCatalog);
+      const policy=JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'packages/creator-host/config/asset-policy.json'),'utf8'));
+      frozenPolicy=createAssetPolicySnapshot(policy,frozenCatalog,readLibraryDeniedHashes(REPOSITORY_ROOT,policy.allowedAssetIds));
     }
     return this.policyContext={snapshot:frozenPolicy,catalog:frozenCatalog,hash:assetPolicyHash(frozenPolicy)};
   }
@@ -194,7 +190,8 @@ export class ThreeCompiler {
       for(const [name,bytes]of workspaceRuntime.files)if(!sourceFiles.get(`sdk/${name}`)?.equals(bytes))throw new Error('THREE_RUNTIME_SOURCE_CHANGED');
     }
     const runtime = await this.prepareRuntime({workspaceRuntime:workspaceRuntime??null});
-    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256, ...(project.ui?{uiCompilerIdentity:await worldUiCompilerIdentity()}: {}) }));
+    const selection=await resolveLibrarySelection(REPOSITORY_ROOT,(project as Project).assetIds,{runtimeDigest:runtime.hash,overridesDigest:sha256(JSON.stringify(sources)),allowedAssetIds:this.assetPolicy().policy.allowedAssetIds,...(this.profile==='three-raw'?{runtimeId:'three',runtimeVersion:JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'package.json'),'utf8')).dependencies.three,authorRuntime:true}:{})});
+    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256,...(selection?{assetLockDigest:selection.lock.lock_digest}:{}),...(project.ui?{uiCompilerIdentity:await worldUiCompilerIdentity()}:{}) }));
     const worldBuildHash = sha256(JSON.stringify({ sourceHash, runtimeHash: runtime.hash, profile: this.profile }));
     const previous = this.candidates.get(worldBuildHash);
     if (previous) { await verifyFiles(previous.root, previous.files); return { ...previous, candidateCacheHit: true, runtimeCacheHit: true }; }
@@ -202,6 +199,11 @@ export class ThreeCompiler {
     await rm(root, { recursive: true, force: true }); await mkdir(sourceRoot, { recursive: true }); await mkdir(playableRoot, { recursive: true });
     for (const [name, data] of sourceFiles) { const file = path.join(sourceRoot, name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, data); }
     await copyTree(sourceRoot, playableRoot); await copyTree(runtime.root, path.join(playableRoot, 'runtime'));
+    if(selection){
+      await materializeLibrarySelection(REPOSITORY_ROOT,selection.lock,{outputRoot:playableRoot});
+      await writeFile(path.join(playableRoot,'project.assets.json'),JSON.stringify(selection.manifest,null,2));
+      await writeFile(path.join(playableRoot,'project.assets.lock.json'),JSON.stringify(selection.lock,null,2));
+    }
       for (const asset of selected) {
         for (const resource of catalogResources(asset)) {
           const bytes = await readCatalogResource(REPOSITORY_ROOT, resource);

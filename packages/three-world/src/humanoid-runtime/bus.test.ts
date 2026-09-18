@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,describe,it,expect,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
@@ -21,7 +22,7 @@ describe('minibus handling',()=>{
   const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return parseFixtureGlb(bytes);});
   const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();try{
-   await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...BUS_SPEC.seat);
+   await rider.load(testAssetResourceUrl);rider.root.position.set(...BUS_SPEC.seat);
    for(let n=0;n<120;n++)rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:n/20,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'drive'});
    rider.root.updateMatrixWorld(true);let minY=Infinity,maxY=-Infinity,maxZ=-Infinity;const point=new Vector3();
    rider.root.traverse(node=>{if(node instanceof SkinnedMesh){node.skeleton.update();for(let n=0;n<node.geometry.getAttribute('position').count;n++){node.getVertexPosition(n,point).applyMatrix4(node.matrixWorld);minY=Math.min(minY,point.y);maxY=Math.max(maxY,point.y);maxZ=Math.max(maxZ,point.z);}}});

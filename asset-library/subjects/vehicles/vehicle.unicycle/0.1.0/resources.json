@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
+  "preview": "subjects/vehicles/vehicle.unicycle/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
+      "sha256": "9a4ed65930cf921f8cd7b0871ae2b5491c869a82ff71d122b41fd2b58c5bebf0",
+      "byte_length": 112688,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/unicycle.glb",
+      "reused_by": [
+        "vehicle.unicycle"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/preview/thumbnail.webp",
+      "sha256": "ceaa916dd3040379ce108730f1bf9cd873c541b3d2a993b221ab5f34e3ef2c00",
+      "byte_length": 13214,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.unicycle"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 35,
+    "meshes": 25,
+    "materials": 3,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 2372,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/unicycle.glb"
+}

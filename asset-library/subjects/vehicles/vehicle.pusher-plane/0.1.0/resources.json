@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.pusher-plane/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.pusher-plane/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/model/model.glb",
+      "sha256": "f7a16036a4fbbc8fce2db5785567b900d20d51e9f861218ca2e9c8cb01eef941",
+      "byte_length": 198896,
+      "format": "glb",
+      "role": "model",
+      "source_path": "pusher-plane.glb",
+      "reused_by": [
+        "vehicle.pusher-plane"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/preview/thumbnail.webp",
+      "sha256": "54d093b07f43a8f6571784a0ddd8a8775758f9805171ed310bc85f5339a39d4e",
+      "byte_length": 9738,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.pusher-plane"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 63,
+    "meshes": 53,
+    "materials": 12,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 3886,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": []
+}

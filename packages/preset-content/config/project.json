@@ -31,6 +31,17 @@
     "vehicle.ski",
     "vehicle.sled",
     "vehicle.tank",
-    "vehicle.bus"
+    "vehicle.bus",
+    "creature.dragon.d01",
+    "creature.dragon.d02",
+    "creature.dragon.d03",
+    "creature.dragon.d04",
+    "creature.dragon.d05",
+    "creature.dragon.d06",
+    "creature.dragon.d07",
+    "creature.dragon.d08",
+    "creature.dragon.d09",
+    "creature.dragon.d10",
+    "creature.dragon.d11"
   ]
 }

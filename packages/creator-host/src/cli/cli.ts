@@ -5,9 +5,12 @@ import { ThreeCreatorTools } from '../tools/tools.js';
 import { executeThreeCreatorTool } from '../tools/tool-dispatch.js';
 import { creatorToolErrorResponse } from '../tools/tool-errors.js';
 import { profileFrom } from '../contracts.js';
+import {REPOSITORY_ROOT} from '../compiler/compiler.js';
+import {prepareAssetLibrary} from '../assets/library-source.mjs';
 
 const args = process.argv.slice(2), value = (name: string) => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
 const policyPath=value('--asset-policy-snapshot'),policyHash=value('--asset-policy-sha256');
+await prepareAssetLibrary(REPOSITORY_ROOT,{policySnapshotPath:policyPath});
 const service = new ThreeCreatorTools(path.resolve(value('--workspace') ?? process.cwd()), profileFrom(value('--profile')),
  {debugTools:args.includes('--debug-tools'),...(policyPath===undefined?{}:{assetPolicySnapshotPath:policyPath}),...(policyHash===undefined?{}:{assetPolicySha256:policyHash})});
 try {

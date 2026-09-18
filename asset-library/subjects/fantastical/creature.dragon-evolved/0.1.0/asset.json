@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "creature.dragon-evolved",
+  "asset_version": "0.1.0",
+  "display_name": "进化龙 / Evolved dragon",
+  "aliases": [
+    "dragon-evolved",
+    "进化龙"
+  ],
+  "browse_group": "fantastical",
+  "semantic_type": "fantastical.dragon",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "skinned_articulated",
+    "profiles": [
+      "quadruped",
+      "winged"
+    ],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Uses the simple dragon vehicle controller; the numbered flying-creature landing, summon, rope-ladder and flame integration does not apply.",
+  "default_assembly": "subjects/fantastical/creature.dragon-evolved/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

@@ -6,6 +6,7 @@
   "exports": {
     "./asset-policy": "./src/assets/asset-policy.mjs",
     "./asset-resources": "./src/assets/asset-resources.ts",
+    "./library-source": "./src/assets/library-source.mjs",
     "./catalog-sources": "./src/assets/catalog-sources.ts",
     "./compiler": "./src/compiler/compiler.ts",
     "./mcp": "./src/cli/mcp.ts",
@@ -14,6 +15,8 @@
     "./world-ui": "./src/compiler/world-ui.ts"
   },
   "dependencies": {
+    "@worldkit/asset-client": "workspace:*",
+    "@worldkit/asset-contracts": "workspace:*",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@worldkit/browser-capture": "workspace:*",
     "@worldkit/preset-content": "workspace:*",

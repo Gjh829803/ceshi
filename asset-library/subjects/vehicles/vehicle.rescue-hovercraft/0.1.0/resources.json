@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/model/rescue-hover.glb",
+  "preview": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/model/rescue-hover.glb",
+      "sha256": "9fe95fec8e19a48db38f9d7a59fbaa5a2fbe0eaf7100c47a96b84684c85a56ea",
+      "byte_length": 124036,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/rescue-hover.glb",
+      "reused_by": [
+        "vehicle.rescue-hovercraft"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/preview/thumbnail.webp",
+      "sha256": "1e0831c2733060b6f1357db3940717be339849ca36cfeec8be1bb8edeca029f8",
+      "byte_length": 11702,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.rescue-hovercraft"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 17,
+    "meshes": 15,
+    "materials": 9,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 4224,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/rescue-hover.glb"
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "sockets": [
+    {
+      "id": "driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.2,
+        0
+      ]
+    }
+  ],
+  "source_seat": [
+    0,
+    0.2,
+    0
+  ]
+}

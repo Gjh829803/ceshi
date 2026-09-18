@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "wheel_contact",
+      "propulsion": "wheel_drive",
+      "degrees_of_freedom": "planar_2d_yaw",
+      "gaits": [],
+      "control_archetype": "throttle_steer",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "throttle_steer",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.bus/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation.",
+    "W throttle; S brakes before reversing; Space brakes. Shift adds no boost."
+  ]
+}

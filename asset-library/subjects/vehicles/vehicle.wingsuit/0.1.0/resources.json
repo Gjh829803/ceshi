@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.wingsuit/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.wingsuit/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/model/model.glb",
+      "sha256": "dca41e20aeb78e0d35c988859b3f330e307c77e2c19456df25ba2d7ea46ec190",
+      "byte_length": 14668,
+      "format": "glb",
+      "role": "model",
+      "source_path": "wingsuit.glb",
+      "reused_by": [
+        "vehicle.wingsuit"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/preview/thumbnail.webp",
+      "sha256": "4fcfd0a3d5ab7b3903db63f2ebb2536633a90cab028677dc908fa320fe898432",
+      "byte_length": 12188,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.wingsuit"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 12,
+    "meshes": 9,
+    "materials": 3,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 86,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": []
+}

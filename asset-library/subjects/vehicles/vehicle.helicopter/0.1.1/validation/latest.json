@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "structure": "passed",
+  "format": "passed",
+  "visual": "preview_loaded",
+  "runtime": "not_run",
+  "checked_at": "2026-09-17T10:20:41.744Z",
+  "evidence": [
+    "tests/evidence/gltf-validation.json",
+    "tests/evidence/browser.json"
+  ],
+  "source_hashes": "passed",
+  "visual_scope": "Reuses the exact 0.1.0 GLB and preview bytes. Browser loading and nonempty mesh scene were previously checked; helicopter control and mounted gameplay remain unverified."
+}

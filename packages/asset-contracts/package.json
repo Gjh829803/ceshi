@@ -1,0 +1,13 @@
+{
+  "name": "@worldkit/asset-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {"types": "./index.d.mts", "import": "./index.mjs"},
+    "./validate": "./validate.mjs",
+    "./schemas": "./schemas/v1.schema.json"
+  },
+  "dependencies": {"ajv": "8.17.1"},
+  "scripts": {"test": "node --test tests/contracts.test.mjs"}
+}

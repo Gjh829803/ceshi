@@ -1,9 +1,16 @@
 *.patch text eol=lf
 *.sh text eol=lf
 *.mjs text eol=lf
+*.mts text eol=lf
+pnpm-lock.yaml text eol=lf
 # Catalog resources are content-addressed, including JSON clips and notices.
 # Preserve exact bytes on add/checkout, independent of core.autocrlf.
-assets/three-creator/presets/** -text
+asset-library/** -text
+# Retain upstream vendored bytes, including upstream whitespace.
+asset-library/tools/vendor/** -whitespace
+asset-library/viewer/vendor/** -whitespace
+packages/preset-content/config/**/*.json text eol=lf
+packages/asset-contracts/**/*.json text eol=lf
 .codex/skills/*/scripts/self-check.mjs -whitespace
 .codex/skills/*/scripts/render-visual-review.mjs -whitespace
 

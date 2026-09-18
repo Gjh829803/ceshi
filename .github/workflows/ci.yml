@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -19,6 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-validation
+
+      - name: Verify install preserves every tracked source file and mode
+        run: |
+          pnpm install --prefer-offline --no-frozen-lockfile
+          git diff --exit-code
+
+      - name: Verify unique asset library and generated consumers
+        run: |
+          node asset-library/tools/library.mjs validate
+          pnpm content:check
+          node scripts/assets/sync-asset-contracts.mjs --check
+          node scripts/assets/sync-asset-client.mjs --check
+          node --test asset-library/tests/*.test.mjs
 
       - name: Lint
         run: pnpm lint
@@ -37,6 +50,9 @@ jobs:
 
       - name: Build Three runtime
         run: pnpm build
+
+      - name: Verify real Creator MCP startup and asset discovery
+        run: node scripts/integration/creator-startup-smoke.mjs .codex-tmp/three-runtime
 
       - name: Assert checks left the tracked tree clean
         run: git diff --exit-code

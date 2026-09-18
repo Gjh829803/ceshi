@@ -1,21 +1,25 @@
 # Camera calibration snapshots
 
-`presets.json` contains per-subject content differences from the SDK camera
-strategies. `dragon-variants.json` contains the eleven variant-specific snapshots.
+The public `@worldkit/preset-content/cameras/presets.json` and
+`@worldkit/preset-content/cameras/dragon-variants.json` exports are generated
+snapshots under `config/generated/`. Author calibration in the engine's
+`config/presets/subjects.json` camera entries, then run `pnpm content:sync`. The aggregate files must not
+be edited by hand; `pnpm content:check` verifies their exact generated contents.
 The SDK owns the native on-foot baseline in `config/camera/humanoid.ts` and exports
-`createHumanoidCameraDocument`; content export derives the person snapshot from
-that public baseline. Generic strategy defaults apply to undeclared subjects.
+`createHumanoidCameraDocument`; the engine's person calibration preserves that
+baseline and tests verify the native fading contract. Generic strategy defaults
+apply to undeclared subjects.
 
 Playground imports complete documents from its own `config/camera.json`,
 `config/cameras/indoor-lab.json` and `config/cameras/npc-workshop.json`. Their preset
-copies are project snapshots. Editing a library preset does not silently change
+copies are project snapshots. Editing an engine preset does not silently change
 an exported project. Selecting a dragon variant explicitly replaces that subject's
 preset references in the current document, preserves project overrides and marks
 the resulting document unsaved. The editor saves the exact active document.
 
-The one-time repository tool `scripts/migrations/export-camera-calibration.ts`
-exports from preserved legacy source fixtures, through `camera-configuration.ts`.
-It is not a runtime configuration layer and must not be imported into packages.
+The historical conversion used preserved source fixtures through
+`scripts/migrations/camera-configuration.ts`. This is migration evidence, not a
+runtime configuration layer or an authoring path for current library calibration.
 `migration-report.json` inventories 33 profiles, 32 vehicle specs and 11 variants.
 It distinguishes conversion from visual retuning. The original source bytes live
 under `scripts/migrations/fixtures`; browser data was not inspected or migrated.

@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-export const CREATOR_RUNTIME_PACKAGES = ['packages/three-world', 'packages/camera-collision', 'packages/creator-host', 'packages/preset-content', 'packages/browser-capture', 'packages/world-ui'];
+export const CREATOR_RUNTIME_PACKAGES = ['packages/three-world', 'packages/camera-collision', 'packages/creator-host', 'packages/preset-content', 'packages/browser-capture', 'packages/asset-contracts', 'packages/asset-client', 'packages/world-ui'];
 // The UI package declares shared browser runtimes as peers. Its local dev pins
 // must become runtime dependencies in the standalone Creator compiler capsule.
 const RUNTIME_PEERS = {'packages/world-ui':['react','react-dom']};
-const SOURCE_TREES = [...CREATOR_RUNTIME_PACKAGES, 'assets/three-creator/catalog'];
+const SOURCE_TREES = [...CREATOR_RUNTIME_PACKAGES];
+const LIBRARY_CATALOG = 'asset-library/dist/whitebox/asset-catalog.json';
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt','.woff','.woff2','.ttf']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -61,7 +62,13 @@ export function projectLock(original, rootManifest) {
     let production = (importer ?? '').replace(/^    devDependencies:\n[\s\S]*?(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m, '').trimEnd();
     for(const name of RUNTIME_PEERS[workspace]??[]){
       const dev=/^    devDependencies:\n([\s\S]*?)(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m.exec(importer??'')?.[1]??'';
-      const row=new RegExp(`^      ${name}:\\n[\\s\\S]*?(?=^      [^ \\n][^\\n]*:\\n|(?![\\s\\S]))`,'m').exec(dev)?.[0];
+      const dependencies=/^    dependencies:\n([\s\S]*?)(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m.exec(production)?.[1]??'';
+      const pattern=new RegExp(`^      ${name}:\\n[\\s\\S]*?(?=^      [^ \\n][^\\n]*:\\n|(?![\\s\\S]))`,'m');
+      const row=pattern.exec(dev)?.[0],existing=pattern.exec(dependencies)?.[0];
+      if(existing){
+        if(row)assert.equal(existing.trimEnd(),row.trimEnd(),`Conflicting runtime peer lock: ${workspace}.${name}`);
+        continue; // An already staged capsule has promoted this pin.
+      }
       assert(row,`Missing runtime peer lock: ${workspace}.${name}`);
       assert(production.includes('    dependencies:\n'),`Missing runtime dependencies: ${workspace}`);
       production=production.replace('    dependencies:\n','    dependencies:\n'+row.trimEnd()+'\n');
@@ -78,7 +85,7 @@ export function stageContext(repositoryRoot, outputRoot) {
   const files = new Map();
   const safeRelative = relative => {
     assert(!path.isAbsolute(relative) && !relative.split('/').includes('..'), `Unsafe source path: ${relative}`);
-    assert(!relative.split('/').some(part => DENIED.has(part) || part.startsWith('.env')), `Forbidden staged path: ${relative}`);
+    assert(!relative.split('/').some(part => (DENIED.has(part) && !(part === 'dist' && relative === LIBRARY_CATALOG)) || part.startsWith('.env')), `Forbidden staged path: ${relative}`);
     return relative;
   };
   function put(relative, bytes, manifest = false) {
@@ -134,13 +141,15 @@ export function stageContext(repositoryRoot, outputRoot) {
   // Tool execution gets a small standalone tsconfig, without Native workspace globals.
   put('tsconfig.json', jsonBytes({ compilerOptions: { target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', strict: true, skipLibCheck: true, resolveJsonModule: true, useDefineForClassFields: true, noEmit: true, lib: ['ESNext', 'DOM', 'DOM.Iterable'] } }));
   source('packages/creator-host/config/asset-policy.json');
-  source('assets/three-creator/asset-catalog.json');
+  source(LIBRARY_CATALOG);
   for (const relative of SOURCE_TREES) tree(relative);
   for (const workspace of CREATOR_RUNTIME_PACKAGES) {
     const manifest = JSON.parse(readFileSync(path.join(repositoryRoot, workspace, 'package.json')));
     for(const name of RUNTIME_PEERS[workspace]??[]){
-      assert(manifest.peerDependencies?.[name]&&manifest.devDependencies?.[name],`Missing runtime peer pin: ${workspace}.${name}`);
-      manifest.dependencies[name]=manifest.devDependencies[name];
+      const pin=manifest.devDependencies?.[name]??manifest.dependencies?.[name];
+      assert(manifest.peerDependencies?.[name]&&pin,`Missing runtime peer pin: ${workspace}.${name}`);
+      if(manifest.dependencies?.[name])assert.equal(manifest.dependencies[name],pin,`Conflicting runtime peer pin: ${workspace}.${name}`);
+      manifest.dependencies[name]=pin;
     }
     delete manifest.devDependencies;
     // Runtime package manifests and lock projection have the same dependency closure.
@@ -153,12 +162,12 @@ export function stageContext(repositoryRoot, outputRoot) {
     assert(relative.startsWith('examples/three-creator/') || relative==='packages/preset-content','Invalid example root');
     if (!SOURCE_TREES.includes(relative)) tree(relative);
   }
-  const catalog = JSON.parse(readFileSync(path.join(sourceRoot, 'assets/three-creator/asset-catalog.json'), 'utf8'));
+  const catalog = JSON.parse(readFileSync(path.join(sourceRoot, LIBRARY_CATALOG), 'utf8'));
   assert.equal(catalog.schemaVersion, 1); assert(Array.isArray(catalog.assets));
   for (const asset of catalog.assets) {
     for (const resource of [asset, ...(asset.resources ?? [])]) {
-      assert(/^assets\/(?:three-creator|dragon-training)\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
-        && !resource.sourcePath.split('/').includes('..'), `Asset outside resource allowlist: ${asset.id}`);
+      assert(/^asset-library\/[a-zA-Z0-9_./-]+\.(?:glb|json|bin|png|jpg|webp|md|txt)$/.test(resource.sourcePath)
+        && !resource.sourcePath.split('/').some(part => !part || part === '.' || part === '..'), `Asset outside resource allowlist: ${asset.id}`);
       assert(/^[a-f0-9]{64}$/.test(resource.sha256)); source(resource.sourcePath);
       const record = files.get(resource.sourcePath);
       assert.equal(record.sha256, `sha256:${resource.sha256}`, `Asset SHA mismatch: ${asset.id}`);
