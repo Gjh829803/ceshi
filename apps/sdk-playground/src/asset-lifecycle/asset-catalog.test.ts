@@ -32,17 +32,20 @@ it('creates every catalog choice on demand in the full campus without replacing 
  // Add the imported skeletal models last: every instance remains live for the
  // final coexistence/reset checks, without paying their render cost on every earlier UI action.
  const creationOrder=[...types.filter(type=>!type.startsWith('dragon-')),...types.filter(type=>type.startsWith('dragon-'))];
+ // These controls are stable DOM nodes; reuse their handles instead of resolving
+ // selectors and refocusing the same button behind each expensive live frame.
+ const catalog=await page.$('#vehicle-type'),create=await page.$('#vehicle-create');
+ if(!catalog||!create)throw Error('Missing catalog controls');
  const timings:{type:string;milliseconds:number}[]=[];
  for(const type of creationOrder){
   const started=performance.now();
   try{
-   await page.selectOption('#vehicle-type',type);
-   const create=page.locator('#vehicle-create');
-   const {visible,enabled}=await create.evaluate(button=>({visible:button.checkVisibility({visibilityProperty:true}),enabled:!(button as HTMLButtonElement).disabled}));
-   expect(visible).toBe(true);expect(enabled).toBe(true);
+   await catalog.selectOption(type);
+   const {visible,enabled,focused}=await create.evaluate(element=>{const button=element as HTMLButtonElement;button.focus();return {visible:button.checkVisibility({visibilityProperty:true}),enabled:!button.disabled,focused:document.activeElement===button};});
+   expect(visible).toBe(true);expect(enabled).toBe(true);expect(focused).toBe(true);
    // Exercise native keyboard activation; mouse clicks remain covered in the other
    // lifecycle cases. This avoids waiting extra render frames for pointer stability.
-   await create.press('Enter');
+   await page.keyboard.press('Enter');
    // Return the completion sample itself as a primitive. A second evaluation would
    // wait behind another live frame and rebuild/serialize the entire world again.
    const completion=await page.waitForFunction(selected=>{
