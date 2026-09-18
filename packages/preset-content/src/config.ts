@@ -34,7 +34,7 @@ export const SPECS: VehicleSpec[] = [
   {id:'boat',name:'水上快艇',en:'WAKE',mode:'boat',kernel:'K06',color:'#68baf1',spawn:[207,-1.9,10],yaw:0,speed:24,accel:7,grip:3,steer:1.05,radius:1.7,seat:[0,0.35,-0.3],hint:'W / S 推进与倒船 · A / D 船舵 · Space 减速',archetype:'boat',envelope:{kind:'box',halfExtents:[1.35,1.25,2.85],offset:[0,.5,0]}},
   {id:'submarine',name:'探索潜艇',en:'DEEP',mode:'submarine',kernel:'K07',color:'#f4ca58',spawn:[230,-3.1,45],yaw:0,speed:16,accel:6.5,grip:2.4,steer:1.15,radius:1.7,seat:[0,0.1,0.5],hint:'W / S 推进 · A / D 转向 · Space 上浮 · Ctrl 下潜 · Q / E 横滚 · Shift 制动',archetype:'submarine',envelope:{kind:'box',halfExtents:[1.8,1.6,2.9],offset:[0,.2,0]}},
   {id:'glider',name:'无动力滑翔机',en:'SOAR',mode:'glider',kernel:'K08',color:'#e2e8eb',spawn:[-130,33,-146],yaw:0,speed:32,accel:0,grip:1,steer:1.05,radius:1.8,seat:[0,0.46,0],hint:'W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚 · Shift 释放滑翔',archetype:'glider',envelope:{kind:'box',halfExtents:[5.6,1.1,3.3],offset:[0,.9,0]}},
-  {id:'plane',name:'动力飞机',en:'AERO',mode:'plane',kernel:'K09',color:'#e27e58',spawn:[-285,0,-205],yaw:0,speed:58,accel:12,grip:1,steer:1.05,radius:2,seat:[0,1.3,.1],hint:'Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚',archetype:'plane',aircraftFlight:{...humanoid.DEFAULT_AIRCRAFT_FLIGHT},envelope:{kind:'box',halfExtents:[4.2,1.25,3.35],offset:[0,1.25,0]}},
+  {id:'plane',name:'动力飞机',en:'AERO',mode:'plane',kernel:'K09',color:'#e27e58',spawn:[-285,0,-205],yaw:0,speed:58,accel:12,grip:1,steer:1.05,radius:2,seat:[0,1.3,.1],hint:'W / S 增减油门 · Q / E 低头 / 抬头 · A / D 转向 · Ctrl 减油门 / 地面制动 · Shift 辅助加油门 · Space 地面制动',archetype:'plane',aircraftFlight:{...humanoid.DEFAULT_AIRCRAFT_FLIGHT},envelope:{kind:'box',halfExtents:[4.2,1.25,3.35],offset:[0,1.25,0]}},
   {id:'spacecraft',name:'轻型穿梭机',en:'SHUTTLE',mode:'spacecraft',kernel:'K10',color:'#a398eb',spawn:[-84,.8,-70],yaw:0,speed:36,accel:14,grip:2.4,steer:1.45,radius:2.1,seat:[0,1.3,.1],hint:'W/S 推进 · A/D 左右转向 · ↑↓ 俯仰 / ←→ 侧移 · Space/Ctrl 升降 · Q/E 横滚 · Shift 制动 · F 上下船 · T 三视角',archetype:'spacecraft',spaceFlight:{...humanoid.SPACE_FLIGHT_PRESETS.shuttle,dockingPorts:[{id:'home',name:'穿梭机泊位',positionMetersXYZ:[-84,.8,-70],rotationXYZW:[0,0,0,1]}]},envelope:{kind:'box',halfExtents:[2.1,1.5,3.8],offset:[0,1.2,0]}},
   {id:'trail-rover',name:'远征保障车',en:'TRAIL',mode:'wheeled',kernel:'K03',color:'#568f72',spawn:[-38,0,35],yaw:0,speed:24,accel:8,grip:12,steer:.95,radius:1.75,seat:roadSeatAnchor('trail-rover'),hint:'W / S 油门与制动 · A / D 转向 · Space 手刹',archetype:'rover',visualVariant:'utility',envelope:{kind:'box',halfExtents:[1.35,1.15,2.25],offset:[0,1.15,0]}},
   {id:'touring-motorcycle',name:'长途巡航摩托',en:'TOURER',mode:'motorcycle',kernel:'K02',color:'#507fc4',spawn:[-24,0,35],yaw:0,speed:28,accel:9,grip:14,steer:1.05,radius:.9,seat:roadSeatAnchor('touring-motorcycle'),hint:'W / S 油门与制动 · A / D 倾斜转弯 · Space 刹车',archetype:'motorcycle',characterPose:'ride',visualVariant:'touring',envelope:{kind:'box',halfExtents:[.65,1.2,1.65],offset:[0,1.2,0]}},
@@ -52,18 +52,18 @@ for(const [n,variant] of ([
  {id:'multirotor',name:'四旋翼载人飞行器',en:'QUAD',aircraftSubtype:'multirotor',color:'#6dbca9'},
  {id:'tiltrotor',name:'倾转旋翼飞机',en:'TILT',aircraftSubtype:'tiltrotor',color:'#9993ca'},
 ] as const).entries())SPECS.push({...structuredClone(planeBaseline),...variant,spawn:[-250+n*16,0,-205],
- hint:variant.aircraftSubtype==='pusher'?planeBaseline.hint:'Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾'+(variant.aircraftSubtype==='tiltrotor'?' · 前飞加速自动倾转，减速恢复悬停':''),
+ hint:variant.aircraftSubtype==='pusher'?planeBaseline.hint:'W / S 前后飞行 · Q / E 增减垂直需求（50% 悬停） · A / D 转向 · Z / X 侧倾侧移 · Ctrl 水平减速'+(variant.aircraftSubtype==='tiltrotor'?' · 前飞加速自动倾转，减速恢复悬停':''),
  envelope:{kind:'box',halfExtents:[4.5,1.4,variant.aircraftSubtype==='helicopter'?4.1:3.6],offset:[0,1.4,0]}});
 // 无动力小类共用注册入口；原旧滑翔机预设迁入新的飞机动力学。
 // 复用飞控但不复用动力飞机的停放点，给 11 米翼展留出独立净空。
 const {aircraftFlight:_,...soaringBaseline}=structuredClone(planeBaseline);
-Object.assign(SPECS.find(s=>s.id==='glider')!,{...soaringBaseline,id:'glider',name:'无动力滑翔机',en:'SOAR',aircraftSubtype:'glider',spawn:[-302,0,-205],color:'#e2e8eb',hint:'Shift 牵引起飞（最多 8 秒） · S 拉起 / W 低头 · A/D 转弯 · Ctrl 扰流板 · Space 地面刹车'});
+Object.assign(SPECS.find(s=>s.id==='glider')!,{...soaringBaseline,id:'glider',name:'无动力滑翔机',en:'SOAR',aircraftSubtype:'glider',spawn:[-302,0,-205],color:'#e2e8eb',hint:'W 牵引起飞并提高空速 · S 降低空速 · A / D 转向 · C 扰流 / 下降辅助 · Space 地面刹车'});
 for(const [n,variant] of ([
  {id:'paraglider',name:'滑翔伞',en:'CANOPY',aircraftSubtype:'paraglider',characterPose:'paraglider',color:'#e3b958'},
  {id:'wingsuit',name:'翼装飞行',en:'WINGSUIT',aircraftSubtype:'wingsuit',characterPose:'wingsuit',color:'#dfb550'},
  {id:'balloon',name:'热气球',en:'BALLOON',aircraftSubtype:'balloon',characterPose:'stand',color:'#db9369'},
 ] as const).entries())SPECS.push({...soaringBaseline,...variant,spawn:variant.id==='balloon'?[-120,0,-205]:[-138+n*16,120,variant.id==='wingsuit'?-170:-138],seat:variant.id==='balloon'?[0,.18,0]:[0,1,0],radius:variant.id==='balloon'?1.2:.6,
- hint:variant.id==='balloon'?'Shift 按住加热 · 松开自然冷却 · Ctrl 放热气下降 · 水平随风漂移':variant.id==='wingsuit'?'Shift 助跑离开高台 · W/S 调整俯仰 · A/D 转向 · Space 开伞减速着陆':'Shift 助跑离开高台 · W/S 调整滑翔角 · A/D 转向 · Space 刹车缓降着陆',
+ hint:variant.id==='balloon'?'Q 加热上升 · E 放热下降 · 松开后自然冷却 · 水平随风漂移':variant.id==='wingsuit'?'W / S 调整空速与俯仰 · A / D 转向 · Space 开伞 / 着陆制动':'W / S 调整空速与滑翔角 · A / D 转向 · C 扰流 / 下降辅助 · Space 着陆制动',
  envelope:{kind:'box',halfExtents:variant.id==='balloon'?[.85,1.4,.85]:[.5,1,.5],offset:[0,1,0]}});
 for(const spec of SPECS){if(spec.mode==='wheeled'){
   const sporty=spec.archetype==='racer',utility=spec.id==='trail-rover';

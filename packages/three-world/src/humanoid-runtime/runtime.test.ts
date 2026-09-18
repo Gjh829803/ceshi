@@ -130,8 +130,8 @@ describe('SDK humanoid runtime',()=>{
   expect(keyboard.advanceReset(1/60)).toBe(true);expect(resets).toBe(1);
   keyboard.keyDown('Backspace',true);for(let n=0;n<60;n++)keyboard.advanceReset(1/60);expect(resets).toBe(1);
   keyboard.keyUp('Backspace');keyboard.keyDown('Backspace');keyboard.advanceReset(.7);keyboard.keyUp('Backspace');keyboard.keyDown('Backspace');keyboard.advanceReset(.2);expect(resets).toBe(1);
-  mounted=false;keyboard.advanceReset(.7);mounted=true;keyboard.advanceReset(.8);expect(resets).toBe(1);
-  keyboard.keyDown('Backspace');keyboard.advanceReset(.7);keyboard.clear();keyboard.advanceReset(.2);expect(resets).toBe(1);
+  mounted=false;keyboard.keyDown('Backspace');expect(keyboard.advanceReset(.7)).toBe(false);expect(keyboard.advanceReset(.1)).toBe(true);expect(resets).toBe(2);
+  keyboard.keyDown('Backspace');keyboard.advanceReset(.7);keyboard.clear();keyboard.advanceReset(.2);expect(resets).toBe(2);
  });
  it('clears held movement and reset when switching between two instances of the same mode',()=>{
   let instanceId='car-1',resets=0;const keyboard=new WorldKeyboard(()=>0,()=>resets++);
