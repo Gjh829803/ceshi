@@ -111,12 +111,15 @@ export type SpawnTemplate =
  | {readonly kind:'character';readonly options:WithoutId<CharacterOptions>};
 export interface PrototypeDefinition {readonly id:string;readonly description:string;readonly template:SpawnTemplate}
 export type PrimitiveCommand =
+ | {readonly type:'entity.set-active';readonly entityId:string;readonly isActive:boolean}
  | {readonly type:'entity.set-visible';readonly entityId:string;readonly isVisible:boolean}
  | {readonly type:'entity.set-scale';readonly entityId:string;readonly scaleLocalXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.set-position';readonly entityId:string;readonly positionWorldMetersXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.set-rotation';readonly entityId:string;readonly rotationLocalRadiansXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.spawn';readonly prototypeId:string;readonly entityId:string;readonly positionWorldMetersXYZ:Vec3}
  | {readonly type:'entity.despawn';readonly entityId:string}
+ /** Destroy this live entity and descendants, release owned asset instances, and remove their reset entries. Authored resources remain caller-owned. */
+ | {readonly type:'entity.destroy';readonly entityId:string}
  | {readonly type:'entity.attach';readonly childEntityId:string;readonly parentEntityId:string;readonly positionLocalMetersXYZ:Vec3}
  | {readonly type:'entity.play-action';readonly entityId:string;readonly actionId:string;readonly playback?:'once'|'loop'}
  | {readonly type:'entity.stop-action';readonly entityId:string}
@@ -270,6 +273,8 @@ export interface EntityState {
  readonly positionWorldMetersXYZ:Vec3;
  readonly rotationLocalRadiansXYZ:Vec3;
  readonly scaleLocalXYZ:Vec3;
+ /** Effective participation in input, animation and physics; rendering remains separately controlled. */
+ readonly isActive:boolean;
  readonly isVisibleLocal:boolean;
  readonly isVisibleEffective:boolean;
  readonly parentEntityId?:string;
@@ -350,6 +355,22 @@ export interface TaskScope {
  execute(command:WorldCommand):Promise<CommandReceipt>;
 }
 export interface UpdateContext {readonly deltaSeconds:number;readonly simulationTick:number;readonly simulationSeconds:number}
+/** Optional synchronous hooks bound to one registered entity instance, not a shared asset template.
+ * World pause stops clock updates; it does not disable entities. Failures detach only this registration.
+ */
+export interface EntityLifecycleCallbacks {
+ /** Called once at registration; partial initialization is cleaned with onDispose if this throws. */
+ onInit?():void;
+ /** Effective activation includes parent and mounted-group state. */
+ onEnable?():void;
+ onDisable?():void;
+ /** Existing fixed step, after world onUpdate subscribers; visual descendants only for direct Three writes. */
+ onUpdate?(context:UpdateContext):void;
+ /** Surviving baseline instance reset; restore callback-owned local state here, without reinitializing. */
+ onReset?():void;
+ /** Release callback-owned listeners/resources once, before SDK-owned instance resources are freed. */
+ onDispose?():void;
+}
 /** Identity is local to one presentation and reset epoch. A tick alone is not a frame identity. */
 export interface SourceFrameKey {readonly presentationId:string;readonly epoch:number;readonly sourceFrameId:number}
 export interface SourceFrame extends SourceFrameKey {
@@ -432,6 +453,8 @@ export interface World {
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
+ /** Release input ownership and the current subject binding without removing the character. */
+ clearControlledEntity():void;
  /** Install the complete camera document; explicit preserve-opening framing can adopt the first authored view. */
  setCameraFollow(options:CameraFollowOptions):void;
  setCameraView(viewId:string):void;
@@ -461,6 +484,11 @@ export interface World {
  onInteract(entityId:string,plan:()=>WorldCommand|readonly WorldCommand[]):()=>void;
  /** Subscribe while alive; returns an idempotent unsubscribe. Direct Three writes are for visual descendants; managed root channels use execute(). */
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
+ /** Initialize hooks for a current entity; returns idempotent disable/dispose/unsubscribe.
+  * Baseline despawn retains hooks for reset. Permanent destroy, transient removal and world disposal release them.
+  * Registration is forbidden inside simulation/author callbacks. Load assets before registering.
+  */
+ registerEntityLifecycle(entityId:string,callbacks:EntityLifecycleCallbacks):()=>void;
  /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
  /** Observe a rendered frame after temporary subject presentation is restored; does not advance simulation. */

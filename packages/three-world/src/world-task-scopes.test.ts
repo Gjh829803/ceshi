@@ -215,3 +215,37 @@ it.each(['duplicate-map-id','registered-entity-conflict'])('failed map validatio
  }finally{gate.resolve();await task;unsubscribe();world.dispose();}
 });
 });
+
+
+describe('task scope cleanup failures',()=>{
+ afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
+ it.each(['success','failure','stale'] as const)('releases every temporary instance after %s and preserves the primary failure',async outcome=>{
+  const row=catalog.assets.find(a=>a.id==='humanoid.uefn-mannequin')!;
+  const definition={...row,uri:`https://cleanup.test/${outcome}/${row.sha256}.glb`} as unknown as AssetDefinition;
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(await readFile(resolve(row.sourcePath)))));
+  const world=await createWorld({navigation:false,assetDefinitions:{[row.id]:definition}}),library=world.assets as WorldAssets;
+  const primary=new Error('TASK_FAILED'),cleanup=new Error('FIRST_RELEASE_FAILED');
+  let first!:Awaited<ReturnType<typeof library.load>>,second!:typeof first,peer!:typeof first;
+  let firstDisposed:import('vitest').MockInstance<()=>void>|undefined,secondDisposed:import('vitest').MockInstance<()=>void>|undefined;
+  try{
+   peer=await library.load(row.id);
+   const result=await world.runTask(async scope=>{
+    first=await scope.assets.load(row.id);second=await scope.assets.load(row.id);
+    const one=library.internal(first),two=library.internal(second),release=one.dispose.bind(one);
+    firstDisposed=vi.spyOn(one,'dispose').mockImplementation(()=>{release();throw cleanup;});
+    secondDisposed=vi.spyOn(two,'dispose');
+    if(outcome==='failure')throw primary;
+    if(outcome==='stale')await world.reset();
+    return 'finished';
+   }).then(value=>({ok:true as const,value}),error=>({ok:false as const,error}));
+   expect(firstDisposed).toHaveBeenCalledOnce();expect(secondDisposed).toHaveBeenCalledOnce();
+   expect(library.owns(first)).toBe(false);expect(library.owns(second)).toBe(false);expect(library.owns(peer)).toBe(true);
+   expect(result.ok).toBe(false);if(result.ok)throw new Error('EXPECTED_FAILURE');
+   if(outcome==='success')expect(result.error).toBe(cleanup);
+   else if(outcome==='failure')expect(result.error).toBe(primary);
+   else expect(result.error).toMatchObject({code:'STALE_TASK'});
+   expect(world.snapshot().errors).toEqual(expect.arrayContaining([expect.objectContaining({message:'FIRST_RELEASE_FAILED'})]));
+   library.internal(peer).update(.1);expect(world.simulationTick).toBe(0);
+  }finally{world.dispose();}
+ });
+});

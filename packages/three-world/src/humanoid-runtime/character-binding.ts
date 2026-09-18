@@ -4,7 +4,7 @@ import type {Character} from './character';
 
 export interface RuntimeActorBinding {readonly object:Object3D;readonly animation?:Character;readonly spawn?:'map'}
 
-const actorCommands=new Set(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','entity.despawn']);
+const actorCommands=new Set(['entity.destroy','entity.set-active','actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','entity.despawn']);
 export const isHumanoidActorCommand=(type:string):boolean=>actorCommands.has(type);
 
 /** Shared by candidate validation and publication; no allocation or owner transfer. */

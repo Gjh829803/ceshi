@@ -1,4 +1,6 @@
+import {EntityCallbackRegistry} from './entity-callbacks';
 import {WorldTaskScopes} from './world-task-scopes';
+import {disposeInOrder} from './lifecycle-disposal';
 import {validateInteractionSlots,INTERACTION_SLOT_SCHEMA} from './interaction-contracts';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
@@ -43,9 +45,9 @@ interface EpisodeLease {
 const vec=(value:unknown):API.Vec3=>{if(!Array.isArray(value)||value.length!==3||!value.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=100000))throw failure('COMMAND_VECTOR_INVALID');return value as unknown as API.Vec3;};
 const tuple=(value:THREE.Vector3):API.Vec3=>[value.x,value.y,value.z];
 const commandFields:Record<API.PrimitiveCommand['type'],readonly string[]>={
- 'entity.set-visible':['entityId','isVisible'],'entity.set-scale':['entityId','scaleLocalXYZ','durationSeconds'],
+ 'entity.set-active':['entityId','isActive'],'entity.set-visible':['entityId','isVisible'],'entity.set-scale':['entityId','scaleLocalXYZ','durationSeconds'],
  'entity.set-position':['entityId','positionWorldMetersXYZ','durationSeconds'],'entity.set-rotation':['entityId','rotationLocalRadiansXYZ','durationSeconds'],
- 'entity.spawn':['prototypeId','entityId','positionWorldMetersXYZ'],'entity.despawn':['entityId'],
+ 'entity.spawn':['prototypeId','entityId','positionWorldMetersXYZ'],'entity.despawn':['entityId'],'entity.destroy':['entityId'],
  'entity.attach':['childEntityId','parentEntityId','positionLocalMetersXYZ'],'entity.play-action':['entityId','actionId','playback'],
  'entity.stop-action':['entityId'],'entity.apply-impulse':['entityId','impulseNewtonSecondsXYZ'],
  'actor.move-to':['entityId','targetPositionWorldMetersXYZ','run'],'actor.follow':['entityId','targetEntityId','distanceMeters'],
@@ -68,6 +70,17 @@ export class ThreeWorld implements API.World {
  private readonly parameters=new Map<string,Parameter>();private readonly actions=new Map<string,API.ActionDefinition<API.ObjectSchema>>();
  private readonly disabled=new Map<string,API.RuntimeError>();private readonly owners=new Map<string,string>();private readonly errors:API.RuntimeError[]=[];
  private readonly updating=new Set<(context:API.UpdateContext)=>void>();private readonly resets=new Set<()=>void>();private readonly disposals=new Set<()=>void>();
+ private entityCallbackDepth=0;
+ private readonly entityCallbacks=new EntityCallbackRegistry({
+  read:(id,object)=>{const present=this.entries.get(id)?.object===object;return {active:present&&this.engine.isEntityActive(id),retained:present||this.baseline?.entries.get(id)?.object===object};},
+  invoke:callback=>{
+   // Preserve even falsy thrown values while reusing the existing author-write guard.
+   let failed=false,cause:unknown;
+   this.entityCallbackDepth++;try{this.guarded(()=>{try{callback();}catch(error){failed=true;cause=error;}});}finally{this.entityCallbackDepth--;}
+   if(failed)throw cause;
+  },
+  report:(error,id,hook)=>{this.errors.push({...runtimeError(error,`entity-lifecycle:${hook}`),entityIds:[id]});if(this.errors.length>128)this.errors.shift();this.touch();},
+ });
  private readonly autonomies=new Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>();
  private readonly pending=new Set<Promise<unknown>>();private readonly scopes=new WorldTaskScopes();
  private readonly activities=new Map<string,Activity>();private readonly tweens:Tween[]=[];private readonly queued:Queued[]=[];
@@ -86,6 +99,7 @@ export class ThreeWorld implements API.World {
   this.state=new StateRegistry(id=>{const owner=this.owners.get(`state:${id}`);if(owner&&owner!==this.activeWriter)throw failure('STATE_OWNED_BY_PARAMETER',`Set parameter ${owner} instead.`);this.notifyChange();});
   engine.onUpdate(({deltaSeconds,simulationTick})=>this.beforeTick(deltaSeconds,simulationTick));
   engine.onAfterUpdate(()=>this.afterTick());
+  engine.setEntityRemovalObserver((id,object)=>this.entityCallbacks.removed(object,this.baseline?.entries.get(id)?.object===object));
   engine.humanoid?.onSimulationReplaced(reason=>this.simulationReplaced(reason));
   if(engine.humanoid)humanoidHost(engine.humanoid).setMapValidator(map=>this.validateMapEntities(map,this.entries));
   engine.setResetHandler(()=>{void this.reset().catch(error=>this.fault(error,'reset'));});
@@ -94,6 +108,7 @@ export class ThreeWorld implements API.World {
  static async create(options:WorldOptions={}):Promise<ThreeWorld>{
   const shadows=resolveShadowSettings(options.shadows);
   const engine=await WorldEngine.create(options);
+  let assets:WorldAssets|undefined,world:ThreeWorld|undefined;
   try{
    let definitions=options.assetDefinitions??{};
    if(options.assetDefinitions===undefined&&typeof document!=='undefined'){
@@ -101,15 +116,20 @@ export class ThreeWorld implements API.World {
     if(response.ok){const catalog=await response.json() as {schemaVersion:number;assets:AssetDefinition[]};if(catalog.schemaVersion!==1||!Array.isArray(catalog.assets))throw failure('ASSET_CATALOG_INVALID');definitions=Object.fromEntries(catalog.assets.map(asset=>[asset.id,asset]));}
     else if(response.status!==404)throw failure('ASSET_CATALOG_FAILED',`HTTP ${response.status}`);
    }
-   const assets=new WorldAssets({definitions,...(typeof document!=='undefined'?{baseUri:document.baseURI}:{})});
-   const world=new ThreeWorld(engine,assets,shadows);
+   assets=new WorldAssets({definitions,...(typeof document!=='undefined'?{baseUri:document.baseURI}:{})});
+   world=new ThreeWorld(engine,assets,shadows);
    if(options.humanoid){
     for(const v of options.humanoid.vehicles)world.addCharacter({id:v.instanceId,name:v.spec.name,object:v.object,body:{heightMeters:Math.max(.1,v.spec.envelope.halfExtents[1]*2),radiusMeters:v.spec.radius},tags:['vehicle',v.assetId],frontYawRadians:Math.PI});
     const c=options.humanoid.character;world.addCharacterInternal({id:c.instanceId,...(c.animation?{humanoid:c.animation}:{object:c.object,body:{heightMeters:1.68,radiusMeters:.28}}),tags:['humanoid-character'],frontYawRadians:Math.PI},false,{...c,spawn:'map'});world.setControlledEntity(c.instanceId);
    }
    if(world.renderer)world.restoreRendererShadows=applyRendererShadows(world.renderer,world.scene,shadows);
    return world;
-  }catch(error){engine.dispose();throw error;}
+  }catch(error){
+   // Once constructed, the world owns the rollback. Before that, release only acquired owners.
+   try{if(world)world.dispose();else disposeInOrder([()=>engine.dispose(),()=>assets?.dispose()]);}
+   catch(cleanupError){console.warn('WORLD_CREATE_CLEANUP_FAILED',cleanupError);}
+   throw error;
+  }
  }
  get humanoid(){return this.engine.humanoid;}
  configureShadowLight(light:THREE.DirectionalLight):void{
@@ -174,6 +194,20 @@ export class ThreeWorld implements API.World {
   if(!('interactions' in entry.options)||!entry.options.interactions?.length)return;
   this.humanoid!.environment.interactions.registerEntity(entry.id,entry.options.interactions,()=>humanoidHost(this.humanoid!).interactionBody(entry.id));
  }
+ /** Add a native vehicle at spec.spawn (world metres) / spec.yaw (radians), using this world's existing solver.
+  * Supplied mesh resources stay caller-owned; native visual controllers transfer on successful registration.
+  * Instances added after the reset baseline are removed on reset, like other dynamic entities.
+  */
+ addVehicle(instance:import('./humanoid-runtime/runtime').VehicleInstance):THREE.Object3D {
+  this.alive();this.engine.assertLifecycleMutationAllowed();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
+  if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');requireId(instance.instanceId);
+  if(this.entries.has(instance.instanceId))throw failure('WORLD_ENTITY_DUPLICATE');
+  if(!(instance.object instanceof THREE.Object3D)||instance.object===this.scene||instance.object.parent&&instance.object.parent!==this.scene)throw failure('HUMANOID_VEHICLE_ROOT_REQUIRED');
+  for(const entry of this.entries.values())for(let node:THREE.Object3D|null=entry.object;node;node=node.parent)if(node===instance.object)throw failure('WORLD_OBJECT_INVALID_OR_REGISTERED');
+  const rollback=humanoidHost(this.humanoid).addVehicle(instance);
+  try{return this.addCharacter({id:instance.instanceId,name:instance.spec.name,object:instance.object,body:{heightMeters:Math.max(.1,instance.spec.envelope.halfExtents[1]*2),radiusMeters:instance.spec.radius},tags:['vehicle',instance.assetId],frontYawRadians:Math.PI});}
+  catch(error){rollback();throw error;}
+ }
  addCharacter(options:API.CharacterOptions):THREE.Object3D{return this.addCharacterInternal(options);}
  private addCharacterInternal(options:API.CharacterOptions,prevalidated=false,runtimeActor?:import('./humanoid-runtime/character-binding').RuntimeActorBinding):THREE.Object3D{
   this.alive();requireId(options.id);if(this.humanoid?.environment.interactions.hasMapEntity(options.id))throw failure('INTERACTION_ENTITY_ID_CONFLICT');
@@ -189,6 +223,7 @@ export class ThreeWorld implements API.World {
   const {asset:_asset,humanoid:_humanoid,...metadata}=options;const binding=runtimeActor??(options.humanoid?{object,animation:options.humanoid}:undefined);this.engine.addCharacter({...metadata,object,character,...(binding?{runtimeActor:binding}:{}),...(asset?{asset:this.assets.internal(asset)}:{})},prevalidated);
   this.entries.set(options.id,{id:options.id,object,options,role:'actor',body,...(asset?{asset}:{}),generation:++this.nextGeneration,geometryVersion:0,movementId,movementState:movementId==='ground'?null:cloneJson(this.movements.get(movementId)!.initialState),physicsKind:'character'});this.touch();return object;
  }
+ clearControlledEntity():void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');const id=this.engine.controlledEntityId;if(id)this.engine.cameraTargetRemoved(id,this.entity(id).generation);this.engine.clearControlledEntity();this.touch();}
  setControlledEntity(id:string):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.entity(id);this.engine.setControlledEntity(id);this.captureTargets=Object.freeze(this.captureTargets.map(selection=>selection.entityId===id?Object.freeze({entityId:id}):selection));this.cancelActor(id);this.touch();}
  setCameraFollow(options:API.CameraFollowOptions):void{this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.setCameraFollow(options);}
   /** Maintainer editing requires the camera baseline sealed by normal start/step. Never seals actor state. */
@@ -217,6 +252,10 @@ export class ThreeWorld implements API.World {
  /** Optional realtime CPU update samples; manual stepping/capture emits no samples. */
  onFrameTiming(callback:(sample:import('./engine').WorldFrameTiming)=>void):()=>void{this.alive();return this.engine.onFrameTiming(callback);}
  onUpdate(callback:(context:API.UpdateContext)=>void):()=>void{this.alive();this.updating.add(callback);return()=>{this.updating.delete(callback);};}
+ registerEntityLifecycle(entityId:string,callbacks:API.EntityLifecycleCallbacks):()=>void{
+  this.alive();this.engine.assertLifecycleMutationAllowed();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
+  return this.entityCallbacks.register(entityId,this.entity(entityId).object,callbacks);
+ }
  onReset(callback:()=>void):()=>void{this.alive();this.resets.add(callback);return()=>{this.resets.delete(callback);};}
  onDispose(callback:()=>void):()=>void{this.alive();this.disposals.add(callback);return()=>{this.disposals.delete(callback);};}
  onInteract(id:string,plan:()=>API.WorldCommand|readonly API.WorldCommand[]):()=>void{
@@ -246,6 +285,11 @@ export class ThreeWorld implements API.World {
    if(template.kind==='character')this.validateHumanoidOptions({...template.options,id:definition.id});
    if(template.kind==='character'&&template.options.humanoid){const {humanoid,...options}=template.options;const create=humanoid.createFactory();if(!create)throw failure('SOURCE_CHARACTER_FACTORY_UNAVAILABLE');copy={kind:'humanoid',options:structuredClone(options),create};}
    else if(template.kind==='character'&&template.options.asset){const asset=await this.assets.clone(template.options.asset);if(epoch!==this.epoch||this.disposed){this.assets.release(asset);throw failure('STALE_TASK');}record.asset=asset;copy={kind:'character',options:{...template.options,asset}};}
+   else if(template.kind==='entity'&&this.assets.within(template.options.object).some(asset=>asset.object===template.options.object)){
+    const source=this.assets.within(template.options.object).find(asset=>asset.object===template.options.object)!;
+    const asset=await this.assets.clone(source);if(epoch!==this.epoch||this.disposed){this.assets.release(asset);throw failure('STALE_TASK');}
+    record.asset=asset;copy={kind:'entity',options:{...template.options,object:asset.object,...(template.options.interactions?{interactions:structuredClone(template.options.interactions)}:{})}};
+   }
    else{const object=this.cloneObject(template.options.object!,true);copy=template.kind==='character'?{kind:'character',options:{...template.options,object} as Extract<API.SpawnTemplate,{kind:'character'}>['options']}:{kind:'entity',options:{...template.options,object,...(template.options.interactions?{interactions:structuredClone(template.options.interactions)}:{})}};}
    if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');record.template=copy;record.status='ready';this.touch();
   }catch(error){record.status='failed';record.error=runtimeError(error,'prototype');throw error;}})());
@@ -302,7 +346,8 @@ export class ThreeWorld implements API.World {
   if(command.type==='entity.spawn')return [`prototype:${command.prototypeId}`];
   if(command.type==='entity.attach')return [`${command.childEntityId}:parentage`,`${command.childEntityId}:position`];
   const channel=propertyChannel(command);if(channel)return [`${command.entityId}:${channel}`];
-  if(command.type==='entity.despawn')return [`${command.entityId}:lifecycle`];
+  if((command.type==='entity.set-active'||command.type==='entity.destroy')&&this.entries.has(command.entityId))return this.engine.activationRootIds(command.entityId).map(id=>`${id}:lifecycle`);
+  if(command.type==='entity.despawn'||command.type==='entity.destroy'||command.type==='entity.set-active')return [`${command.entityId}:lifecycle`];
   if(command.type==='entity.apply-impulse')return [`${command.entityId}:impulse`];
   if(command.type==='entity.set-interactions')return [`${command.entityId}:interactions`];
   if(command.type==='entity.set-geometry')return [`${command.entityId}:geometry`];
@@ -320,6 +365,7 @@ export class ThreeWorld implements API.World {
    case 'entity.set-interactions':validateInteractionSlots(copy.slots);break;
    case 'entity.set-rotation':vec(copy.rotationLocalRadiansXYZ);break;
    case 'entity.set-scale':if(vec(copy.scaleLocalXYZ).some(v=>v<=0||v>100))throw failure('SCALE_INVALID');break;
+   case 'entity.set-active':if(typeof copy.isActive!=='boolean')throw failure('ACTIVE_INVALID');break;
    case 'entity.set-visible':if(typeof copy.isVisible!=='boolean')throw failure('VISIBILITY_INVALID');break;
    case 'entity.spawn':requireId(copy.prototypeId);vec(copy.positionWorldMetersXYZ);break;
    case 'entity.attach':requireId(copy.childEntityId);requireId(copy.parentEntityId);vec(copy.positionLocalMetersXYZ);break;
@@ -371,6 +417,7 @@ export class ThreeWorld implements API.World {
    const template=prototype.template;let options:API.EntityOptions|API.CharacterOptions;
    if(template.kind==='humanoid'){const humanoid=await template.create();options={...structuredClone(template.options),id:command.entityId,humanoid};}
    else if(template.kind==='character'&&template.options.asset){const asset=await this.assets.clone(template.options.asset);options={...template.options,id:command.entityId,asset};}
+   else if(template.kind==='entity'&&prototype.asset){const asset=await this.assets.clone(prototype.asset);options={...template.options,id:command.entityId,object:asset.object};}
    else options={...template.options,id:command.entityId,object:this.cloneObject(template.options.object!)} as API.EntityOptions|API.CharacterOptions;
    const object='humanoid' in options&&options.humanoid?options.humanoid.root:'asset' in options&&options.asset?options.asset.object:options.object!;this.scene.updateWorldMatrix(true,true,true);object.position.copy(this.scene.worldToLocal(new THREE.Vector3().fromArray(command.positionWorldMetersXYZ)));spawned.set(command.entityId,options);
   }
@@ -383,6 +430,7 @@ export class ThreeWorld implements API.World {
    try{
     if('humanoid' in options&&options.humanoid&&this.entries.get(id)?.object!==options.humanoid.root)options.humanoid.dispose();
     if('asset' in options&&options.asset&&this.entries.get(id)?.asset!==options.asset)this.assets.release(options.asset);
+    if('role' in options&&this.entries.get(id)?.object!==options.object)for(const asset of this.assets.within(options.object))this.assets.release(asset);
    }catch(error){this.errors.push(runtimeError(error,'spawn-cleanup',[id]));}
    spawned.delete(id);
   }
@@ -395,6 +443,8 @@ export class ThreeWorld implements API.World {
  private validatePreparedScene(prepared:Prepared,applyTimedTransforms:boolean):void{
   const candidates=new Map(this.entries);const physical=new Set<string>();const removed=new Set<string>();
   const resourcePlan=this.engine.resourcePlanValidator();
+  const inactive=new Set([...this.entries.values()].filter(entry=>!this.engine.isLocallyActive(entry.id)).map(entry=>entry.object));
+  const active=(object:THREE.Object3D)=>{for(let at:THREE.Object3D|null=object;at;at=at.parent)if(inactive.has(at))return false;return true;};
   for(const [id,options] of prepared.spawned){
    const isCharacter=!('role' in options);const asset='asset' in options?options.asset:undefined;const humanoid='humanoid' in options?options.humanoid:undefined;const object=humanoid?.root??asset?.object??options.object!;
    const body=humanoid?{heightMeters:1.68,radiusMeters:.28}:isCharacter?(options as API.CharacterOptions).body??asset?.recommendedBody:undefined;if(isCharacter&&!body)throw failure('CHARACTER_BODY_REQUIRED');
@@ -408,10 +458,21 @@ export class ThreeWorld implements API.World {
     if(command.type==='entity.set-interactions'){const entry=entity(command.entityId);this.validateEntityInteractions(entry.physicsKind,command.slots);if(command.slots.length&&!prepared.spawned.has(entry.id))humanoidHost(this.humanoid!).interactionBody(entry.id).read();continue;}
     if(command.type==='entity.spawn'){const entry=entity(command.entityId);if(this.humanoid?.environment.interactions.hasMapEntity(entry.id))throw failure('INTERACTION_ENTITY_ID_CONFLICT');this.validateEntityInteractions(entry.physicsKind,'interactions' in entry.options?entry.options.interactions:undefined);if(!entry.object.parent)this.scene.add(entry.object);this.scene.updateWorldMatrix(true,true,true);entry.object.position.copy(this.scene.worldToLocal(new THREE.Vector3().fromArray(command.positionWorldMetersXYZ)));continue;}
     if(command.type==='entity.attach'){
-     const child=entity(command.childEntityId),parent=entity(command.parentEntityId);if(child.physicsKind!=='none'||[...candidates.values()].some(entry=>entry.physicsKind!=='none'&&this.within(entry.object,child.object)))throw failure('ATTACHMENT_REQUIRES_NONPHYSICAL_CHILD');
+     const child=entity(command.childEntityId),parent=entity(command.parentEntityId);if(!active(child.object)||!active(parent.object))throw failure('ENTITY_INACTIVE');if(child.physicsKind!=='none'||[...candidates.values()].some(entry=>entry.physicsKind!=='none'&&this.within(entry.object,child.object)))throw failure('ATTACHMENT_REQUIRES_NONPHYSICAL_CHILD');
      if(this.within(parent.object,child.object))throw failure('ATTACHMENT_CYCLE');parent.object.add(child.object);child.object.position.fromArray(command.positionLocalMetersXYZ);continue;
     }
     const entry=entity(command.entityId);if('humanoid' in entry.options&&entry.options.humanoid&&!isHumanoidActorCommand(command.type))throw failure('HUMANOID_USE_RUNTIME_COMMANDS');const duration='durationSeconds' in command?command.durationSeconds??0:0;
+    if(command.type==='entity.set-active'){
+     const roots=(this.entries.has(entry.id)?this.engine.activationRootIds(entry.id):[entry.id]).map(id=>entity(id).object);
+     for(const child of candidates.values())if(roots.some(root=>this.within(child.object,root))){
+      if(this.humanoid?.logicalPose(child.id))humanoidHost(this.humanoid).validateActivation(child.id,command.isActive);
+      const declared=prepared.plan.declarations.get(command);if(declared&&!prepared.spawned.has(child.id)&&!declared.has(`${child.id}:lifecycle`))throw failure('ACTION_WRITE_UNDECLARED');
+     }
+     for(const root of roots){if(command.isActive)inactive.delete(root);else inactive.add(root);}
+     if(this.humanoid)for(const child of candidates.values())if(roots.some(root=>this.within(child.object,root)))for(const peerId of humanoidHost(this.humanoid).activationMembers(child.id)){const peer=entity(peerId);if(active(peer.object)!==active(child.object))throw failure('MOUNT_GROUP_INACTIVE_ANCESTOR','Reactivate the inactive ancestor so rider and vehicle can resume together.');}
+     continue;
+    }
+    if(!active(entry.object)&&!['entity.destroy','entity.despawn','entity.set-visible'].includes(command.type))throw failure('ENTITY_INACTIVE');
     resourcePlan(command.type,entry.id);
     if(command.type==='entity.set-position'&&entry.body)resourcePlan('actor.stop',entry.id);
     if((command.type==='entity.set-position'||command.type==='entity.set-rotation')&&duration>0&&entry.physicsKind!=='kinematic'&&entry.physicsKind!=='none')throw failure('KINEMATIC_REQUIRED');
@@ -425,9 +486,9 @@ export class ThreeWorld implements API.World {
      if(!this.geometries.has(command.geometryId))throw failure('GEOMETRY_NOT_PREPARED');const mesh=entry.object as THREE.Mesh;
      if(!mesh.isMesh||(mesh as THREE.SkinnedMesh).isSkinnedMesh||(mesh as THREE.InstancedMesh).isInstancedMesh||entry.body)throw failure('GEOMETRY_REQUIRES_RIGID_MESH');mesh.geometry=this.geometries.get(command.geometryId)!.geometry;physical.add(entry.id);
     }
-    if(command.type==='entity.despawn'){
+    if(command.type==='entity.despawn'||command.type==='entity.destroy'){
      if(this.engine.controlledEntityId&&this.within(entity(this.engine.controlledEntityId).object,entry.object))throw failure('CONTROLLED_ENTITY_CANNOT_DESPAWN');
-     for(const child of candidates.values())if(this.within(child.object,entry.object)){const declared=prepared.plan.declarations.get(command);if(declared&&!prepared.spawned.has(child.id)&&!declared.has(`${child.id}:lifecycle`))throw failure('ACTION_WRITE_UNDECLARED',`Deletion also requires lifecycle of ${child.id}`);removed.add(child.id);}
+     for(const child of candidates.values())if(this.within(child.object,entry.object)){if(command.type==='entity.despawn'&&this.humanoid?.logicalPose(child.id)&&!this.humanoid.hasActor(child.id))throw failure('HUMANOID_USE_RUNTIME_COMMANDS');if(command.type==='entity.destroy'&&this.humanoid?.logicalPose(child.id)){humanoidHost(this.humanoid).validateDestruction(child.id,new Set([...candidates.values()].filter(candidate=>this.within(candidate.object,entry.object)).map(candidate=>candidate.id)));const claims=prepared.plan.declarations.get(command);if(claims)for(const member of humanoidHost(this.humanoid).activationMembers(child.id))if(!claims.has(`${member}:lifecycle`))throw failure('ACTION_WRITE_UNDECLARED',`Destruction also requires lifecycle of ${member}`);}const declared=prepared.plan.declarations.get(command);if(declared&&!prepared.spawned.has(child.id)&&!declared.has(`${child.id}:lifecycle`))throw failure('ACTION_WRITE_UNDECLARED',`Deletion also requires lifecycle of ${child.id}`);removed.add(child.id);}
     }
     if(command.type==='entity.play-action'&&!entry.asset?.actionIds.includes(command.actionId))throw failure('ANIMATION_UNAVAILABLE',`Available actions: ${entry.asset?.actionIds.join(', ')??'none'}`,'unsupported-capability');
     if(command.type==='entity.apply-impulse'&&entry.physicsKind!=='dynamic')throw failure('IMPULSE_REQUIRES_DYNAMIC');
@@ -442,7 +503,7 @@ export class ThreeWorld implements API.World {
    this.scene.updateWorldMatrix(true,true,true);
    const affected=[...candidates.values()].filter(entry=>!removed.has(entry.id)&&entry.physicsKind!=='none'&&[...physical].some(id=>this.within(entry.object,entity(id).object)||this.within(entity(id).object,entry.object)));
    for(const entry of affected)if('humanoid' in entry.options&&entry.options.humanoid){if(!this.humanoid)throw failure('HUMANOID_RUNTIME_REQUIRED');validateActorBinding({object:entry.options.humanoid.root,animation:entry.options.humanoid},this.engineCharacter(entry.options,entry.body!));}
-   this.engine.physics.validateBatch(affected.map(entry=>entry.body?{kind:'character' as const,id:entry.id,object:entry.object,options:this.engineCharacter(entry.options as API.CharacterOptions,entry.body)}:{kind:'rigid' as const,id:entry.id,object:entry.object,options:this.enginePhysics(entry.options as API.EntityOptions)}),[...removed].filter(id=>Boolean(this.engine.physics.state(id))));
+   this.engine.physics.validateBatch(affected.map(entry=>entry.body?{kind:'character' as const,id:entry.id,object:entry.object,options:this.engineCharacter(entry.options as API.CharacterOptions,entry.body)}:{kind:'rigid' as const,id:entry.id,object:entry.object,options:this.enginePhysics(entry.options as API.EntityOptions)}),[...removed].filter(id=>Boolean(this.engine.physics.state(id))&&(!this.humanoid?.logicalPose(id)||this.humanoid.hasActor(id))));
   }finally{
    for(const prior of stored){if(prior.parent)prior.parent.add(prior.entry.object);else prior.entry.object.removeFromParent();prior.entry.object.position.copy(prior.position);prior.entry.object.quaternion.copy(prior.quaternion);prior.entry.object.scale.copy(prior.scale);prior.entry.object.matrix.copy(prior.matrix);prior.entry.object.visible=prior.visible;if(prior.geometry)(prior.entry.object as THREE.Mesh).geometry=prior.geometry;}
    for(const id of prepared.spawned.keys())setEntityBoundary(candidates.get(id)!.object,false);this.scene.updateWorldMatrix(true,true,true);
@@ -516,6 +577,36 @@ export class ThreeWorld implements API.World {
   const activity=this.activities.get(id);if(activity){for(const step of activity.steps)if(step.status==='running'||step.status==='queued')step.status='cancelled';this.operations.update(id,{steps:activity.steps});for(const actor of activity.actorSteps.keys())if(this.entries.has(actor))this.engineCommand({type:'actor.stop',entityId:actor});
    for(const parameterId of activity.parameters){const parameter=this.parameters.get(parameterId);if(parameter?.operationId===id&&parameter.status!=='failed')parameter.status='interrupted';}this.activities.delete(id);}
  }
+ private setEntityActivation(entityId:string,isActive:boolean):void{
+  const roots=this.engine.activationRootIds(entityId).map(id=>this.entity(id).object);if(!isActive)for(const entry of this.entries.values())if(roots.some(root=>this.within(entry.object,root)))this.cancelActor(entry.id);
+  this.engine.setEntityActive(entityId,isActive);this.entityCallbacks.sync();
+ }
+ private removeEntity(entityId:string,permanent:boolean,committed:()=>void):void{
+  const root=this.entity(entityId);const removed=[...this.entries.values()].filter(entry=>this.within(entry.object,root.object));
+  const destroyNative=permanent&&this.humanoid?removed.map(entry=>humanoidHost(this.humanoid!).prepareVehicleDestruction(entry.id,new Set(removed.map(child=>child.id)))):[];
+  const ownedAssets=permanent?this.assets.within(root.object):[];
+  const remainingCaptureTargets=this.captureTargets.filter(selection=>!removed.some(entry=>entry.id===selection.entityId||selection.representative&&this.within(selection.representative.object,entry.object)));
+  // A deleted follow target explicitly releases the same camera instead of keeping a stale callback.
+  for(const entry of removed)this.engine.cameraTargetRemoved(entry.id,entry.generation);
+  for(const task of [...this.activities.values()])if([...task.followTargets.values()].some(targetId=>removed.some(entry=>entry.id===targetId))){this.cancelActivity(task.operationId);this.operations.update(task.operationId,{status:'failed',phase:'target-removed',error:failure('FOLLOW_TARGET_REMOVED','The followed entity was removed.','content')});}
+  for(const entry of removed){this.humanoid?.environment.interactions.unregisterEntity(entry.id);this.cancelActor(entry.id);}if(permanent)this.engine.removeForDestruction(entityId);else this.engineCommand({type:'entity.despawn',entityId});this.captureTargets=remainingCaptureTargets;for(const entry of removed){this.retireHumanoidActivities(entry.id);this.entries.delete(entry.id);this.autonomies.delete(entry.id);}
+  if(permanent){
+   // Destruction is committed before cleanup. A faulty disposer must not strand sibling owners.
+   committed();
+   const objects=new Set(removed.map(entry=>entry.object));
+   for(const tween of [...this.tweens])if(removed.some(entry=>entry.id===tween.command.entityId))this.operations.cancel(tween.operationId);
+   if(this.baseline){
+    for(const entry of removed)if(this.baseline.entries.get(entry.id)?.object===entry.object){this.baseline.entries.delete(entry.id);this.baseline.autonomies.delete(entry.id);this.baseline.geometryById.delete(entry.id);}
+    this.baseline.captureTargets=this.baseline.captureTargets.filter(selection=>!removed.some(entry=>entry.id===selection.entityId||selection.representative&&this.within(selection.representative.object,entry.object)));
+   }
+   this.entityCallbacks.releaseObjects(objects);
+   const errors:unknown[]=[];
+   for(const destroy of destroyNative)try{errors.push(...destroy());}catch(error){errors.push(error);}
+   errors.push(...this.engine.destroyRetired(objects));
+   for(const asset of ownedAssets)try{this.assets.release(asset);}catch(error){errors.push(error);}
+   if(errors.length)throw errors[0];
+  }else this.entityCallbacks.sync();
+ }
  private applyProperty(command:API.PropertyCommand):void{
   if(command.type==='entity.set-visible')this.engineCommand({type:command.type,entityId:command.entityId,visible:command.isVisible});
   if(command.type==='entity.set-position')this.engineCommand({type:command.type,entityId:command.entityId,positionMetersXYZ:command.positionWorldMetersXYZ});
@@ -549,15 +640,12 @@ export class ThreeWorld implements API.World {
      published=true;continue;
     }
     switch(command.type){
+     case 'entity.set-active':this.setEntityActivation(command.entityId,command.isActive);break;
      case 'entity.spawn':{const options=prepared.spawned.get(command.entityId)!;if('role' in options)this.addEntity(options);else this.addCharacterInternal(options,true);break;}
-     case 'entity.despawn':{const root=this.entity(command.entityId);const removed=[...this.entries.values()].filter(entry=>this.within(entry.object,root.object));
-      const remainingCaptureTargets=this.captureTargets.filter(selection=>!removed.some(entry=>entry.id===selection.entityId||selection.representative&&this.within(selection.representative.object,entry.object)));
-      // A deleted follow target explicitly releases the same camera instead of keeping a stale callback.
-      for(const entry of removed)this.engine.cameraTargetRemoved(entry.id,entry.generation);
-      for(const task of [...this.activities.values()])if([...task.followTargets.values()].some(targetId=>removed.some(entry=>entry.id===targetId))){this.cancelActivity(task.operationId);this.operations.update(task.operationId,{status:'failed',phase:'target-removed',error:failure('FOLLOW_TARGET_REMOVED','The followed entity was removed.','content')});}
-      for(const entry of removed){this.humanoid?.environment.interactions.unregisterEntity(entry.id);this.cancelActor(entry.id);}this.engineCommand({type:command.type,entityId:command.entityId});this.captureTargets=remainingCaptureTargets;for(const entry of removed){this.retireHumanoidActivities(entry.id);this.entries.delete(entry.id);this.autonomies.delete(entry.id);}break;}
+     case 'entity.destroy':
+     case 'entity.despawn':this.removeEntity(command.entityId,command.type==='entity.destroy',()=>{published=true;});break;
      case 'entity.set-interactions':{const entry=this.entity(command.entityId);if(this.humanoid)this.humanoid.environment.interactions.replaceEntity(entry.id,command.slots,()=>humanoidHost(this.humanoid!).interactionBody(entry.id));entry.options={...entry.options,interactions:structuredClone(command.slots)} as API.EntityOptions;break;}
-     case 'entity.attach':this.engineCommand({type:command.type,childEntityId:command.childEntityId,parentEntityId:command.parentEntityId,positionMetersXYZ:command.positionLocalMetersXYZ});break;
+     case 'entity.attach':this.engineCommand({type:command.type,childEntityId:command.childEntityId,parentEntityId:command.parentEntityId,positionMetersXYZ:command.positionLocalMetersXYZ});this.entityCallbacks.sync();break;
      case 'entity.play-action':this.engine.playAction(command.entityId,command.actionId,command.playback);break;
      case 'entity.stop-action':this.engine.stopAction(command.entityId);break;
      case 'entity.apply-impulse':this.engineCommand(command);break;
@@ -586,7 +674,7 @@ export class ThreeWorld implements API.World {
  private beforeTick(deltaSeconds:number,simulationTick:number):void{
   for(const item of this.queued.splice(0))this.commit(item);
   for(const tween of [...this.tweens]){
-   if(!this.tweens.includes(tween))continue;tween.elapsed=Math.min(tween.duration,tween.elapsed+deltaSeconds);const ratio=tween.elapsed/tween.duration;
+   if(!this.tweens.includes(tween)||!this.engine.isEntityActive(tween.command.entityId))continue;tween.elapsed=Math.min(tween.duration,tween.elapsed+deltaSeconds);const ratio=tween.elapsed/tween.duration;
    const next=tween.from.map((value,index)=>value+(tween.to[index]!-value)*ratio) as unknown as API.Vec3;
    const property=tween.command.type==='entity.set-position'?{...tween.command,positionWorldMetersXYZ:next}:tween.command.type==='entity.set-scale'?{...tween.command,scaleLocalXYZ:next}:{...tween.command,rotationLocalRadiansXYZ:next};
    try{this.applyProperty(property as API.PropertyCommand);
@@ -595,7 +683,7 @@ export class ThreeWorld implements API.World {
   }
   this.pauseMountedNavigation();
   for(const [id,autonomy] of this.autonomies){
-   if(autonomy.paused||!this.entries.has(id)||this.entity(id).movementId!=='ground'||id===this.engine.controlledEntityId)continue;
+   if(autonomy.paused||!this.entries.has(id)||!this.engine.isEntityActive(id)||this.entity(id).movementId!=='ground'||id===this.engine.controlledEntityId)continue;
    if(this.navigationRestriction('actor.move-to',this.entity(id)))continue;
    const current=this.engine.actorTaskState(id);if(current?.status==='running')continue;
    autonomy.delay-=deltaSeconds;if(autonomy.delay>0)continue;
@@ -605,6 +693,7 @@ export class ThreeWorld implements API.World {
    if(receipt.status==='rejected'){autonomy.paused=true;this.errors.push(failure('AUTONOMY_NO_PATH',receipt.error?.message??'No patrol path','content',[id]));}
   }
   for(const update of this.updating)this.guarded(()=>synchronous(()=>update({deltaSeconds,simulationTick,simulationSeconds:simulationTick*this.engine.fixedTimeStepSeconds})));
+  this.entityCallbacks.update({deltaSeconds,simulationTick,simulationSeconds:simulationTick*this.engine.fixedTimeStepSeconds});
  }
  private afterTick():void{
   this.notifyChange();
@@ -640,7 +729,7 @@ export class ThreeWorld implements API.World {
    entry.generation=++this.nextGeneration;this.bindEntityInteractions(entry);
    if(entry.body)this.engineCommand({type:'actor.stop',entityId:entry.id});
   }
-  if(reason==='map')for(const autonomy of this.autonomies.values())autonomy.paused=true;
+  if(reason==='map'){for(const autonomy of this.autonomies.values())autonomy.paused=true;for(const entry of this.entries.values())if(!this.engine.isEntityActive(entry.id)&&this.engine.physics.state(entry.id))this.engine.physics.setEnabled(entry.id,false);}
   this.engine.clearInput();this.touch();
  }
  private retireHumanoidActivities(actorId?:string):void{for(const [id,activity] of this.humanoidActivities)if(actorId===undefined||activity.actorId===actorId){this.operations.update(id,{status:'cancelled',phase:actorId===undefined?'simulation-replaced':'actor-removed'});this.humanoidActivities.delete(id);}}
@@ -688,6 +777,9 @@ export class ThreeWorld implements API.World {
   this.operations.cancelAll();
   const wasRunning=this.engine.isRunning;this.engine.stop();if(!this.baseline)await this.initialise();
   const baseline=this.baseline!;
+  const previousErrors=new Set(this.errors);
+  this.entityCallbacks.retainOnly(new Set([...baseline.entries.values()].map(entry=>entry.object)));
+  const callbackCleanupErrors=this.errors.filter(error=>!previousErrors.has(error));
   this.captureTargets=baseline.captureTargets;
   for(const [id,geometry] of baseline.geometryById){const original=baseline.entries.get(id)!;(original.object as THREE.Mesh).geometry=geometry;}
   this.entries.clear();for(const [id,entry] of baseline.entries)this.entries.set(id,{...this.copyEntry(entry),generation:++this.nextGeneration});
@@ -697,9 +789,9 @@ export class ThreeWorld implements API.World {
   this.parameters.clear();this.owners.clear();for(const [id,value] of baseline.parameters){value.value=value.definition.initialValue;value.status='settled';delete value.operationId;delete value.error;this.parameters.set(id,value);for(const claim of value.definition.writes)for(const key of this.claimKey(claim))this.owners.set(key,id);}
   this.actions.clear();for(const [id,value] of baseline.actions)this.actions.set(id,value);
   this.autonomies.clear();for(const [id,value] of baseline.autonomies)this.autonomies.set(id,cloneJson(value));
-  this.state.reset();this.engine.reset();this.errors.length=0;this.touch();
+  this.state.reset();this.engine.reset();this.errors.length=0;this.errors.push(...callbackCleanupErrors);this.touch();
   for(const parameter of this.parameters.values())if('effect' in parameter.definition){this.activeWriter=parameter.definition.id;try{const effect=parameter.definition.effect;this.authorCallback(parameter.definition.id,()=>effect(parameter.value));}finally{this.activeWriter=undefined;}}
-  for(const callback of this.resets)this.guarded(()=>synchronous(callback));this.captureObservation();this.engine.render();if(wasRunning)await this.start();
+  for(const callback of this.resets)this.guarded(()=>synchronous(callback));this.entityCallbacks.reset();this.captureObservation();this.engine.render();if(wasRunning)await this.start();
  }
  async runTask<T>(task:(scope:API.TaskScope)=>Promise<T>):Promise<T>{
   this.alive();const epoch=this.epoch;const abort=this.scopes.begin();
@@ -708,14 +800,21 @@ export class ThreeWorld implements API.World {
   const scope:API.TaskScope={signal:abort.signal,
    assets:{search:query=>{check();return this.assets.search(query);},load:async id=>{check();const asset=await this.assets.load(id);try{check();}catch(error){this.assets.release(asset);throw error;}created.add(asset);return asset;}},
    setState:(state,value)=>{check();state.set(value);},
-   addEntity:options=>{check();return this.addEntity(options);},
+   addEntity:options=>{check();const object=this.addEntity(options);for(const asset of this.assets.within(object))created.delete(asset);return object;},
    addCharacter:options=>{check();const object=this.addCharacter(options);if(options.asset)created.delete(options.asset);return object;},
    registerPrototype:async definition=>{check();await this.registerPrototype(definition);check();},
    replaceGeometry:async (id,geometry)=>{check();const receipt=await this.replaceGeometry(id,geometry);check();return receipt;},
    execute:async command=>{check();const receipt=await this.execute(command);check();return receipt;},
   };
-  try{const result=await task(scope);check();return result;}
-  finally{this.scopes.end(abort);for(const asset of created)this.assets.release(asset);}
+  let failed=false,firstError:unknown,result!:T;
+  try{result=await task(scope);check();}
+  catch(error){failed=true;firstError=error;}
+  this.scopes.end(abort);
+  // One failed temporary instance must not retain its peers or mask the task failure.
+  try{disposeInOrder([...created].map(asset=>()=>{try{this.assets.release(asset);}catch(error){this.errors.push(runtimeError(error,'task-cleanup'));throw error;}}));}
+  catch(error){if(!failed){failed=true;firstError=error;}}
+  if(failed)throw firstError;
+  return result;
  }
  getEntityState(id:string):API.EntityState{
   const entry=this.entity(id);const physics=this.engine.physics.state(id);let parentEntityId:string|undefined;for(let parent=entry.object.parent;parent;parent=parent.parent){const found=[...this.entries].find(([,candidate])=>candidate.object===parent);if(found){parentEntityId=found[0];break;}}
@@ -731,7 +830,7 @@ export class ThreeWorld implements API.World {
   const internal=entry.asset?this.assets.internal(entry.asset):undefined;
   const humanoidAnimation=this.humanoid?.animationState(id);
   return {id,generation:entry.generation,geometryVersion:entry.geometryVersion,...(entry.body?{movementId:entry.movementId}:{}),name:entry.options.name??id,tags:entry.options.tags??[],appearancePrompt:entry.options.appearancePrompt??'',role:entry.role,
-   positionWorldMetersXYZ:position,rotationLocalRadiansXYZ:[rotation.x,rotation.y,rotation.z],scaleLocalXYZ:tuple(entry.object.scale),isVisibleLocal:entry.object.visible,isVisibleEffective:isWorldVisible(entry.object),...(parentEntityId?{parentEntityId}:{}),
+   positionWorldMetersXYZ:position,rotationLocalRadiansXYZ:[rotation.x,rotation.y,rotation.z],scaleLocalXYZ:tuple(entry.object.scale),isActive:this.engine.isEntityActive(id),isVisibleLocal:entry.object.visible,isVisibleEffective:isWorldVisible(entry.object),...(parentEntityId?{parentEntityId}:{}),
    ...(physics&&entry.body?{motion:{phase:physics.isGrounded?'grounded' as const:physics.velocityMetersPerSecondXYZ[1]>0?'jumping' as const:'falling' as const,velocityWorldMetersPerSecondXYZ:physics.velocityMetersPerSecondXYZ,isGrounded:physics.isGrounded,collisionEntityIds:physics.collisionEntityIds}}:{}),
    ...(humanoidAnimation?{animation:humanoidAnimation}:internal?.currentActionId&&internal.currentClipName?{animation:{actionId:internal.currentActionId,clipName:internal.currentClipName,timeSeconds:internal.timeSeconds}}:{}),controlOwners:owners};
  }
@@ -745,11 +844,12 @@ export class ThreeWorld implements API.World {
  }
  private commandDescriptor(type:API.PrimitiveCommand['type'],entry:Registration):API.CommandDescriptor{
   const fields=commandFields[type];const properties:Record<string,API.JsonValue>={type:{const:type}};
-  for(const field of fields)properties[field]=field==='slots'?{type:'array',items:INTERACTION_SLOT_SCHEMA}:field.endsWith('XYZ')?{type:'array',items:{type:'number'},minItems:3,maxItems:3}:field==='isVisible'||field==='run'?{type:'boolean'}:field.endsWith('Seconds')||field.endsWith('Meters')?{type:'number',minimum:0}:{type:'string'};
+  for(const field of fields)properties[field]=field==='slots'?{type:'array',items:INTERACTION_SLOT_SCHEMA}:field.endsWith('XYZ')?{type:'array',items:{type:'number'},minItems:3,maxItems:3}:field==='isActive'||field==='isVisible'||field==='run'?{type:'boolean'}:field.endsWith('Seconds')||field.endsWith('Meters')?{type:'number',minimum:0}:{type:'string'};
   properties.entityId={const:entry.id};if(type==='entity.attach')properties.childEntityId={const:entry.id};
   const optional=new Set(['durationSeconds','run','distanceMeters','playback']);
   let reason:API.RuntimeError|undefined;const key=propertyChannel({type} as API.PrimitiveCommand);const parameter=key?this.owners.get(`${entry.id}:${key}`):undefined;
   if(this.humanoid?.logicalPose(entry.id)&&!this.humanoid.allowsWorldCommand(type,entry.id))reason=failure('HUMANOID_USE_RUNTIME_COMMANDS','Use world.humanoid for humanoid and vehicle runtime commands.');
+  if(!this.engine.isEntityActive(entry.id)&&!['entity.set-active','entity.set-visible','entity.destroy','entity.despawn'].includes(type))reason=failure('ENTITY_INACTIVE');
   if(parameter)reason=failure('CHANNEL_OWNED_BY_PARAMETER',`Use parameter ${parameter}.`);
   if(type==='entity.set-rotation'&&entry.body)reason=failure('ACTOR_ROTATION_OWNED_BY_MOVEMENT');
   if(['actor.move-to','actor.follow','actor.stop','actor.resume-autonomy'].includes(type)&&entry.id===this.engine.controlledEntityId)reason=failure('PLAYER_INPUT_OWNS_ACTOR');
@@ -768,8 +868,8 @@ export class ThreeWorld implements API.World {
  describe(query:{readonly query?:string;readonly entityIds?:readonly string[]}={}):API.WorldDescription{
   const text=query.query?.toLowerCase();const selected=[...this.entries.values()].filter(entry=>(!query.entityIds||query.entityIds.includes(entry.id))&&(!text||[entry.id,entry.options.name??'',...(entry.options.tags??[])].join(' ').toLowerCase().includes(text)));
   return {...(this.humanoid&&this.engine.controlledHumanoid?{humanoid:{configuration:this.humanoid.inspectConfiguration(),boarding:Object.fromEntries(selected.filter(entry=>this.humanoid!.options.vehicles.some(v=>v.instanceId===entry.id)).map(entry=>[entry.id,this.humanoid!.inspectBoarding(entry.id)])),controlState:{...this.humanoid.inspectControls(),livePaused:!this.engine.isRunning,clockOwner:this.episodeLease?'episode':'live'},inputGuide:this.humanoid.inputGuide(),characterCapabilities:this.humanoid.characterCapabilities(),keyBindings:this.getKeyBindings()}}:{}),schemaVersion:2,worldRevision:this.revision,simulationTick:this.simulationTick,supportedMovementKinds:['ground',...this.movements.keys()],movements:[{id:'ground',version:1,description:'SDK ground movement and navigation'},...[...this.movements.values()].map(({id,version,description,episode})=>({id,version,description,episodeInput:episode?'custom' as const:'unsupported' as const}))],geometries:[...this.geometries.values()].map(({id,description})=>({id,description,status:'ready'})),
-   entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
-    if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn');if(entry.physicsKind==='none')commands.push('entity.attach');else if(this.humanoid&&!entry.body)commands.push('entity.set-interactions');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
+   entities:selected.map(entry=>{const commands:API.PrimitiveCommand['type'][]=['entity.set-active','entity.set-visible','entity.set-position','entity.set-scale','entity.set-rotation'];
+    if(entry.id!==this.engine.controlledEntityId)commands.push('entity.despawn','entity.destroy');if(entry.physicsKind==='none')commands.push('entity.attach');else if(this.humanoid&&!entry.body)commands.push('entity.set-interactions');if(entry.body)commands.push('actor.move-to','actor.follow','actor.stop','actor.resume-autonomy','actor.set-movement');
     if(entry.asset)commands.push('entity.play-action','entity.stop-action');if(entry.physicsKind==='dynamic')commands.push('entity.apply-impulse');
     if((entry.object as THREE.Mesh).isMesh&&!entry.body&&!(entry.object as THREE.SkinnedMesh).isSkinnedMesh&&!(entry.object as THREE.InstancedMesh).isInstancedMesh)commands.push('entity.set-geometry');
     return {state:this.getEntityState(entry.id),commands:[...commands.map(type=>this.commandDescriptor(type,entry)),...this.humanoid?.commandDescriptors(entry.id)??[]],actionIds:entry.asset?.actionIds??this.humanoid?.actionIds(entry.id)??[]};}),
@@ -893,7 +993,7 @@ export class ThreeWorld implements API.World {
  }
  /** Headless/Host verification uses the same fixed engine; no synthetic position updates. */
  step(input:API.WorldInput={},ticks=1):API.WorldSnapshot{
-  this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
+  if(this.entityCallbackDepth)throw failure('WORLD_TRANSACTION_REENTRY');this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');
   this.engine.validateStep(input,ticks);
   if(!this.baseline){
    if(this.pending.size||this.parameters.size)throw failure('WORLD_INITIALIZATION_REQUIRED','Await world.start() before synchronous stepping when content or parameters require initialization.');
@@ -904,7 +1004,7 @@ export class ThreeWorld implements API.World {
  render(interpolationAlpha=1):void{this.engine.render(interpolationAlpha);}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
-  if(this.disposed)return;
+  if(this.disposed)return;if(this.entityCallbackDepth)throw failure('WORLD_TRANSACTION_REENTRY');
   // Invalidate before calling borrowed renderer code: viewport restoration can
   // synchronously re-enter dispose. Independent owners must still be released.
   this.epoch++;this.disposed=true;
@@ -918,6 +1018,7 @@ export class ThreeWorld implements API.World {
   this.scopes.abortAll();this.retireHumanoidActivities();
   for(const queued of this.queued.splice(0)){this.releasePreparedSpawns(queued.prepared.spawned);queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});}
   this.operations.cancelAll();
+  release(()=>this.entityCallbacks.dispose());
   release(()=>this.presentation?.dispose());this.changes.clear();release(()=>this.restoreRendererShadows?.());release(()=>this.engine.dispose());release(()=>this.assets.dispose());for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   this.updating.clear();this.resets.clear();this.disposals.clear();

@@ -1,3 +1,4 @@
+import {disposeInOrder} from '../../lifecycle-disposal';
 import {actorResources,FULL_BODY_RESOURCES,type ActorResources} from '../../actor-resources';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {contactColliderVolume} from '../../physics-box';
@@ -595,8 +596,10 @@ export class HumanoidController {
   }
   dispose(){
     if(this.disposed)return;this.disposed=true;
-    this.skills.dispose();this.resources.release(this.surface);this.resources.release(this);this.crates=[];
-    this.queries.releaseHumanoidRig(this.rig);
+    disposeInOrder([
+      ()=>this.skills.dispose(),()=>this.resources.release(this.surface),()=>this.resources.release(this),
+      ()=>{this.crates=[];},()=>this.queries.releaseHumanoidRig(this.rig),
+    ]);
   }
   sync(){const p=this.body.translation();this.position.set(p.x,p.y-this.capsuleCenter,p.z);}
   snapshot(){return {position:this.position.toArray(),speed:this.speed,grounded:this.grounded,state:this.state,stance:this.stance,swimming:this.swimming,water:this.water,waterEntrySerial:this.waterEntrySerial,waterEntrySpeed:this.waterEntrySpeed,capsuleHeight:this.capsuleHeight,animationEvent:this.animationEvent,probe:this.probe?{kind:this.probe.kind,height:this.probe.height,depth:this.probe.depth,reason:this.probe.reason}:null,traversal:this.traversal?{kind:this.traversal.probe.kind,progress:this.traversal.progress,phase:this.traversal.phase,airborne:!!this.traversal.airborne}:null,events:this.events.slice(-20),lastResult:this.lastResult,crates:this.crates.map(c=>c.body.translation())};}

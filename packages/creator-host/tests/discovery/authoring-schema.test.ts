@@ -35,6 +35,13 @@ it.each(['getting-started','nonhuman-subject','extensions'] as const)('exposes e
  }
 });
 
+it.each(['getting-started','programming','nonhuman-subject','assets','extensions'] as const)('publishes the optional entity hooks and their complete types to %s',topic=>{
+ const selected=publicContractTopic(contracts,topic),types=declarations(selected);
+ expect(selected).toContain('registerEntityLifecycle(entityId:string,callbacks:EntityLifecycleCallbacks):()=>void');
+ for(const name of ['EntityLifecycleCallbacks','UpdateContext'])expect(types.byName.get(name)?.getText(types.file)).toBe(declarations(contracts).byName.get(name)?.getText(declarations(contracts).file));
+ expect(guideTopic(guide,'extensions')).toContain('world.registerEntityLifecycle');
+});
+
 it('keeps quality inspection contracts tied to current source declarations',()=>{
  const original=declarations(contracts),selected=declarations(publicContractTopic(contracts,'quality'));
  const members=({file,byName}:ReturnType<typeof declarations>)=>{

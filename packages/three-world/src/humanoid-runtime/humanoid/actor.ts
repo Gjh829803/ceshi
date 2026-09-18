@@ -47,7 +47,7 @@ export class HumanoidActor {
   private recoveryIncident=false;
   get environment(){return this.world.environment;}
   get vehicles(){return this.world.vehicles;}
-  get time(){return this.world.time;}
+  get time(){return this.world.entityTime(this.id);}
   constructor(readonly id:string,readonly world:Simulation,position:Vector3,yaw=0){
     this.controller=new HumanoidController(world.environment,id);
     try{this.resetAt(position,yaw);}catch(error){this.controller.dispose();throw error;}
@@ -316,6 +316,31 @@ export class HumanoidActor {
       return false;
     }
     return this.interact(id);
+  }
+  /** Read-only admission for permanent vehicle removal; uses the existing family exit geometry. */
+  planVehicleDestruction():MountDecision {
+    const v=this.vehicle;
+    const fail=(code:MountFailureCode,message:string):MountDecision=>({ok:false,code,message});
+    if(!v)return fail('HUMANOID_NOT_MOUNTED','人物未骑乘');
+    if(this.transition>0||this.dragonTransition)return fail('HUMANOID_TRANSITION_ACTIVE','骑乘切换尚未完成');
+    if(v.motion.flyingCreature){
+      if(v.motion.flyingCreature.groundPhase!=='grounded')return fail('VEHICLE_MOUNT_GROUND_REQUIRED','请先落地，再销毁载具');
+      const plan=planDragonMount(this.mountContext(),v,false);
+      return typeof plan==='string'?fail('VEHICLE_DISMOUNT_NO_SAFE_POINT',plan):{ok:true,instanceId:v.spec.id,position:new Vector3(...plan.destination),yaw:v.yaw,velocity:new Vector3()};
+    }
+    if(v.spec.mode==='mount')return evaluateDismount(this.mountContext());
+    if(v.velocity.length()>5)return fail('VEHICLE_MOUNT_TOO_FAST','请先减速再销毁载具');
+    if(v.motion.submersible&&(this.environment.waterAt(v.position)?.surface??-Infinity)-v.position.y>.4)return fail('VEHICLE_DISMOUNT_NO_SAFE_POINT','请先上浮至水面');
+    const point=this.boardingPoint(v);
+    return point?{ok:true,instanceId:v.spec.id,position:point,yaw:v.yaw,velocity:v.velocity.clone()}:fail('VEHICLE_DISMOUNT_NO_SAFE_POINT','没有安全下车落点');
+  }
+  commitVehicleDestructionExit(decision:Extract<MountDecision,{ok:true}>):void {
+    this.controller.commitDismount(decision.position,decision.yaw,decision.velocity);this.vehicleIndex=-1;
+    syncPlayer(this.controller,this.player);this.dragonTransition=undefined;
+    // A suspended actor cannot advance an exit transition, and activation rejects unfinished transitions.
+    const active=this.world.isActive(this.id);this.transition=active ? .38 : 0;this.transitionKind=active?'exit':'';this.player.animation=active?'Sitting_Exit':'Idle';
+    if(!active){this.controller.body.setEnabled(false);this.environment.colliderBindings.changed([this.controller.capsule]);}
+    this.teleportRevision++;
   }
   exit(): boolean {
     this.failureCode = undefined;

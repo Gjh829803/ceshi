@@ -1,3 +1,4 @@
+import {disposeInOrder} from './lifecycle-disposal';
 import type { AssetInstance, Assets, CharacterBody } from './contracts.js';
 import type { AssetDefinition, AssetInstance as EngineAssetInstance } from './engine-contracts.js';
 import { cloneAsset, loadAsset, validateAssetDefinition } from './assets.js';
@@ -84,6 +85,14 @@ export class WorldAssets implements Assets {
   internal(instance: AssetInstance): EngineAssetInstance { this.alive(); return this.entry(instance).managed; }
   owns(instance: AssetInstance): boolean { return this.entries.has(instance); }
 
+  /** Capture ownership before detaching an entity tree; shared resources stay ref-counted. */
+  within(root: import('three').Object3D): AssetInstance[] {
+    return [...this.entries.keys()].filter(instance => {
+      for (let node: import('three').Object3D | null = instance.object; node; node = node.parent) if (node === root) return true;
+      return false;
+    });
+  }
+
   release(instance: AssetInstance): void {
     const entry = this.entries.get(instance);
     if (entry) entry.managed.dispose();
@@ -93,11 +102,7 @@ export class WorldAssets implements Assets {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    let firstError: unknown;
-    for (const entry of [...this.entries.values()]) {
-      try { entry.managed.dispose(); } catch (error) { firstError ??= error; }
-    }
-    if (firstError) throw firstError;
+    disposeInOrder([...this.entries.values()].map(entry=>()=>entry.managed.dispose()));
   }
 
   private alive(): void { if (this.disposed) throw new Error('ASSET_LIBRARY_DISPOSED'); }

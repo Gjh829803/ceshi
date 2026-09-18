@@ -1,11 +1,13 @@
+import {ThreeNavigation} from './navigation';
+import {ThreePhysics} from './physics';
+import {WorldAssets} from './assets-library';
 import * as THREE from 'three';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createWorld, type ThreeWorld} from './world';
 import {setObjectColor} from './object-color';
-import {createWorld as createEngine, type WorldEngine} from './engine';
-import type {WorldAssets} from './assets-library';
+import {createWorld as createEngine, WorldEngine} from './engine';
 import type {AssetDefinition} from './engine-contracts';
 import type {AssetInstance} from './contracts';
 import catalog from '../../../assets/three-creator/asset-catalog.json';
@@ -281,5 +283,32 @@ describe('World-owned callback lifetime', () => {
       world.dispose(); expect(mesh.material).toBe(original); expect(released).toHaveBeenCalledOnce();
       world.dispose(); expect(released).toHaveBeenCalledOnce();
     } finally {world.dispose(); coloring.dispose(); released.mockRestore(); original.dispose(); geometry.dispose();}
+  });
+});
+
+
+describe('failed construction ownership',()=>{
+  it.each([new Error('INITIAL_CREATE_FAILED'),null,undefined])('releases independent engine owners and preserves the original creation failure %s',async original=>{
+    const order:string[]=[],navDispose=ThreeNavigation.prototype.dispose,physicsDispose=ThreePhysics.prototype.dispose;
+    const navigation=vi.spyOn(ThreeNavigation.prototype,'dispose').mockImplementation(function(this:ThreeNavigation){order.push('navigation');navDispose.call(this);throw Error('NAV_CLEANUP_FAILED');});
+    const physics=vi.spyOn(ThreePhysics.prototype,'dispose').mockImplementation(function(this:ThreePhysics){order.push('physics');physicsDispose.call(this);throw Error('PHYSICS_CLEANUP_FAILED');});
+    vi.mocked(THREE.WebGLRenderer).mockImplementation(function(){throw original;});
+    vi.spyOn(console,'warn').mockImplementation(()=>{});
+    await expect(createEngine({canvas:{} as HTMLCanvasElement})).rejects.toBe(original);
+    expect(order).toEqual(['navigation','physics']);expect(navigation).toHaveBeenCalledOnce();expect(physics).toHaveBeenCalledOnce();
+  });
+  it('keeps a catalog preparation error when engine rollback also fails',async()=>{
+    const original=Error('CATALOG_READ_FAILED'),dispose=WorldEngine.prototype.dispose;
+    const cleanup=vi.spyOn(WorldEngine.prototype,'dispose').mockImplementation(function(this:WorldEngine){dispose.call(this);throw Error('ENGINE_CLEANUP_FAILED');});
+    vi.spyOn(console,'warn').mockImplementation(()=>{});
+    await expect(createWorld({navigation:false,get assetDefinitions():never{throw original;}})).rejects.toBe(original);
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+  it('rolls back the constructed world and asset owner when final rendering setup fails',async()=>{
+    const original=Error('SHADOW_SETUP_FAILED'),borrowed=renderer();
+    Object.defineProperty(borrowed,'shadowMap',{get(){throw original;}});
+    const assets=vi.spyOn(WorldAssets.prototype,'dispose'),engine=vi.spyOn(WorldEngine.prototype,'dispose');
+    await expect(createWorld({navigation:false,assetDefinitions:{},renderer:borrowed as unknown as THREE.WebGLRenderer})).rejects.toBe(original);
+    expect(engine).toHaveBeenCalledOnce();expect(assets).toHaveBeenCalledOnce();expect(borrowed.dispose).not.toHaveBeenCalled();
   });
 });

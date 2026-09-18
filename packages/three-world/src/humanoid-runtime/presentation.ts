@@ -44,8 +44,8 @@ function readActor(actor:HumanoidActor,player:MotionPose){
     if(actor.vehicle?.motion.atv)player.humanoid.atvSteeringAngle=actor.vehicle.motion.atv.steeringAngle;
     if(actor.vehicle?.motion.sled)player.humanoid.sledPose={...actor.vehicle.motion.sled};}
 }
-function readVehicles(sim:Simulation,vehicles:MotionPose[]){
-  sim.vehicles.forEach((v,n)=>{const p=vehicles[n]!;p.aircraft=v.motion.aircraft?{rotorSpeedFraction:v.motion.aircraft.rotorSpeedFraction,tilt:v.motion.aircraft.tilt,rotorPhases:[...v.motion.aircraft.rotorPhases]}:undefined;p.flyingCreature=v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.motion.wheelPhysics?.wheels.map(w=>({...w}))??v.motion.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.motion.creature);p.unicycle=copyUnicycleState(v.motion.unicycle);p.submersible=copySubmersibleState(v.motion.submersible);p.raft=v.motion.raft?{...v.motion.raft}:undefined;p.jetski=copyJetSkiState(v.motion.jetski);p.atv=copyAtvState(v.motion.atv);p.kayak=v.motion.kayak?{...v.motion.kayak}:undefined;p.tank=v.motion.tank?{...v.motion.tank}:undefined;});
+function readVehicles(sim:Simulation,vehicles:MotionPose[],onlyIndex?:number){
+  sim.vehicles.forEach((v,n)=>{if(onlyIndex!==undefined&&n!==onlyIndex)return;const p=vehicles[n]!;p.aircraft=v.motion.aircraft?{rotorSpeedFraction:v.motion.aircraft.rotorSpeedFraction,tilt:v.motion.aircraft.tilt,rotorPhases:[...v.motion.aircraft.rotorPhases]}:undefined;p.flyingCreature=v.motion.flyingCreature?copyFlyingCreatureState(v.motion.flyingCreature):undefined;p.position.copy(v.position);p.rotation.copy(v.rotation);p.velocity.copy(v.velocity);p.yaw=v.yaw;p.speed=v.speed;p.steering=v.steering;p.wheels=v.motion.wheelPhysics?.wheels.map(w=>({...w}))??v.motion.aircraft?.wheels.map((w,n)=>({...w,hubHeight:AIRCRAFT.wheels[n]!.y,length:.25-w.compression,omega:0,slip:0,force:0}));p.creature=copyCreature(v.motion.creature);p.unicycle=copyUnicycleState(v.motion.unicycle);p.submersible=copySubmersibleState(v.motion.submersible);p.raft=v.motion.raft?{...v.motion.raft}:undefined;p.jetski=copyJetSkiState(v.motion.jetski);p.atv=copyAtvState(v.motion.atv);p.kayak=v.motion.kayak?{...v.motion.kayak}:undefined;p.tank=v.motion.tank?{...v.motion.tank}:undefined;});
 }
 function blend(out:MotionPose,a:MotionPose,b:MotionPose,alpha:number){out.flyingCreature=b.flyingCreature?copyFlyingCreatureState(b.flyingCreature):undefined;
   if(out.flyingCreature&&a.flyingCreature&&b.flyingCreature){
@@ -84,6 +84,22 @@ export class PresentationState {
     for(const [id,actor] of sim.actors){const current=pose(),previous=pose();readActor(actor,current);copy(previous,current);this.actors.set(id,{previous,current,revision:actor.teleportRevision,vehicleIndex:actor.vehicleIndex,mountedInstanceId:actor.vehicle?.spec.id??null});}
     readVehicles(sim,this.currentVehicles);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));
     this.interpolate(1);
+  }
+  /** Activation cuts only this instance's interpolation, preserving peers and the render clock. */
+  snapEntity(sim:Simulation,id:string):void{
+    const actor=this.actors.get(id);if(actor)copy(actor.previous,actor.current);
+    const index=sim.vehicles.findIndex(v=>v.spec.id===id);if(index>=0){copy(this.previousVehicles[index]!,this.currentVehicles[index]!);copy(this.vehicles[index]!,this.currentVehicles[index]!);}
+  }
+  addVehicle(sim:Simulation):void {
+    const index=sim.vehicles.length-1,current=pose(),previous=pose(),display=pose();
+    this.currentVehicles.push(current);readVehicles(sim,this.currentVehicles,index);copy(previous,current);copy(display,current);
+    this.previousVehicles.push(previous);this.vehicles.push(display);
+  }
+  removeActor(id:string):void{this.actors.delete(id);}
+  removeVehicle(index:number,sim:Simulation,dismounted:readonly string[]):void {
+    this.vehicles.splice(index,1);this.previousVehicles.splice(index,1);this.currentVehicles.splice(index,1);
+    for(const state of this.actors.values())if(state.vehicleIndex>index)state.vehicleIndex--;
+    for(const id of dismounted){const actor=sim.actor(id),current=pose(),previous=pose();readActor(actor,current);copy(previous,current);this.actors.set(id,{current,previous,revision:actor.teleportRevision,vehicleIndex:-1,mountedInstanceId:null});}
   }
   beforeStep(sim:Simulation):void{if(this.hasDiscontinuity(sim))this.snap(sim);this.previousTime=this.currentTime;for(const state of this.actors.values())copy(state.previous,state.current);this.currentVehicles.forEach((p,n)=>copy(this.previousVehicles[n]!,p));}
   afterStep(sim:Simulation):void{if(this.hasDiscontinuity(sim)){this.snap(sim);return;}this.currentTime=sim.time;for(const [id,actor] of sim.actors)readActor(actor,this.actors.get(id)!.current);readVehicles(sim,this.currentVehicles);}

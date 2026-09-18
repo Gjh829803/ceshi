@@ -1,3 +1,4 @@
+import {disposeInOrder} from '../../lifecycle-disposal';
 import {ActorResources} from '../../actor-resources';
 import {FixedBoxColliderFactory,contactColliderVolume} from '../../physics-box';
 import {EnvironmentInteractionProps} from './interaction-props';
@@ -97,6 +98,8 @@ export class EnvironmentQueries {
   private rigs=new Set<HumanoidRig>();
   private actorColliders=new Map<string,{collider:RAPIER.Collider;bodyKey:string;actorId:string}>();
   private actorColliderHandles=new Set<number>();
+  private readonly suspendedEntities=new Set<string>();
+  setEntitySuspended(id:string,suspended:boolean):void{if(suspended)this.suspendedEntities.add(id);else this.suspendedEntities.delete(id);}
   // General floor/spawn queries omit actor proxies. Vehicle motion temporarily
   // includes other actors, using their native rig or authored compound collider.
   private queryExcluded=new Set<number>();
@@ -210,7 +213,14 @@ export class EnvironmentQueries {
     const id=this.colliderId(hit.collider.handle);
     return {id,friction:hit.collider.friction(),distance:hit.timeOfImpact,normal:new Vector3(hit.normal.x,hit.normal.y,hit.normal.z)};
   }
-  dispose(){if(!this.disposed){this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.lifts.clear();this.liftBoxIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.boundaryColliderHandles.clear();this.cameraTransparentBoundaryHandles.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();this.interactions.dispose();this.interactionProps.dispose();this.world.free();this.disposed=true;}}
+  private disposing=false;
+  dispose():void {
+    if(this.disposed||this.disposing)return;this.disposing=true;
+    try{
+      this.rigs.clear();this.vehicleRigs.clear();this.vehicleColliderIds.clear();this.lifts.clear();this.liftBoxIds.clear();this.propBodies.clear();this.propBoxes.clear();this.staticColliders.clear();this.staticColliderIds.clear();this.boundaryColliderHandles.clear();this.cameraTransparentBoundaryHandles.clear();this.actorColliders.clear();this.actorColliderHandles.clear();this.queryExcluded.clear();this.externalCharacterColliders.clear();this.colliderBindings.clear();this.physicsSubsteps.clear();
+      disposeInOrder([()=>this.interactions.dispose(),()=>this.interactionProps.dispose(),()=>this.world.free()]);
+    }finally{this.disposed=true;this.disposing=false;}
+  }
   colliderForId(id:string){this.assertLive();return this.staticColliders.get(id)?.[0]??this.interactionProps.colliderForId(id);}
   private interactionAnchor(boxId:string,point:readonly number[]){
     const collider=this.staticColliders.get(boxId)?.[0];if(!collider?.isEnabled()||collider.parent()?.isEnabled()===false)return null;
@@ -260,7 +270,7 @@ export class EnvironmentQueries {
   withVehicleCollisions<T>(actorId:string,move:()=>T):T {
     const excluded=new Set(this.queryExcluded),colliders:RAPIER.Collider[]=[];
     for(const entry of this.actorColliders.values())if(entry.actorId!==actorId&&!this.vehicleRigs.has(entry.actorId))colliders.push(entry.collider);
-    for(const [id,rig] of this.vehicleRigs)if(id!==actorId)colliders.push(...rig.colliders.filter(c=>c.isEnabled()));
+    for(const [id,rig] of this.vehicleRigs)if(id!==actorId&&rig.body.isEnabled())colliders.push(...rig.colliders.filter(c=>c.isEnabled()));
     for(const collider of colliders)excluded.delete(collider.handle);
     const previous=this.motionFilter,previousColliders=this.motionColliders;
     this.motionFilter=collider=>!excluded.has(collider.handle);this.motionColliders=colliders;
@@ -294,7 +304,7 @@ export class EnvironmentQueries {
     const excluded=new Set(filter.excludedColliderHandles);
     for(const [id,rig] of this.vehicleRigs)if(filter.excludedActorIds?.has(id))for(const collider of rig.colliders)excluded.add(collider.handle);
     for(const entry of this.actorColliders.values())if(filter.excludedActorIds?.has(entry.actorId))excluded.add(entry.collider.handle);
-    return candidates.filter(c=>c.isEnabled()&&!c.isSensor()&&!excluded.has(c.handle));
+    return candidates.filter(c=>c.isEnabled()&&(!this.suspendedEntities.size||(c.parent()?.isEnabled()??true))&&!c.isSensor()&&!excluded.has(c.handle));
   }
   private bodyQueryBounds(pose:BodyPose):Box3{
     validatePose(pose);
@@ -423,6 +433,7 @@ export class EnvironmentQueries {
       : null;
   }
   releaseVehicleRig(id:string){const rig=this.vehicleRigs.get(id);if(!rig)return;for(const collider of rig.colliders){this.queryExcluded.delete(collider.handle);this.vehicleColliderIds.delete(collider.handle);}this.world.removeRigidBody(rig.body);this.vehicleRigs.delete(id);}
+  setVehicleEnabled(id:string,enabled:boolean):void{this.vehicleRigs.get(id)?.body.setEnabled(enabled);}
   retainVehicleRigs(ids:ReadonlySet<string>){for(const id of this.vehicleRigs.keys())if(!ids.has(id))this.releaseVehicleRig(id);}
   vehicleRig(id:string,token:object,position:Vector3,rotation:Quaternion,mass:number,halfWidth:number,halfLength:number,height:number,centerOfMassHeight:number,parts?:readonly {body:QueryBody;rotation?:Quaternion}[],friction=.6,restitution=.08,airframe?:{stops?:readonly {radius:number;center:Vector3}[];boxes:readonly {halfExtents:readonly [number,number,number];offset:readonly [number,number,number]}[];inertia:Vector3;center:Vector3}):VehicleRigidRig {
     this.assertLive();const previous=this.vehicleRigs.get(id);if(previous?.token===token)return previous;if(previous)this.releaseVehicleRig(id);
@@ -475,9 +486,9 @@ export class EnvironmentQueries {
     this.world.timestep=dt/count;
     try{for(let n=0;n<count;n++){
       for(const before of this.physicsSubsteps)before((n+1)/count);
-      for(const rig of this.vehicleRigs.values())rig.beforeStep(dt/count);
+      for(const rig of this.vehicleRigs.values())if(rig.body.isEnabled())rig.beforeStep(dt/count);
       this.world.step();this.completedPhysicsSteps++;
-      for(const rig of this.vehicleRigs.values())rig.afterStep();
+      for(const rig of this.vehicleRigs.values())if(rig.body.isEnabled())rig.afterStep();
     }}finally{this.world.timestep=previousTimestep;}
     this.interactions.advance(dt);this.interactions.syncPhysicalState();
   }

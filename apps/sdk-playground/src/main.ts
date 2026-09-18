@@ -223,14 +223,19 @@ const session = {
   switchMap(id: string) {
     if (id === currentMap.id) return;
     const next = getMap(id),
-      visual = buildWorld(scene, next);
+      visual = buildWorld(scene, next),
+      previousEnvironment = runtime.environment;
     try {
       sdk.configureShadowLight(visual.sun);
       npcLab?.beforeMapChange();
       runtime.switchMap(next);
     } catch (error) {
-      visual.dispose();
-      throw error;
+      // Preparation failures keep the previous map. Cleanup failures after adoption must keep its new visuals.
+      if (runtime.environment === previousEnvironment) {
+        visual.dispose();
+        throw error;
+      }
+      console.warn('WORLD_MAP_CLEANUP_FAILED', error);
     }
     world.dispose();
     displayPreview.clearMaterials();
@@ -298,9 +303,9 @@ function displayColliderId(handle:number) {
 }
 function readDisplayTargets():DisplayInteractionTarget[] {
   const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.environment)];
-  sim.vehicles.forEach((vehicle,n)=>{
+  sim.vehicles.forEach(vehicle=>{
     if(!sim.available(vehicle))return;
-    const root=visuals[n]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
+    const root=visuals[SPECS.findIndex(spec=>spec.id===vehicle.spec.id)]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
     targets.push({id:'vehicle-seat:'+vehicle.spec.id,ownerIds:[vehicle.spec.id],kind:'seat',slotId:'seat',state:'available',
       position:new T.Vector3(...vehicle.spec.seat).applyQuaternion(rotation).add(root.getWorldPosition(new T.Vector3()))});
   });
@@ -310,7 +315,7 @@ function readDisplayCatalog() {
   const colliderIds=new Set<string>();sim.controlledActor.controller?.world.forEachCollider(c=>{if(c.isEnabled())colliderIds.add(displayColliderId(c.handle));});
   return buildDisplayCatalog({scene,map:session.map,environment:world.root,person:character.root,
     actors: npcLab?.displayActors() ?? [],
-    vehicles:visuals.map((visual,n)=>({id:SPECS[n]!.id,name:SPECS[n]!.name,object:visual.root,available:sim.available(sim.vehicles[n]!),type:(SPECS[n]!.mode==='mount'||SPECS[n]!.mode==='dragon'?'creature':'vehicle') as DisplayType})),
+    vehicles:visuals.flatMap((visual,n)=>{const spec=SPECS[n]!,state=sim.vehicles.find(v=>v.spec.id===spec.id);return state?[{id:spec.id,name:spec.name,object:visual.root,available:sim.available(state),type:(spec.mode==='mount'||spec.mode==='dragon'?'creature':'vehicle') as DisplayType}]:[];}),
     ...(sim.controlledActor.vehicle?{currentVehicleId:sim.controlledActor.vehicle.spec.id}:{}),colliderIds});
 }
 let displayCatalog=readDisplayCatalog();
@@ -338,7 +343,7 @@ const displayPreview = createDisplayPreview({
   inputSurface:sdkPresentation.inputSurface,
   focusGameplay:()=>{if(ready&&!paused&&!panelOpen)sdkPresentation.focus();},
   scene, camera, source: renderer, mount: canvas.parentElement!,
-  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[sim.controlledActor.vehicleIndex]!.root]:[controlledCharacter().root]}),
+  context: () => ({...displayCatalog.context,subjects:sim.controlledActor.vehicleIndex>=0?[controlledCharacter().root,visuals[SPECS.findIndex(spec=>spec.id===sim.controlledActor.vehicle?.spec.id)]!.root]:[controlledCharacter().root]}),
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
     targets:displaySettings.anchors&&displaySettings.helperOnly==='none'?readDisplayTargets():[],colliderId:displayColliderId,
     colliderDistance:(handle,centers)=>{const c=sim.controlledActor.controller?.world.getCollider(handle);if(!c)return Infinity;
@@ -431,7 +436,8 @@ function selectAsset(id: string) {
     return;
   }
   const v = sim.vehicles.find((v) => v.spec.id === id);
-  if (v && !sim.available(v)) {
+  if(!v){toast("该载具实例已销毁。");return;}
+  if (!sim.available(v)) {
     toast("这个载具不适配当前地图，请在测试场景中切换到综合园区。");
     return;
   }
@@ -769,7 +775,7 @@ const workbench = mountWorkbench(document.body, {
     相机避障: cameraCollisionLimited(),
     视野度: +camera.fov.toFixed(1),
     动画: sim.controlledActor.player.animation,
-    生物模型: visuals[sim.controlledActor.vehicleIndex]?.creature?.sourceStatus,
+    生物模型: visuals[SPECS.findIndex(spec=>spec.id===sim.controlledActor.vehicle?.spec.id)]?.creature?.sourceStatus,
     步态: sim.controlledActor.vehicle?.motion.creature?.gait,
     骑乘姿势:
       sim.controlledActor.vehicle?.spec.characterPose === "ride"
@@ -1267,7 +1273,7 @@ function updateUI(force = false) {
             ? "E 进入攀爬"
             : null) ??
         (nearest >= 0
-          ? `<kbd>F</kbd>进入 ${SPECS[nearest]!.name}`
+          ? `<kbd>F</kbd>进入 ${sim.vehicles[nearest]!.spec.name}`
           : (traversalPrompt ?? "")),
     );
   if (!v) {
@@ -1337,8 +1343,8 @@ function updateUI(force = false) {
 
 function updateCreatureVisual(n: number, dt: number) {
   const visual = visuals[n]!,
-    state = sim.vehicles[n]!,
-    c = state.motion.creature;
+    state = sim.vehicles.find(v=>v.spec.id===SPECS[n]!.id);
+  if(!state)return;const c = state.motion.creature;
   if (visual.root.visible && visual.creature)
     visual.creature.update(
       {
@@ -1360,22 +1366,24 @@ let movingVisualRoot:T.Group|undefined;
 let movingVisuals:{id:string;mesh:T.Object3D}[]=[];
 function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   visuals.forEach((vis, n) => {
-    const state = sim.vehicles[n]!;
+    const index=sim.vehicles.findIndex(v=>v.spec.id===SPECS[n]!.id);if(index<0)return;
+    const state = sim.vehicles[index]!;
+    if(!sim.isActive(state.spec.id))return;
     if(state.motion.family==='space')updateSpaceExhaust(vis.engine,state.motion.appliedForceNewtonsXYZ,state.rotation,state.spec.spaceFlight!.thrustNewtonsXYZ[2]);
     updateCreatureVisual(n, dt);
-    updateVehicleWheels(vis, sample?.vehicles[n]??state, {
+    updateVehicleWheels(vis, sample?.vehicles[index]??state, {
       grounded: state.grounded && !state.submerged,
       dt,
       revision: sim.controlledActor.teleportRevision,
-      active: n === sim.controlledActor.vehicleIndex,
+      active: index === sim.controlledActor.vehicleIndex,
     });
-    if (n === sim.controlledActor.vehicleIndex)
-      vis.aircraftCockpit?.update({...state,aircraft:state.motion.aircraft},sim.time);
-    vis.soaringShell?.update({...state,aircraft:state.motion.aircraft},n===sim.controlledActor.vehicleIndex?character.root:undefined);
-    if(state.motion.aircraft)vis.aircraftShell?.update(sample?.vehicles[n]?.aircraft??state.motion.aircraft);
-    if(n===sim.controlledActor.vehicleIndex&&!state.motion.aircraft)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
+    if (index === sim.controlledActor.vehicleIndex)
+      vis.aircraftCockpit?.update({...state,aircraft:state.motion.aircraft},sim.entityTime(state.spec.id));
+    vis.soaringShell?.update({...state,aircraft:state.motion.aircraft},index===sim.controlledActor.vehicleIndex?character.root:undefined);
+    if(state.motion.aircraft)vis.aircraftShell?.update(sample?.vehicles[index]?.aircraft??state.motion.aircraft);
+    if(index===sim.controlledActor.vehicleIndex&&!state.motion.aircraft)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
     vis.label.visible =
-      n !== sim.controlledActor.vehicleIndex &&
+      index !== sim.controlledActor.vehicleIndex &&
       camera.position.distanceToSquared(state.position) < 8100;
   });
   const held = [character, ...(npcLab?.characters() ?? [])].flatMap(actor => actor.carriedAttachment ? [actor.carriedAttachment] : []);
