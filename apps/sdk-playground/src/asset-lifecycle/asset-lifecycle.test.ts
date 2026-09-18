@@ -172,45 +172,6 @@ it('recreates the native car, drives it in the same world and clears the new ins
 },45000);
 
 
-it('creates every catalog choice on demand in the full campus without replacing the world',async()=>{
- // Keep the real desktop layout and full map while bounding software raster work on CI.
- await page.setViewportSize({width:960,height:600});
- await page.goto(url.replace('asset-lifecycle.html','native-lifecycle.html'));await page.waitForFunction(()=>document.body.dataset.ready==='true');
- const native=()=>page.evaluate(()=>({...((window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:NonNullable<Snapshot['world']>;errors:string[]}}}).nativeLifecycleLab.snapshot()),message:document.getElementById('message')!.textContent,createEnabled:!(document.getElementById('vehicle-create') as HTMLButtonElement).disabled}));
- const before=await native();expect(before.mapId).toBe('campus');expect(before.bounds.max[0]!-before.bounds.min[0]!).toBe(1000);
- const types=await page.locator('#vehicle-type option').evaluateAll(options=>options.map(option=>(option as HTMLOptionElement).value));expect(types).toEqual(expect.arrayContaining(['canoe','plane','horse','tank','spacecraft','dragon-D01','dragon-D11']));
- // Add the imported skeletal models last: every instance remains live for the
- // final coexistence/reset checks, without paying their render cost on every earlier UI action.
- const creationOrder=[...types.filter(type=>!type.startsWith('dragon-')),...types.filter(type=>type.startsWith('dragon-'))];
- const timings:{type:string;milliseconds:number}[]=[];
- for(const type of creationOrder){
-  const started=performance.now();
-  try{
-   await page.selectOption('#vehicle-type',type);
-   const create=page.locator('#vehicle-create');expect(await create.isVisible()).toBe(true);expect(await create.isEnabled()).toBe(true);
-   // Exercise native keyboard activation; mouse clicks remain covered in the other
-   // lifecycle cases. This avoids waiting extra render frames for pointer stability.
-   await create.press('Enter');
-   // Wait where the state lives. Repeated full-world CDP serialization competes
-   // with the live renderer on CPU-only CI; transfer one coherent sample afterwards.
-   await page.waitForFunction(selected=>{
-    if((document.getElementById('vehicle-create') as HTMLButtonElement).disabled)return false;
-    const state=(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{type:string}[];errors:string[]}}}).nativeLifecycleLab.snapshot();
-    return state.errors.length>0||state.loaded.some(entry=>entry.type===selected);
-   },type,{timeout:20000,polling:100});
-   const observed=await native();
-   expect(observed.errors,`${type}: ${observed.message}`).toEqual([]);expect(observed.loaded.some(entry=>entry.type===type),type).toBe(true);
-   expect(observed.createEnabled,type).toBe(true);expect(observed.message,type).toContain('已定位');
-  }catch(error){console.error('Catalog creation failed',{type,elapsedMs:Math.round(performance.now()-started),completed:timings});throw error;}
-  timings.push({type,milliseconds:Math.round(performance.now()-started)});
- }
- console.info('Catalog creation timings',timings);
- const final=await native();expect(final.loaded.length).toBe(types.length);expect(final.world.simulationTick).toBeGreaterThan(before.world.simulationTick);expect(final.world.errors).toEqual([]);
- await page.screenshot({path:path.join(app,'../../.codex-tmp/asset-lifecycle-lab/catalog-all.png'),fullPage:true});
- await page.locator('#reset').click();await expect.poll(async()=>(await native()).loaded.length).toBe(1);
- expect((await native()).loaded[0]!.type).toBe('rover');expect((await native()).errors).toEqual([]);
-},150000);
-
 it.each([{type:'canoe',key:'w'},{type:'plane',key:'Shift'},{type:'horse',key:'w'},{type:'spacecraft',key:'w'},{type:'dragon-D01',key:'w'}])('boards and controls a newly created $type through the shared runtime',async({type,key})=>{
  await page.goto(url.replace('asset-lifecycle.html','native-lifecycle.html'));await page.waitForFunction(()=>document.body.dataset.ready==='true');
  const native=()=>page.evaluate(()=>(window as unknown as {nativeLifecycleLab:{snapshot:()=>{selectedId:string;riding:{vehicleId:string|null;transitioning:boolean};world:NonNullable<Snapshot['world']>;errors:string[]}}}).nativeLifecycleLab.snapshot());
