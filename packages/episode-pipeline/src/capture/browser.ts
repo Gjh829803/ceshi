@@ -134,7 +134,7 @@ export async function openEpisodeBrowser(options: EpisodeBrowserOptions): Promis
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(`console.error: ${message.text().slice(0, 2000)}`); });
-    await page.goto(`${origin}/index.html`, { waitUntil: 'domcontentloaded', timeout: options.timeoutMilliseconds ?? 60_000 });
+    await page.goto(`${origin}/index.html?ui=off`, { waitUntil: 'domcontentloaded', timeout: options.timeoutMilliseconds ?? 60_000 });
     await page.waitForFunction(() => (window as any).__WORLDKIT_EVAL__?.ready, undefined, { timeout: options.timeoutMilliseconds ?? 60_000 });
     await page.evaluate(async () => {
       const observer = (window as any).__WORLDKIT_EVAL__;

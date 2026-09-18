@@ -356,9 +356,11 @@ export interface SourceFrame extends SourceFrameKey {
  readonly simulationTick:number;readonly worldRevision:number;
  readonly capturedAtMilliseconds:number;readonly widthPixels:number;readonly heightPixels:number;
 }
-export interface ModelInputFrame {
+export interface ModelInputFrame<T extends JsonValue = JsonValue> {
  /** Clean world pixels only. The receiver owns and must close this bitmap. */
  readonly image:ImageBitmap;readonly source:SourceFrame;
+ /** JSON frozen synchronously with the pixels; never sampled after bitmap decoding. */
+ readonly metadata?:T;
 }
 export interface PresentationOptions {
  /** Must be the source canvas's parent. Give it an explicit size; camera/render resolution stay owned by the world. */
@@ -392,9 +394,24 @@ export interface PresentationUI {
  /** Automatically mounts; hidden behind camera, outside frame, or when model frame identity is unknown. */
  anchor(anchor:UIAnchor):()=>void;
 }
+/** Input intent queued for the existing live fixed clock. Pointer units match camera intent. */
+export interface RemoteInputState {
+ readonly sequence:number;
+ readonly heldKeys:readonly string[];
+ readonly keyEdges:readonly {readonly code:string;readonly kind:'down'|'up'}[];
+ readonly yawDeltaRadians?:number;
+ readonly pitchDeltaRadians?:number;
+ readonly distanceDeltaMeters?:number;
+}
+export interface RemoteInputLease {
+ /** False for duplicate/old packets. Admission never advances simulation. */
+ submit(input:RemoteInputState):boolean;
+ clear():void;
+ dispose():void;
+}
 export interface ModelInput {
  /** Renders without advancing simulation, freezes pure world pixels and local UI samples. */
- captureFrame():Promise<ModelInputFrame>;
+ captureFrame<T extends JsonValue = JsonValue>(options?:{readonly readMetadata:(source:SourceFrame)=>T}):Promise<ModelInputFrame<T>>;
  /** Clean canvas MediaStream. Does not promise per-frame correspondence. Close stops SDK-owned tracks. */
  createStream(options?:{readonly framesPerSecond?:number}):{readonly stream:MediaStream;close():void};
 }
@@ -414,6 +431,8 @@ export interface WorldPresentation {
  dispose():void;
 }
 export interface World {
+ /** Resize the renderer and camera projection without resetting or advancing the world. Dimensions are CSS pixels; renderer pixel ratio remains unchanged. */
+ resize(width:number,height:number):void;
  readonly shadowSettings:Readonly<ShadowSettings>;
  /** Apply this world's settings once to an authored directional light. Does not move or own it. */
  configureShadowLight(light:THREE.DirectionalLight):void;
@@ -429,6 +448,8 @@ export interface World {
  setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void;
  /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
  createPresentation(options?:PresentationOptions):WorldPresentation;
+ /** Exclusive remote input; stop/reset/dispose revoke the lease. Incompatible with Episode. */
+ acquireRemoteInput():RemoteInputLease;
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;

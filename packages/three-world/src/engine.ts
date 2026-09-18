@@ -1,3 +1,4 @@
+import { QueuedRemoteInput } from './remote-input.js';
 import type {RuntimeSample} from "./contracts";
 import { CameraSubjectVisibility } from "./camera/subject-visibility";
 import { cameraControlForward } from "./camera/control-basis";
@@ -102,6 +103,14 @@ export class WorldEngine {
   }
   private driveProvider: ((id:string,input:WorldInput,direction:Vec3,dt:number)=>{drive:CharacterDrive;facing?:Vec3;actionId?:string}|undefined)|undefined;
   private pointerInput: CameraPointerInput = {};
+  private remoteInput:QueuedRemoteInput|undefined;
+  get hasRemoteInput():boolean{return !!this.remoteInput;}
+  acquireRemoteInput():import('./contracts.js').RemoteInputLease {
+    this.alive();if(this.remoteInput)throw new Error('WORLD_REMOTE_INPUT_ALREADY_OWNED');
+    this.clearInput();
+    const lease=new QueuedRemoteInput(this.keyboard,input=>{this.pointerInput={activate:true,yawDeltaRadians:input.yawDeltaRadians,pitchDeltaRadians:input.pitchDeltaRadians,distanceDeltaMeters:input.distanceDeltaMeters};},()=>{this.remoteInput=undefined;this.clearInput();});
+    this.remoteInput=lease;return lease;
+  }
   private readonly jumped = new Set<string>();
   private readonly locomotionAnimations = new Map<string, LocomotionAnimation>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
@@ -260,7 +269,7 @@ export class WorldEngine {
     return options.object;
   }
   setControlledEntity(id: string): void { if (this.entity(id).character === undefined) throw new Error('WORLD_CONTROL_REQUIRES_CHARACTER'); if(this.humanoid)humanoidHost(this.humanoid).setControlledActor(this.humanoid.hasActor(id)?id:undefined);this.controlled = id;this.updateKeyboardOwner();this.keyboard.clear();this.clearPendingInput(); }
-  clearInput():void{this.inputRouter.clear();this.clearPendingInput();}
+  clearInput():void{this.remoteInput?.clear();this.inputRouter.clear(true);this.clearPendingInput();}
   private clearPendingInput():void{this.pendingInputEdges={interact:false,jump:false,cameraToggle:false,humanoidJump:false,actions:{}};this.previousJump=false;this.previousInteract=false;this.pointerInput={};}
   private updateKeyboardOwner():void{this.keyboard.setHumanoidContext(this.controlledHumanoid?()=>{const actor=this.controlledHumanoid?.simulation.controlledActor,v=actor?.vehicle;return v?{mode:v.spec.mode,aircraftSubtype:v.spec.aircraftSubtype,instanceId:v.spec.id,groundLocomotion:actor.wingsuitGroundControl,canopyDeployed:(v.motion.aircraft?.canopy??0)>0}:undefined;}:undefined);}
   registerPrototype(id: string, factory: () => EntityOptions | CharacterEntityOptions): void { requireId(id); if (this.prototypes.has(id)) throw new Error('WORLD_PROTOTYPE_DUPLICATE'); this.prototypes.set(id, factory); }
@@ -711,6 +720,7 @@ export class WorldEngine {
     }
     let steps = 0;
     while (this.accumulatorSeconds + 1e-10 >= this.fixedTimeStepSeconds && steps++ < 15) {
+      if(input===undefined)this.remoteInput?.drain();
       let sampled = input === undefined ? this.keyboard.sample() : steps === 1 ? input : { ...input, ...(input.humanoid?{humanoid:{...input.humanoid,jump:false,actions:{}}}:{}),...(input.jumpPressed === undefined ? {} : { jumpPressed: false }), ...(input.interactPressed === undefined ? {} : { interactPressed: false }), ...(input.cameraTogglePressed === undefined ? {} : { cameraTogglePressed: false }) };
       if(steps===1){
         const pending=this.pendingInputEdges;
@@ -753,7 +763,7 @@ export class WorldEngine {
     };
     this.frameId = requestAnimationFrame(frame);
   }
-  stop(): void { this.running = false; this.clearInput(); this.frameGeneration += 1; this.keyboard.enabled = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
+  stop(): void { this.remoteInput?.dispose();this.running = false; this.clearInput(); this.frameGeneration += 1; this.keyboard.enabled = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
   render(alpha=1): void {
     if(this.disposed)return;
     if(!Number.isFinite(alpha)||alpha<0||alpha>1)throw new Error('WORLD_PRESENTATION_ALPHA_INVALID');

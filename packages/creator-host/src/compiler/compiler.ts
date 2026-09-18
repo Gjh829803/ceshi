@@ -1,3 +1,4 @@
+import {compileWorldUi,worldUiCompilerIdentity} from './world-ui.js';
 import { build, type Plugin } from 'esbuild';
 import {readWorkspaceRuntime,materializeWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 import Ajv from 'ajv';
@@ -158,7 +159,7 @@ export class ThreeCompiler {
       this.runtimes.set(cacheIdentity, { files: manifest.files, hash: manifest.runtimeHash }); return { root, hash: manifest.runtimeHash, hit: true, cacheIdentity };
     }
     await rm(root, { recursive: true, force: true }); await mkdir(root, { recursive: true });
-    const base = { tsconfigRaw: {compilerOptions: {target:'ES2022',useDefineForClassFields:true}}, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
+    const base = { absWorkingDir: REPOSITORY_ROOT, tsconfigRaw: {compilerOptions: {target:'ES2022',useDefineForClassFields:true}}, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
     const threeEsmEntry = path.join(path.dirname(require.resolve('three')), 'three.module.js');
     await build({ ...base, entryPoints: [threeEsmEntry], outfile: path.join(root, 'three.js') });
     await build({ ...base, entryPoints: [path.join(REPOSITORY_ROOT, 'packages/creator-host/src/browser/bridge.ts')], external: ['three'], outfile: path.join(root, 'bridge.js') });
@@ -193,7 +194,7 @@ export class ThreeCompiler {
       for(const [name,bytes]of workspaceRuntime.files)if(!sourceFiles.get(`sdk/${name}`)?.equals(bytes))throw new Error('THREE_RUNTIME_SOURCE_CHANGED');
     }
     const runtime = await this.prepareRuntime({workspaceRuntime:workspaceRuntime??null});
-    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256 }));
+    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256, ...(project.ui?{uiCompilerIdentity:await worldUiCompilerIdentity()}: {}) }));
     const worldBuildHash = sha256(JSON.stringify({ sourceHash, runtimeHash: runtime.hash, profile: this.profile }));
     const previous = this.candidates.get(worldBuildHash);
     if (previous) { await verifyFiles(previous.root, previous.files); return { ...previous, candidateCacheHit: true, runtimeCacheHit: true }; }
@@ -209,6 +210,7 @@ export class ThreeCompiler {
     }
     await writeFile(path.join(playableRoot, 'asset-definitions.json'), JSON.stringify({ schemaVersion: 1, assets: selected.map(publicAsset) }, null, 2));
     await writeFile(path.join(playableRoot, 'asset-policy.json'), JSON.stringify(this.assetPolicy(), null, 2));
+    if(project.ui){const ui=await compileWorldUi(sourceRoot,path.join(playableRoot,'world-ui'),(project as Project).ui!);await writeFile(path.join(playableRoot,'world-ui-identity.json'),JSON.stringify({uiBundleHash:ui.hash,worldBuildHash}));}
     const imports: Record<string, string> = { three: './runtime/three.js' };
     if (this.profile === 'three-sdk') imports['@worldkit/three'] = './runtime/worldkit-three.js';
     if(this.debugTools)imports['@worldkit/three/debug']='./runtime/worldkit-debug.js';
@@ -241,7 +243,7 @@ export class ThreeCompiler {
       const entry = src ? path.resolve(sourceRoot, src) : path.join(sourceRoot, `inline-${entryCount}.ts`);
       if (!isWithin(sourceRoot, entry)) throw new Error('THREE_ENTRY_PATH_ESCAPE');
       const out = `compiled/entry-${entryCount++}.js`;
-      const common = { bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const, '.woff': 'file' as const, '.woff2': 'file' as const, '.ttf': 'file' as const } };
+      const common = { absWorkingDir: sourceRoot, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const, '.woff': 'file' as const, '.woff2': 'file' as const, '.ttf': 'file' as const } };
       if (src) await build({ ...common, entryPoints: [entry] }); else await build({ ...common, stdin: { contents: body, loader: 'ts', resolveDir: sourceRoot, sourcefile: path.basename(entry) } });
       const css = out.replace(/\.js$/, '.css'); let cssTag = '';
       try { await lstat(path.join(playableRoot, css)); cssTag = `<link rel="stylesheet" href="./${css}">`; } catch (error: any) { if (error.code !== 'ENOENT') throw error; }
@@ -253,13 +255,14 @@ export class ThreeCompiler {
       const cache = path.join(this.outputRoot, 'addons', runtime.cacheIdentity, filename); await mkdir(path.dirname(cache), { recursive: true });
       const expected = this.addons.get(cache);
       if (expected) { if (sha256(await readFile(cache)) !== expected) throw new Error('THREE_ADDON_CACHE_CHANGED'); } else {
-        await build({ entryPoints: [require.resolve(specifier)], outfile: cache, bundle: true, platform: 'browser', format: 'esm', external: ['three'], target: 'es2022', logLevel: 'silent' });
+        await build({ absWorkingDir: REPOSITORY_ROOT, entryPoints: [require.resolve(specifier)], outfile: cache, bundle: true, platform: 'browser', format: 'esm', external: ['three'], target: 'es2022', logLevel: 'silent' });
         this.addons.set(cache, sha256(await readFile(cache)));
       }
       await copyFile(cache, path.join(playableRoot, 'runtime', filename)); imports[specifier] = `./runtime/${filename}`;
     }
     const debugInjection=this.debugTools?`<script id="worldkit-debug-identity" type="application/json">${JSON.stringify({sourceHash,runtimeHash:runtime.hash,worldBuildHash}).replace(/</g,'\\u003c')}</script><script type="module" src="./runtime/debug-tools.js"></script>`:'';
-    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>${debugInjection}`;
+    const uiInjection=project.ui?`<script type="module">if(new URLSearchParams(location.search).get('ui')!=='off'){import('./world-ui/local-preview.js').then(m=>m.startLocalPreview(new URL('./world-ui/',document.baseURI))).catch(error=>console.error('UI_PREVIEW_START_FAILED',error));}</script>`:'';
+    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>${debugInjection}${uiInjection}`;
     html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, value => value + injected) : injected + html;
     await writeFile(path.join(playableRoot, 'index.html'), html);
     const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, runtimeSourceHash:workspaceRuntime?.sourceHash??null, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };

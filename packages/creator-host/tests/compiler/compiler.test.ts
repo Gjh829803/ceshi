@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 const audit = vi.hoisted(() => ({ forbiddenRoots: [] as string[], calls: [] as { operation: string; path: string }[] }));
 vi.mock('node:fs/promises', async importOriginal => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -111,3 +113,14 @@ describe('Host-owned task root boundary', () => {
     expect(audit.calls.some(call => call.path === scratch || call.path.startsWith(scratch + '/'))).toBe(false);
   });
 });
+
+
+it('produces identical sealed files when the CLI starts from different workspace directories', async () => {
+  const root=await fixture(),repo=path.resolve('.');
+  await writeFile(path.join(root,'main.ts'),"import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js'; console.log(mergeGeometries); document.title='stable';");
+  const compilerPath=path.join(repo,'packages/creator-host/src/compiler/compiler.ts');
+  const program=`import {ThreeCompiler} from ${JSON.stringify(compilerPath)}; void (async()=>{const c=await new ThreeCompiler(${JSON.stringify(root)},'three-raw').prepare();console.log(JSON.stringify({sourceHash:c.sourceHash,runtimeHash:c.runtimeHash,worldBuildHash:c.worldBuildHash,files:c.files}));})()`;
+  const run=async(cwd:string)=>JSON.parse((await promisify(execFile)('pnpm',['exec','tsx','-e',program],{cwd,timeout:30000,maxBuffer:1024*1024})).stdout);
+  const fromRoot=await run(repo),fromPackage=await run(path.join(repo,'packages/creator-host'));
+  expect(fromPackage).toEqual(fromRoot);
+},60000);

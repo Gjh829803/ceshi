@@ -13,7 +13,7 @@ export async function readExampleFiles(root:string, topic:ExampleTopic, selected
     if(stat.isSymbolicLink())throw new Error('THREE_EXAMPLE_SYMLINK');
     if(stat.isDirectory())await walk(file);else if(stat.isFile()){
       const bytes=await readFile(file);entries.push({path:path.relative(root,file).split(path.sep).join('/'),byteLength:bytes.length,
-        sha256:createHash('sha256').update(bytes).digest('hex'),readable:/\.(?:ts|json|html|css|md|txt)$/.test(name)});
+        sha256:createHash('sha256').update(bytes).digest('hex'),readable:/\.(?:tsx?|json|html|css|md|txt)$/.test(name)});
     }
   }}
   await walk(root);

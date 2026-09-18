@@ -9,10 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-export const CREATOR_RUNTIME_PACKAGES = ['packages/three-world', 'packages/camera-collision', 'packages/creator-host', 'packages/preset-content', 'packages/browser-capture'];
+export const CREATOR_RUNTIME_PACKAGES = ['packages/three-world', 'packages/camera-collision', 'packages/creator-host', 'packages/preset-content', 'packages/browser-capture', 'packages/world-ui'];
+// The UI package declares shared browser runtimes as peers. Its local dev pins
+// must become runtime dependencies in the standalone Creator compiler capsule.
+const RUNTIME_PEERS = {'packages/world-ui':['react','react-dom']};
 const SOURCE_TREES = [...CREATOR_RUNTIME_PACKAGES, 'assets/three-creator/catalog'];
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
-const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt','.woff','.woff2','.ttf']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt','.woff','.woff2','.ttf']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const jsonBytes = value => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const writeJson = (file, value) => { mkdirSync(path.dirname(file), { recursive: true }); writeFileSync(file, jsonBytes(value)); };
@@ -55,7 +58,14 @@ export function projectLock(original, rootManifest) {
     assert(empty || importer, `Missing workspace importer: ${workspace}`);
     // Test-only edges must not bring Episode, Playground or their dependencies
     // into the Creator production runtime.
-    const production = (importer ?? '').replace(/^    devDependencies:\n[\s\S]*?(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m, '').trimEnd();
+    let production = (importer ?? '').replace(/^    devDependencies:\n[\s\S]*?(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m, '').trimEnd();
+    for(const name of RUNTIME_PEERS[workspace]??[]){
+      const dev=/^    devDependencies:\n([\s\S]*?)(?=^    [^ \n][^\n]*:\n|(?![\s\S]))/m.exec(importer??'')?.[1]??'';
+      const row=new RegExp(`^      ${name}:\\n[\\s\\S]*?(?=^      [^ \\n][^\\n]*:\\n|(?![\\s\\S]))`,'m').exec(dev)?.[0];
+      assert(row,`Missing runtime peer lock: ${workspace}.${name}`);
+      assert(production.includes('    dependencies:\n'),`Missing runtime dependencies: ${workspace}`);
+      production=production.replace('    dependencies:\n','    dependencies:\n'+row.trimEnd()+'\n');
+    }
     projected += production ? `\n  ${workspace}:\n${production}\n` : `\n  ${workspace}: {}\n`;
   }
   return original.slice(0, start) + '\nimporters:\n\n' + projected + original.slice(end);
@@ -128,6 +138,10 @@ export function stageContext(repositoryRoot, outputRoot) {
   for (const relative of SOURCE_TREES) tree(relative);
   for (const workspace of CREATOR_RUNTIME_PACKAGES) {
     const manifest = JSON.parse(readFileSync(path.join(repositoryRoot, workspace, 'package.json')));
+    for(const name of RUNTIME_PEERS[workspace]??[]){
+      assert(manifest.peerDependencies?.[name]&&manifest.devDependencies?.[name],`Missing runtime peer pin: ${workspace}.${name}`);
+      manifest.dependencies[name]=manifest.devDependencies[name];
+    }
     delete manifest.devDependencies;
     // Runtime package manifests and lock projection have the same dependency closure.
     put(`${workspace}/package.json`, jsonBytes(manifest), true);

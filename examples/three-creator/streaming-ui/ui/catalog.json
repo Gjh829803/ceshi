@@ -1,0 +1,8 @@
+{
+  "schemaVersion":1,"catalogId":"stream-demo",
+  "components":{
+    "HealthBar":{"description":"带同步掉血动画的血条","propsSchema":{"type":"object","additionalProperties":false,"required":["value","max"],"properties":{"value":{"type":"number","minimum":0},"max":{"type":"number","exclusiveMinimum":0}}},"bindableProps":["value","max"],"animatableProps":{"value":{"presentationProperty":"displayValue","fallbackProp":"value","interpolation":"number"}},"slots":[],"events":[]},
+    "Controls":{"description":"世界操作按钮与说明","propsSchema":{"type":"object","additionalProperties":false,"properties":{}},"bindableProps":[],"animatableProps":{},"slots":[],"events":["damage","heal"]}
+  },
+  "actions":{"damage":{"paramsSchema":{"type":"object","properties":{},"additionalProperties":false}},"heal":{"paramsSchema":{"type":"object","properties":{},"additionalProperties":false}}}
+}

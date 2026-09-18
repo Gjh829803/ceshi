@@ -70,6 +70,19 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
   try {
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
+    const stagedPackages=new Map(CREATOR_RUNTIME_PACKAGES.map(directory=>{
+      const manifest=JSON.parse(readFileSync(path.join(sourceRoot,directory,'package.json'),'utf8'));return [manifest.name,manifest];
+    }));
+    for(const manifest of stagedPackages.values())for(const [name,version] of Object.entries(manifest.dependencies??{})){
+      if(version.startsWith('workspace:'))assert(stagedPackages.has(name),`Missing production workspace dependency: ${manifest.name} -> ${name}`);
+    }
+    for(const relative of ['packages/world-ui/src/react.tsx','packages/world-ui/src/schema.ts','packages/creator-host/docs/agent/ui.md','examples/three-creator/streaming-ui/ui/components.tsx','examples/three-creator/streaming-ui/ui/definition.json']){
+      assert.deepEqual(readFileSync(path.join(sourceRoot,relative)),readFileSync(path.join(repositoryRoot,relative)));
+    }
+    assert.equal(stagedPackages.get('@worldkit/world-ui').dependencies.react,JSON.parse(readFileSync(path.join(repositoryRoot,'packages/world-ui/package.json'))).devDependencies.react);
+    assert(!stagedPackages.get('@worldkit/world-ui').devDependencies);
+    assert(!existsSync(path.join(sourceRoot,'apps/stream-web')), 'Development console is not a Creator production dependency');
+
     const nativeBuild = JSON.parse(readFileSync(path.join(repositoryRoot, 'vendor/rapier-query-refresh/build.json'), 'utf8'));
     const nativeArchive = readFileSync(path.join(sourceRoot, 'vendor/rapier-query-refresh', nativeBuild.archive));
     assert.equal(sha256(nativeArchive), `sha256:${nativeBuild.sha256}`, 'Cloud install must include the current SDK native archive');

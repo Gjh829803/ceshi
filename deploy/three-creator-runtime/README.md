@@ -26,7 +26,8 @@ timeout; Docker dependency/build phases have fifteen/twenty-minute timeouts.
 
 ## Closed build context
 
-Only the Three package, Three Creator tools, browser bridge and the catalog's
+Only the Three package, Three Creator tools, their World UI compiler/runtime dependency,
+browser bridge and the catalog's
 original SHA-verified GLB files enter the source tree. Native/Babylon workspace
 packages and host `node_modules` never enter it. The root manifest contains only
 the direct dependencies consumed by these tools. The pnpm 9 lock importer
@@ -69,3 +70,11 @@ plain-hex `manifestSha256` and `runtimeHash`. Per-profile MCP launchers must set
 environment values are absent during prebuild. The compiler doctor then uses
 the pinned prebuild for the very first author compilation, checks a second
 cache hit, and includes Source101 asset selection in both profiles.
+
+Streaming UI source closure includes `.tsx`, the shared `world-ui` package and the
+registered streaming example referenced by Agent guidance. The standalone capsule
+promotes the UI package's pinned React/React DOM development providers to runtime
+dependencies so its peer contract survives removal of test-only dependencies.
+The doctor resolves these packages and, in compile mode, compiles the streaming
+example and verifies its UI module hash and styles. The stream debug console and
+stream-serving deployment are separate from the Creator authoring capsule.

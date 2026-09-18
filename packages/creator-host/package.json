@@ -10,7 +10,8 @@
     "./compiler": "./src/compiler/compiler.ts",
     "./mcp": "./src/cli/mcp.ts",
     "./tools": "./src/tools/tools.ts",
-    "./workspace-runtime": "./src/compiler/workspace-runtime.ts"
+    "./workspace-runtime": "./src/compiler/workspace-runtime.ts",
+    "./world-ui": "./src/compiler/world-ui.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -22,7 +23,9 @@
     "playwright": "^1.62.1",
     "sharp": "0.35.4",
     "three": "0.185.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@worldkit/world-ui": "workspace:*",
+    "json-schema-to-typescript": "16.0.0"
   },
   "devDependencies": {
     "@worldkit/episode-pipeline": "workspace:*",

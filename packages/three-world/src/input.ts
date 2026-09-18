@@ -43,20 +43,21 @@ export class WorldKeyboard {
   private abort: AbortController | undefined;
   private admitEvent: ((event: KeyboardEvent) => boolean) | undefined;
   enabled = false;
+  remoteMode = false;
   readonly transcript: { type: 'keydown' | 'keyup' | 'blur'; code: string; repeat: boolean; simulationTick: number }[] = [];
   constructor(private readonly getTick: () => number, private readonly reset: () => void) {}
   attach(target: Window): void {
     this.detach(); this.abort = new AbortController();
     const options = { signal: this.abort.signal };
     target.addEventListener('keydown', event => {
-      if (!this.enabled || hasUIControl(event) || (this.admitEvent && !this.admitEvent(event))) return;
+      if (this.remoteMode || !this.enabled || hasUIControl(event) || (this.admitEvent && !this.admitEvent(event))) return;
       if (this.admittedKey(event.code)) event.preventDefault();
       this.keyDown(event.code, event.repeat);
     }, options);
-    target.addEventListener('keyup', event => this.keyUp(event.code), options);
-    target.addEventListener('blur', () => { this.record('blur', '', false); this.clear(); }, options);
-    target.document.addEventListener('focusin', event => { if (hasUIControl(event)) this.clear(); }, options);
-    target.document.addEventListener('visibilitychange', () => { if (target.document.hidden) this.clear(); }, options);
+    target.addEventListener('keyup', event => {if(!this.remoteMode)this.keyUp(event.code);}, options);
+    target.addEventListener('blur', () => { if(!this.remoteMode){this.record('blur', '', false); this.clear();} }, options);
+    target.document.addEventListener('focusin', event => { if (!this.remoteMode && hasUIControl(event)) this.clear(); }, options);
+    target.document.addEventListener('visibilitychange', () => { if (!this.remoteMode && target.document.hidden) this.clear(); }, options);
   }
   /** Internal admission policy; direct fixed-input keyDown/keyUp stay deterministic. */
   setEventAdmission(admit: ((event: KeyboardEvent) => boolean) | undefined): void { this.admitEvent = admit; }
@@ -85,6 +86,9 @@ export class WorldKeyboard {
   }
   private record(type: 'keydown' | 'keyup' | 'blur', code: string, repeat: boolean): void {
     if (this.transcript.length < 100_000) this.transcript.push({ type, code, repeat, simulationTick: this.getTick() });
+  }
+  reconcileHeld(codes:readonly string[]):void {
+    this.syncContext();this.held.clear();for(const code of codes)if(this.admittedKey(code))this.held.add(code);
   }
   sample(): WorldInput {
     this.syncContext();
@@ -137,7 +141,7 @@ export class WorldInputRouter {
   }) {
     this.keyboard.setEventAdmission(event => {
       const binding = this.current;
-      return !!binding && activeRouterByDocument.get(binding.surface.ownerDocument) === this &&
+      return !this.keyboard.remoteMode && !!binding && activeRouterByDocument.get(binding.surface.ownerDocument) === this &&
         !this.blocked && this.options.isRunning() && !includesRoot(event, binding.uiRoot);
     });
   }
@@ -168,7 +172,7 @@ export class WorldInputRouter {
     binding.surface.focus({ preventScroll: true });
   }
   releasePointerLock(): void { const surface=this.current?.surface;if(surface&&surface.ownerDocument.pointerLockElement===surface)surface.ownerDocument.exitPointerLock(); }
-  clear(): void { this.releasePointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
+  clear(force=false): void { if(this.keyboard.remoteMode&&!force)return;this.releasePointerLock();this.releasePointer(); this.keyboard.clear(); this.options.onRelease(); }
   dispose(): void {
     if (this.disposed) return;
     this.suspend(); this.bindings.length = 0; this.disposed = true;
@@ -214,7 +218,7 @@ export class WorldInputRouter {
       (uiRoot?.contains(focused) || !surface.contains(focused) || isUIControl(focused) || (deepFocused && isUIControl(deepFocused)))) this.blocked = true;
     if (!activeRouterByDocument.has(doc)) activeRouterByDocument.set(doc, this);
     const isUI = (event: Event) => includesRoot(event, uiRoot) || hasUIControl(event);
-    const isActive = () => activeRouterByDocument.get(doc) === this && !this.blocked;
+    const isActive = () => !this.keyboard.remoteMode && activeRouterByDocument.get(doc) === this && !this.blocked;
     const blockUI = (event: Event) => {
       if (includesRoot(event, uiRoot)) this.activate(true);
       else if (hasUIControl(event) && activeRouterByDocument.get(doc) === this) { this.blocked = true; this.clear(); }
@@ -226,7 +230,7 @@ export class WorldInputRouter {
       else if (activeRouterByDocument.get(doc) === this) { this.blocked = true; this.clear(); }
     }, { ...options, capture: true });
     surface.addEventListener('pointerdown', event => {
-      if (isUI(event) || !event.isPrimary || event.button !== 0) return;
+      if (this.keyboard.remoteMode || isUI(event) || !event.isPrimary || event.button !== 0) return;
       this.focus();
       if (!this.options.isRunning()) return;
       event.preventDefault();
@@ -253,7 +257,7 @@ export class WorldInputRouter {
       if(!isActive()||!this.options.isRunning()||!this.options.wantsPointerLock?.()){this.clear();return;}
       this.options.onPointer({yawDeltaRadians:-event.movementX*.004,pitchDeltaRadians:event.movementY*.004,activate:true});
     },options);
-    doc.addEventListener('pointerlockchange',()=>{if(doc.pointerLockElement!==surface&&activeRouterByDocument.get(doc)===this){this.releasePointer();this.keyboard.clear();this.options.onRelease();}},options);
+    doc.addEventListener('pointerlockchange',()=>{if(!this.keyboard.remoteMode&&doc.pointerLockElement!==surface&&activeRouterByDocument.get(doc)===this){this.releasePointer();this.keyboard.clear();this.options.onRelease();}},options);
     surface.addEventListener('pointerup', event => { if (this.pointer?.pointerId === event.pointerId) this.releasePointer(); }, options);
     surface.addEventListener('pointercancel', event => { if (this.pointer?.pointerId === event.pointerId) this.clear(); }, options);
     surface.addEventListener('lostpointercapture', event => { if (this.pointer?.pointerId === event.pointerId) this.clear(); }, options);

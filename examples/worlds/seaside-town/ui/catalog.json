@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "seaside-town",
+  "components": {
+    "PlaceCard": {
+      "propsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "district"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          }
+        }
+      },
+      "bindableProps": [
+        "name",
+        "district"
+      ],
+      "animatableProps": {},
+      "events": [],
+      "slots": []
+    },
+    "TravelStatus": {
+      "propsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode",
+          "speed"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "number"
+          }
+        }
+      },
+      "bindableProps": [
+        "mode",
+        "speed"
+      ],
+      "animatableProps": {},
+      "events": [],
+      "slots": []
+    },
+    "HelpCard": {
+      "propsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      },
+      "bindableProps": [],
+      "animatableProps": {},
+      "events": [],
+      "slots": []
+    },
+    "Toolbar": {
+      "propsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      },
+      "bindableProps": [],
+      "animatableProps": {},
+      "events": [
+        "toggleHelp",
+        "recover"
+      ],
+      "slots": []
+    }
+  },
+  "actions": {
+    "toggleHelp": {
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    "recover": {
+      "paramsSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    }
+  }
+}

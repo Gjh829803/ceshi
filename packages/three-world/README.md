@@ -1192,6 +1192,25 @@ captures, configurable with `historyFrames`). `modelInput.createStream({
 framesPerSecond:24})` instead returns a clean canvas MediaStream and `close()`.
 Its frame rate does not prove source-to-output frame correspondence.
 
+`world.resize(width,height)` updates renderer size (CSS pixels) and camera projection
+without resetting or advancing simulation. It preserves renderer pixel ratio.
+
+Streaming Hosts may call `captureFrame({readMetadata})`. The synchronous callback
+receives the frozen source key and returns JSON metadata copied into the captured
+packet. It must only observe state. The callback and clean pixel copy share the
+capture transaction; neither advances simulation. Existing callers without this
+option still receive the same `{image,source}` shape.
+
+A Host may acquire `world.acquireRemoteInput()` while live playback owns the
+world. The exclusive lease accepts monotonic `sequence`, `heldKeys`, ordered
+`keyEdges` and optional camera deltas (yaw/pitch radians, distance metres).
+Packets drain at the next existing fixed tick. Native keyboard/pointer input is
+suppressed while the lease is active; `clear()` releases remote held input and
+`dispose()` restores local admission. World stop/disposal revokes the lease.
+Episode acquisition and remote input are mutually exclusive; release the remote
+lease before preparing an Episode segment. This API does not create another clock.
+
+
 The application supplies model transport. Display a returned decoded image with
 `output.presentFrame({image,source})`, using the source key returned by the
 service. Keep the source aspect ratio; mismatched decoded output is rejected.

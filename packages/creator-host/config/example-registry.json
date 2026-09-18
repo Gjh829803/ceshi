@@ -133,5 +133,18 @@
       "episode.json",
       "config/camera.json"
     ]
+  },
+  "streaming-ui": {
+    "root": "examples/three-creator/streaming-ui",
+    "files": [
+      "index.html",
+      "scene.ts",
+      "project.json",
+      "ui/catalog.json",
+      "ui/definition.json",
+      "ui/state.schema.json",
+      "ui/components.tsx",
+      "ui/styles.css"
+    ]
   }
 }

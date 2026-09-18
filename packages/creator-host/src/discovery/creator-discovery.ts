@@ -1,6 +1,6 @@
 import {cameraPresetSnapshots} from './camera-presets.js';
 import {bindingExample,type BindingVariant} from './binding-examples.js';
-import {agentDocument,AGENT_READING_GUIDE,readAgentDocument,AGENT_DOCUMENT_PATHS,documentNavigation,topicDocument,type AgentDocumentPath} from './agent-docs.js';
+import {agentDocument,AGENT_READING_GUIDE,WORLD_UI_AUTHORING,readAgentDocument,AGENT_DOCUMENT_PATHS,documentNavigation,topicDocument,type AgentDocumentPath} from './agent-docs.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ThreeCompiler, REPOSITORY_ROOT, publicAsset } from '../compiler/compiler.js';
@@ -21,7 +21,7 @@ import {qualityAuthoringGuidance} from './quality-guidance.js';
 export const SCHEMA_SECTIONS = ['guide', 'contracts', 'project', 'episode', 'observation', 'commands', 'humanoid', 'all'] as const;
 export type SchemaSection = typeof SCHEMA_SECTIONS[number];
 const sectionFields = {
-  guide: ['navigation','assetIndex','readingGuide','entryPoint', 'sdkGuide', 'cameraAuthoring', 'qualityAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
+  guide: ['uiAuthoring','navigation','assetIndex','readingGuide','entryPoint', 'sdkGuide', 'cameraAuthoring', 'qualityAuthoring', 'episodeNote', 'humanoidExampleTopic', 'runtimeSource', 'humanAuthoring', 'subjectAuthoring', 'exampleTopic'],
   contracts: ['cameraConfiguration','cameraSourceContracts','sdkContracts', 'sdkFactoryContracts', 'runtimeDefinitions', 'boundaryContracts', 'objectColorContracts'], project: ['project'], episode: ['episode', 'episodeNote'],
   observation: ['observation', 'observationScope'], commands: ['worldCommandSchema', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions'],
   humanoid: ['aircraftConfigurations', 'roadVehicleConfigurations', 'humanoidSourceContracts', 'humanoidExampleTopic', 'cameraAuthoring', 'characterCapabilities', 'controlBindings', 'humanoidInputGuides', 'runtimeDefinitions','objectColorContracts'],
@@ -55,7 +55,7 @@ export class CreatorDiscovery {
     const sdk:{sdkContracts?:string;sdkFactoryContracts?:string;sdkGuide?:string} = isSdk ? {
       ...(wants('sdkContracts') ? {sdkContracts: publicContractTopic(await guidance.source('contracts.ts'), topic,{includeHostFactory:!guidance.isWorkspace})} : {}),
       ...(!nonhuman&&wants('sdkFactoryContracts')?{sdkFactoryContracts: humanoidFactoryContractSource(await guidance.source('humanoid.ts'))}:{}),
-      ...(topic!=='quality'&&wants('sdkGuide') ? {sdkGuide: ['getting-started','programming','assets'].includes(topic)?agentDocument(topic as 'getting-started'|'programming'|'assets'):guidance.isWorkspace
+      ...(topic!=='quality'&&wants('sdkGuide') ? {sdkGuide: topic==='presentation'?readAgentDocument('ui.md'):['getting-started','programming','assets'].includes(topic)?agentDocument(topic as 'getting-started'|'programming'|'assets'):guidance.isWorkspace
         ? 'This project uses workspace SDK source. Request contracts/humanoid sections for current declarations and runtimeDefinitions. Capability conditions and bindings must come from this source or world_inspect, not Host baseline examples. Host command transport and admission rules stay fixed.'
         : guideTopic(await readFile(path.join(REPOSITORY_ROOT, 'packages/three-world/README.md'), 'utf8'), topic)
         .replace(/<!-- asset-info:([a-zA-Z0-9._,+-]+) -->([\s\S]*?)<!-- \/asset-info -->/g,
@@ -66,6 +66,7 @@ export class CreatorDiscovery {
       ...(topicDocument(topic)?{navigation:documentNavigation(topicDocument(topic)!)}:{}),
       ...(['getting-started','all'].includes(topic)?{readingGuide:AGENT_READING_GUIDE}:{}),
       ...(cameraAuthoring?{cameraAuthoring}:{}),
+      ...(isSdk?{uiAuthoring:WORLD_UI_AUTHORING}:{}),
       ...(!nonhuman?{humanAuthoring:humanAuthoringGuidance(policy,this.profile)}:{}),
       ...(['getting-started','all'].includes(topic)?{subjectAuthoring:subjectAuthoringGuidance(this.profile)}:{}),
       ...(['getting-started','quality','all'].includes(topic)?{qualityAuthoring:qualityAuthoringGuidance(topic!=='getting-started')}:{}),

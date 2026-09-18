@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "place",
+    "visitor",
+    "panels"
+  ],
+  "properties": {
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "district"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "district": {
+          "type": "string"
+        }
+      }
+    },
+    "visitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "speed"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "panels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "helpVisible"
+      ],
+      "properties": {
+        "helpVisible": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

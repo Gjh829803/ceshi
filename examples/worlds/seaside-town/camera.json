@@ -1,0 +1,52 @@
+{
+  "kind": "world-camera",
+  "schemaVersion": 1,
+  "activation": "on-input",
+  "binding": {
+    "targetEntityId": "visitor",
+    "mountTarget": "vehicle"
+  },
+  "defaultViewId": "third-person",
+  "input": {
+    "cycleViewIds": [
+      "third-person",
+      "first-person",
+      "shoulder"
+    ]
+  },
+  "views": {
+    "third-person": {
+      "kind": "third-person",
+      "opening": {
+        "fovDegrees": 58,
+        "positionWorldMetersXYZ": [
+          1.5,
+          4.2,
+          13
+        ],
+        "lookAtWorldMetersXYZ": [
+          -1,
+          0,
+          -8
+        ]
+      },
+      "overrides": {
+        "framing": {
+          "kind": "preserve-opening"
+        },
+        "orientation": {
+          "referenceFrame": "world-up",
+          "recenter": {
+            "enabled": false
+          }
+        }
+      }
+    },
+    "first-person": {
+      "kind": "first-person"
+    },
+    "shoulder": {
+      "kind": "shoulder"
+    }
+  }
+}
