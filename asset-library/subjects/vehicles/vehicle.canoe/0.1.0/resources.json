@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.canoe/0.1.0/model/canoe.glb",
+  "preview": "subjects/vehicles/vehicle.canoe/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.canoe/0.1.0/model/canoe.glb",
+      "sha256": "e34475368d6762eb5e76ab6c757dff9f2209a32b3bce2cfb73641ce11dff922c",
+      "byte_length": 60296,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/canoe.glb",
+      "reused_by": [
+        "vehicle.canoe"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.canoe/0.1.0/preview/thumbnail.webp",
+      "sha256": "a138395cfbab28f6ca8bcd6322396f5c265ed3d77a571b6fc72ca826ec451d55",
+      "byte_length": 9622,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.canoe"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 16,
+    "meshes": 13,
+    "materials": 2,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1628,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/canoe.glb"
+}

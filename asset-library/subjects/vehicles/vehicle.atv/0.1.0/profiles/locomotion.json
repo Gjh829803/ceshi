@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "atv",
+    "name": "全地形车",
+    "en": "QUAD ATV",
+    "archetype": "atv",
+    "radius": 1.48,
+    "seat": [
+      0,
+      1,
+      -0.15
+    ],
+    "wheelbaseMeters": 1.6,
+    "rearAxleZMeters": -0.8,
+    "wheelPhysics": {
+      "chassis": {
+        "kind": "box",
+        "halfExtents": [
+          0.85,
+          0.5,
+          1.2
+        ],
+        "offset": [
+          0,
+          0.88,
+          0
+        ]
+      },
+      "radius": 0.39,
+      "halfTrack": 0.7,
+      "halfWheelbase": 0.8,
+      "hubHeight": 0.39,
+      "wheelWidth": 0.28,
+      "wheels": [
+        {
+          "x": 0.7,
+          "z": 0.8,
+          "steering": true,
+          "driven": true
+        },
+        {
+          "x": -0.7,
+          "z": 0.8,
+          "steering": true,
+          "driven": true
+        },
+        {
+          "x": 0.7,
+          "z": -0.8,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": -0.7,
+          "z": -0.8,
+          "steering": false,
+          "driven": true
+        }
+      ]
+    },
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.91,
+        0.71,
+        1.25
+      ],
+      "offset": [
+        0,
+        0.71,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

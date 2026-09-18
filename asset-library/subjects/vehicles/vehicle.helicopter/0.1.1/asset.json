@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.helicopter",
+  "asset_version": "0.1.1",
+  "display_name": "单主旋翼直升机 / Helicopter",
+  "aliases": [
+    "单主旋翼直升机",
+    "helicopter",
+    "rotorcraft"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.helicopter",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [
+      "rotorcraft"
+    ],
+    "appendages": [
+      {
+        "role": "rotor",
+        "count": 2
+      }
+    ],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "+Z",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "由 Whitebox 单主旋翼直升机构造导出的可复用 GLB；0.1.1 接通 Creator 资产加载与 SDK helicopter 控制合同，模型字节复用 0.1.0。",
+  "default_assembly": "subjects/vehicles/vehicle.helicopter/0.1.1/assemblies/default.json",
+  "dependencies": []
+}

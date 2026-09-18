@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "shapes": [
+    {
+      "kind": "box",
+      "halfExtents": [
+        2.367,
+        3.181,
+        5.099
+      ],
+      "offset": [
+        0.08099999999999996,
+        0.8639999999999999,
+        3.801
+      ]
+    }
+  ],
+  "verification": "not_run"
+}

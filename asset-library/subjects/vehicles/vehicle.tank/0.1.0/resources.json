@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.tank/0.1.0/model/tank.glb",
+  "preview": "subjects/vehicles/vehicle.tank/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.tank/0.1.0/model/tank.glb",
+      "sha256": "6f9f61fd8786d9215253881a5278684c256a3a4d4278bb91886b7079de4630cf",
+      "byte_length": 106580,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/tank.glb",
+      "reused_by": [
+        "vehicle.tank"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tank/0.1.0/preview/thumbnail.webp",
+      "sha256": "0dfca3db3d44f1e82b4f707833c3269b4d1ebf285c91991f35e201735c5cdbc6",
+      "byte_length": 14156,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.tank"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 219,
+    "meshes": 34,
+    "materials": 4,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 804,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/tank.glb"
+}

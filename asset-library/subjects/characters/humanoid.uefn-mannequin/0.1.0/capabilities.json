@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "foot_contact",
+      "propulsion": "legged_step",
+      "degrees_of_freedom": "surface_2d",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/characters/humanoid.uefn-mannequin/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。"
+  ]
+}

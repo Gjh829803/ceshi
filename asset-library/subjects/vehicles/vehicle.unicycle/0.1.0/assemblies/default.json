@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "assembly_id": "assembly.vehicle.unicycle",
+  "subject": {
+    "asset_id": "vehicle.unicycle",
+    "version": "0.1.0"
+  },
+  "model": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
+  "bindings": {
+    "rig": "subjects/vehicles/vehicle.unicycle/0.1.0/bindings/rig.json",
+    "animations": "subjects/vehicles/vehicle.unicycle/0.1.0/bindings/animation_map.json",
+    "sockets": "subjects/vehicles/vehicle.unicycle/0.1.0/bindings/sockets.json"
+  },
+  "profiles": {
+    "control": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/locomotion.json",
+    "camera": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/camera.json"
+  },
+  "modules": [
+    {
+      "asset_id": "module.host.subject",
+      "version": "1.0.0"
+    }
+  ],
+  "authority": {
+    "root_transform": "host.motor",
+    "animation": "host.animation",
+    "camera": "host.camera"
+  },
+  "stage": "assets_ready",
+  "runtime_ready": false
+}

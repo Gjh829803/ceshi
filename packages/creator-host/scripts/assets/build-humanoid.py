@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build the Source101 model with ground locomotion bindings.
 
-Run with --check to verify model bytes, provenance and catalog bindings.
+Explicit --source and --output produce an intake candidate. --check verifies an existing export.
+Register reviewed output through asset-library/tools/ingest.mjs using a new version.
 """
 import argparse
 import copy
@@ -10,11 +11,7 @@ import json
 import math
 from pathlib import Path
 import struct
-import subprocess
 
-ROOT = Path(__file__).resolve().parents[4]
-SOURCE = ROOT / 'assets/three-creator/presets/humanoid/source'
-DEST = ROOT / 'assets/three-creator/humanoid/source-101'
 CLIPS = {'idle': 'idle-loop', 'walk': 'walk-loop', 'run': 'run-loop',
          'jump': 'jump-stand', 'fall': 'fall-loop'}
 
@@ -44,9 +41,9 @@ def floats(document, binary, index):
     return list(struct.unpack_from('<' + 'f' * accessor['count'] * width, binary, start))
 
 
-def build():
-    manifest = json.loads((SOURCE / 'manifest.json').read_bytes())
-    source_files = [SOURCE / manifest['model']]
+def build(source):
+    manifest = json.loads((source / 'manifest.json').read_bytes())
+    source_files = [source / manifest['model']]
     document, original = glb(source_files[0])
     document = copy.deepcopy(document)
     # The offline UEFN skin and Source101 rig stay intact; attach existing locomotion clips.
@@ -73,7 +70,7 @@ def build():
         return index
 
     for action, name in CLIPS.items():
-        file = SOURCE / f'gasp-research/{name}.experimental.glb'
+        file = source / f'gasp-research/{name}.experimental.glb'
         source_files.append(file)
         src, data = glb(file)
         # Do not silently accept incompatible skeletons or bind poses.
@@ -119,7 +116,7 @@ def build():
               + struct.pack('<II', len(encoded), 0x4E4F534A) + encoded
               + struct.pack('<II', len(binary), 0x004E4942) + binary)
     provenance = {'schemaVersion': 1, 'sourceAssetId': 'humanoid.uefn-mannequin',
-                  'sources': [{'path': p.relative_to(ROOT).as_posix(), 'sha256': digest(p.read_bytes())} for p in source_files],
+                  'sources': [{'path': p.relative_to(source).as_posix(), 'sha256': digest(p.read_bytes())} for p in source_files],
                   'actions': CLIPS, 'normalization': 'zero stage/root translation; remove root translation tracks and root yaw; jump starts at source frame 10; catalog rotates +Z to -Z',
                   'outputSha256': digest(result), 'outputByteLength': len(result)}
     return bytes(result), (json.dumps(provenance, indent=2) + '\n').encode()
@@ -127,30 +124,22 @@ def build():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', required=True, type=Path, help='Input source directory containing manifest.json and source clips')
+    parser.add_argument('--output', required=True, type=Path, help='New intake output directory')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    model, provenance = build()
-    catalog_path = ROOT / 'assets/three-creator/catalog/humanoid.uefn-mannequin.json'
-    source = json.loads(catalog_path.read_bytes())
-    entry = {**source,
-             'uri': f'./assets/subjects/{digest(model)}.glb', 'sha256': digest(model), 'byteLength': len(model),
-             'sourcePath': (DEST / 'model.glb').relative_to(ROOT).as_posix(),
-             'recommendedBody': {'heightMeters': 1.8, 'radiusMeters': .35},
-             'locomotionBindingIds': ['locomotion.ground', 'locomotion.humanoid'],
-             'rootTransform': {'positionMetersXYZ': [0, 0, 0], 'rotationEulerRadiansXYZ': [0, math.pi, 0], 'scaleXYZ': [1, 1, 1]},
-             'actions': {action: {'clipName': action, 'loop': action != 'jump', 'blendSeconds': .1,
-                                  'timeScale': {'walk': 2.4/2, 'run': 4.8/5}.get(action, 1)} for action in CLIPS}}
+    model, provenance = build(args.source.resolve())
+    dest = args.output.resolve()
     if args.check:
-        assert (DEST / 'model.glb').read_bytes() == model, 'Model byte mismatch'
-        assert (DEST / 'provenance.json').read_bytes() == provenance, 'Provenance mismatch'
-        assert source == entry, 'Catalog binding mismatch'
+        assert (dest / 'model.glb').read_bytes() == model, 'Model byte mismatch'
+        assert (dest / 'provenance.json').read_bytes() == provenance, 'Provenance mismatch'
     else:
-        DEST.mkdir(parents=True, exist_ok=True)
-        (DEST / 'model.glb').write_bytes(model)
-        (DEST / 'provenance.json').write_bytes(provenance)
-        catalog_path.write_text(json.dumps(entry, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-        subprocess.run(['pnpm', 'content:sync'], cwd=ROOT, check=True)
-    print(f'Source101 verified: {len(model)} bytes, sha256 {digest(model)}')
+        if dest.exists():
+            raise ValueError('OUTPUT_EXISTS: choose a new intake directory')
+        dest.mkdir(parents=True)
+        (dest / 'model.glb').write_bytes(model)
+        (dest / 'provenance.json').write_bytes(provenance)
+    print(f'Source101 export verified: {len(model)} bytes, sha256 {digest(model)}')
 
 
 if __name__ == '__main__':

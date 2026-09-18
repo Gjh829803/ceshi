@@ -31,6 +31,30 @@ package internals or create production dependency cycles. Root scripts coordinat
 workspace checks and cross-package integration; production code belongs to its
 own package. Keep tests with their owner unless they verify cross-package flows.
 
+## Non-production Web UI standard
+
+All Web pages outside the production pipeline must use **React + Vite + shadcn/ui +
+Lucide (`lucide-react`)**. This includes SDK Playground, local world/stream
+previews, debugging and calibration consoles, inspection pages, and visualization
+or reporting tools. The examples are not an exhaustive list. Apply this stack to
+new pages and use it when migrating or substantially reworking existing pages;
+do not create new standalone HTML/imperative-DOM UI implementations or introduce
+another component/icon stack for these tools. This standard supports long-term
+maintenance, reusable interactions and consistent visual presentation.
+
+React owns page composition and state; Vite owns the development server and
+application build; shadcn/ui supplies application controls; Lucide supplies icons. Specialized canvas/WebGL/chart renderers can remain inside
+React views. The root owns development tooling and baseline dependency versions.
+Each consuming app declares direct dependencies, including Vite as a development
+dependency, and keeps adapted components in
+its own `src/components/ui`; do not import another app's internals. Reuse the
+existing app theme and prefer compact, information-rich developer layouts.
+
+Scope follows the page's responsibility, not its deployment address: a production
+page does not become a development tool merely by running on localhost. This rule
+does not prescribe UI dependencies for production pages, authored world HUDs,
+shared player runtime packages, or Creator/Episode production instructions.
+
 ## Naming
 
 Follow the [complete naming rules](docs/asset-production-integration.md#命名规范)

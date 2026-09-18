@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "assembly_id": "assembly.human_driving_car",
+  "version": "0.1.0",
+  "stage": "planned",
+  "roles": {
+    "actor": {
+      "asset_id": "humanoid.uefn-mannequin",
+      "version": "0.1.0"
+    },
+    "target": {
+      "asset_id": "vehicle.rover",
+      "version": "0.1.0"
+    }
+  },
+  "contract": "shared/interaction_contracts/vehicle_seat_v1.json",
+  "unresolved": [
+    "anchor binding",
+    "control transfer integration",
+    "cancel/exit recovery tests"
+  ],
+  "runtime_ready": false
+}

@@ -1,7 +1,7 @@
-import {writeCatalogSources,syncAssetCatalog} from '../../src/assets/catalog-sources.js';
+import {exportDestination,writeIntakeExport} from './export-intake.js';
+const sourcePath=exportDestination();
 /** Rebuild only the local atv asset; never re-import the donor project. */
 import { createHash } from 'node:crypto';
-import { writeFile, mkdir } from 'node:fs/promises';
 import { Group } from 'three';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { buildAtvModel } from '@worldkit/preset-content/atv-model';
@@ -14,9 +14,6 @@ Object.assign(globalThis,{FileReader:class {
 const model=buildAtvModel();
 const bytes=Buffer.from(await new GLTFExporter().parseAsync(model,{binary:true}) as ArrayBuffer);
 const sha256=createHash('sha256').update(bytes).digest('hex');
-const sourcePath='assets/three-creator/presets/vehicles/atv.glb';
-await mkdir('assets/three-creator/presets/vehicles',{recursive:true});
-await writeFile(sourcePath,bytes);
 const asset={id:'vehicle.atv',displayName:"全地形车 / All-terrain vehicle",path:'vehicles/atv.glb',uri:`./assets/subjects/${sha256}.glb`,
   sha256,byteLength:bytes.length,sourcePath,usage:'reusable',
   rootTransform:{positionMetersXYZ:[0,0,0],rotationEulerRadiansXYZ:[0,0,0],scaleXYZ:[1,1,1]},
@@ -24,6 +21,4 @@ const asset={id:'vehicle.atv',displayName:"全地形车 / All-terrain vehicle",p
   provenance:{source:'Local procedural geometry',generator:'packages/creator-host/scripts/assets/export-atv.ts'},resources:[],
   locomotionBindingIds:["locomotion.wheeled"],vehicle:{schemaVersion:1,spec:{...ATV_SPEC,id:"atv",name:"全地形车",en:"All-terrain vehicle"}},
   sockets:Object.entries(ATV_SOCKETS).map(([node,positionMetersXYZ])=>({id:node,node,positionMetersXYZ})).concat([{id:'control.hand.left',node:'control.hand.left',positionMetersXYZ:[.29,0,0]},{id:'control.hand.right',node:'control.hand.right',positionMetersXYZ:[-.29,0,0]}]),collision:ATV_SPEC.envelope};
-await writeCatalogSources(process.cwd(),[asset]);
-await syncAssetCatalog(process.cwd());
-console.log(JSON.stringify({sourcePath,sha256,byteLength:bytes.length}));
+await writeIntakeExport(sourcePath,bytes,asset);

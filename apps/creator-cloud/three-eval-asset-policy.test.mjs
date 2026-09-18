@@ -1,18 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, readFile, writeFile, rm, symlink, realpath, cp, chmod} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, writeFile, rm, symlink, realpath, cp, chmod, lstat} from 'node:fs/promises';
 import path from 'node:path';
 import {tmpdir} from 'node:os';
+import {createHash} from 'node:crypto';
 import {freezeRunAssetPolicy, freezeTaskAssetPolicy, readPinnedAssetPolicy} from './three-eval-mcp-bridge.mjs';
+import {installFixtureLibraryClosure} from './three-eval-fixture-toolkit.mjs';
 const toolkitRoot = path.resolve('.');
-test('new runs load Host policy from config and catalog from assets with validation code in scripts', async t => {
+const catalogRelative = 'asset-library/dist/whitebox/asset-catalog.json';
+async function installLibraryReader(root) {
+ await installFixtureLibraryClosure(toolkitRoot,root);
+}
+
+test('new runs freeze a library-only toolkit without an old authoring assets directory', async t => {
+ const isolated = await realpath(await mkdtemp(path.join(tmpdir(), 'three-library-only-')));
+ t.after(() => rm(isolated, {recursive: true, force: true}));
+ await mkdir(path.join(isolated, 'packages/creator-host/config'), {recursive: true});
+ await cp(path.join(toolkitRoot, 'packages/creator-host/src/assets/asset-policy.mjs'), path.join(isolated, 'packages/creator-host/src/assets/asset-policy.mjs'));
+ await installLibraryReader(isolated);
+ const bytes = Buffer.from('synthetic immutable model'), sha256 = createHash('sha256').update(bytes).digest('hex');
+ const asset = {id:'humanoid.fixture', actions:{idle:{},walk:{},run:{},jump:{}}, locomotionBindingIds:['locomotion.ground'],
+  recommendedBody:{heightMeters:1.8,radiusMeters:.3}, uri:`./assets/subjects/${sha256}.glb`, sha256, byteLength:bytes.length,
+  sourcePath:'asset-library/subjects/characters/humanoid.fixture/1.0.0/model/model.glb'};
+ const policy = {schemaVersion:1, allowedAssetIds:[asset.id], defaultHumanoidAssetId:asset.id, allowCustomAssets:false};
+ await mkdir(path.join(isolated, 'asset-library/dist/whitebox'), {recursive:true});
+ await writeFile(path.join(isolated, 'asset-library/dist/whitebox/asset-catalog.json'), JSON.stringify({schemaVersion:1,assets:[asset]}));
+ await mkdir(path.dirname(path.join(isolated, asset.sourcePath)), {recursive:true});
+ await writeFile(path.join(isolated, asset.sourcePath), bytes);
+ await writeFile(path.join(isolated, 'packages/creator-host/config/asset-policy.json'), JSON.stringify(policy));
+ const frozen = await freezeRunAssetPolicy({toolkitRoot:isolated});
+ assert.deepEqual(frozen.assetPolicySnapshot.policy, policy);
+ assert.equal(frozen.assetPolicySnapshot.allowedAssets[0].sha256, sha256);
+ await assert.rejects(lstat(path.join(isolated, 'assets')), {code:'ENOENT'});
+});
+test('new runs load Host policy from config and generated catalog from the unique library', async t => {
  const isolated = await realpath(await mkdtemp(path.join(tmpdir(), 'three-policy-config-')));
  t.after(() => rm(isolated, {recursive: true, force: true}));
  await mkdir(path.join(isolated, 'packages/creator-host'), {recursive: true});
  await mkdir(path.join(isolated, 'packages/creator-host/config'), {recursive: true});
  await cp(path.join(toolkitRoot, 'packages/creator-host/src/assets/asset-policy.mjs'), path.join(isolated, 'packages/creator-host/src/assets/asset-policy.mjs'));
- await mkdir(path.join(isolated, 'assets/three-creator'), {recursive: true});
- await cp(path.join(toolkitRoot, 'assets/three-creator/asset-catalog.json'), path.join(isolated, 'assets/three-creator/asset-catalog.json'));
+ await installLibraryReader(isolated);
+ await mkdir(path.dirname(path.join(isolated, catalogRelative)), {recursive: true});
+ await cp(path.join(toolkitRoot, catalogRelative), path.join(isolated, catalogRelative));
  const policy = {schemaVersion: 1, allowedAssetIds: ['humanoid.uefn-mannequin'], defaultHumanoidAssetId: 'humanoid.uefn-mannequin', allowCustomAssets: false};
  const configPath = path.join(isolated, 'packages/creator-host/config/asset-policy.json');
  await writeFile(configPath, JSON.stringify(policy));
@@ -75,7 +104,9 @@ test('pinned bridge rejects workspace policy, symlinks and incomplete pins',asyn
  const f=await fixture(t),pinned=await freezeTaskAssetPolicy(f);
  await assert.rejects(readPinnedAssetPolicy({...pinned,assetPolicySnapshotPath:f.inputPath,workspace:f.layout.workspace,toolkitRoot}),/POLICY_PATH/);
  await assert.rejects(readPinnedAssetPolicy({assetPolicySnapshotPath:pinned.assetPolicySnapshotPath,workspace:f.layout.workspace,toolkitRoot}),/POLICY_PIN/);
- const link=path.join(f.root,'policy-link.json');await symlink(pinned.assetPolicySnapshotPath,link);
+ let link=path.join(f.root,'policy-link.json');
+ if(process.platform==='win32'){await symlink(path.dirname(pinned.assetPolicySnapshotPath),link,'junction');link=path.join(link,path.basename(pinned.assetPolicySnapshotPath));}
+ else await symlink(pinned.assetPolicySnapshotPath,link);
  await assert.rejects(readPinnedAssetPolicy({...pinned,assetPolicySnapshotPath:link,workspace:f.layout.workspace,toolkitRoot}),/POLICY_PATH/);
 });
 
@@ -83,13 +114,34 @@ test('installed catalog drift or resource-byte drift rejects before a task can f
  const f=await fixture(t), isolated=path.join(f.root,'toolkit');
  await mkdir(path.join(isolated,'packages/creator-host'),{recursive:true});
  await cp(path.join(toolkitRoot,'packages/creator-host/src/assets/asset-policy.mjs'),path.join(isolated,'packages/creator-host/src/assets/asset-policy.mjs'));
- await mkdir(path.join(isolated,'assets/three-creator'),{recursive:true});
- await cp(path.join(toolkitRoot,'assets/three-creator/asset-catalog.json'),path.join(isolated,'assets/three-creator/asset-catalog.json'));
- const catalogPath=path.join(isolated,'assets/three-creator/asset-catalog.json'),catalog=JSON.parse(await readFile(catalogPath,'utf8'));
+ await installLibraryReader(isolated);
+ await mkdir(path.dirname(path.join(isolated,catalogRelative)),{recursive:true});
+ await cp(path.join(toolkitRoot,catalogRelative),path.join(isolated,catalogRelative));
+ const catalogPath=path.join(isolated,catalogRelative),catalog=JSON.parse(await readFile(catalogPath,'utf8'));
  const original=catalog.assets[0].displayName;catalog.assets[0].displayName+=' drift';
  await writeFile(catalogPath,JSON.stringify(catalog));
  await assert.rejects(freezeTaskAssetPolicy({...f,lock:{...f.lock,toolkitRoot:isolated}}),/POLICY_CATALOG/);
  catalog.assets[0].displayName=original;await writeFile(catalogPath,JSON.stringify(catalog));
  const resourcePath=path.join(isolated,catalog.assets[0].sourcePath);await mkdir(path.dirname(resourcePath),{recursive:true});await writeFile(resourcePath,'changed');
- await assert.rejects(freezeTaskAssetPolicy({...f,lock:{...f.lock,toolkitRoot:isolated}}),/POLICY_RESOURCE_MISMATCH/);
+ await assert.rejects(freezeTaskAssetPolicy({...f,lock:{...f.lock,toolkitRoot:isolated}}),/THREE_ASSET_HASH_MISMATCH/);
+});
+
+test('Registry policy freeze and verification prepare allowed IDs and retain additive denied hashes',async t=>{
+ const root=await realpath(await mkdtemp(path.join(tmpdir(),'three-registry-policy-')));t.after(()=>rm(root,{recursive:true,force:true}));
+ const isolated=path.join(root,'toolkit'),assets=path.join(isolated,'packages/creator-host/src/assets'),config=path.join(isolated,'packages/creator-host/config');await mkdir(assets,{recursive:true});await mkdir(config,{recursive:true});
+ await cp(path.join(toolkitRoot,'packages/creator-host/src/assets/asset-policy.mjs'),path.join(assets,'asset-policy.mjs'));
+ const bytes=Buffer.from('prepared Registry model'),sha256=createHash('sha256').update(bytes).digest('hex'),denied='d'.repeat(64);
+ const asset={id:'humanoid.fixture',actions:{idle:{},walk:{},run:{},jump:{}},locomotionBindingIds:['locomotion.ground'],recommendedBody:{heightMeters:1.8,radiusMeters:.3},uri:`./assets/subjects/${sha256}.glb`,sha256,byteLength:bytes.length};
+ const policy={schemaVersion:1,allowedAssetIds:[asset.id],defaultHumanoidAssetId:asset.id,allowCustomAssets:false};
+ await writeFile(path.join(config,'asset-policy.json'),JSON.stringify(policy));await writeFile(path.join(isolated,'fixture.json'),JSON.stringify({asset,denied,bytes:bytes.toString('base64')}));
+ await writeFile(path.join(assets,'library-source.mjs'),`import fs from 'node:fs';import path from 'node:path';let prepared=false;const load=root=>JSON.parse(fs.readFileSync(path.join(root,'fixture.json'),'utf8'));
+ export async function prepareAssetLibrary(root,options){if(JSON.stringify(options.assetIds)!==JSON.stringify(['humanoid.fixture'])||JSON.stringify(options.policyAssetIds)!==JSON.stringify(['humanoid.fixture']))throw Error('WRONG_ALLOWED_SCOPE');prepared=true;}
+ export async function readLibraryCatalog(root){if(!prepared)throw Error('PREPARE_REQUIRED');return [load(root).asset];}
+ export function readLibraryDeniedHashes(root,ids){if(!prepared||JSON.stringify(ids)!==JSON.stringify(['humanoid.fixture']))throw Error('PREPARE_REQUIRED');return [load(root).denied];}
+ export async function readLibraryResource(root){return Buffer.from(load(root).bytes,'base64');}`);
+ const frozen=await freezeRunAssetPolicy({toolkitRoot:isolated});assert.deepEqual(frozen.assetPolicySnapshot.deniedResourceSha256,[denied]);
+ const workspace=path.join(root,'workspace');await mkdir(workspace);const pin=path.join(root,'pin.json');await writeFile(pin,JSON.stringify(frozen.assetPolicySnapshot));
+ assert.deepEqual(await readPinnedAssetPolicy({assetPolicySnapshotPath:pin,assetPolicySha256:frozen.assetPolicySha256,workspace,toolkitRoot:isolated}),frozen.assetPolicySnapshot);
+ await writeFile(path.join(isolated,'fixture.json'),JSON.stringify({asset,denied:'e'.repeat(64),bytes:bytes.toString('base64')}));
+ await assert.rejects(readPinnedAssetPolicy({assetPolicySnapshotPath:pin,assetPolicySha256:frozen.assetPolicySha256,workspace,toolkitRoot:isolated}),/POLICY_CATALOG_MISMATCH/);
 });

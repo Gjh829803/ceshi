@@ -6,7 +6,9 @@ import { afterEach, expect, it } from 'vitest';
 import { ThreeCreatorTools } from '../../src/tools/tools';
 import { ThreeCompiler, hashTree } from '../../src/compiler/compiler';
 import {sha256} from '../../src/contracts';
-import catalog from '../../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import defaultPolicy from '../../config/asset-policy.json';
 import {createAssetPolicySnapshot,assetPolicyHash,verifyAssetPolicySources} from '../../src/assets/asset-policy.mjs';
 

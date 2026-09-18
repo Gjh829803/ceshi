@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.trainer-plane/0.1.0/model/trainer-plane.glb",
+  "preview": "subjects/vehicles/vehicle.trainer-plane/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/model/trainer-plane.glb",
+      "sha256": "cdfc214312a4b907ee89cf8a3fc751dbd4e55c2e8a742c972b8dc233652aa031",
+      "byte_length": 121304,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/trainer-plane.glb",
+      "reused_by": [
+        "vehicle.trainer-plane"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/preview/thumbnail.webp",
+      "sha256": "d7c58f07b1ceb96e9113d93b7709532d64d06a428ba053be5e3f0ec42740e707",
+      "byte_length": 9556,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.trainer-plane"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 29,
+    "meshes": 20,
+    "materials": 8,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 3360,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/trainer-plane.glb"
+}

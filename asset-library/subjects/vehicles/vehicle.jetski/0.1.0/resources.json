@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.jetski/0.1.0/model/jetski.glb",
+  "preview": "subjects/vehicles/vehicle.jetski/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0/model/jetski.glb",
+      "sha256": "d21a8c40d15a04e19bb18a0f9c55224fb46763ca4104b1fc7e02a9082c14e707",
+      "byte_length": 30336,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/jetski.glb",
+      "reused_by": [
+        "vehicle.jetski"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0/preview/thumbnail.webp",
+      "sha256": "df3060f0103de679418ba81cf8ed59e5497634fcaa342068e20bc72e6870abd0",
+      "byte_length": 8664,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.jetski"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 29,
+    "meshes": 16,
+    "materials": 3,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 216,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/jetski.glb"
+}

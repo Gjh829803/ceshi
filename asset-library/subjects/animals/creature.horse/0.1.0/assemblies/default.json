@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "assembly_id": "assembly.creature.horse",
+  "subject": {
+    "asset_id": "creature.horse",
+    "version": "0.1.0"
+  },
+  "model": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+  "bindings": {
+    "rig": "subjects/animals/creature.horse/0.1.0/bindings/rig.json",
+    "animations": "subjects/animals/creature.horse/0.1.0/bindings/animation_map.json",
+    "sockets": "subjects/animals/creature.horse/0.1.0/bindings/sockets.json"
+  },
+  "profiles": {
+    "control": "subjects/animals/creature.horse/0.1.0/profiles/locomotion.json",
+    "camera": "subjects/animals/creature.horse/0.1.0/profiles/camera.json"
+  },
+  "modules": [
+    {
+      "asset_id": "module.host.subject",
+      "version": "1.0.0"
+    }
+  ],
+  "authority": {
+    "root_transform": "host.motor",
+    "animation": "host.animation",
+    "camera": "host.camera"
+  },
+  "stage": "assets_ready",
+  "runtime_ready": false
+}

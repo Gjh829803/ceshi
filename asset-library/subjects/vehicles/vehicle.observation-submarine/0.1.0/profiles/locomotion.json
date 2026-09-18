@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "observation-submarine",
+    "name": "单人观景潜艇",
+    "en": "SUBMERSIBLE",
+    "archetype": "submarine",
+    "visualVariant": "bubble-sub",
+    "radius": 1.6,
+    "seat": [
+      0,
+      0.24,
+      0.25
+    ],
+    "bodyPhysics": {
+      "water": {
+        "depth": 2.2,
+        "bottom": 0.78
+      }
+    },
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.55,
+        1.2,
+        1.55
+      ],
+      "offset": [
+        0,
+        0.15,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

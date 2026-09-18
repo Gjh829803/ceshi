@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "seaside-town",
+  "designViewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "spec": {
+    "root": "root",
+    "elements": {
+      "root": {
+        "type": "HudLayer",
+        "props": {},
+        "children": [
+          "place",
+          "travel",
+          "help",
+          "toolbar"
+        ]
+      },
+      "place": {
+        "type": "PlaceCard",
+        "props": {
+          "name": {
+            "$state": "/place/name"
+          },
+          "district": {
+            "$state": "/place/district"
+          }
+        },
+        "children": [],
+        "layout": {
+          "top": 24,
+          "left": 24,
+          "width": 265
+        }
+      },
+      "travel": {
+        "type": "TravelStatus",
+        "props": {
+          "mode": {
+            "$state": "/visitor/mode"
+          },
+          "speed": {
+            "$state": "/visitor/speed"
+          }
+        },
+        "children": [],
+        "layout": {
+          "top": 24,
+          "right": 24,
+          "width": 175
+        }
+      },
+      "help": {
+        "type": "HelpCard",
+        "props": {},
+        "visible": {
+          "$state": "/panels/helpVisible"
+        },
+        "children": [],
+        "layout": {
+          "bottom": 84,
+          "left": 24,
+          "width": 340
+        }
+      },
+      "toolbar": {
+        "type": "Toolbar",
+        "props": {},
+        "children": [],
+        "layout": {
+          "bottom": 24,
+          "left": 24,
+          "right": 24
+        },
+        "on": {
+          "toggleHelp": {
+            "action": "toggleHelp",
+            "params": {}
+          },
+          "recover": {
+            "action": "recover",
+            "params": {}
+          }
+        }
+      }
+    }
+  },
+  "transitions": {}
+}

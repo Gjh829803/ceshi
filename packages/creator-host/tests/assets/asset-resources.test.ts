@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { catalogResources, publicCatalogValue, readCatalogResource } from '../../src/assets/asset-resources.js';
 import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm, realpath, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, realpath, readFile } from 'node:fs/promises';
+import {createServer} from 'node:http';
+import {prepareAssetLibrary,readLibraryCatalogSync} from '../../src/assets/library-source.mjs';
 import os from 'node:os';
 import path from 'node:path';
-import catalog from '../../../../assets/three-creator/asset-catalog.json';
+import catalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
 
 describe('catalog dependency closure', () => {
   const sha256 = 'a'.repeat(64);
@@ -22,12 +24,40 @@ describe('catalog dependency closure', () => {
   it('verifies dependency bytes, size and repository containment', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'three-resources-')));
     try {
-      await writeFile(path.join(root, 'clip.json'), '{}');
-      const entry = { ...resource, sourcePath: 'clip.json', byteLength: 2, sha256: createHash('sha256').update('{}').digest('hex') };
+      await mkdir(path.join(root,'asset-library'));
+      await writeFile(path.join(root, 'asset-library/clip.json'), '{}');
+      const entry = { ...resource, sourcePath: 'asset-library/clip.json', byteLength: 2, sha256: createHash('sha256').update('{}').digest('hex') };
       expect((await readCatalogResource(root, entry)).toString()).toBe('{}');
       await expect(readCatalogResource(root, { ...entry, byteLength: 3 })).rejects.toThrow('THREE_ASSET_HASH_MISMATCH');
       await expect(readCatalogResource(root, { ...entry, sourcePath: '../clip.json' })).rejects.toThrow('THREE_ASSET_SOURCE_ESCAPE');
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+  it('rejects a readable resource outside the sole asset-library namespace', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'unique-library-')));
+    try {
+      await writeFile(path.join(root, 'old-model.json'), '{}');
+      const entry = {...resource, sourcePath:'old-model.json', byteLength:2, sha256:createHash('sha256').update('{}').digest('hex')};
+      await expect(readCatalogResource(root, entry)).rejects.toThrow('THREE_ASSET_SOURCE_ESCAPE');
+    } finally { await rm(root,{recursive:true,force:true}); }
+  });
+  it('reads a relocated library root without any original asset folder',async()=>{
+    const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'relocated-library-'))),external=path.join(root,'external');
+    try {await mkdir(external);await writeFile(path.join(external,'clip.json'),'{}');vi.stubEnv('ASSET_LIBRARY_ROOT',external);vi.stubEnv('ASSET_LIBRARY_URL','');
+      const entry={...resource,sourcePath:'asset-library/clip.json',byteLength:2,sha256:createHash('sha256').update('{}').digest('hex')};
+      expect((await readCatalogResource(path.join(root,'missing-project'),entry)).toString()).toBe('{}');
+    }finally{vi.unstubAllEnvs();await rm(root,{recursive:true,force:true});}
+  });
+  it('prepares one remote catalog, verifies remote bytes, and never falls back to local data',async()=>{
+    const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'remote-library-')));
+    const hash=createHash('sha256').update('{}').digest('hex'),entry={...resource,id:'remote.subject',uri:`./assets/subjects/${hash}.json`,sourcePath:'asset-library/clip.json',byteLength:2,sha256:hash};
+    let unavailable=false,corrupt=false;
+    const server=createServer((req,res)=>{if(req.url==='/dist/whitebox/asset-catalog.json'){res.setHeader('content-type','application/json');res.end(JSON.stringify({schemaVersion:1,assets:[entry]}));}else if(unavailable){res.writeHead(503);res.end();}else res.end(corrupt?'wrong':'{}');});
+    try {await mkdir(path.join(root,'asset-library'));await writeFile(path.join(root,'asset-library/clip.json'),'{}');await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+      vi.stubEnv('ASSET_LIBRARY_URL',`http://127.0.0.1:${(server.address() as any).port}/`);
+      expect(()=>readLibraryCatalogSync(root)).toThrow('THREE_ASSET_LIBRARY_NOT_PREPARED');await prepareAssetLibrary(root);expect(readLibraryCatalogSync(root)[0]?.id).toBe('remote.subject');
+      expect((await readCatalogResource(root,entry)).toString()).toBe('{}');corrupt=true;await expect(readCatalogResource(root,entry)).rejects.toThrow('THREE_ASSET_HASH_MISMATCH');unavailable=true;
+      await expect(readCatalogResource(root,entry)).rejects.toThrow('THREE_ASSET_LIBRARY_HTTP: 503');
+    }finally{vi.unstubAllEnvs();await new Promise<void>(r=>server.close(()=>r()));await rm(root,{recursive:true,force:true});}
   });
 });
 
@@ -35,12 +65,13 @@ describe('committed player resource declarations', () => {
   it('stores portable POSIX source paths for Linux resource staging', async () => {
     for (const asset of catalog.assets) {
       for (const resource of catalogResources(asset)) {
-        expect(resource.sourcePath, asset.id).toMatch(/^assets\//);
+        expect(resource.sourcePath, asset.id).toMatch(/^asset-library\//);
         expect(resource.sourcePath, asset.id).not.toContain('\\');
         expect(path.posix.normalize(resource.sourcePath), asset.id).toBe(resource.sourcePath);
       }
     }
-    const provenance = JSON.parse(await readFile(new URL('../../../../assets/three-creator/humanoid/source-101/provenance.json', import.meta.url), 'utf8'));
+    const archive=JSON.parse(await readFile(new URL('../../../../asset-library/migrations/legacy-source-records.json',import.meta.url),'utf8'));
+    const provenance=JSON.parse(archive.records.find((r:any)=>r.original_path.endsWith('/humanoid/source-101/provenance.json')).content);
     for (const source of provenance.sources) expect(source.path).not.toContain('\\');
   });
   it.each([

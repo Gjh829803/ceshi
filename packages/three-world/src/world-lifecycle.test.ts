@@ -124,7 +124,7 @@ function lockedInput(world: Awaited<ReturnType<typeof fixture>>) {
   const release = world.bindInput(surface as unknown as HTMLElement, new EventTarget() as HTMLElement);
   documentTarget.pointerLockElement = surface;
   documentTarget.exitPointerLock.mockImplementation(() => {documentTarget.pointerLockElement = null;});
-  return {documentTarget, release, styles};
+  return {documentTarget, release, styles, surface};
 }
 describe('Lifecycle teardown at the host input boundary', () => {
   it('cancels scheduled frames and held input even when releasing pointer lock fails', async () => {
@@ -169,4 +169,34 @@ describe('Lifecycle teardown at the host input boundary', () => {
       expect(disposed).toHaveBeenCalledOnce(); expect(clock.pending.size).toBe(0);
     } finally {input.documentTarget.pointerLockElement = null; input.release(); world.dispose();}
   });
+});
+
+// Remote input shares the existing fixed clock and must release before local restart.
+it.each(['stop','reset','dispose'] as const)('releases queued remote input on %s', async action => {
+  const clock=frames(),world=await fixture();
+  try {
+    world.start(); const lease=world.acquireRemoteInput();
+    lease.submit({sequence:1,heldKeys:['KeyW'],keyEdges:[]});
+    world.advance(1/60); expect(world.keyboard.held.has('KeyW')).toBe(true);
+    lease.submit({sequence:2,heldKeys:['KeyW'],keyEdges:[{code:'Space',kind:'down'}]});
+    world[action]();
+    expect(world.hasRemoteInput).toBe(false);expect(world.keyboard.remoteMode).toBe(false);
+    expect(world.keyboard.held.size).toBe(0);expect(()=>lease.submit({sequence:3,heldKeys:[],keyEdges:[]})).toThrow('RELEASED');
+    expect(clock.pending.size).toBe(action==='reset'?1:0);
+    if(action!=='dispose'){world.start();expect(clock.pending.size).toBe(1);world.acquireRemoteInput().dispose();}
+  } finally {world.dispose();}
+});
+it('releases the remote lease and cancels the clock even when host pointer release fails',async()=>{
+  const clock=frames(),world=await fixture(),input=lockedInput(world);
+  try {
+    world.start();const lease=world.acquireRemoteInput();
+    lease.submit({sequence:1,heldKeys:['KeyW'],keyEdges:[]});world.advance(1/60);
+    const fault=new Error('HOST_REMOTE_RELEASE_FAILED');
+    input.documentTarget.exitPointerLock.mockImplementation(()=>{throw fault;});
+    // acquireRemoteInput clears the old local lock; reproduce a host-owned lock during remote control.
+    input.documentTarget.pointerLockElement=input.surface;
+    expect(()=>world.stop()).toThrow(fault);
+    expect(world.hasRemoteInput).toBe(false);expect(world.keyboard.remoteMode).toBe(false);
+    expect(world.keyboard.held.size).toBe(0);expect(clock.pending.size).toBe(0);
+  } finally {input.documentTarget.pointerLockElement=null;input.release();world.dispose();}
 });

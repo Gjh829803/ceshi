@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.motorcycle/0.1.0/model/bike.glb",
+  "preview": "subjects/vehicles/vehicle.motorcycle/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/model/bike.glb",
+      "sha256": "7131275ec5ca92526e16ee4996fb0fa60a2dbfdd814254483c2809d55529a301",
+      "byte_length": 61392,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/bike.glb",
+      "reused_by": [
+        "vehicle.motorcycle"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/preview/thumbnail.webp",
+      "sha256": "a97dbca23f2462cc88cf0934df69a4a149e1bc9fdac56900feda043f8c5f8363",
+      "byte_length": 9602,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.motorcycle"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 19,
+    "meshes": 13,
+    "materials": 5,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1224,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/bike.glb"
+}

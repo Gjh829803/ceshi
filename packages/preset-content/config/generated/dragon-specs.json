@@ -1,0 +1,3027 @@
+{
+  "D01": {
+    "id": "creature.dragon.d01",
+    "name": "飞龙 D01",
+    "en": "Flying dragon D01",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      0,
+      2.6,
+      0
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.8299999999999998,
+        3.2994999999999997,
+        6.170999999999999
+      ],
+      "offset": [
+        0.10299999999999998,
+        0.7944999999999998,
+        4.468999999999999
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D01-core-0",
+        "center": [
+          -0.011,
+          0.219,
+          6.223
+        ],
+        "radius": 1.462
+      },
+      {
+        "id": "D01-core-1",
+        "center": [
+          0.014,
+          0.295,
+          -0.26
+        ],
+        "radius": 1.442
+      },
+      {
+        "id": "D01-core-2",
+        "center": [
+          0.007,
+          2.384,
+          3.721
+        ],
+        "radius": 1.71
+      },
+      {
+        "id": "D01-core-3",
+        "center": [
+          -0.067,
+          -0.835,
+          3.442
+        ],
+        "radius": 1.48
+      },
+      {
+        "id": "D01-core-4",
+        "center": [
+          0.133,
+          -0.426,
+          9.261
+        ],
+        "radius": 1.379
+      },
+      {
+        "id": "D01-core-5",
+        "center": [
+          0.485,
+          0.154,
+          1.929
+        ],
+        "radius": 1.448
+      },
+      {
+        "id": "D01-core-6",
+        "center": [
+          0.052,
+          0.467,
+          4.402
+        ],
+        "radius": 1.462
+      },
+      {
+        "id": "D01-core-7",
+        "center": [
+          -0.018,
+          -0.964,
+          5.253
+        ],
+        "radius": 1.541
+      },
+      {
+        "id": "D01-core-8",
+        "center": [
+          0.022,
+          1.731,
+          1.282
+        ],
+        "radius": 1.614
+      },
+      {
+        "id": "D01-core-9",
+        "center": [
+          -0.184,
+          0.622,
+          2.832
+        ],
+        "radius": 1.543
+      },
+      {
+        "id": "D01-core-10",
+        "center": [
+          -0.185,
+          -0.271,
+          1.194
+        ],
+        "radius": 1.509
+      },
+      {
+        "id": "D01-core-11",
+        "center": [
+          -0.008,
+          -0.519,
+          7.514
+        ],
+        "radius": 1.636
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.068,
+      "seat": [
+        -0.135,
+        3.195,
+        0.562
+      ],
+      "probes": [
+        {
+          "id": "D01-core-0",
+          "center": [
+            0.263,
+            2.961,
+            3.995
+          ],
+          "radius": 0.703
+        },
+        {
+          "id": "D01-core-1",
+          "center": [
+            0.39,
+            1.815,
+            -1.242
+          ],
+          "radius": 0.831
+        },
+        {
+          "id": "D01-core-2",
+          "center": [
+            -0.354,
+            3.053,
+            0.924
+          ],
+          "radius": 0.919
+        },
+        {
+          "id": "D01-core-3",
+          "center": [
+            0.335,
+            1.709,
+            0.695
+          ],
+          "radius": 0.879
+        },
+        {
+          "id": "D01-core-4",
+          "center": [
+            -0.583,
+            3.404,
+            2.685
+          ],
+          "radius": 0.792
+        },
+        {
+          "id": "D01-core-5",
+          "center": [
+            -0.174,
+            2.164,
+            1.501
+          ],
+          "radius": 0.966
+        },
+        {
+          "id": "D01-core-6",
+          "center": [
+            0.174,
+            2.054,
+            -0.324
+          ],
+          "radius": 0.877
+        },
+        {
+          "id": "D01-core-7",
+          "center": [
+            -0.577,
+            2.087,
+            0.654
+          ],
+          "radius": 0.982
+        },
+        {
+          "id": "D01-core-8",
+          "center": [
+            0.272,
+            1.198,
+            -0.589
+          ],
+          "radius": 0.862
+        },
+        {
+          "id": "D01-core-9",
+          "center": [
+            0.386,
+            2.7,
+            0.47
+          ],
+          "radius": 0.928
+        },
+        {
+          "id": "D01-core-10",
+          "center": [
+            -0.24,
+            3.301,
+            3.536
+          ],
+          "radius": 0.771
+        },
+        {
+          "id": "D01-core-11",
+          "center": [
+            -0.566,
+            2.998,
+            1.863
+          ],
+          "radius": 0.919
+        }
+      ],
+      "support": [
+        -3.125,
+        10.812,
+        -6.543,
+        4.351
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D02": {
+    "id": "creature.dragon.d02",
+    "name": "飞龙 D02",
+    "en": "Flying dragon D02",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.09288931981453548,
+      1.8833502717189936,
+      -0.901541861105132
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.2175,
+        3.5604999999999998,
+        6.5495
+      ],
+      "offset": [
+        -0.1915,
+        1.0635,
+        3.7595000000000005
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D02-core-0",
+        "center": [
+          0.016,
+          -0.253,
+          3.315
+        ],
+        "radius": 1.789
+      },
+      {
+        "id": "D02-core-1",
+        "center": [
+          -0.009,
+          -0.266,
+          8.925
+        ],
+        "radius": 1.384
+      },
+      {
+        "id": "D02-core-2",
+        "center": [
+          0.028,
+          1.008,
+          -1.192
+        ],
+        "radius": 1.598
+      },
+      {
+        "id": "D02-core-3",
+        "center": [
+          -0.006,
+          3.219,
+          2.174
+        ],
+        "radius": 1.405
+      },
+      {
+        "id": "D02-core-4",
+        "center": [
+          0.027,
+          -0.844,
+          5.255
+        ],
+        "radius": 1.653
+      },
+      {
+        "id": "D02-core-5",
+        "center": [
+          -0.015,
+          -0.017,
+          1.714
+        ],
+        "radius": 1.826
+      },
+      {
+        "id": "D02-core-6",
+        "center": [
+          -0.022,
+          1.879,
+          0.54
+        ],
+        "radius": 1.664
+      },
+      {
+        "id": "D02-core-7",
+        "center": [
+          0.003,
+          0.472,
+          4.85
+        ],
+        "radius": 1.879
+      },
+      {
+        "id": "D02-core-8",
+        "center": [
+          0.5,
+          0.288,
+          0.139
+        ],
+        "radius": 1.526
+      },
+      {
+        "id": "D02-core-9",
+        "center": [
+          0.019,
+          2.623,
+          3.092
+        ],
+        "radius": 1.682
+      },
+      {
+        "id": "D02-core-10",
+        "center": [
+          0.001,
+          -0.391,
+          7.092
+        ],
+        "radius": 1.831
+      },
+      {
+        "id": "D02-core-11",
+        "center": [
+          -0.519,
+          0.041,
+          -0.286
+        ],
+        "radius": 1.89
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 2.479,
+      "seat": [
+        -0.638,
+        1.222,
+        1.421
+      ],
+      "probes": [
+        {
+          "id": "D02-core-0",
+          "center": [
+            -0.675,
+            1.265,
+            3.443
+          ],
+          "radius": 0.876
+        },
+        {
+          "id": "D02-core-1",
+          "center": [
+            -0.465,
+            0.414,
+            -0.03
+          ],
+          "radius": 0.949
+        },
+        {
+          "id": "D02-core-2",
+          "center": [
+            -0.702,
+            -0.375,
+            1.69
+          ],
+          "radius": 1.036
+        },
+        {
+          "id": "D02-core-3",
+          "center": [
+            -0.713,
+            2.14,
+            5.13
+          ],
+          "radius": 0.952
+        },
+        {
+          "id": "D02-core-4",
+          "center": [
+            -0.636,
+            0.989,
+            1.515
+          ],
+          "radius": 0.928
+        },
+        {
+          "id": "D02-core-5",
+          "center": [
+            -0.463,
+            2.747,
+            4.31
+          ],
+          "radius": 0.997
+        },
+        {
+          "id": "D02-core-6",
+          "center": [
+            0.163,
+            0.371,
+            0.744
+          ],
+          "radius": 1.033
+        },
+        {
+          "id": "D02-core-7",
+          "center": [
+            -0.448,
+            -0.552,
+            0.451
+          ],
+          "radius": 0.957
+        },
+        {
+          "id": "D02-core-8",
+          "center": [
+            -1.086,
+            0.453,
+            0.796
+          ],
+          "radius": 0.953
+        },
+        {
+          "id": "D02-core-9",
+          "center": [
+            -0.683,
+            0.339,
+            2.664
+          ],
+          "radius": 1.033
+        },
+        {
+          "id": "D02-core-10",
+          "center": [
+            -0.507,
+            1.956,
+            4.08
+          ],
+          "radius": 0.804
+        },
+        {
+          "id": "D02-core-11",
+          "center": [
+            -0.788,
+            1.014,
+            2.437
+          ],
+          "radius": 0.898
+        }
+      ],
+      "support": [
+        -6.381,
+        5.179,
+        -12.793,
+        5.924
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D03": {
+    "id": "creature.dragon.d03",
+    "name": "飞龙 D03",
+    "en": "Flying dragon D03",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.10143964518814236,
+      2.1988230766558,
+      1.6584156129844345
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.6280000000000001,
+        2.8165,
+        4.8045
+      ],
+      "offset": [
+        -0.049000000000000044,
+        0.8045,
+        4.0315
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D03-core-0",
+        "center": [
+          0.004,
+          0.495,
+          4.76
+        ],
+        "radius": 1.336
+      },
+      {
+        "id": "D03-core-1",
+        "center": [
+          0.057,
+          0.136,
+          0.476
+        ],
+        "radius": 1.249
+      },
+      {
+        "id": "D03-core-2",
+        "center": [
+          -0.042,
+          2.133,
+          2.226
+        ],
+        "radius": 1.3
+      },
+      {
+        "id": "D03-core-3",
+        "center": [
+          -0.002,
+          -0.603,
+          7.534
+        ],
+        "radius": 1.302
+      },
+      {
+        "id": "D03-core-4",
+        "center": [
+          -0.015,
+          -0.254,
+          3.142
+        ],
+        "radius": 1.283
+      },
+      {
+        "id": "D03-core-5",
+        "center": [
+          -0.005,
+          2.287,
+          3.689
+        ],
+        "radius": 1.334
+      },
+      {
+        "id": "D03-core-6",
+        "center": [
+          0.324,
+          1.359,
+          1.254
+        ],
+        "radius": 1.255
+      },
+      {
+        "id": "D03-core-7",
+        "center": [
+          -0.001,
+          -0.73,
+          4.286
+        ],
+        "radius": 1.282
+      },
+      {
+        "id": "D03-core-8",
+        "center": [
+          0.001,
+          -0.528,
+          5.822
+        ],
+        "radius": 1.318
+      },
+      {
+        "id": "D03-core-9",
+        "center": [
+          0.011,
+          0.868,
+          2.919
+        ],
+        "radius": 1.277
+      },
+      {
+        "id": "D03-core-10",
+        "center": [
+          -0.442,
+          0.87,
+          1.291
+        ],
+        "radius": 1.235
+      },
+      {
+        "id": "D03-core-11",
+        "center": [
+          0.079,
+          -0.197,
+          1.807
+        ],
+        "radius": 1.324
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.078,
+      "seat": [
+        -0.695,
+        3.021,
+        1.378
+      ],
+      "probes": [
+        {
+          "id": "D03-core-0",
+          "center": [
+            -0.72,
+            2.784,
+            3.215
+          ],
+          "radius": 0.853
+        },
+        {
+          "id": "D03-core-1",
+          "center": [
+            -0.094,
+            2.425,
+            -0.13
+          ],
+          "radius": 0.819
+        },
+        {
+          "id": "D03-core-2",
+          "center": [
+            -1.204,
+            1.928,
+            1.342
+          ],
+          "radius": 0.868
+        },
+        {
+          "id": "D03-core-3",
+          "center": [
+            0.033,
+            2.438,
+            0.995
+          ],
+          "radius": 0.851
+        },
+        {
+          "id": "D03-core-4",
+          "center": [
+            -1.022,
+            2.524,
+            2.571
+          ],
+          "radius": 0.915
+        },
+        {
+          "id": "D03-core-5",
+          "center": [
+            -0.899,
+            2.902,
+            1.775
+          ],
+          "radius": 0.9
+        },
+        {
+          "id": "D03-core-6",
+          "center": [
+            -0.442,
+            1.745,
+            0.6
+          ],
+          "radius": 0.883
+        },
+        {
+          "id": "D03-core-7",
+          "center": [
+            0.528,
+            2.409,
+            0.185
+          ],
+          "radius": 0.792
+        },
+        {
+          "id": "D03-core-8",
+          "center": [
+            -0.537,
+            1.775,
+            1.717
+          ],
+          "radius": 0.86
+        },
+        {
+          "id": "D03-core-9",
+          "center": [
+            0.206,
+            1.531,
+            0.068
+          ],
+          "radius": 0.784
+        },
+        {
+          "id": "D03-core-10",
+          "center": [
+            -0.644,
+            2.668,
+            0.727
+          ],
+          "radius": 0.85
+        },
+        {
+          "id": "D03-core-11",
+          "center": [
+            -0.502,
+            2.557,
+            3.819
+          ],
+          "radius": 0.784
+        }
+      ],
+      "support": [
+        -4.845,
+        8.533,
+        -5.557,
+        5.441
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D04": {
+    "id": "creature.dragon.d04",
+    "name": "飞龙 D04",
+    "en": "Flying dragon D04",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      0.035284322355466885,
+      2.4083334248360706,
+      0.7031703289988525
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.5795,
+        3.978,
+        5.923
+      ],
+      "offset": [
+        0.0924999999999998,
+        1.416,
+        3.8569999999999998
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D04-core-0",
+        "center": [
+          -0.051,
+          0.666,
+          5.571
+        ],
+        "radius": 1.902
+      },
+      {
+        "id": "D04-core-1",
+        "center": [
+          0.08,
+          1.822,
+          -0.274
+        ],
+        "radius": 1.792
+      },
+      {
+        "id": "D04-core-2",
+        "center": [
+          0.033,
+          3.303,
+          3.031
+        ],
+        "radius": 2.091
+      },
+      {
+        "id": "D04-core-3",
+        "center": [
+          0.032,
+          -0.507,
+          2.155
+        ],
+        "radius": 2.055
+      },
+      {
+        "id": "D04-core-4",
+        "center": [
+          -0.496,
+          1.082,
+          3.311
+        ],
+        "radius": 1.991
+      },
+      {
+        "id": "D04-core-5",
+        "center": [
+          -0.159,
+          0.364,
+          8.027
+        ],
+        "radius": 1.753
+      },
+      {
+        "id": "D04-core-6",
+        "center": [
+          0.607,
+          1.108,
+          1.612
+        ],
+        "radius": 2.065
+      },
+      {
+        "id": "D04-core-7",
+        "center": [
+          -0.596,
+          0.738,
+          0.976
+        ],
+        "radius": 1.846
+      },
+      {
+        "id": "D04-core-8",
+        "center": [
+          0.018,
+          3.143,
+          0.965
+        ],
+        "radius": 2.077
+      },
+      {
+        "id": "D04-core-9",
+        "center": [
+          -0.109,
+          -0.793,
+          4.385
+        ],
+        "radius": 1.762
+      },
+      {
+        "id": "D04-core-10",
+        "center": [
+          -0.046,
+          -0.323,
+          6.658
+        ],
+        "radius": 1.649
+      },
+      {
+        "id": "D04-core-11",
+        "center": [
+          0.685,
+          0.525,
+          3.742
+        ],
+        "radius": 1.72
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.066,
+      "seat": [
+        0.111,
+        3.432,
+        0.527
+      ],
+      "probes": [
+        {
+          "id": "D04-core-0",
+          "center": [
+            0.24,
+            3.125,
+            3.709
+          ],
+          "radius": 0.985
+        },
+        {
+          "id": "D04-core-1",
+          "center": [
+            0.24,
+            2.613,
+            -0.745
+          ],
+          "radius": 1.062
+        },
+        {
+          "id": "D04-core-2",
+          "center": [
+            0.073,
+            1.761,
+            1.486
+          ],
+          "radius": 1.206
+        },
+        {
+          "id": "D04-core-3",
+          "center": [
+            -0.102,
+            3.411,
+            1.095
+          ],
+          "radius": 1.138
+        },
+        {
+          "id": "D04-core-4",
+          "center": [
+            0.958,
+            2.694,
+            0.214
+          ],
+          "radius": 1.228
+        },
+        {
+          "id": "D04-core-5",
+          "center": [
+            0.375,
+            3.668,
+            4.445
+          ],
+          "radius": 0.812
+        },
+        {
+          "id": "D04-core-6",
+          "center": [
+            -0.345,
+            2.692,
+            0.102
+          ],
+          "radius": 1.153
+        },
+        {
+          "id": "D04-core-7",
+          "center": [
+            0.329,
+            1.572,
+            0.139
+          ],
+          "radius": 1.118
+        },
+        {
+          "id": "D04-core-8",
+          "center": [
+            -0.523,
+            2.421,
+            2.075
+          ],
+          "radius": 1.106
+        },
+        {
+          "id": "D04-core-9",
+          "center": [
+            -0.239,
+            3.673,
+            2.4
+          ],
+          "radius": 1.093
+        },
+        {
+          "id": "D04-core-10",
+          "center": [
+            0.384,
+            3.067,
+            2.249
+          ],
+          "radius": 1.138
+        },
+        {
+          "id": "D04-core-11",
+          "center": [
+            -0.006,
+            3.74,
+            3.31
+          ],
+          "radius": 1.029
+        }
+      ],
+      "support": [
+        -6.639,
+        8.49,
+        -10.627,
+        4.918
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D05": {
+    "id": "creature.dragon.d05",
+    "name": "飞龙 D05",
+    "en": "Flying dragon D05",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.00009398425572572594,
+      2.0080233088879798,
+      0.7441157487464997
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.8760000000000001,
+        3.527,
+        6.0649999999999995
+      ],
+      "offset": [
+        -0.09899999999999998,
+        0.968,
+        4.5760000000000005
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D05-core-0",
+        "center": [
+          0.01,
+          0.707,
+          5.936
+        ],
+        "radius": 1.671
+      },
+      {
+        "id": "D05-core-1",
+        "center": [
+          -0.013,
+          0.42,
+          0.096
+        ],
+        "radius": 1.585
+      },
+      {
+        "id": "D05-core-2",
+        "center": [
+          0.004,
+          2.74,
+          3.619
+        ],
+        "radius": 1.755
+      },
+      {
+        "id": "D05-core-3",
+        "center": [
+          0.153,
+          -0.334,
+          9.126
+        ],
+        "radius": 1.515
+      },
+      {
+        "id": "D05-core-4",
+        "center": [
+          0.175,
+          -0.635,
+          3.073
+        ],
+        "radius": 1.602
+      },
+      {
+        "id": "D05-core-5",
+        "center": [
+          0.056,
+          1.89,
+          1.465
+        ],
+        "radius": 1.567
+      },
+      {
+        "id": "D05-core-6",
+        "center": [
+          0.044,
+          0.711,
+          4.232
+        ],
+        "radius": 1.729
+      },
+      {
+        "id": "D05-core-7",
+        "center": [
+          -0.034,
+          -1.015,
+          4.752
+        ],
+        "radius": 1.544
+      },
+      {
+        "id": "D05-core-8",
+        "center": [
+          -0.004,
+          0.04,
+          7.691
+        ],
+        "radius": 1.508
+      },
+      {
+        "id": "D05-core-9",
+        "center": [
+          0.07,
+          -0.051,
+          1.464
+        ],
+        "radius": 1.679
+      },
+      {
+        "id": "D05-core-10",
+        "center": [
+          -0.332,
+          0.567,
+          2.719
+        ],
+        "radius": 1.643
+      },
+      {
+        "id": "D05-core-11",
+        "center": [
+          -0.033,
+          -0.991,
+          6.505
+        ],
+        "radius": 1.55
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.093,
+      "seat": [
+        1.057,
+        3.005,
+        -0.198
+      ],
+      "probes": [
+        {
+          "id": "D05-core-0",
+          "center": [
+            1.138,
+            3.211,
+            3.31
+          ],
+          "radius": 1.058
+        },
+        {
+          "id": "D05-core-1",
+          "center": [
+            1.554,
+            1.733,
+            -1.507
+          ],
+          "radius": 1.09
+        },
+        {
+          "id": "D05-core-2",
+          "center": [
+            0.573,
+            2.894,
+            0.152
+          ],
+          "radius": 1.099
+        },
+        {
+          "id": "D05-core-3",
+          "center": [
+            1.356,
+            4.313,
+            2.765
+          ],
+          "radius": 1.182
+        },
+        {
+          "id": "D05-core-4",
+          "center": [
+            1.5,
+            2.037,
+            1.095
+          ],
+          "radius": 1.097
+        },
+        {
+          "id": "D05-core-5",
+          "center": [
+            1.736,
+            2.1,
+            -0.353
+          ],
+          "radius": 1.011
+        },
+        {
+          "id": "D05-core-6",
+          "center": [
+            0.951,
+            3.429,
+            1.768
+          ],
+          "radius": 1.081
+        },
+        {
+          "id": "D05-core-7",
+          "center": [
+            0.966,
+            2.163,
+            -0.876
+          ],
+          "radius": 1.006
+        },
+        {
+          "id": "D05-core-8",
+          "center": [
+            0.799,
+            1.724,
+            0.311
+          ],
+          "radius": 0.988
+        },
+        {
+          "id": "D05-core-9",
+          "center": [
+            0.639,
+            2.33,
+            1.436
+          ],
+          "radius": 1.085
+        },
+        {
+          "id": "D05-core-10",
+          "center": [
+            1.337,
+            3.114,
+            0.362
+          ],
+          "radius": 1.055
+        },
+        {
+          "id": "D05-core-11",
+          "center": [
+            0.666,
+            4.024,
+            2.877
+          ],
+          "radius": 0.978
+        }
+      ],
+      "support": [
+        -3.699,
+        6.519,
+        -11.982,
+        4.029
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D06": {
+    "id": "creature.dragon.d06",
+    "name": "飞龙 D06",
+    "en": "Flying dragon D06",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      0.03785072200028711,
+      2.5861761679004016,
+      0.646139228254275
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.433,
+        4.1884999999999994,
+        5.6075
+      ],
+      "offset": [
+        0.09099999999999997,
+        1.1675,
+        3.5295000000000005
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D06-core-0",
+        "center": [
+          0.044,
+          0.496,
+          5.302
+        ],
+        "radius": 1.777
+      },
+      {
+        "id": "D06-core-1",
+        "center": [
+          -0.043,
+          1.411,
+          -0.489
+        ],
+        "radius": 1.589
+      },
+      {
+        "id": "D06-core-2",
+        "center": [
+          0.097,
+          3.374,
+          1.974
+        ],
+        "radius": 1.982
+      },
+      {
+        "id": "D06-core-3",
+        "center": [
+          0.013,
+          -1.08,
+          2.372
+        ],
+        "radius": 1.806
+      },
+      {
+        "id": "D06-core-4",
+        "center": [
+          -0.091,
+          -0.23,
+          7.166
+        ],
+        "radius": 1.971
+      },
+      {
+        "id": "D06-core-5",
+        "center": [
+          -0.36,
+          1.234,
+          1.638
+        ],
+        "radius": 1.864
+      },
+      {
+        "id": "D06-core-6",
+        "center": [
+          0.062,
+          -1.124,
+          4.781
+        ],
+        "radius": 1.897
+      },
+      {
+        "id": "D06-core-7",
+        "center": [
+          0.673,
+          0.536,
+          2.92
+        ],
+        "radius": 1.851
+      },
+      {
+        "id": "D06-core-8",
+        "center": [
+          0.077,
+          2.755,
+          0.229
+        ],
+        "radius": 1.816
+      },
+      {
+        "id": "D06-core-9",
+        "center": [
+          -0.607,
+          0.057,
+          3.534
+        ],
+        "radius": 1.735
+      },
+      {
+        "id": "D06-core-10",
+        "center": [
+          -0.01,
+          2.25,
+          3.385
+        ],
+        "radius": 1.885
+      },
+      {
+        "id": "D06-core-11",
+        "center": [
+          0.186,
+          0.09,
+          0.851
+        ],
+        "radius": 1.974
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.065,
+      "seat": [
+        -0.222,
+        3.91,
+        0.834
+      ],
+      "probes": [
+        {
+          "id": "D06-core-0",
+          "center": [
+            -0.256,
+            2.993,
+            3.312
+          ],
+          "radius": 1.142
+        },
+        {
+          "id": "D06-core-1",
+          "center": [
+            0.525,
+            3.035,
+            -0.927
+          ],
+          "radius": 1.035
+        },
+        {
+          "id": "D06-core-2",
+          "center": [
+            -0.2,
+            1.22,
+            1.385
+          ],
+          "radius": 1.075
+        },
+        {
+          "id": "D06-core-3",
+          "center": [
+            -0.243,
+            3.591,
+            0.716
+          ],
+          "radius": 1.134
+        },
+        {
+          "id": "D06-core-4",
+          "center": [
+            0.366,
+            2.37,
+            2.371
+          ],
+          "radius": 1.222
+        },
+        {
+          "id": "D06-core-5",
+          "center": [
+            -0.645,
+            2.011,
+            2.55
+          ],
+          "radius": 1.15
+        },
+        {
+          "id": "D06-core-6",
+          "center": [
+            0.136,
+            1.412,
+            0.041
+          ],
+          "radius": 1.164
+        },
+        {
+          "id": "D06-core-7",
+          "center": [
+            0.1,
+            2.23,
+            3.652
+          ],
+          "radius": 1.07
+        },
+        {
+          "id": "D06-core-8",
+          "center": [
+            -0.465,
+            2.885,
+            -0.654
+          ],
+          "radius": 1.094
+        },
+        {
+          "id": "D06-core-9",
+          "center": [
+            0.705,
+            2.799,
+            0.23
+          ],
+          "radius": 1.167
+        },
+        {
+          "id": "D06-core-10",
+          "center": [
+            -0.394,
+            3.416,
+            2.148
+          ],
+          "radius": 1.212
+        },
+        {
+          "id": "D06-core-11",
+          "center": [
+            -0.928,
+            2.044,
+            0.367
+          ],
+          "radius": 1.466
+        }
+      ],
+      "support": [
+        -4.934,
+        5.825,
+        -6.74,
+        4.482
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D07": {
+    "id": "creature.dragon.d07",
+    "name": "飞龙 D07",
+    "en": "Flying dragon D07",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.1105684781428653,
+      2.3671454628234407,
+      1.5626520853407164
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.367,
+        3.181,
+        5.099
+      ],
+      "offset": [
+        0.08099999999999996,
+        0.8639999999999999,
+        3.801
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D07-core-0",
+        "center": [
+          0.049,
+          1.497,
+          1.428
+        ],
+        "radius": 1.61
+      },
+      {
+        "id": "D07-core-1",
+        "center": [
+          0.001,
+          -0.604,
+          7.448
+        ],
+        "radius": 1.452
+      },
+      {
+        "id": "D07-core-2",
+        "center": [
+          0.057,
+          -0.861,
+          4.639
+        ],
+        "radius": 1.456
+      },
+      {
+        "id": "D07-core-3",
+        "center": [
+          0.014,
+          0.754,
+          4.703
+        ],
+        "radius": 1.563
+      },
+      {
+        "id": "D07-core-4",
+        "center": [
+          -0.68,
+          0.187,
+          0.308
+        ],
+        "radius": 1.606
+      },
+      {
+        "id": "D07-core-5",
+        "center": [
+          -0.001,
+          2.483,
+          3.129
+        ],
+        "radius": 1.562
+      },
+      {
+        "id": "D07-core-6",
+        "center": [
+          0.719,
+          0.22,
+          0.459
+        ],
+        "radius": 1.729
+      },
+      {
+        "id": "D07-core-7",
+        "center": [
+          -0.436,
+          -0.338,
+          3.419
+        ],
+        "radius": 1.434
+      },
+      {
+        "id": "D07-core-8",
+        "center": [
+          -0.023,
+          -0.663,
+          5.999
+        ],
+        "radius": 1.359
+      },
+      {
+        "id": "D07-core-9",
+        "center": [
+          0.614,
+          -0.19,
+          2.844
+        ],
+        "radius": 1.53
+      },
+      {
+        "id": "D07-core-10",
+        "center": [
+          -0.243,
+          -0.118,
+          1.783
+        ],
+        "radius": 1.495
+      },
+      {
+        "id": "D07-core-11",
+        "center": [
+          -0.05,
+          1.051,
+          2.997
+        ],
+        "radius": 1.442
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.077,
+      "seat": [
+        -0.216,
+        3.78,
+        1.135
+      ],
+      "probes": [
+        {
+          "id": "D07-core-0",
+          "center": [
+            -1.118,
+            2.95,
+            0.224
+          ],
+          "radius": 0.896
+        },
+        {
+          "id": "D07-core-1",
+          "center": [
+            -0.644,
+            3.545,
+            3.456
+          ],
+          "radius": 0.943
+        },
+        {
+          "id": "D07-core-2",
+          "center": [
+            -0.166,
+            2.235,
+            1.789
+          ],
+          "radius": 1.051
+        },
+        {
+          "id": "D07-core-3",
+          "center": [
+            -0.488,
+            3.467,
+            2.275
+          ],
+          "radius": 1.039
+        },
+        {
+          "id": "D07-core-4",
+          "center": [
+            -1.713,
+            2.7,
+            -0.83
+          ],
+          "radius": 0.911
+        },
+        {
+          "id": "D07-core-5",
+          "center": [
+            -0.308,
+            2.687,
+            -0.792
+          ],
+          "radius": 1.264
+        },
+        {
+          "id": "D07-core-6",
+          "center": [
+            0.113,
+            2.773,
+            0.44
+          ],
+          "radius": 1.111
+        },
+        {
+          "id": "D07-core-7",
+          "center": [
+            0.155,
+            3.26,
+            2.524
+          ],
+          "radius": 0.979
+        },
+        {
+          "id": "D07-core-8",
+          "center": [
+            -0.97,
+            2.65,
+            1.148
+          ],
+          "radius": 0.984
+        },
+        {
+          "id": "D07-core-9",
+          "center": [
+            -0.203,
+            3.565,
+            1.21
+          ],
+          "radius": 0.921
+        },
+        {
+          "id": "D07-core-10",
+          "center": [
+            -0.525,
+            2.065,
+            0.303
+          ],
+          "radius": 1.083
+        },
+        {
+          "id": "D07-core-11",
+          "center": [
+            -0.127,
+            3.906,
+            2.985
+          ],
+          "radius": 0.866
+        }
+      ],
+      "support": [
+        -8.08,
+        3.244,
+        -12.035,
+        3.989
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D08": {
+    "id": "creature.dragon.d08",
+    "name": "飞龙 D08",
+    "en": "Flying dragon D08",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.005025776369020556,
+      1.2545577210292143,
+      0.11466930189100377
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.6574999999999998,
+        3.839,
+        6.330500000000001
+      ],
+      "offset": [
+        0.0685,
+        0.6019999999999999,
+        4.3215
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D08-core-0",
+        "center": [
+          -0.263,
+          0.738,
+          5.379
+        ],
+        "radius": 2.127
+      },
+      {
+        "id": "D08-core-1",
+        "center": [
+          -0.001,
+          0.276,
+          0.015
+        ],
+        "radius": 2.024
+      },
+      {
+        "id": "D08-core-2",
+        "center": [
+          0.107,
+          -0.173,
+          8.708
+        ],
+        "radius": 1.944
+      },
+      {
+        "id": "D08-core-3",
+        "center": [
+          -0.056,
+          -1.387,
+          3.339
+        ],
+        "radius": 1.702
+      },
+      {
+        "id": "D08-core-4",
+        "center": [
+          0.002,
+          1.335,
+          1.785
+        ],
+        "radius": 1.763
+      },
+      {
+        "id": "D08-core-5",
+        "center": [
+          0.76,
+          3.108,
+          4.343
+        ],
+        "radius": 1.174
+      },
+      {
+        "id": "D08-core-6",
+        "center": [
+          0.007,
+          -1.383,
+          5.433
+        ],
+        "radius": 1.854
+      },
+      {
+        "id": "D08-core-7",
+        "center": [
+          0.824,
+          0.58,
+          6.626
+        ],
+        "radius": 1.902
+      },
+      {
+        "id": "D08-core-8",
+        "center": [
+          0.004,
+          -0.554,
+          1.549
+        ],
+        "radius": 1.855
+      },
+      {
+        "id": "D08-core-9",
+        "center": [
+          -0.462,
+          -0.058,
+          7.114
+        ],
+        "radius": 2.127
+      },
+      {
+        "id": "D08-core-10",
+        "center": [
+          -0.218,
+          2.527,
+          4.043
+        ],
+        "radius": 1.914
+      },
+      {
+        "id": "D08-core-11",
+        "center": [
+          0.035,
+          0.126,
+          3.613
+        ],
+        "radius": 1.939
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.071,
+      "seat": [
+        0.066,
+        3.177,
+        0.107
+      ],
+      "probes": [
+        {
+          "id": "D08-core-0",
+          "center": [
+            0.045,
+            4.113,
+            2.283
+          ],
+          "radius": 1.005
+        },
+        {
+          "id": "D08-core-1",
+          "center": [
+            -0.06,
+            1.809,
+            -1.355
+          ],
+          "radius": 0.958
+        },
+        {
+          "id": "D08-core-2",
+          "center": [
+            0.245,
+            1.724,
+            1.611
+          ],
+          "radius": 1.106
+        },
+        {
+          "id": "D08-core-3",
+          "center": [
+            0.079,
+            2.908,
+            -0.019
+          ],
+          "radius": 1.108
+        },
+        {
+          "id": "D08-core-4",
+          "center": [
+            0.269,
+            2.913,
+            2.05
+          ],
+          "radius": 1.122
+        },
+        {
+          "id": "D08-core-5",
+          "center": [
+            -0.101,
+            3.077,
+            -1.236
+          ],
+          "radius": 1.14
+        },
+        {
+          "id": "D08-core-6",
+          "center": [
+            0.865,
+            4.863,
+            2.075
+          ],
+          "radius": 1.095
+        },
+        {
+          "id": "D08-core-7",
+          "center": [
+            -0.036,
+            1.783,
+            0.086
+          ],
+          "radius": 1.101
+        },
+        {
+          "id": "D08-core-8",
+          "center": [
+            -0.439,
+            2.6,
+            1.233
+          ],
+          "radius": 1.073
+        },
+        {
+          "id": "D08-core-9",
+          "center": [
+            0.814,
+            2.415,
+            0.731
+          ],
+          "radius": 1.117
+        },
+        {
+          "id": "D08-core-10",
+          "center": [
+            0.109,
+            4.09,
+            1.201
+          ],
+          "radius": 1.157
+        },
+        {
+          "id": "D08-core-11",
+          "center": [
+            -0.741,
+            4.946,
+            2.053
+          ],
+          "radius": 1.036
+        }
+      ],
+      "support": [
+        -11.015,
+        15.066,
+        -11.472,
+        4.923
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D09": {
+    "id": "creature.dragon.d09",
+    "name": "长身飞龙 D09",
+    "en": "Long-bodied flying dragon D09",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      -0.08957363615376446,
+      2.7633648122450754,
+      -1.9658638496740712
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        3.231,
+        3.1235000000000004,
+        8.341999999999999
+      ],
+      "offset": [
+        -0.17700000000000027,
+        1.2055000000000002,
+        2.463
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D09-core-0",
+        "center": [
+          -1.182,
+          0.459,
+          6.705
+        ],
+        "radius": 1.638
+      },
+      {
+        "id": "D09-core-1",
+        "center": [
+          -1.161,
+          1.189,
+          -3.612
+        ],
+        "radius": 2.233
+      },
+      {
+        "id": "D09-core-2",
+        "center": [
+          0.872,
+          0.293,
+          2.115
+        ],
+        "radius": 2.182
+      },
+      {
+        "id": "D09-core-3",
+        "center": [
+          -0.463,
+          2.289,
+          -1.387
+        ],
+        "radius": 2.04
+      },
+      {
+        "id": "D09-core-4",
+        "center": [
+          -1.353,
+          0.218,
+          2.41
+        ],
+        "radius": 2.055
+      },
+      {
+        "id": "D09-core-5",
+        "center": [
+          0.773,
+          0.415,
+          4.197
+        ],
+        "radius": 2.028
+      },
+      {
+        "id": "D09-core-6",
+        "center": [
+          -0.272,
+          -0.06,
+          9.073
+        ],
+        "radius": 1.732
+      },
+      {
+        "id": "D09-core-7",
+        "center": [
+          0.334,
+          2.2,
+          -2.837
+        ],
+        "radius": 1.916
+      },
+      {
+        "id": "D09-core-8",
+        "center": [
+          -0.337,
+          1.775,
+          0.864
+        ],
+        "radius": 1.857
+      },
+      {
+        "id": "D09-core-9",
+        "center": [
+          -0.8,
+          0.012,
+          4.678
+        ],
+        "radius": 1.93
+      },
+      {
+        "id": "D09-core-10",
+        "center": [
+          0.559,
+          0.231,
+          6.661
+        ],
+        "radius": 1.866
+      },
+      {
+        "id": "D09-core-11",
+        "center": [
+          0.331,
+          0.822,
+          -3.936
+        ],
+        "radius": 1.943
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.04,
+      "seat": [
+        0.333,
+        6.257,
+        0.509
+      ],
+      "probes": [
+        {
+          "id": "D09-core-0",
+          "center": [
+            -0.12,
+            2.937,
+            2.873
+          ],
+          "radius": 0.941
+        },
+        {
+          "id": "D09-core-1",
+          "center": [
+            0.922,
+            4.954,
+            -1.996
+          ],
+          "radius": 0.85
+        },
+        {
+          "id": "D09-core-2",
+          "center": [
+            0.614,
+            5.893,
+            0.905
+          ],
+          "radius": 0.905
+        },
+        {
+          "id": "D09-core-3",
+          "center": [
+            0.745,
+            4.68,
+            2.349
+          ],
+          "radius": 0.917
+        },
+        {
+          "id": "D09-core-4",
+          "center": [
+            0.482,
+            5.238,
+            -0.749
+          ],
+          "radius": 0.853
+        },
+        {
+          "id": "D09-core-5",
+          "center": [
+            0.823,
+            4.418,
+            -1.276
+          ],
+          "radius": 0.929
+        },
+        {
+          "id": "D09-core-6",
+          "center": [
+            0.502,
+            5.249,
+            0.399
+          ],
+          "radius": 0.878
+        },
+        {
+          "id": "D09-core-7",
+          "center": [
+            0.373,
+            3.707,
+            3.106
+          ],
+          "radius": 0.937
+        },
+        {
+          "id": "D09-core-8",
+          "center": [
+            0.228,
+            3.728,
+            2.508
+          ],
+          "radius": 0.956
+        },
+        {
+          "id": "D09-core-9",
+          "center": [
+            0.754,
+            5.381,
+            1.628
+          ],
+          "radius": 0.916
+        },
+        {
+          "id": "D09-core-10",
+          "center": [
+            0.771,
+            5.338,
+            -1.386
+          ],
+          "radius": 0.916
+        },
+        {
+          "id": "D09-core-11",
+          "center": [
+            0.625,
+            5.822,
+            -0.149
+          ],
+          "radius": 0.902
+        }
+      ],
+      "support": [
+        -3.83,
+        8.225,
+        -7.607,
+        5.017
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D10": {
+    "id": "creature.dragon.d10",
+    "name": "飞龙 D10",
+    "en": "Flying dragon D10",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      0.031681729792083745,
+      5.322934244325622,
+      -1.1711399679197654
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.045,
+        5.1915,
+        5.602
+      ],
+      "offset": [
+        -0.08499999999999996,
+        3.4085,
+        1.85
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D10-core-0",
+        "center": [
+          -0.012,
+          0.449,
+          2.842
+        ],
+        "radius": 1.645
+      },
+      {
+        "id": "D10-core-1",
+        "center": [
+          0.062,
+          6.881,
+          -0.946
+        ],
+        "radius": 1.719
+      },
+      {
+        "id": "D10-core-2",
+        "center": [
+          0.024,
+          3.44,
+          -0.357
+        ],
+        "radius": 1.836
+      },
+      {
+        "id": "D10-core-3",
+        "center": [
+          -0.085,
+          3.639,
+          4.418
+        ],
+        "radius": 2.045
+      },
+      {
+        "id": "D10-core-4",
+        "center": [
+          -0.008,
+          0.672,
+          5.79
+        ],
+        "radius": 1.662
+      },
+      {
+        "id": "D10-core-5",
+        "center": [
+          0.015,
+          4.54,
+          1.603
+        ],
+        "radius": 1.696
+      },
+      {
+        "id": "D10-core-6",
+        "center": [
+          0.005,
+          4.91,
+          -1.942
+        ],
+        "radius": 1.81
+      },
+      {
+        "id": "D10-core-7",
+        "center": [
+          -0.001,
+          0.293,
+          1.347
+        ],
+        "radius": 1.555
+      },
+      {
+        "id": "D10-core-8",
+        "center": [
+          -0.016,
+          3.031,
+          2.125
+        ],
+        "radius": 1.9
+      },
+      {
+        "id": "D10-core-9",
+        "center": [
+          0.006,
+          1.455,
+          4.003
+        ],
+        "radius": 1.641
+      },
+      {
+        "id": "D10-core-10",
+        "center": [
+          0.001,
+          5.701,
+          0.165
+        ],
+        "radius": 1.716
+      },
+      {
+        "id": "D10-core-11",
+        "center": [
+          0.012,
+          -0.206,
+          4.425
+        ],
+        "radius": 1.577
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.083,
+      "seat": [
+        0.008,
+        2.897,
+        -0.1
+      ],
+      "probes": [
+        {
+          "id": "D10-core-0",
+          "center": [
+            0.031,
+            2.52,
+            -0.373
+          ],
+          "radius": 0.833
+        },
+        {
+          "id": "D10-core-1",
+          "center": [
+            -0.036,
+            3.31,
+            2.054
+          ],
+          "radius": 0.784
+        },
+        {
+          "id": "D10-core-2",
+          "center": [
+            -0.247,
+            1.802,
+            -1.599
+          ],
+          "radius": 0.845
+        },
+        {
+          "id": "D10-core-3",
+          "center": [
+            0.032,
+            2.266,
+            1.533
+          ],
+          "radius": 0.895
+        },
+        {
+          "id": "D10-core-4",
+          "center": [
+            0.063,
+            4.005,
+            1.308
+          ],
+          "radius": 0.85
+        },
+        {
+          "id": "D10-core-5",
+          "center": [
+            0.393,
+            3.16,
+            1.093
+          ],
+          "radius": 0.892
+        },
+        {
+          "id": "D10-core-6",
+          "center": [
+            -0.386,
+            3.023,
+            1.19
+          ],
+          "radius": 0.731
+        },
+        {
+          "id": "D10-core-7",
+          "center": [
+            0.034,
+            1.646,
+            0.525
+          ],
+          "radius": 0.919
+        },
+        {
+          "id": "D10-core-8",
+          "center": [
+            -0.101,
+            1.776,
+            -0.333
+          ],
+          "radius": 0.937
+        },
+        {
+          "id": "D10-core-9",
+          "center": [
+            -0.022,
+            2.778,
+            0.265
+          ],
+          "radius": 0.968
+        },
+        {
+          "id": "D10-core-10",
+          "center": [
+            -0.164,
+            2.337,
+            -1.179
+          ],
+          "radius": 0.783
+        },
+        {
+          "id": "D10-core-11",
+          "center": [
+            -0.073,
+            3.726,
+            1.78
+          ],
+          "radius": 0.748
+        }
+      ],
+      "support": [
+        -11.769,
+        11.581,
+        -11.382,
+        2.613
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  },
+  "D11": {
+    "id": "creature.dragon.d11",
+    "name": "飞龙 D11",
+    "en": "Flying dragon D11",
+    "archetype": "dragon",
+    "radius": 1.8299999999999998,
+    "seat": [
+      0.025339596295169336,
+      1.6532228348059776,
+      0.17419680901314005
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        2.4595000000000002,
+        3.791,
+        4.946
+      ],
+      "offset": [
+        -0.009500000000000064,
+        1.8130000000000002,
+        2.965
+      ]
+    },
+    "flyingCreatureCollision": [
+      {
+        "id": "D11-core-0",
+        "center": [
+          0.015,
+          -0.348,
+          2.76
+        ],
+        "radius": 1.63
+      },
+      {
+        "id": "D11-core-1",
+        "center": [
+          -0.489,
+          3.65,
+          1.311
+        ],
+        "radius": 1.954
+      },
+      {
+        "id": "D11-core-2",
+        "center": [
+          -0.076,
+          0.675,
+          6.322
+        ],
+        "radius": 1.589
+      },
+      {
+        "id": "D11-core-3",
+        "center": [
+          0.009,
+          1.699,
+          -0.2
+        ],
+        "radius": 1.781
+      },
+      {
+        "id": "D11-core-4",
+        "center": [
+          0.487,
+          2.104,
+          2.821
+        ],
+        "radius": 1.65
+      },
+      {
+        "id": "D11-core-5",
+        "center": [
+          -0.654,
+          1.151,
+          4.766
+        ],
+        "radius": 1.489
+      },
+      {
+        "id": "D11-core-6",
+        "center": [
+          -0.053,
+          -0.153,
+          4.489
+        ],
+        "radius": 1.56
+      },
+      {
+        "id": "D11-core-7",
+        "center": [
+          -0.008,
+          1.494,
+          1.459
+        ],
+        "radius": 1.498
+      },
+      {
+        "id": "D11-core-8",
+        "center": [
+          0.633,
+          1.168,
+          4.292
+        ],
+        "radius": 1.817
+      },
+      {
+        "id": "D11-core-9",
+        "center": [
+          0.007,
+          -0.002,
+          1.194
+        ],
+        "radius": 1.552
+      },
+      {
+        "id": "D11-core-10",
+        "center": [
+          0.583,
+          3.75,
+          1.162
+        ],
+        "radius": 1.797
+      },
+      {
+        "id": "D11-core-11",
+        "center": [
+          -0.629,
+          1.483,
+          3.169
+        ],
+        "radius": 1.84
+      }
+    ],
+    "flyingCreatureGround": {
+      "rootHeight": 0.026,
+      "seat": [
+        -0.504,
+        3.361,
+        0.5
+      ],
+      "probes": [
+        {
+          "id": "D11-core-0",
+          "center": [
+            -0.756,
+            2.895,
+            0.455
+          ],
+          "radius": 0.914
+        },
+        {
+          "id": "D11-core-1",
+          "center": [
+            -0.368,
+            3.027,
+            2.947
+          ],
+          "radius": 0.801
+        },
+        {
+          "id": "D11-core-2",
+          "center": [
+            0.286,
+            4.402,
+            1.804
+          ],
+          "radius": 0.791
+        },
+        {
+          "id": "D11-core-3",
+          "center": [
+            -1.496,
+            4.292,
+            2.14
+          ],
+          "radius": 0.832
+        },
+        {
+          "id": "D11-core-4",
+          "center": [
+            -0.521,
+            3.409,
+            1.795
+          ],
+          "radius": 0.95
+        },
+        {
+          "id": "D11-core-5",
+          "center": [
+            -0.164,
+            1.687,
+            0.382
+          ],
+          "radius": 0.905
+        },
+        {
+          "id": "D11-core-6",
+          "center": [
+            0.028,
+            2.608,
+            -0.537
+          ],
+          "radius": 0.88
+        },
+        {
+          "id": "D11-core-7",
+          "center": [
+            -0.1,
+            3.797,
+            2.574
+          ],
+          "radius": 0.735
+        },
+        {
+          "id": "D11-core-8",
+          "center": [
+            0.023,
+            2.811,
+            0.492
+          ],
+          "radius": 0.916
+        },
+        {
+          "id": "D11-core-9",
+          "center": [
+            -0.828,
+            3.785,
+            2.759
+          ],
+          "radius": 0.757
+        },
+        {
+          "id": "D11-core-10",
+          "center": [
+            -0.616,
+            1.914,
+            -0.107
+          ],
+          "radius": 0.935
+        },
+        {
+          "id": "D11-core-11",
+          "center": [
+            -0.456,
+            2.894,
+            2.284
+          ],
+          "radius": 0.836
+        }
+      ],
+      "support": [
+        -8.943,
+        7.333,
+        -5.972,
+        3.423
+      ],
+      "landingSeconds": 1.8,
+      "takeoffSeconds": 1.4
+    },
+    "mode": "dragon",
+    "kernel": "creature-flight",
+    "speed": 18,
+    "maxSpeed": 31,
+    "accel": 7,
+    "grip": 4,
+    "steer": 1.4,
+    "brakeDeceleration": 22,
+    "coastDeceleration": 7,
+    "pitchResponse": 3.4,
+    "rollResponse": 5,
+    "characterPose": "ride",
+    "flyingCreature": {},
+    "hint": "W/S 俯冲/抬头 · A/D 转向 · Shift 加速 · Ctrl 刹停 · F 着陆/上下龙 · Space 起飞/滑翔 · E 喷火 · Q 闪避"
+  }
+}

@@ -9,6 +9,7 @@ import { readRuntimeLock, executionEnvironment, prepareSessionDirectories, value
 
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const policyModule = toolkitRoot => import(pathToFileURL(path.join(toolkitRoot, "packages/creator-host/src/assets/asset-policy.mjs")).href);
+const libraryModule = toolkitRoot => import(pathToFileURL(path.join(toolkitRoot, "packages/creator-host/src/assets/library-source.mjs")).href);
 async function policyFields(value, toolkitRoot) {
   const {validateAssetPolicySnapshot, assetPolicyHash} = await policyModule(toolkitRoot);
   if (!value?.assetPolicySnapshot || !/^[a-f0-9]{64}$/.test(value.assetPolicySha256 ?? "")) throw new Error("THREE_ASSET_POLICY_PIN_REQUIRED");
@@ -25,20 +26,24 @@ export async function freezeRunAssetPolicy({toolkitRoot, previousPlan}) {
   }
   const {createAssetPolicySnapshot, assetPolicyHash} = await policyModule(toolkitRoot);
   const policy = JSON.parse(await readFile(path.join(toolkitRoot, "packages/creator-host/config/asset-policy.json"), "utf8"));
-  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "assets/three-creator/asset-catalog.json"), "utf8"));
-  const assetPolicySnapshot = createAssetPolicySnapshot(policy, catalog.assets);
+  const {prepareAssetLibrary,readLibraryCatalog,readLibraryDeniedHashes} = await libraryModule(toolkitRoot);
+  await prepareAssetLibrary(toolkitRoot,{assetIds:policy.allowedAssetIds,policyAssetIds:policy.allowedAssetIds});
+  const catalog = await readLibraryCatalog(toolkitRoot,{assetIds:policy.allowedAssetIds,policyAssetIds:policy.allowedAssetIds});
+  const assetPolicySnapshot = createAssetPolicySnapshot(policy, catalog, readLibraryDeniedHashes(toolkitRoot,policy.allowedAssetIds));
   return {assetPolicySnapshot, assetPolicySha256: assetPolicyHash(assetPolicySnapshot)};
 }
 async function verifyInstalledPolicy(snapshot, toolkitRoot) {
   const {createAssetPolicySnapshot, assetPolicyHash} = await policyModule(toolkitRoot);
-  const catalog = JSON.parse(await readFile(path.join(toolkitRoot, "assets/three-creator/asset-catalog.json"), "utf8"));
-  if (assetPolicyHash(createAssetPolicySnapshot(snapshot.policy, catalog.assets)) !== assetPolicyHash(snapshot)) throw new Error("THREE_ASSET_POLICY_CATALOG_MISMATCH");
+  const {prepareAssetLibrary,readLibraryCatalog,readLibraryResource,readLibraryDeniedHashes} = await libraryModule(toolkitRoot);
+  await prepareAssetLibrary(toolkitRoot,{assetIds:snapshot.policy.allowedAssetIds,policyAssetIds:snapshot.policy.allowedAssetIds});
+  const catalog = await readLibraryCatalog(toolkitRoot,{assetIds:snapshot.policy.allowedAssetIds,policyAssetIds:snapshot.policy.allowedAssetIds});
+  if (assetPolicyHash(createAssetPolicySnapshot(snapshot.policy, catalog,readLibraryDeniedHashes(toolkitRoot,snapshot.policy.allowedAssetIds))) !== assetPolicyHash(snapshot)) throw new Error("THREE_ASSET_POLICY_CATALOG_MISMATCH");
   // The locked capsule already verifies its complete file inventory. Also bind
   // the catalog's resource claims to the actual bytes used by this task.
-  for (const asset of catalog.assets) for (const resource of [asset, ...(asset.resources ?? [])]) {
-    const file = path.resolve(toolkitRoot, resource.sourcePath);
-    if (!file.startsWith(toolkitRoot + path.sep) || await realpath(file) !== file || !(await lstat(file)).isFile()) throw new Error("THREE_ASSET_POLICY_RESOURCE_PATH");
-    const bytes = await readFile(file);
+  for (const asset of catalog) for (const resource of [asset, ...(asset.resources ?? [])]) {
+    // The Host adapter enforces the selected library root, contained regular
+    // paths and exact hashes for local and prepared remote library resources.
+    const bytes = await readLibraryResource(toolkitRoot, resource);
     if (bytes.length !== resource.byteLength || digest(bytes) !== resource.sha256) throw new Error("THREE_ASSET_POLICY_RESOURCE_MISMATCH");
   }
 }

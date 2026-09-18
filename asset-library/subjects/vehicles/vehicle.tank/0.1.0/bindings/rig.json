@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "semantic_bones": {},
+  "mapping_status": "unmapped",
+  "bones": [],
+  "skin_count": 0,
+  "selected_node_indices": null,
+  "source_transform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  }
+}

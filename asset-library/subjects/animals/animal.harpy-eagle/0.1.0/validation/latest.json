@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "structure": "passed",
+  "format": "fbx_source_unvalidated",
+  "visual": "preview_loaded",
+  "runtime": "not_run",
+  "checked_at": "2026-09-17T10:20:41.744Z",
+  "evidence": [
+    "tests/evidence/gltf-validation.json",
+    "tests/evidence/browser.json"
+  ],
+  "limitations": [
+    "FBX 是未规范化的来源样本，贴图可能缺失。"
+  ],
+  "source_hashes": "passed",
+  "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "structure": "passed",
+  "format": "passed",
+  "visual": "preview_loaded",
+  "runtime": "not_run",
+  "checked_at": "2026-09-17T10:20:41.744Z",
+  "evidence": [
+    "tests/evidence/gltf-validation.json",
+    "tests/evidence/browser.json"
+  ],
+  "source_hashes": "passed",
+  "limitations": [
+    "历史接入信息保留；本库未宣称已重新验证游戏运行。"
+  ],
+  "visual_scope": "Actual browser load + nonempty mesh scene. Representative models visually inspected; no gameplay/physics validation."
+}

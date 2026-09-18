@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "actions": [
+    "pick_up",
+    "hold",
+    "drop",
+    "throw",
+    "push",
+    "pull",
+    "carry",
+    "be_carried",
+    "equip",
+    "be_equipped",
+    "weapon_use",
+    "tool_use",
+    "mount",
+    "be_mounted",
+    "drive",
+    "be_driven",
+    "ride",
+    "be_ridden",
+    "passenger",
+    "tow",
+    "be_towed",
+    "climb",
+    "be_climbed"
+  ]
+}

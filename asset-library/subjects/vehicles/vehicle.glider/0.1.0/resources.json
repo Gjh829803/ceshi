@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.glider/0.1.0/model/glider.glb",
+  "preview": "subjects/vehicles/vehicle.glider/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.glider/0.1.0/model/glider.glb",
+      "sha256": "47beb14d68eb11dfaa2be07a5cd5bfcf9151826dbdc9f8447145162637545169",
+      "byte_length": 87228,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/glider.glb",
+      "reused_by": [
+        "vehicle.glider"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.glider/0.1.0/preview/thumbnail.webp",
+      "sha256": "c346dd1c91e0f9ecb7d112c862e1ed316fda36b604f860d9db3e885b043946ca",
+      "byte_length": 4198,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.glider"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 12,
+    "meshes": 10,
+    "materials": 6,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 2952,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/glider.glb"
+}

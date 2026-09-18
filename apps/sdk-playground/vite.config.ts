@@ -3,29 +3,39 @@ import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import {createHash} from 'node:crypto';
 import {playgroundDiagnosticsPlugin} from "./server/diagnostics";
 import { cameraConfigPlugin } from "./server/camera-config";
-import { dragonTrainingPlugin } from "./dragon-training-plugin";
+import {assetLibraryRoot,readLibraryCatalog,readLibraryResource,resolveLibrarySelection,materializeLibrarySelection} from '@worldkit/creator-host/library-source';
 import {
   catalogResources,
   publicCatalogValue,
-  readCatalogResource,
   type CatalogResource,
 } from "@worldkit/creator-host/asset-resources";
 const repository = fileURLToPath(new URL("../..", import.meta.url));
+async function runtimeSourceDigest(){
+  const hash=createHash('sha256');
+  async function visit(relative:string){
+    for(const entry of (await readdir(path.join(repository,relative),{withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){
+      const name=relative+'/'+entry.name;
+      if(entry.isSymbolicLink())throw Error('PLAYGROUND_RUNTIME_SYMLINK');
+      if(entry.isDirectory())await visit(name);
+      else if(/\.(?:ts|tsx|js|mjs|json)$/.test(name)&&!name.includes('.test.'))hash.update(name+'\0').update(await readFile(path.join(repository,name))).update('\0');
+    }
+  }
+  for(const relative of ['packages/three-world/src','packages/camera-collision/src','packages/preset-content/src','packages/preset-content/config','apps/sdk-playground/src','apps/sdk-playground/config'])await visit(relative);
+  hash.update(await readFile(path.join(repository,'pnpm-lock.yaml')));
+  return hash.digest('hex');
+}
 // Reuse the verified catalog closure without giving Creator author code npm access.
 function catalogPlugin(): Plugin {
   let files: Map<string, Buffer>;
   async function load() {
     if (files) return files;
-    files = new Map();
-    const catalog = JSON.parse(
-      await readFile(
-        path.join(repository, "assets/three-creator/asset-catalog.json"),
-        "utf8",
-      ),
-    );
+    const result = new Map<string,Buffer>();
+    // Both local and remote library sources pass through the same hash-checked
+    // delivery. Direct GLTF/texture consumers also receive the verified bytes.
     const project = JSON.parse(
       await readFile(
         path.join(
@@ -35,10 +45,19 @@ function catalogPlugin(): Plugin {
         "utf8",
       ),
     );
-    const selected = catalog.assets.filter((a: { id: string }) =>
+    const catalog = await readLibraryCatalog(repository,{assetIds:project.assetIds});
+    const overrides=createHash('sha256').update(JSON.stringify(project)).update(await readFile(path.join(repository,'packages/preset-content/config/profiles.json'))).digest('hex');
+    const selection=await resolveLibrarySelection(repository,project.assetIds,{runtimeDigest:await runtimeSourceDigest(),overridesDigest:overrides});
+    if(selection){
+      const closure=await materializeLibrarySelection(repository,selection.lock);
+      for(const artifact of selection.lock.artifacts)result.set(artifact.storage_path,await readFile(closure.files[artifact.artifact_id]!));
+      result.set('project.assets.json',Buffer.from(JSON.stringify(selection.manifest,null,2)));
+      result.set('project.assets.lock.json',Buffer.from(JSON.stringify(selection.lock,null,2)));
+    }
+    const selected = catalog.filter((a: { id: string }) =>
       project.assetIds.includes(a.id),
     );
-    files.set(
+    result.set(
       "asset-definitions.json",
       Buffer.from(
         JSON.stringify({
@@ -50,10 +69,10 @@ function catalogPlugin(): Plugin {
     for (const asset of selected)
       for (const resource of catalogResources(asset as CatalogResource)) {
         const name = resource.uri.replace(/^\.\//, "");
-        if (!files.has(name))
-          files.set(name, await readCatalogResource(repository, resource));
+        if (!result.has(name))
+          result.set(name, await readLibraryResource(repository, resource));
       }
-    return files;
+    files=result;return files;
   }
   return {
     name: "playground-catalog",
@@ -64,7 +83,7 @@ function catalogPlugin(): Plugin {
       // Catalog URLs identify exact asset bytes. Retire the in-memory catalog
       // when imports change, then let Vite reload clients with the new URLs.
       const catalogInputs = [
-        path.join(repository, "assets/three-creator/asset-catalog.json"),
+        path.join(assetLibraryRoot(repository), "dist/whitebox/asset-catalog.json"),
         path.join(repository, "packages/preset-content/config/project.json"),
       ];
       server.watcher.add(catalogInputs);
@@ -97,7 +116,7 @@ function catalogPlugin(): Plugin {
   };
 }
 export default defineConfig({
-  plugins: [...cameraConfigPlugin(import.meta.dirname), react(), tailwind(), playgroundDiagnosticsPlugin(repository), catalogPlugin(), dragonTrainingPlugin(repository)],
+  plugins: [...cameraConfigPlugin(import.meta.dirname), react(), tailwind(), playgroundDiagnosticsPlugin(repository), catalogPlugin()],
   // Maintenance Vite/SSR tests also use the application root. Their dependency
   // optimizer must not replace chunks served by the running Playground.
   cacheDir: path.join(repository, '.codex-tmp', 'playground-vite'),

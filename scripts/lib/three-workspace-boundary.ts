@@ -4,9 +4,16 @@ import path from "node:path";
 import ts from "typescript";
 
 export const RETAINED_PACKAGES = new Map([
+  ["apps/stream-web/package.json", "@worldkit/stream-web"],
+  ["packages/world-ui/package.json", "@worldkit/world-ui"],
+  ["packages/stream-protocol/package.json", "@worldkit/stream-protocol"],
+  ["packages/stream-player/package.json", "@worldkit/stream-player"],
+  ["packages/stream-host/package.json", "@worldkit/stream-host"],
   ["apps/creator-cloud/package.json", "@worldkit/creator-cloud"],
   ["apps/creator-evaluation-site/package.json", "@worldkit/creator-evaluation-site"],
   ["apps/sdk-playground/package.json", "@worldkit/sdk-playground"],
+  ["packages/asset-client/package.json", "@worldkit/asset-client"],
+  ["packages/asset-contracts/package.json", "@worldkit/asset-contracts"],
   ["packages/browser-capture/package.json", "@worldkit/browser-capture"],
   ["packages/camera-collision/package.json", "@worldkit/camera-collision"],
   ["packages/cloud-generation-client/package.json", "@worldkit/cloud-generation-client"],

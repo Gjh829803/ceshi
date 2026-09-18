@@ -35,8 +35,16 @@ SDK 的 `humanoid.CANOE_WATER` 导出。
 - [浏览器真实按键验证](../packages/creator-host/scripts/smoke/canoe-browser-smoke.ts)
 - [Episode 路线输入测试](../packages/episode-pipeline/tests/planning/vehicle-route.test.ts)
 
-执行 `pnpm exec tsx packages/creator-host/scripts/assets/export-canoe.ts` 导出
-`assets/three-creator/presets/vehicles/canoe.glb` 并更新 `vehicle.canoe` 目录哈希。
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-canoe.ts --output .codex-tmp/canoe.glb`，
+只生成待入库的 GLB 和 `.intake.json` 转换记录；输出已存在时请改用新文件名。
+按[入库流程](../asset-library/CONTRIBUTING.md)，使用 `asset-library/tools/ingest.mjs` 将候选模型
+以稳定 ID `vehicle.canoe`、`--group vehicles` 和新的 `--version` 入库，审查并补齐原有
+bindings、profiles、来源与验证记录，然后在仓库根运行 `pnpm content:sync` 和 `pnpm content:check`。
+
+当前登记版本位于 `asset-library/subjects/vehicles/vehicle.canoe/0.1.0/`。
+模型、挂点与参数的权威数据在主体中；包内 spec 读取生成快照。
+导出器不会替换这个版本或自动更新目录，新版本完成绑定和验证后才用于交付。
+
 SDK 修改后执行 `pnpm build` 并重启预览。
 在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
 验证截图、纯画面操作录像及实际运行时 SHA-256 位于 `outputs/canoe/browser/`。

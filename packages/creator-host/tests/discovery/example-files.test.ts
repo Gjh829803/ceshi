@@ -10,7 +10,9 @@ import {ThreeCreatorTools} from '../../src/tools/tools.js';
 import {executeThreeCreatorTool} from '../../src/cli/mcp.js';
 import {EPISODE_SCHEMA} from '../../src/contracts.js';
 import {createAssetPolicySnapshot, assetPolicyHash} from '../../src/assets/asset-policy.mjs';
-import catalog from '../../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 describe('example source selection',()=>{
  const root=path.resolve('examples/three-creator/vehicle-camera');
  it('lists dependencies and reads selected files without allowing arbitrary paths',async()=>{

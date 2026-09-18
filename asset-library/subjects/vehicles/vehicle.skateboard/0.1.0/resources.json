@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.skateboard/0.1.0/model/slide.glb",
+  "preview": "subjects/vehicles/vehicle.skateboard/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.skateboard/0.1.0/model/slide.glb",
+      "sha256": "035bf797a20a3c86dc8b4979859249b625f627d588d5455982be3828a32ae658",
+      "byte_length": 42016,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/slide.glb",
+      "reused_by": [
+        "vehicle.skateboard"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.skateboard/0.1.0/preview/thumbnail.webp",
+      "sha256": "38af63271ec45e03de3c0b7024e198d64c36719d344cad6c588e623ef8837c1f",
+      "byte_length": 7534,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.skateboard"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 21,
+    "meshes": 11,
+    "materials": 5,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 516,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/slide.glb"
+}

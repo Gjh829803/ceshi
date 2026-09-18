@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "kayak",
+    "name": "单人皮划艇",
+    "en": "KAYAK",
+    "archetype": "kayak",
+    "radius": 0.48,
+    "seat": [
+      0,
+      0.23,
+      -0.35
+    ],
+    "bodyPhysics": {
+      "water": {
+        "depth": 0.35,
+        "bottom": 0.23
+      }
+    },
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.4,
+        0.24,
+        2.2
+      ],
+      "offset": [
+        0,
+        0.01,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

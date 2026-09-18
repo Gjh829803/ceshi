@@ -61,12 +61,15 @@ export function vehicleDirectionInput(family:VehicleFamily,position:Vec3,rotatio
   } else if(family==='submarine'||family==='dragon'){
     input.lift=clamp((delta.y-velocity[1]*.8)/3);input.forward=horizontal<.5?0:input.forward;
   } else if(family==='plane'||family==='glider'){
+    const soaring=family==='plane'&&_aircraft?.subtype==='glider',glider=family==='glider'||soaring;
     const pitch=Math.atan2(delta.y+(family==='glider'?1.2:0),Math.max(5,horizontal));
     const speed=Math.hypot(...velocity),flightPath=family==='plane'?Math.atan2(velocity[1]!,Math.max(1,speed)):0;
-    input.pitch=clamp(-(pitch-flightPath)/(family==='plane'?.27:.62));
-    input.forward=family==='plane'?clamp((56-speed)/12):clamp((SOARING.targetSpeed.glider-speed)/8);
+    input.pitch=clamp(-(pitch-flightPath)/(soaring?.24:family==='plane'?.27:.62));
+    input.forward=glider?clamp((SOARING.targetSpeed.glider-speed)/8):clamp((56-speed)/12);
     if(family==='plane'){const speed=Math.hypot(velocity[0]!,velocity[2]!),course=speed>3?Math.atan2(velocity[0]!,velocity[2]!):yaw;
-      const acceleration=2*speed*speed*Math.sin(desiredYaw-course)/Math.max(15,Math.min(horizontal,speed*1.3));input.steer=clamp(-acceleration/Math.max(speed,16)/AIRCRAFT.turnRate);}
+      const acceleration=2*speed*speed*Math.sin(desiredYaw-course)/Math.max(15,Math.min(horizontal,speed*1.3));
+      // Soaring steers a coordinated bank; powered aircraft exposes assisted yaw rate.
+      input.steer=soaring?clamp(-Math.atan(acceleration/9.81)/.55):clamp(-acceleration/Math.max(speed,16)/AIRCRAFT.turnRate);}
   } else if(family==='sled'||family==='ski'){
     // Foot propulsion is only useful near walking speed; brake before a tight
     // bend or the stopping distance, while leaving a coasting route unpowered.

@@ -148,6 +148,7 @@ export class ThreeWorld implements API.World {
   if(this.changeQueued||this.disposed||!this.changes.size)return;this.changeQueued=true;
   queueMicrotask(()=>{this.changeQueued=false;if(this.disposed)return;for(const callback of this.changes)callback();});
  }
+ acquireRemoteInput():API.RemoteInputLease {this.alive();if(this.episodeLease)throw failure('WORLD_EPISODE_OWNS_CLOCK');return this.engine.acquireRemoteInput();}
  createPresentation(options:API.PresentationOptions={}):API.WorldPresentation {
   this.alive();if(this.presentation)throw failure('PRESENTATION_ALREADY_EXISTS');if(!this.renderer)throw failure('PRESENTATION_REQUIRES_RENDERER');
   const presentation=new ThreePresentation({canvas:this.renderer.domElement,camera:this.camera,
@@ -930,7 +931,7 @@ export class ThreeWorld implements API.World {
     camera:(()=>{const baseline=world.engine.episodeCameraBaseline();return {mode:world.cameraMode,baselineMode:baseline.mode,documentHash:baseline.documentHash??null,views:Object.entries(baseline.document?.views??{}).map(([viewId,view])=>({viewId,kind:view.kind})),defaultViewId:baseline.document?.defaultViewId??null,current:world.engine.cameraSnapshot(),segmentInitialization:'relative-authored-pose' as const,automaticViewSelection:baseline.mode!=='authored'&&!!baseline.document?.viewSelection};})(),maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
    probeStart(start){validateStart(start);return probe(start);},
    async prepareSegment(start,viewport){
-    world.alive();validateStart(start);
+    world.alive();if(world.engine.hasRemoteInput)throw failure('WORLD_REMOTE_INPUT_OWNS_CONTROL');validateStart(start);
     if(!viewport||![viewport.widthPixels,viewport.heightPixels].every(n=>Number.isSafeInteger(n)&&n>0&&n<=8192))throw failure('EPISODE_VIEWPORT_INVALID');
     if(world.episodeLease?.state==='preparing')throw failure('EPISODE_PREPARATION_IN_PROGRESS');
     release();const renderer=world.renderer;if(!renderer)throw failure('EPISODE_RENDERER_REQUIRED');

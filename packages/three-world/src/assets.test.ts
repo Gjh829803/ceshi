@@ -2,13 +2,16 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, LoopOnce, LoopRepeat, Vector3, type DataTexture, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
-import catalog from '../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { loadAsset } from './assets';
 import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const assets = catalog.assets as unknown as readonly (AssetDefinition & { sourcePath: string })[];
 const humanoid = assets.find((asset) => asset.id === 'humanoid.uefn-mannequin')!;
 const animal = assets.find((asset) => asset.id === 'creature.quadruped-static-diagnostic')!;
+const helicopter = assets.find((asset) => asset.id === 'vehicle.helicopter')!;
 const instances: AssetInstance[] = [];
 const readBytes = (definition: typeof humanoid) => () => readFile(resolve(definition.sourcePath));
 const load = async (definition: AssetDefinition = humanoid, source = humanoid) => {
@@ -29,6 +32,38 @@ const pose = (asset: AssetInstance) => {
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); vi.restoreAllMocks(); });
 
 describe('Three asset loader against original project GLBs', () => {
+  it('retains both original helicopter rotor pivot names and their authored local axes', async () => {
+    const instance = await load(helicopter, helicopter);
+    const exactRuntimeName = instance.object.getObjectsByProperty('name', 'aircraft-rotor');
+    expect(exactRuntimeName).toHaveLength(1);
+    const rotors: typeof exactRuntimeName = [];
+    instance.object.traverse(node => {
+      const sourceName = node.userData.name ?? node.name;
+      if (sourceName === 'aircraft-rotor') rotors.push(node);
+    });
+    expect(rotors.map(node => node.name)).toEqual(['aircraft-rotor', 'aircraft-rotor_1']);
+    expect(rotors.map(node => node.userData.name)).toEqual(['aircraft-rotor', 'aircraft-rotor']);
+    const tailParent = rotors[1]!.parent!;
+    const authoredTailOrientation = tailParent.quaternion.clone();
+    expect(tailParent.rotation.z).toBeCloseTo(Math.PI / 2);
+    const applyRotorPhases = (phases: readonly number[]) => rotors.forEach((rotor, index) => {
+      const phase = phases[index] ?? 0;
+      rotor.rotation.y = Number.isFinite(phase) ? phase : 0;
+    });
+    applyRotorPhases([]);
+    instance.object.updateMatrixWorld(true);
+    expect(rotors.map(rotor => rotor.rotation.y)).toEqual([0, 0]);
+    expect(rotors.every(rotor => rotor.matrixWorld.elements.every(Number.isFinite))).toBe(true);
+    const phases = [.75, -1.25];
+    applyRotorPhases(phases);
+    expect(rotors.map(rotor => rotor.rotation.y)).toEqual(phases);
+    expect(tailParent.quaternion.equals(authoredTailOrientation)).toBe(true);
+    applyRotorPhases([]);
+    instance.object.updateMatrixWorld(true);
+    expect(rotors.map(rotor => rotor.rotation.y)).toEqual([0, 0]);
+    expect(rotors.every(rotor => rotor.matrixWorld.elements.every(Number.isFinite))).toBe(true);
+  });
+
   it('skips images by default and isolates decoded Node textures from live whitebox assets', async () => {
     const fetchBytes = vi.fn(readBytes(humanoid));
     const objectURL = vi.spyOn(URL, 'createObjectURL');

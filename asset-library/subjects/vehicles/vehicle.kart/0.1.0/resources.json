@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.kart/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.kart/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.0/model/model.glb",
+      "sha256": "1497eccf3908160008bca683ff571db71181af8ae2f58394895905af19c65ef0",
+      "byte_length": 78144,
+      "format": "glb",
+      "role": "model",
+      "source_path": "kart.glb",
+      "reused_by": [
+        "vehicle.kart"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.0/preview/thumbnail.webp",
+      "sha256": "734c96e5505f9ae67fc9cdf37f376d4d194396fbfabf3ff18feca46d4991d2b0",
+      "byte_length": 15404,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.kart"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 33,
+    "meshes": 23,
+    "materials": 4,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1144,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": []
+}

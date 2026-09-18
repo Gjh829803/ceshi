@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../../test-asset-library';
 import {readFile} from 'node:fs/promises';
 import {afterEach,beforeAll,expect,it} from 'vitest';
 import {Vector3} from 'three';
@@ -10,7 +11,7 @@ import type {MotionSource} from './motion';
 const fixtures:{q:EnvironmentQueries;actor:HumanoidController}[]=[];
 let sources:MotionSource[];
 beforeAll(async()=>{await initEnvironmentQueries();sources=await Promise.all(['mantle-1m','climb-2m5','hurdle-1m'].map(async id=>{
- const bytes=await readFile(new URL(`../../../../../assets/three-creator/presets/humanoid/source/gasp-research/${id}.experimental.glb`,import.meta.url));
+ const bytes=await readFile(new URL(testAssetResourceUrl(`humanoid/source/gasp-research/${id}.experimental.glb`)));
  const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
  return motionSourceFromClip({id,clip:gltf.animations[0]!})!;
 }));});

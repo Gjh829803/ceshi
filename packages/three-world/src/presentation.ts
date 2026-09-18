@@ -73,7 +73,7 @@ export class ThreePresentation implements API.WorldPresentation {
    this.cleanups.add(()=>{win.removeEventListener('resize',relayout);win.removeEventListener('scroll',relayout,true);});
   } catch(error) {this.dispose();throw error;}
   this.ui={root:this.uiRoot,mount:(element,settings)=>this.mount(element,settings),bind:definition=>this.bind(definition),anchor:definition=>this.anchor(definition)};
-  this.modelInput={captureFrame:()=>this.captureFrame(),createStream:settings=>this.createStream(settings)};
+  this.modelInput={captureFrame:options=>this.captureFrame(options),createStream:settings=>this.createStream(settings)};
   this.output={attachStream:(stream,settings)=>this.attachStream(stream,settings),presentFrame:frame=>this.presentFrame(frame),showWorld:()=>this.showWorld()};
   this.refresh();
  }
@@ -149,9 +149,9 @@ export class ThreePresentation implements API.WorldPresentation {
    } catch(error){definition.element.hidden=true;this.error(error);}
   } finally {this.flushing=false;}
  }
- private async captureFrame():Promise<API.ModelInputFrame> {
+ private async captureFrame<T extends API.JsonValue = API.JsonValue>(options?:{readonly readMetadata:(source:API.SourceFrame)=>T}):Promise<API.ModelInputFrame<T>> {
   this.alive();if(this.capturing)fail('CAPTURE_REENTRANT');this.capturing=true;
-  let pending:Promise<ImageBitmap>;let sample:Sample;
+  let pending:Promise<ImageBitmap>;let sample:Sample;let metadata:T|undefined;
   try {
    this.host.render();const canvas=this.host.canvas;
    const source:API.SourceFrame={presentationId:this.presentationId,epoch:this.epoch,sourceFrameId:++this.nextFrameId,...this.host.stamp(),capturedAtMilliseconds:performance.now(),widthPixels:canvas.width,heightPixels:canvas.height};
@@ -159,13 +159,15 @@ export class ThreePresentation implements API.WorldPresentation {
    // Freeze the source synchronously; asynchronous bitmap decoding must not race the next render.
    const copy=canvas.ownerDocument.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;
    const context=copy.getContext('2d')??fail('CAPTURE_CONTEXT_UNAVAILABLE');context.drawImage(canvas,0,0);
-   sample=this.sample(source);pending=createImageBitmap(copy);
+   sample=this.sample(source);
+   if(options)metadata=cloneJson(options.readMetadata({...source}));
+   pending=createImageBitmap(copy);
    this.history.set(source.sourceFrameId,sample);
    while(this.history.size>this.capacity)this.history.delete(this.history.keys().next().value!);
   } finally {this.capturing=false;}
   const image=await pending!;
   if(this.disposed||sample!.source.epoch!==this.epoch){image.close();fail('STALE_CAPTURE');}
-  return {image,source:{...sample!.source}};
+  return {image,source:{...sample!.source},...(metadata===undefined?{}:{metadata})};
  }
  private createStream(options:{readonly framesPerSecond?:number}={}):{stream:MediaStream;close():void} {
   this.alive();const rate=options.framesPerSecond??24;

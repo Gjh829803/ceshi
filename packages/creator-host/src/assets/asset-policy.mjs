@@ -48,7 +48,7 @@ function checkAssets(policy, assets) {
       || !(humanoid.recommendedBody?.heightMeters > 0) || !(humanoid.recommendedBody?.radiusMeters > 0)) fail('THREE_ASSET_POLICY_DEFAULT_UNSUPPORTED');
 }
 
-export function createAssetPolicySnapshot(value, catalog) {
+export function createAssetPolicySnapshot(value, catalog, additionalDeniedHashes=[]) {
   const policy = policyOf(value);
   if (!Array.isArray(catalog) || new Set(catalog.map(a => a.id)).size !== catalog.length) fail('THREE_ASSET_POLICY_CATALOG_INVALID');
   const allowedAssets = policy.allowedAssetIds.map(id => {
@@ -58,9 +58,10 @@ export function createAssetPolicySnapshot(value, catalog) {
   });
   checkAssets(policy, allowedAssets);
   const allowedHashes = new Set(allowedAssets.flatMap(resources).map(resource => resource.sha256));
-  const deniedResourceSha256 = [...new Set(catalog.filter(a => !policy.allowedAssetIds.includes(a.id))
+  if(!Array.isArray(additionalDeniedHashes)||additionalDeniedHashes.some(sha=>!hex(sha)))fail('THREE_ASSET_POLICY_SCOPE_INVALID');
+  const deniedResourceSha256 = [...new Set([...additionalDeniedHashes,...catalog.filter(a => !policy.allowedAssetIds.includes(a.id))
     .flatMap(resources).map(resource => { resourcePath(resource); return resource.sha256; })
-    .filter(sha => !allowedHashes.has(sha)))].sort();
+    ].filter(sha => !allowedHashes.has(sha)))].sort();
   return {kind:'three-creator-asset-policy-snapshot',schemaVersion:1,policy,allowedAssets,deniedResourceSha256};
 }
 
@@ -76,7 +77,7 @@ export function validateAssetPolicySnapshot(value) {
 export function assetPolicyHash(snapshot) { return hash(canonical(validateAssetPolicySnapshot(snapshot))); }
 
 const mediaFile = /\.(?:glb|gltf|bin|png|jpe?g|webp|gif|svg|mp3|ogg|wav|woff2?|ttf)$/i;
-const reserved = name => ['asset-policy.json','asset-definitions.json'].includes(name) || /^(runtime|compiled)\//.test(name);
+const reserved = name => ['asset-policy.json','asset-definitions.json','project.assets.json','project.assets.lock.json'].includes(name) || /^(runtime|compiled)\//.test(name);
 function checkFiles(snapshot, files, source) {
   const denied = new Set(snapshot.deniedResourceSha256);
   const allowed = new Set(snapshot.allowedAssets.flatMap(resources).map(resource => resource.sha256));

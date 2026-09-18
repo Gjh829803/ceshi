@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "sled",
+    "name": "木座雪橇",
+    "en": "SLED",
+    "archetype": "sled",
+    "radius": 1.15,
+    "seat": [
+      0,
+      0.63,
+      -0.22
+    ],
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.65,
+        0.78,
+        1.05
+      ],
+      "offset": [
+        0,
+        0.78,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

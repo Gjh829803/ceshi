@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.submarine/0.1.0/model/sub.glb",
+  "preview": "subjects/vehicles/vehicle.submarine/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.submarine/0.1.0/model/sub.glb",
+      "sha256": "994b053a8b0d34c8f1bdd9b7f6a6b0d9bed047490e3aae3fc95729aeab80607a",
+      "byte_length": 93700,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/sub.glb",
+      "reused_by": [
+        "vehicle.submarine"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.submarine/0.1.0/preview/thumbnail.webp",
+      "sha256": "df41cea0927c713e2e0159dca5fb3895425fc556107e4e43931e4e75a7c7d2d1",
+      "byte_length": 9882,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.submarine"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 15,
+    "meshes": 12,
+    "materials": 5,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 3032,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/sub.glb"
+}

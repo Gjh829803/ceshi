@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.giant-scorpion/0.1.0/preview/Giant Scorpion.jpg",
+  "files": [
+    {
+      "path": "subjects/animals/animal.giant-scorpion/0.1.0/preview/Giant Scorpion.jpg",
+      "sha256": "8024090ef50c50a88108e81157843133d2d7d4fa0f439e212be178dcc638c1e1",
+      "byte_length": 7904,
+      "format": "jpg",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Giant Scorpion.jpg",
+      "reused_by": [
+        "animal.giant-scorpion"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

@@ -2,18 +2,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {fileURLToPath} from 'node:url';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Matrix3,Matrix4,Quaternion,Vector3} from 'three';
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const input=process.argv[2];if(!input)throw new Error('Usage: node scripts/assets/bind-uefn-mannequin.mjs converted.glb');
-const source='assets/three-creator/presets/humanoid/source/gasp-research/climb-2m5.experimental.glb';
-const output='assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb';
+const [input,source,output]=process.argv.slice(2);
+if(!input||!source||!output)throw new Error('Usage: node scripts/assets/bind-uefn-mannequin.mjs converted.glb source-rig.glb new-output.glb; ingest the reviewed output as a new library version');
+if(fs.existsSync(output))throw new Error('OUTPUT_EXISTS');
 const hash=b=>createHash('sha256').update(b).digest('hex');
 function glb(file){const bytes=fs.readFileSync(file),n=bytes.readUInt32LE(12);return {bytes,json:JSON.parse(bytes.subarray(20,20+n)),bin:bytes.subarray(28+n)};}
 globalThis.ProgressEvent=class{};
 async function parse({json,bin}){const j=structuredClone(json);delete j.images;delete j.textures;for(const m of j.materials??[])for(const k of Object.keys(m))if(k!=='name')delete m[k];j.buffers=[{uri:'data:application/octet-stream;base64,'+bin.toString('base64'),byteLength:bin.length}];return new GLTFLoader().parseAsync(JSON.stringify(j),'');}
-const old=glb(path.join(root,source)),incoming=glb(input),target=await parse(old),model=await parse(incoming);
+const old=glb(source),incoming=glb(input),target=await parse(old),model=await parse(incoming);
 let targetMesh,newMesh;target.scene.traverse(o=>{if(o.isSkinnedMesh)targetMesh??=o});model.scene.traverse(o=>{if(o.isSkinnedMesh){if(newMesh)throw new Error('Expected one incoming skinned mesh');newMesh=o}});
 targetMesh.skeleton.pose();target.scene.getObjectByName('GASP_DirectFK_Research').position.set(0,0,0);target.scene.updateMatrixWorld(true);
 newMesh.skeleton.pose();model.scene.updateMatrixWorld(true);
@@ -60,5 +58,5 @@ for(const skin of document.skins){skin.inverseBindMatrices=append(skin.joints.fl
 document.buffers=[{byteLength:length}];document.asset.generator='WorldKit UEFN LOD1 skin binding v1';
 const encoded=Buffer.from(JSON.stringify(document)),jsonPadding=Buffer.alloc((4-encoded.length%4)%4,32),bin=Buffer.concat(binary),binPadding=Buffer.alloc((4-bin.length%4)%4);
 const header=Buffer.alloc(20);header.writeUInt32LE(0x46546c67);header.writeUInt32LE(2,4);header.writeUInt32LE(28+encoded.length+jsonPadding.length+bin.length+binPadding.length,8);header.writeUInt32LE(encoded.length+jsonPadding.length,12);header.writeUInt32LE(0x4e4f534a,16);const binHeader=Buffer.alloc(8);binHeader.writeUInt32LE(bin.length+binPadding.length);binHeader.writeUInt32LE(0x004e4942,4);
-const result=Buffer.concat([header,encoded,jsonPadding,binHeader,bin,binPadding]);fs.writeFileSync(path.join(root,output),result);
+const result=Buffer.concat([header,encoded,jsonPadding,binHeader,bin,binPadding]);fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,result,{flag:'wx'});
 console.log(JSON.stringify({output,sha256:hash(result),sourceRigSha256:hash(old.bytes),convertedInputSha256:hash(incoming.bytes),unitScale,vertices:p.count,triangles:newMesh.geometry.index.count/3,bones:bones.length}));

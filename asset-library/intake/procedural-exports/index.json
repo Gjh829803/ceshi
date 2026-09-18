@@ -1,0 +1,515 @@
+[
+  {
+    "id": "vehicle.supercar",
+    "name": "超跑",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\supercar.glb",
+    "spec": {
+      "id": "supercar",
+      "name": "超跑",
+      "en": "VELOCITY",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 65,
+      "accel": 17,
+      "grip": 18,
+      "steer": 0.88,
+      "radius": 1.7,
+      "seat": [
+        0,
+        0.778,
+        -0.3
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速",
+      "archetype": "racer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1.3,
+          0.74,
+          2.5
+        ],
+        "offset": [
+          0,
+          1.06,
+          0
+        ]
+      },
+      "reverseSpeed": 19.5,
+      "maxSpeed": 74.75,
+      "wheelPhysics": {
+        "mass": 1250,
+        "radius": 0.37,
+        "hubHeight": 0.37,
+        "halfTrack": 1.02,
+        "halfWheelbase": 1.5,
+        "maxRaise": 0.02,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.32,
+        "centerOfMassHeight": 0.45,
+        "tireFriction": 1.55,
+        "wheels": [
+          {
+            "x": -1.02,
+            "z": -1.5,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -1.02,
+            "z": 1.5,
+            "steering": true,
+            "driven": true
+          },
+          {
+            "x": 1.02,
+            "z": -1.5,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 1.02,
+            "z": 1.5,
+            "steering": true,
+            "driven": true
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 7200,
+          "upshiftRpm": 6200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              297
+            ],
+            [
+              2500,
+              462
+            ],
+            [
+              4500,
+              561
+            ],
+            [
+              6000,
+              528
+            ],
+            [
+              7200,
+              396
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 3.9,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.24,
+          "engineBrakeTorque": 65,
+          "dragArea": 0.65,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.8181818181818183
+        },
+        "coastBrakeDeceleration": 1.2
+      }
+    }
+  },
+  {
+    "id": "vehicle.kart",
+    "name": "卡丁车",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\kart.glb",
+    "spec": {
+      "id": "kart",
+      "name": "卡丁车",
+      "en": "KART",
+      "mode": "wheeled",
+      "kernel": "K03",
+      "speed": 24,
+      "accel": 10,
+      "grip": 19,
+      "steer": 1.65,
+      "radius": 1.15,
+      "seat": [
+        0,
+        0.6679999999999999,
+        -0.32
+      ],
+      "hint": "W / S 油门与制动 · A / D 转向 · Space 手刹 · Shift 加速",
+      "archetype": "racer",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          1,
+          0.69,
+          1.45
+        ],
+        "offset": [
+          0,
+          1.01,
+          0
+        ]
+      },
+      "reverseSpeed": 7.199999999999999,
+      "maxSpeed": 27.599999999999998,
+      "wheelPhysics": {
+        "mass": 180,
+        "radius": 0.24,
+        "hubHeight": 0.24,
+        "halfTrack": 0.78,
+        "halfWheelbase": 0.87,
+        "maxRaise": 0.02,
+        "maxDrop": 0.025,
+        "wheelWidth": 0.24,
+        "centerOfMassHeight": 0.3,
+        "tireFriction": 1.4,
+        "wheels": [
+          {
+            "x": -0.78,
+            "z": -0.89,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": -0.78,
+            "z": 0.85,
+            "steering": true,
+            "driven": false
+          },
+          {
+            "x": 0.78,
+            "z": -0.89,
+            "steering": false,
+            "driven": true
+          },
+          {
+            "x": 0.78,
+            "z": 0.85,
+            "steering": true,
+            "driven": false
+          }
+        ],
+        "powertrain": {
+          "idleRpm": 850,
+          "maxRpm": 7200,
+          "upshiftRpm": 6200,
+          "downshiftRpm": 2100,
+          "torqueCurve": [
+            [
+              850,
+              14.4
+            ],
+            [
+              2500,
+              22.400000000000002
+            ],
+            [
+              4500,
+              27.2
+            ],
+            [
+              6000,
+              25.6
+            ],
+            [
+              7200,
+              19.2
+            ]
+          ],
+          "forwardRatios": [
+            3.8,
+            2.3,
+            1.55,
+            1.1,
+            0.85,
+            0.68
+          ],
+          "reverseRatio": 3.3,
+          "finalDrive": 3.9,
+          "efficiency": 0.88,
+          "shiftSeconds": 0.24,
+          "engineBrakeTorque": 5,
+          "dragArea": 0.45,
+          "rollingResistance": 0.018,
+          "boostTorqueMultiplier": 1.6
+        },
+        "coastBrakeDeceleration": 1.2
+      }
+    }
+  },
+  {
+    "id": "vehicle.pusher-plane",
+    "name": "机尾推进式飞机",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\pusher-plane.glb",
+    "spec": {
+      "id": "pusher-plane",
+      "name": "机尾推进式飞机",
+      "en": "PUSHER",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 加油门 / Ctrl 减油门 · W 俯冲 / S 拉起 · A / D 转弯 · Q / E 横滚",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "pusher"
+    }
+  },
+  {
+    "id": "vehicle.helicopter",
+    "name": "单主旋翼直升机",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\helicopter.glb",
+    "spec": {
+      "id": "helicopter",
+      "name": "单主旋翼直升机",
+      "en": "HELI",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          4.1
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "helicopter"
+    }
+  },
+  {
+    "id": "vehicle.multirotor",
+    "name": "四旋翼载人飞行器",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\multirotor.glb",
+    "spec": {
+      "id": "multirotor",
+      "name": "四旋翼载人飞行器",
+      "en": "QUAD",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "multirotor"
+    }
+  },
+  {
+    "id": "vehicle.tiltrotor",
+    "name": "倾转旋翼飞机",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\tiltrotor.glb",
+    "spec": {
+      "id": "tiltrotor",
+      "name": "倾转旋翼飞机",
+      "en": "TILT",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 2,
+      "seat": [
+        0,
+        1.3,
+        0.1
+      ],
+      "hint": "Shift 增加升力 / Ctrl 降低升力（50% 悬停） · W / S 前后倾 · A / D 转向 · Q / E 侧倾 · 前飞加速自动倾转，减速恢复悬停",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          4.5,
+          1.4,
+          3.6
+        ],
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      "aircraftSubtype": "tiltrotor"
+    }
+  },
+  {
+    "id": "vehicle.paraglider",
+    "name": "滑翔伞",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\paraglider.glb",
+    "spec": {
+      "id": "paraglider",
+      "name": "滑翔伞",
+      "en": "CANOPY",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 0.6,
+      "seat": [
+        0,
+        1,
+        0
+      ],
+      "hint": "Shift 助跑离开高台 · W/S 调整滑翔角 · A/D 转向 · Space 刹车缓降着陆",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.5,
+          1,
+          0.5
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "paraglider",
+      "characterPose": "paraglider"
+    }
+  },
+  {
+    "id": "vehicle.wingsuit",
+    "name": "翼装飞行",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\wingsuit.glb",
+    "spec": {
+      "id": "wingsuit",
+      "name": "翼装飞行",
+      "en": "WINGSUIT",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 0.6,
+      "seat": [
+        0,
+        1,
+        0
+      ],
+      "hint": "Shift 助跑离开高台 · W/S 调整俯仰 · A/D 转向 · Space 开伞减速着陆",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.5,
+          1,
+          0.5
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "wingsuit",
+      "characterPose": "wingsuit"
+    }
+  },
+  {
+    "id": "vehicle.balloon",
+    "name": "热气球",
+    "input": "D:\\01_Workspace\\01_Loopit\\00_repos\\agent-whitebox-world-sdk\\.worktrees\\subject-library-demo\\asset-library\\intake\\procedural-exports\\balloon.glb",
+    "spec": {
+      "id": "balloon",
+      "name": "热气球",
+      "en": "BALLOON",
+      "mode": "plane",
+      "kernel": "K09",
+      "speed": 58,
+      "accel": 12,
+      "grip": 1,
+      "steer": 1.05,
+      "radius": 1.2,
+      "seat": [
+        0,
+        0.18,
+        0
+      ],
+      "hint": "Shift 按住加热 · 松开自然冷却 · Ctrl 放热气下降 · 水平随风漂移",
+      "archetype": "plane",
+      "envelope": {
+        "kind": "box",
+        "halfExtents": [
+          0.85,
+          1.4,
+          0.85
+        ],
+        "offset": [
+          0,
+          1,
+          0
+        ]
+      },
+      "aircraftSubtype": "balloon",
+      "characterPose": "stand"
+    }
+  }
+]

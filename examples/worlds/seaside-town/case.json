@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "title": "海滨小镇",
+  "description": "沿海广场、港口、咖啡馆与上坡旧街；步行探索和摩托骑行。",
+  "reference": {
+    "path": "reference.png",
+    "sha256": "80638d6c6791c29a9c57d3b568973195340fd6f5bb7add4afc0ee5397638f803"
+  },
+  "uiProtocolVersion": 1
+}

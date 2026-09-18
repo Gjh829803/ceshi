@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "source_type": "procedural_export",
+  "source_url": null,
+  "license": {
+    "status": "whitebox_authored_procedural",
+    "commercial_use": "unknown",
+    "redistribution": "unknown",
+    "editable_distribution": "unknown",
+    "user_export": "unknown"
+  },
+  "license_files": [],
+  "source_hash": "dca41e20aeb78e0d35c988859b3f330e307c77e2c19456df25ba2d7ea46ec190",
+  "conversion_pipeline": {
+    "tool": "Three.js GLTFExporter",
+    "version": "0.185.1",
+    "method": "buildVehicle(SPECS[id]); remove UI label; GLB export in real browser",
+    "source_entrypoints": [
+      "@worldkit/preset-content/models",
+      "@worldkit/preset-content/config"
+    ]
+  },
+  "source_commit": "514fd6ba261f079620c47c49228c70d70f6e8cb1"
+}

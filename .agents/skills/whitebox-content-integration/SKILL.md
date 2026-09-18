@@ -39,7 +39,7 @@ NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `h
 
 | 内容 | 主要修改位置 | 检查消费者 |
 | --- | --- | --- |
-| 模型及资源元数据 | `assets/three-creator/<内容目录>/`、`assets/three-creator/catalog/<assetId>.json` | asset loader、Creator assets_search/assets_describe、编译后 asset-definitions |
+| 模型及资源元数据 | `asset-library/subjects/<分类>/<ID>/<版本>/` 的 asset/capabilities/resources、bindings/whitebox.json 与 profiles | asset loader、Creator assets_search/assets_describe、编译后 asset-definitions |
 | Source101 动画/绑定 | `humanoid-runtime/humanoid/source-character.ts`、`catalog.ts`、`action-schema.ts` 与实际 source manifest/clip | Character 单个 mixer、动作资格和终态；按实际绑定支持变体 |
 | 可执行动作 | 当前 action-system/controller、capabilities、World execute/operations | 键盘、Creator command schema、Episode action-controller |
 | 操控与几何约定 | SDK `config/`、所属 motion-family、`road-vehicle.ts`/`aircraft-spec.ts` | Playground resolved 配置、自绘示例、真实碰撞与机械动画 |
@@ -71,8 +71,9 @@ Episode 的 actionGoals 也传递同一 `targetId/slotId`，完成判断必须�
 
 ## 让 Agent 找到并知道怎么用
 
-资产源文件编辑后用 `pnpm content:sync` 更新派生 `asset-catalog.json`。
-已有 import/export 脚本写入独立源；不直接编辑聚合目录。
+资产源文件编辑后用 `pnpm content:sync` 更新 `asset-library/dist/whitebox/` 和 package 生成配置。
+新模型通过 `asset-library/tools/ingest.mjs` 入库，补齐主体的 Whitebox 绑定后再接入 Creator。
+导出器显式提供 `--output`，输出待入库文件；不直接覆盖现有版本或编辑聚合目录。
 资源 hash/byteLength/逻辑路径指向最终实际 bytes，保留来源与许可。不要复制同一模型来承载新动画。
 
 新增示例在 `example-registry.json` 写一次 topic/root/default files；源码工具与运行包消费同一登记。

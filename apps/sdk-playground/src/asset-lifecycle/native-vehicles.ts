@@ -1,3 +1,4 @@
+import {resolvePresetResource} from '@worldkit/preset-content/assets/resources';
 import * as THREE from 'three';
 import {humanoid} from '@worldkit/three';
 import {SPECS,type VehicleSpec} from '@worldkit/preset-content/config';
@@ -39,7 +40,7 @@ export async function loadVehicle(choice:Choice):Promise<LoadedVehicle>{
   for(const resource of [...geometries,...materials,...textures])resource.dispose();visual.root.removeFromParent();
  };
  try{
-  if(flyingVisual&&dragon)await flyingVisual.load({dragonUrl:`./flying-creature/__creature-assets/${dragon.file}`,loadTextures:true,animationPrefix:dragon.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'});
+  if(flyingVisual&&dragon)await flyingVisual.load({dragonUrl:resolvePresetResource('flying-creatures/'+dragon.id+'/model.glb'),loadTextures:true,animationPrefix:dragon.id,flameTextureUrl:resolvePresetResource('flying-creatures/flame.png')});
   await visual.creature?.load();
   return {id:instanceId(choice),choice,spec,visual,...(flyingVisual?{flyingVisual}:{}),adopt:()=>{transferred=true;},dispose};
  }catch(error){dispose();throw error;}

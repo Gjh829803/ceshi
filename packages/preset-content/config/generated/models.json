@@ -1,0 +1,295 @@
+{
+  "rover": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.91,
+        0
+      ],
+      "size": [
+        0.72,
+        0.13,
+        0.5
+      ]
+    }
+  },
+  "racer": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.77,
+        0
+      ],
+      "size": [
+        0.72,
+        0.13,
+        0.5
+      ]
+    }
+  },
+  "motorcycle": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.89,
+        -0.48
+      ],
+      "size": [
+        0.42,
+        0.16,
+        0.95
+      ]
+    }
+  },
+  "trail-rover": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.91,
+        0
+      ],
+      "size": [
+        0.72,
+        0.13,
+        0.5
+      ]
+    }
+  },
+  "touring-motorcycle": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.89,
+        -0.48
+      ],
+      "size": [
+        0.42,
+        0.16,
+        0.95
+      ]
+    }
+  },
+  "supercar": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.58,
+        -0.3
+      ],
+      "size": [
+        0.72,
+        0.13,
+        0.5
+      ]
+    }
+  },
+  "kart": {
+    "roadCushion": {
+      "center": [
+        0,
+        0.63,
+        -0.32
+      ],
+      "size": [
+        0.72,
+        0.13,
+        0.5
+      ]
+    }
+  },
+  "unicycle": {
+    "sockets": {
+      "seat.driver": [
+        0,
+        0.94,
+        0
+      ],
+      "entry.left": [
+        1,
+        0,
+        0
+      ],
+      "entry.right": [
+        -1,
+        0,
+        0
+      ],
+      "camera.driver": [
+        0,
+        1.6,
+        0.05
+      ]
+    }
+  },
+  "raft": {
+    "sockets": {
+      "seat.driver": [
+        0,
+        0.45,
+        -0.45
+      ],
+      "seat.passenger.1": [
+        0,
+        0.45,
+        0.85
+      ],
+      "seat.passenger.2": [
+        0,
+        0.45,
+        -1.25
+      ],
+      "entry.left": [
+        1.4,
+        0.05,
+        -0.45
+      ],
+      "entry.right": [
+        -1.4,
+        0.05,
+        -0.45
+      ],
+      "camera.driver": [
+        0,
+        1.08,
+        -0.3
+      ],
+      "control.foot.left": [
+        0.123174,
+        0.389302,
+        0.52132
+      ],
+      "control.foot.right": [
+        -0.122625,
+        0.391087,
+        0.496006
+      ]
+    }
+  },
+  "jetski": {
+    "sockets": {
+      "seat.driver": [
+        0,
+        1,
+        -0.15
+      ],
+      "control.foot.left": [
+        0.420507,
+        0.309005,
+        0.012058
+      ],
+      "control.foot.right": [
+        -0.420509,
+        0.309004,
+        0.012058
+      ],
+      "entry.left": [
+        1.4,
+        0.05,
+        -0.15
+      ],
+      "entry.right": [
+        -1.4,
+        0.05,
+        -0.15
+      ],
+      "camera.driver": [
+        0.000542,
+        1.633,
+        0.080046
+      ],
+      "water.intake": [
+        0,
+        -0.25,
+        -0.85
+      ],
+      "water.jet": [
+        0,
+        -0.02,
+        -1.5
+      ]
+    }
+  },
+  "atv": {
+    "sockets": {
+      "seat.driver": [
+        0,
+        1,
+        -0.15
+      ],
+      "seat.passenger": [
+        0,
+        1,
+        -0.68
+      ],
+      "control.foot.left": [
+        0.420507,
+        0.309005,
+        0.012058
+      ],
+      "control.foot.right": [
+        -0.420509,
+        0.309004,
+        0.012058
+      ],
+      "entry.left": [
+        1.35,
+        0.025,
+        -0.15
+      ],
+      "entry.right": [
+        -1.35,
+        0.025,
+        -0.15
+      ],
+      "camera.driver": [
+        0.000542,
+        1.633,
+        0.080046
+      ]
+    }
+  },
+  "tank": {
+    "sockets": {
+      "seat.driver": [
+        0,
+        1.45,
+        2.1
+      ],
+      "control.hand.left": [
+        0.213968,
+        1.735009,
+        2.518638
+      ],
+      "control.hand.right": [
+        -0.194585,
+        1.743792,
+        2.495255
+      ],
+      "control.foot.left": [
+        0.169582,
+        0.948443,
+        2.590657
+      ],
+      "control.foot.right": [
+        -0.169582,
+        0.948443,
+        2.590659
+      ],
+      "entry.left": [
+        3.25,
+        0.025,
+        0
+      ],
+      "entry.right": [
+        -3.25,
+        0.025,
+        0
+      ],
+      "camera.driver": [
+        0.000542,
+        2.083,
+        2.330046
+      ]
+    }
+  }
+}

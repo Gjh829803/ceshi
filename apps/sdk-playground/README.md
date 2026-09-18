@@ -18,6 +18,17 @@ changes to the scene entry reload the world. A production build includes the
 verified asset catalog closure and can be served as static files. No CDN runtime
 imports or external model fetches are needed.
 
+### Independent asset library demo
+
+Start `node asset-library/tools/serve.mjs` from the repository root. Then set
+`ASSET_LIBRARY_URL=http://127.0.0.1:3188/` before starting this Playground.
+The Vite catalog adapter serves definitions whose resource URLs point at that
+library; model bytes are loaded directly from its HTTP origin. Without the URL,
+the same library is read locally from `asset-library/`, or `ASSET_LIBRARY_ROOT`.
+There is no former-directory fallback. Controllers, simulation, animation
+ownership and Creator permissions stay with their existing owners. Dedicated
+content parameters and camera defaults are generated from library subject profiles.
+
 ## Local diagnostics and reproduction
 
 For taking over another person's incident without conversation history, use the

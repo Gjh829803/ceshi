@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "archetype": [
+    "directional",
+    "throttle_steer",
+    "differential_drive",
+    "bike_balance",
+    "aircraft",
+    "rotorcraft",
+    "marine_3d",
+    "space_6dof",
+    "path_speed_control",
+    "target_position",
+    "unknown"
+  ]
+}

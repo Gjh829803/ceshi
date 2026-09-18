@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "creature.horse",
+  "asset_version": "0.1.0",
+  "display_name": "骑乘骏马 / Horse",
+  "aliases": [
+    "horse",
+    "骑乘骏马"
+  ],
+  "browse_group": "animals",
+  "semantic_type": "animal.mammal.equine.horse",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "skinned_articulated",
+    "profiles": [
+      "quadruped"
+    ],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Walk also serves trot; no distinct trot clip. The supplied humanoid uses a procedural riding overlay; no authored mount/dismount clips, rein contact solver or guarantee against visible body intersection.",
+  "default_assembly": "subjects/animals/creature.horse/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

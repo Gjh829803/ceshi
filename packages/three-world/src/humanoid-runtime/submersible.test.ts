@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';
@@ -70,7 +71,7 @@ describe('observation submersible',()=>{
 it('places the original rider inside the sealed cabin from the first mounted frame',async()=>{
  const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const b=await readFile(fileURLToPath(url));return parseFixtureGlb(b);});
  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
- const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...SUBMERSIBLE_SPEC.seat);
+ const rider=new Character();try{await rider.load(testAssetResourceUrl);rider.root.position.set(...SUBMERSIBLE_SPEC.seat);
   for(const dt of [0,1/60,.5]){rider.update(dt,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'submarine'});
    rider.root.updateMatrixWorld(true);let low=Infinity,high=-Infinity,front=-Infinity;const v=new Vector3();rider.root.traverse(n=>{if(n instanceof SkinnedMesh){n.skeleton.update();for(let j=0;j<n.geometry.getAttribute('position').count;j++){n.getVertexPosition(j,v).applyMatrix4(n.matrixWorld);low=Math.min(low,v.y);high=Math.max(high,v.y);front=Math.max(front,v.z);}}});
    expect(low).toBeGreaterThan(-.33);expect(high).toBeLessThan(1.42);expect(front).toBeLessThan(1.27);

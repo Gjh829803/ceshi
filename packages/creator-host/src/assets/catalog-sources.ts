@@ -1,47 +1,31 @@
-import {mkdir,readFile,readdir,lstat,writeFile,rm,realpath} from 'node:fs/promises';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {lstat,readdir,realpath} from 'node:fs/promises';
+import {assetLibraryRoot,assetLibraryUrl} from './library-source.mjs';
+import {composeAssetCatalog,presetAuthoringContext} from '@worldkit/preset-content/assets/host-adapter';
 
-export type CatalogSource = Record<string,any> & {id:string};
-const sourceDirectory=(root:string)=>path.join(root,'assets/three-creator/catalog');
-function validate(entries:readonly CatalogSource[]) {
-  const ids=new Set<string>();
-  for(const entry of entries) {
-    if(!entry || typeof entry.id!=='string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(entry.id))throw new Error('THREE_CATALOG_ID_INVALID');
-    if(ids.has(entry.id))throw new Error(`THREE_CATALOG_DUPLICATE: ${entry.id}`);ids.add(entry.id);
-  }
+export type CatalogSource=Record<string,any>&{id:string};
+async function authoringModule(root:string,name:string){
+  if(assetLibraryUrl())throw new Error('THREE_ASSET_LIBRARY_READ_ONLY: edit the source library and publish it');
+  const libraryRoot=assetLibraryRoot(root),file=path.join(libraryRoot,'tools',name);
+  if((await lstat(libraryRoot)).isSymbolicLink()||(await lstat(file)).isSymbolicLink()||await realpath(file)!==file)throw new Error('THREE_CATALOG_SOURCE_SYMLINK');
+  return import(pathToFileURL(file).href);
 }
-export async function readCatalogSources(root:string):Promise<CatalogSource[]> {
-  const directory=sourceDirectory(await realpath(root)),entries:CatalogSource[]=[];
-  if((await lstat(directory)).isSymbolicLink() || await realpath(directory)!==directory)throw new Error('THREE_CATALOG_SOURCE_SYMLINK');
-  for(const name of (await readdir(directory)).sort()) {
-    if(!name.endsWith('.json'))continue;
-    const file=path.join(directory,name),stat=await lstat(file);
-    if(stat.isSymbolicLink() || await realpath(file)!==file)throw new Error('THREE_CATALOG_SOURCE_SYMLINK');
-    if(!stat.isFile())throw new Error('THREE_CATALOG_SOURCE_INVALID');
-    const entry=JSON.parse(await readFile(file,'utf8')) as CatalogSource;validate([entry]);
-    if(name!==`${entry.id}.json`)throw new Error(`THREE_CATALOG_SOURCE_ID: ${name}`);
-    entries.push(entry);
-  }
-  validate(entries);return entries.sort((a,b)=>a.id.localeCompare(b.id));
+/** Build descriptors from subject metadata; no independently authored catalog exists. */
+export async function readCatalogSources(root:string):Promise<CatalogSource[]>{
+  const generator=await authoringModule(root,'whitebox.mjs');
+  async function rejectLinks(directory:string):Promise<void>{for(const name of await readdir(directory)){const file=path.join(directory,name),stat=await lstat(file);if(stat.isSymbolicLink())throw new Error('THREE_CATALOG_SOURCE_SYMLINK');if(stat.isDirectory())await rejectLinks(file);}}
+  await rejectLinks(path.join(assetLibraryRoot(root),'subjects'));
+  const entries:CatalogSource[]=(await generator.buildWhiteboxCatalog(assetLibraryRoot(root))).assets,ids=new Set<string>();
+  for(const entry of entries){if(typeof entry.id!=='string'||!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(entry.id))throw new Error('THREE_CATALOG_ID_INVALID');if(ids.has(entry.id))throw new Error('THREE_CATALOG_DUPLICATE: '+entry.id);ids.add(entry.id);}
+  return composeAssetCatalog(entries);
 }
-/** Import/export scripts write owned entries. Full replacement is explicit. */
-export async function writeCatalogSources(root:string,entries:readonly CatalogSource[],replace=false):Promise<void> {
-  validate(entries);const directory=sourceDirectory(await realpath(root));await mkdir(directory,{recursive:true});
-  if((await lstat(directory)).isSymbolicLink() || await realpath(directory)!==directory)throw new Error('THREE_CATALOG_SOURCE_SYMLINK');
-  // Check all existing paths before a write; never follow an author-controlled link.
-  const existing=await readCatalogSources(root);
-  for(const entry of entries) {
-    const previous=existing.find(value=>value.id===entry.id);
-    if(previous && JSON.stringify(previous)===JSON.stringify(entry))continue;
-    await writeFile(path.join(directory,`${entry.id}.json`),`${JSON.stringify(entry,null,2)}\n`);
-  }
-  if(replace)for(const entry of existing)if(!entries.some(next=>next.id===entry.id))await rm(path.join(directory,`${entry.id}.json`));
-}
-/** The Host catalog is derived from the independent asset definitions. */
-export async function syncAssetCatalog(root:string,check=false) {
-  const entries=await readCatalogSources(root),file=path.join(root,'assets/three-creator/asset-catalog.json');
-  const text=`${JSON.stringify({schemaVersion:1,assets:entries},null,2)}\n`;
-  if(check) {if(await readFile(file,'utf8')!==text)throw new Error('THREE_CATALOG_GENERATED_DRIFT: run pnpm content:sync');}
-  else await writeFile(file,text);
-  return entries;
+/** Maintainer operation: derive host metadata and compile-time content snapshots. */
+export async function syncAssetCatalog(root:string,check=false):Promise<CatalogSource[]>{
+  const generator=await authoringModule(root,'whitebox.mjs');
+  await generator.syncWhiteboxCatalog(assetLibraryRoot(root),check);
+  const presets=await authoringModule(root,'presets.mjs');
+  await presets.syncContentOwnership(assetLibraryRoot(root),path.join(root,'packages/preset-content'),check);
+  await presets.syncPresetContent(assetLibraryRoot(root),path.join(root,'packages/preset-content'),check,presetAuthoringContext());
+  return readCatalogSources(root);
 }

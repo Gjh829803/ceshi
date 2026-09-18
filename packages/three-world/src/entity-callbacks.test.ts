@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises';
-import catalog from '../../../assets/three-creator/asset-catalog.json';
+import catalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
 import {Character} from './humanoid-runtime/character';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {Group,PerspectiveCamera} from 'three';

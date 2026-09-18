@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "source_type": "whitebox_snapshot",
+  "source_url": null,
+  "source_creator": null,
+  "source_commit": "514fd6ba261f079620c47c49228c70d70f6e8cb1",
+  "original_asset_id": "humanoid.uefn-mannequin",
+  "original": {
+    "repository": "vehicle-training-ground",
+    "commit": "c293622a63716b8473cc2a95cb485c515265945e",
+    "notices": "resources",
+    "importedWithoutChangingAssetBytes": false,
+    "modelModification": "User-supplied UEFN BlackJoints LOD1 skin bound offline to preserved Source101 animation rig."
+  },
+  "license": {
+    "status": "see_source_notices",
+    "commercial_use": "unknown",
+    "redistribution": "unknown",
+    "editable_distribution": "unknown",
+    "user_export": "unknown"
+  },
+  "license_files": [
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/6d01f55c-LICENSE-ANIMATIONS.txt",
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/f9b1de4e-LICENSE-UAL2.txt",
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/8276bedb-THIRD_PARTY_NOTICES.md",
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/6d01f55c-LICENSE-SOURCE-CC0.txt",
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/ee588de7-LICENSE-NOTICE.txt",
+    "subjects/characters/humanoid.uefn-mannequin/0.1.0/source/84a52c6a-LICENSE-SOURCE-CMU.txt"
+  ],
+  "modified_from": null,
+  "conversion_pipeline": {
+    "method": "byte_preserving_copy",
+    "tool": "import-whitebox.mjs",
+    "version": "1.0"
+  }
+}

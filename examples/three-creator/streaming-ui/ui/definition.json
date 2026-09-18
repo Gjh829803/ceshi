@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "stream-demo",
+  "designViewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "spec": {
+    "root": "hud",
+    "elements": {
+      "hud": {
+        "type": "HudLayer",
+        "props": {},
+        "children": [
+          "health",
+          "controls"
+        ]
+      },
+      "health": {
+        "type": "HealthBar",
+        "props": {
+          "value": {
+            "$state": "/player/health"
+          },
+          "max": {
+            "$state": "/player/maxHealth"
+          }
+        },
+        "children": [],
+        "layout": {
+          "position": "absolute",
+          "top": 28,
+          "left": 28,
+          "width": 346,
+          "zIndex": 10
+        }
+      },
+      "controls": {
+        "type": "Controls",
+        "props": {},
+        "children": [],
+        "on": {
+          "damage": {
+            "action": "damage",
+            "params": {}
+          },
+          "heal": {
+            "action": "heal",
+            "params": {}
+          }
+        },
+        "layout": {
+          "position": "absolute",
+          "bottom": 28,
+          "left": 28,
+          "right": 28,
+          "zIndex": 20
+        }
+      }
+    }
+  },
+  "transitions": {
+    "health": {
+      "value": {
+        "targetProperty": "displayValue",
+        "durationMs": 600,
+        "easing": "linear",
+        "interrupt": "from-current"
+      }
+    }
+  }
+}

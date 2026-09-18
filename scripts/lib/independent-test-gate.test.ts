@@ -126,6 +126,7 @@ describe("independent test repository census", () => {
       nodeTestFiles: [
         "apps/creator-cloud/creator-eval-diagnostics.test.mjs",
         "apps/creator-cloud/prepare-three-evaluation-site.test.mjs",
+        "apps/creator-cloud/three-capsule.test.mjs",
         "apps/creator-cloud/three-eval-asset-policy.test.mjs",
         "apps/creator-cloud/three-eval-effort.test.mjs",
         "apps/creator-cloud/three-eval-progress.test.mjs",
@@ -134,7 +135,11 @@ describe("independent test repository census", () => {
         "apps/creator-cloud/three-ray-cleanup.test.mjs",
         "deploy/creator-evaluation/gateway.test.mjs",
         "deploy/three-creator-runtime/capsule.test.mjs",
+        "packages/asset-client/tests/client.test.mjs",
+        "packages/asset-contracts/tests/contracts.test.mjs",
         "packages/cloud-generation-client/lwdp-generation-client.test.mjs",
+        "packages/creator-host/tests/assets/registry-compiler.test.mjs",
+        "packages/creator-host/tests/assets/registry-source.test.mjs",
         "packages/episode-pipeline/tests/batch/batch-resources.test.mjs",
         "packages/episode-pipeline/tests/batch/cloud-production-run.test.mjs",
         "packages/episode-pipeline/tests/batch/gpu-capture-batch.test.mjs",
@@ -156,6 +161,7 @@ describe("independent test repository census", () => {
         "packages/episode-pipeline/tests/visuals/episode-style-variants.test.mjs",
         "packages/episode-pipeline/tests/visuals/vertex-event-director.test.mjs",
         "packages/episode-pipeline/tests/visuals/visuals.test.mjs",
+        "packages/preset-content/src/assets/host-adapter.test.mjs",
       ],
     });
   });

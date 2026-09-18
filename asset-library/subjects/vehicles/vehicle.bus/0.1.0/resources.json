@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.bus/0.1.0/model/bus.glb",
+  "preview": "subjects/vehicles/vehicle.bus/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.bus/0.1.0/model/bus.glb",
+      "sha256": "47231d79d0b76bf45358a7e7f5989a25973f1eceb400d03c0802969e8b065f14",
+      "byte_length": 381212,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/bus.glb",
+      "reused_by": [
+        "vehicle.bus"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.bus/0.1.0/preview/thumbnail.webp",
+      "sha256": "6c8ef9fed63bdc8393cad1208025edf19748220158873368a7e3ec69b4129804",
+      "byte_length": 15876,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.bus"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 148,
+    "meshes": 137,
+    "materials": 8,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 5076,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/bus.glb"
+}

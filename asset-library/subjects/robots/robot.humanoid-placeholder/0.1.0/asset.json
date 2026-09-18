@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "robot.humanoid-placeholder",
+  "asset_version": "0.1.0",
+  "display_name": "人形机器人 · 分类占位",
+  "aliases": [
+    "人形机器人 · 分类占位"
+  ],
+  "browse_group": "robots",
+  "semantic_type": "robot.humanoid",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [
+      "biped"
+    ],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "分类模板占位，待引入真实资源。",
+  "default_assembly": "subjects/robots/robot.humanoid-placeholder/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

@@ -1,5 +1,6 @@
 import { SPECS, type CollisionEnvelope } from '../config';
 import { humanoid } from '@worldkit/three';
+import personProfile from '../../config/generated/person.json';
 
 export const PROFILE_VERSION = 2 as const;
 export type ControlTuning = humanoid.MovementSettings;
@@ -19,7 +20,7 @@ const person: AssetProfile = {
   version: PROFILE_VERSION,
   assetId: 'person',
   control: humanoid.defaultMovementSettings('character',humanoid.DEFAULT_CHARACTER_CONTROL_BASE),
-  envelope: { kind: 'capsule', radius: .28, halfHeight: .56, offset: [0, .84, 0] },
+  envelope: structuredClone(personProfile.envelope) as ProfileEnvelope,
 };
 
 const records: Record<string, AssetProfile> = { person };

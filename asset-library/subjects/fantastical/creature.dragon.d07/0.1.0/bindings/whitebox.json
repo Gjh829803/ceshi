@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.flying-creature"
+  ],
+  "integrationMetadata": {
+    "classification": "flying-mount",
+    "exampleTopic": "mounted-interaction",
+    "exampleVariant": "flying-creature",
+    "documentation": "assets/animals/flying-mounts.md",
+    "requiredAssetIds": [
+      "humanoid.uefn-mannequin",
+      "creature.dragon.d07"
+    ],
+    "visual": {
+      "animationPrefix": "D07",
+      "modelResource": "flying-creatures/D07/model.glb",
+      "flameResource": "flying-creatures/flame.png"
+    },
+    "useWhen": "使用编号 D07 的飞龙模型；支持飞行、落地、召唤（summon）和绳梯骑乘。与进化龙使用不同控制配置；编号是资源标识，官方名称未确认。",
+    "binding": "Load humanoid.FlyingCreatureVisual using visual resources and animationPrefix; pass its root and flyingVisual with this vehicle.spec. The SDK owns its mixer and fixed simulation tick; do not start another animation loop or use generic asset action playback.",
+    "capabilities": [
+      "Flight, boost, glide, brake hover, dodge and flame visual feedback.",
+      "Landing, takeoff and the supplied humanoid rope-ladder mount/dismount after ground support and clearance checks.",
+      "SDK summon navigation with actual flight/landing outcomes; observe summon and ground phases for completion."
+    ]
+  },
+  "empty_fields": [],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

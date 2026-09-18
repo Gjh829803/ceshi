@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "source_commit": "63b289d541e2aa89b64dd8cfa044657e2f4dc5d1",
+  "source_count": 11,
+  "source_bytes": 567408,
+  "all_bytes_retained": true,
+  "purpose": "Original Playground selector PNGs retained byte-for-byte as subject previews; consumption uses hash-verified library resource delivery.",
+  "files": [
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D01.png",
+      "path": "subjects/fantastical/creature.dragon.d01/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D01/thumbnail.png",
+      "sha256": "fc3a1f9611f0c1d8c9f72f38e4161db677d4735f7e360a78c82eb2b89008e227",
+      "byte_length": 49260
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D02.png",
+      "path": "subjects/fantastical/creature.dragon.d02/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D02/thumbnail.png",
+      "sha256": "5d8e137a763974ef98d71ef41b73c876fe4e0e8cfb15582fd8e46df09f2e96bb",
+      "byte_length": 54417
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D03.png",
+      "path": "subjects/fantastical/creature.dragon.d03/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D03/thumbnail.png",
+      "sha256": "7b87989bbe78e5e96559665ad0ac0fa6abd7f9732355e9ae2e2ceaa0471d5c20",
+      "byte_length": 44280
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D04.png",
+      "path": "subjects/fantastical/creature.dragon.d04/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D04/thumbnail.png",
+      "sha256": "c2b7507ef85ee56cf849ce4201fddf1faefb9b5de9d428c26911e3a92467b39c",
+      "byte_length": 53876
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D05.png",
+      "path": "subjects/fantastical/creature.dragon.d05/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D05/thumbnail.png",
+      "sha256": "81efe3cb1ffe658ed066d90ffdb0b70405192593a02f0885bae10798c5cbc8b6",
+      "byte_length": 61137
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D06.png",
+      "path": "subjects/fantastical/creature.dragon.d06/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D06/thumbnail.png",
+      "sha256": "8aa620e162a1c904ddcb421747a3e784a3bcdc16b0d5cafe7737f42d577de92c",
+      "byte_length": 53974
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D07.png",
+      "path": "subjects/fantastical/creature.dragon.d07/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D07/thumbnail.png",
+      "sha256": "e0d7f09cb48a74f9b8c2d4cfc4488e58b0c6271d84eb02b700b878f0bbac40b0",
+      "byte_length": 54430
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D08.png",
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D08/thumbnail.png",
+      "sha256": "d6e74f5826e2484baa1fcefa716ed4a3585cc604db5b023d35f41906a35cd9f1",
+      "byte_length": 51854
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D09.png",
+      "path": "subjects/fantastical/creature.dragon.d09/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D09/thumbnail.png",
+      "sha256": "27771c9f8543628fc4b59f8e60952aa6d6fed9cd73b4742d2ea1d1b408aa0d34",
+      "byte_length": 41922
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D10.png",
+      "path": "subjects/fantastical/creature.dragon.d10/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D10/thumbnail.png",
+      "sha256": "d9ff55bfe56b1ba3c578d31db4896261e4b6387e677ab6677233deef6607dd52",
+      "byte_length": 50176
+    },
+    {
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D11.png",
+      "path": "subjects/fantastical/creature.dragon.d11/0.1.0/preview/selector.png",
+      "logical_path": "flying-creatures/D11/thumbnail.png",
+      "sha256": "723569c4c88eea8ddab88f28abdd67087d3a236ccd2b37fc386585566622c064",
+      "byte_length": 52082
+    }
+  ]
+}

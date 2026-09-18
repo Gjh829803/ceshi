@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "water_surface",
+      "support": "buoyancy",
+      "propulsion": "paddling",
+      "degrees_of_freedom": "planar_2d_yaw",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.raft/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Unpowered inflatable boat; paddle propulsion on water, gravity sliding on land and damped contact restitution. Single active driver; passenger anchors reserved.",
+    "W repeats single-sided strokes with yaw, S back-paddles, A/D change sides and sweep, Space braces to slow; propulsion requires immersion."
+  ]
+}

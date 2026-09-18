@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "subject": [
+    "placeholder",
+    "assets_ready",
+    "deprecated"
+  ],
+  "capability": [
+    "planned",
+    "assets_ready",
+    "integrated",
+    "verified",
+    "deprecated"
+  ],
+  "validation": [
+    "pending",
+    "passed",
+    "failed",
+    "not_run",
+    "preview_loaded",
+    "verified",
+    "not_applicable",
+    "fbx_source_unvalidated"
+  ]
+}

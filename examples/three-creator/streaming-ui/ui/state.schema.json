@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["player"],"properties":{"player":{"type":"object","additionalProperties":false,"required":["health","maxHealth"],"properties":{"health":{"type":"number","minimum":0,"maximum":100},"maxHealth":{"type":"number","const":100}}}}}

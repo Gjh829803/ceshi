@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
+  "preview": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/preview/Animalia Brown Bear male.png",
+      "sha256": "73b86e4ab3601caad94a5d68ab8f42890b40fbf063e179d6420914bdd5e1289f",
+      "byte_length": 204559,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Brown Bear male.png",
+      "reused_by": [
+        "animal.animalia-brown-bear-male"
+      ]
+    },
+    {
+      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
+      "sha256": "235a759f7fb602bb07d15cc01c28478cd5d796838889f8003d23f64b4b858b8d",
+      "byte_length": 760768,
+      "format": "fbx",
+      "role": "source_sample",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia Brown Bear male.zip!/Animalia Brown Bear male/Content/AnimalsBear/Meshes/SK-AnimalsBear_Bear.FBX",
+      "reused_by": [
+        "animal.animalia-brown-bear-male"
+      ]
+    },
+    {
+      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/preview/thumbnail.webp",
+      "sha256": "d62b0a4c0782d45585bff25dea09358a490f9537be4c62f5b2b8aa0175a660a4",
+      "byte_length": 6152,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "animal.animalia-brown-bear-male"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "fbx",
+    "external_uris": [],
+    "bones": [
+      {
+        "name": "RigRoot"
+      },
+      {
+        "name": "RigPelvis"
+      },
+      {
+        "name": "RigTail1"
+      },
+      {
+        "name": "RigTail2"
+      },
+      {
+        "name": "RigRBLeg1"
+      },
+      {
+        "name": "RigRBLeg2"
+      },
+      {
+        "name": "RigRBLegAnkle"
+      },
+      {
+        "name": "RigRBLegDigit11"
+      },
+      {
+        "name": "RigSpine1"
+      },
+      {
+        "name": "RigSpine2"
+      },
+      {
+        "name": "RigChest"
+      },
+      {
+        "name": "RigRFLegCollarbone"
+      },
+      {
+        "name": "RigRFLeg1"
+      },
+      {
+        "name": "RigRFLeg2"
+      },
+      {
+        "name": "RigRFLegAnkle"
+      },
+      {
+        "name": "RigRFLegDigit11"
+      },
+      {
+        "name": "RigLFLegCollarbone"
+      },
+      {
+        "name": "RigLFLeg1"
+      },
+      {
+        "name": "RigLFLeg2"
+      },
+      {
+        "name": "RigLFLegAnkle"
+      },
+      {
+        "name": "RigLFLegDigit11"
+      },
+      {
+        "name": "RigNeck1"
+      },
+      {
+        "name": "RigNeck2"
+      },
+      {
+        "name": "RigHead"
+      },
+      {
+        "name": "RigREyelid"
+      },
+      {
+        "name": "RigLEyelid"
+      },
+      {
+        "name": "RigRigREar1"
+      },
+      {
+        "name": "RigRigLEar1"
+      },
+      {
+        "name": "RigJaw"
+      },
+      {
+        "name": "RigTongue_1"
+      },
+      {
+        "name": "RigTongue_2"
+      },
+      {
+        "name": "RigTongue_3"
+      },
+      {
+        "name": "RigLBLeg1"
+      },
+      {
+        "name": "RigLBLeg2"
+      },
+      {
+        "name": "RigLBLegAnkle"
+      },
+      {
+        "name": "RigLBLegDigit11"
+      }
+    ],
+    "meshes": 1,
+    "source": "actual FBXLoader browser inspection",
+    "normalization": "not_done"
+  },
+  "animations": [
+    {
+      "name": "Take 001",
+      "index": 0,
+      "duration_seconds": 0,
+      "channels": 0,
+      "resource": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
+      "format": "fbx",
+      "loop": null,
+      "root_motion": "unknown",
+      "binding_status": "source_unvalidated"
+    }
+  ]
+}

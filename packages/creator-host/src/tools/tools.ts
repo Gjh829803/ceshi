@@ -1,5 +1,6 @@
-import {AGENT_READING_GUIDE,type AgentDocumentPath} from '../discovery/agent-docs.js';
+import {AGENT_READING_GUIDE,WORLD_UI_AUTHORING,type AgentDocumentPath} from '../discovery/agent-docs.js';
 import type {InspectionQuery} from '../browser/bridge.js';
+import {captureUiPreview} from './ui-preview-capture.js';
 import {checkViewport} from './viewport-check.js';
 import type {ViewportSize} from '../browser/viewport-diagnostics.js';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -35,6 +36,12 @@ const checkCommand = new Ajv({ allErrors: true, strict: false, strictNumbers: tr
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const json = async (file: string, value: unknown) => { await mkdir(path.dirname(file), { recursive: true }); const temporary = `${file}.${randomUUID()}.tmp`; await writeFile(temporary, JSON.stringify(value, null, 2)); await rename(temporary, file); };
 type Session = { candidate: Candidate; browser: Browser; context: BrowserContext; page: Page; server: Server; errors: string[]; networkErrors: string[]; collectionError?: SerializedDiagnostic; close: () => Promise<void> };
+function uiFeedback(candidate:Pick<Candidate,'profile'|'project'>){
+  if(candidate.profile!=='three-sdk')return {status:'not-applicable'};
+  return candidate.project.ui
+    ? {status:'compiled',declaration:candidate.project.ui,note:'UI bundle included; inspect includeUi:true previews and actual UI behavior separately.'}
+    : {status:'not-configured',warning:'project.ui is absent: no stream UI bundle is delivered. Handwritten DOM HUD is not serialized.',next:WORLD_UI_AUTHORING};
+}
 type Evidence = { root: string; files: Record<string, string>; report: any };
 export async function withStageDeadline<T>(work: () => Promise<T>, milliseconds: number, errorCode: string, onTimeout: () => Promise<void>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -128,9 +135,10 @@ export class ThreeCreatorTools {
       subjectAuthoring:subjectAuthoringGuidance(this.profile),
       humanAuthoring: humanAuthoringGuidance(this.compiler.assetPolicy().policy,this.profile),
       ...(cameraAuthoring?{cameraAuthoring}:{}),
+      ...(this.profile==='three-sdk'?{uiAuthoring:WORLD_UI_AUTHORING}:{}),
       runtimeSource: this.profile==='three-sdk'?{tool:'creator_materialize_runtime',directory:'sdk',edit:'Edit sdk/three-world/src or sdk/camera-collision/src, then world_validate. The compiler uses locked dependencies and records runtimeSourceHash; all SDK source ships with delivery.'}:null,
       authoringLayers:['reuse: select the subject entry point','scene conditions: character-actions capability cards','parameters: control/extensions','runtime source: creator_materialize_runtime'],
-      project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. Episode steps live in episode.json and do not affect worldBuildHash.',
+      project: 'project.json declares assetIds and the SDK world UI bundle. Read programming and uiAuthoring. Exact asset definitions are written to asset-definitions.json; episode.json does not affect worldBuildHash.',
       observation: 'SDK world.start() installs the observer after preparation. Raw authors implement the observation contract; request sections:[observation].',
       feedback: 'Tools return actual browser observations and real-input evidence. Read programming for selection, timing and failures.',
       delivery: 'Read quality for completion requirements and programming for current-session recording, views and world_submit.',
@@ -181,7 +189,7 @@ export class ThreeCreatorTools {
     await this.closeSession(); await verifyFiles(candidate.root, candidate.files);
     const errors: string[] = [], networkErrors: string[] = [];
     const mountPath = `/playable/${candidate.worldBuildHash}/`;
-    const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm' };
+    const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm' };
     const server = createServer(async (request, response) => {
       try {
         const url = new URL(request.url ?? '/', 'http://localhost'); const decoded = decodeURIComponent(url.pathname);
@@ -189,7 +197,9 @@ export class ThreeCreatorTools {
         if (!decoded.startsWith(mountPath)) { response.writeHead(404).end(); return; }
         const relative = decoded.slice(mountPath.length) || 'index.html', filename = path.resolve(candidate.playableRoot, relative);
         if (!isWithin(candidate.playableRoot, filename) || !(await lstat(filename)).isFile() || (await lstat(filename)).isSymbolicLink() || !isWithin(candidate.playableRoot, await realpath(filename))) { response.writeHead(403).end(); return; }
-        response.setHeader('Content-Security-Policy', "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
+        // The shared UI runtime compiles JSON schemas with Ajv in this local browser.
+        const uiScriptPolicy=candidate.project.ui?" 'unsafe-eval'":'';
+        response.setHeader('Content-Security-Policy', `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${uiScriptPolicy}; connect-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'`);
         response.setHeader('Content-Type', mime[path.extname(filename)] ?? 'application/octet-stream'); response.end(await readFile(filename));
       } catch { response.writeHead(404).end(); }
     });
@@ -220,7 +230,7 @@ export class ThreeCreatorTools {
       const session: Session = { candidate, browser, context, page, server, errors, networkErrors, close };
       this.session = session;
       hostPhase = 'browser.startup';
-      await page.goto(`${origin}${mountPath}`, { waitUntil: 'domcontentloaded', timeout: 60_000 }); const deadline = Date.now() + 60_000;
+      await page.goto(`${origin}${mountPath}?ui=off`, { waitUntil: 'domcontentloaded', timeout: 60_000 }); const deadline = Date.now() + 60_000;
       for (;;) {
         let diagnostics: SerializedDiagnostic[] = [];
         try { diagnostics = await page.evaluate(() => (window as any).__THREE_CREATOR_DIAGNOSTICS__?.records ?? []); }
@@ -271,7 +281,7 @@ export class ThreeCreatorTools {
     return response.result;
   }
   async materializeRuntime() { return this.compiler.materializeRuntime(); }
-  async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', playableRoot: candidate.playableRoot }; }
+  async validate() { const candidate = await this.compiler.prepare(); return { status: 'compiled', candidateId: candidate.id, profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, candidateCacheHit: candidate.candidateCacheHit, runtimeCacheHit: candidate.runtimeCacheHit, runtimeValidation: 'not-run', ui:uiFeedback(candidate), playableRoot: candidate.playableRoot }; }
   async inspect(query?: InspectionQuery) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate);
     const observation = await this.bridge(session, 'inspect', [query ?? null]);
@@ -330,17 +340,24 @@ export class ThreeCreatorTools {
     }
     return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, worldOperation };
   }
-  private async capture(session: Session, root: string, view: string, entityIds: string[] = [], frontYawRadians?: number) {
-    const result = await this.bridge(session, 'capture', [view, entityIds, frontYawRadians]); const bytes = Buffer.from(result.image.replace(/^data:image\/png;base64,/, ''), 'base64'); delete result.image;
+  private async capture(session: Session, root: string, view: string, entityIds: string[] = [], frontYawRadians?: number, includeUi=false) {
+    let result:any,bytes:Buffer;
+    if(includeUi&&session.candidate.project.ui){
+      ({result,bytes}=await withStageDeadline(()=>captureUiPreview(session.page,view as 'opening'|'current'),15000,'UI_PREVIEW_CAPTURE_TIMEOUT',()=>this.closeSession()));
+    }else{
+      result = await this.bridge(session, 'capture', [view, entityIds, frontYawRadians]); bytes = Buffer.from(result.image.replace(/^data:image\/png;base64,/, ''), 'base64'); delete result.image;
+      result.ui={included:false,reason:includeUi?'not-defined':'disabled',...(includeUi&&this.profile==='three-sdk'?{next:WORLD_UI_AUTHORING}:{})};
+    }
     const name = `${view}-${sha256(JSON.stringify(entityIds)).slice(0, 10)}.png`, file = path.join(root, name); await mkdir(root, { recursive: true }); await writeFile(file, bytes);
     return { ...result, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: session.candidate.sourceHash, worldBuildHash: session.candidate.worldBuildHash, runtimeHash: session.candidate.runtimeHash, runtimeSourceHash: session.candidate.runtimeSourceHash, profile: this.profile };
   }
-  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number) {
+  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number, includeUi = view === 'opening' || view === 'current') {
     if (!['opening', 'current', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
+    if(typeof includeUi!=='boolean'||(includeUi&&view!=='opening'&&view!=='current'))throw new Error('THREE_PREVIEW_UI_VIEW_INVALID: includeUi:true requires opening or current');
     const candidate = await this.compiler.prepare(), session = await this.open(candidate);
     if (view !== 'current') await this.bridge(session, 'stop');
     if (view === 'opening') await this.bridge(session, 'reset');
-    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
+    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians, includeUi);
   }
   async triviews(includeAdditionalTargets=false) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'reset');
@@ -546,7 +563,7 @@ export class ThreeCreatorTools {
     for (const prefix of ['source', 'playable']) await verifyFiles(path.join(payload, prefix), Object.fromEntries(Object.entries(candidate.files).filter(([name]) => name.startsWith(`${prefix}/`)).map(([name, hash]) => [name.slice(prefix.length + 1), hash])));
     await verifyFiles(path.join(payload, 'playtest'), played.files); await verifyFiles(path.join(payload, 'captures'), captures.files);
     await this.compiler.verifyCandidatePolicy({...candidate,sourceRoot:path.join(payload,'source'),playableRoot:path.join(payload,'playable')});
-    const manifest = { assetPolicySha256:candidate.assetPolicySha256, kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
+    const manifest = { assetPolicySha256:candidate.assetPolicySha256, kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, runtimeSourceHash:candidate.runtimeSourceHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, ui:uiFeedback(candidate), deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
     await json(path.join(payload, 'delivery.json'), manifest); const hashes = await hashTree(payload); await json(path.join(payload, 'artifact-hashes.json'), { schemaVersion: 1, files: hashes });
     const temporary = path.join(root, 'creator-delivery.tar.gz'); await createClosedArchive(root, temporary);
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files); await verifyFiles(captures.root, captures.files);

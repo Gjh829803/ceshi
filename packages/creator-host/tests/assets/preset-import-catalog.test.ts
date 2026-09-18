@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { expect, it } from 'vitest';
-import catalog from '../../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { presetImportDetails, presetImportIdentity } from '../../src/assets/preset-import-catalog';
 import { SPECS } from '@worldkit/preset-content/config';
 import { assetIdForPreset } from '@worldkit/preset-content/platform/catalog';

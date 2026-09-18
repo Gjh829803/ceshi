@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.multirotor/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.multirotor/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.multirotor/0.1.0/model/model.glb",
+      "sha256": "403bc7c970c4f95cf97d66c22a23aeea29b83973906a43efc9fd053e1c349a15",
+      "byte_length": 173844,
+      "format": "glb",
+      "role": "model",
+      "source_path": "multirotor.glb",
+      "reused_by": [
+        "vehicle.multirotor"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.multirotor/0.1.0/preview/thumbnail.webp",
+      "sha256": "9a93c6a5057675b68dd31f43bdc8ebda01c6b0c9b79945983d601e8ae163c6d2",
+      "byte_length": 16436,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.multirotor"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 77,
+    "meshes": 60,
+    "materials": 10,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 2498,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": []
+}

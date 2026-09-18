@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.trail-rover/0.1.0/model/trail-rover.glb",
+  "preview": "subjects/vehicles/vehicle.trail-rover/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/model/trail-rover.glb",
+      "sha256": "7a3e0c8140000831e568f64cb1ea6b07b95b893f99330ee9bc5012c8be2a0887",
+      "byte_length": 99956,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/trail-rover.glb",
+      "reused_by": [
+        "vehicle.trail-rover"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/preview/thumbnail.webp",
+      "sha256": "3fa0a5180f11db252d4cce51b267a2dcd30d10e36c5524261f3edfa19dcd59a3",
+      "byte_length": 16248,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.trail-rover"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 42,
+    "meshes": 32,
+    "materials": 9,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1336,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/trail-rover.glb"
+}

@@ -76,7 +76,12 @@ try{
   await choose('飞机 · 起降训练场');await waitMap('aircraft-training');await page.reload();await waitMap('aircraft-training');
   await page.goto(new URL('/?dragon=D02#/scenes/flying-creature-training',base).href);await waitMap('flying-creature-training');
   assert.equal((await state()).dragonVariant,'D02');assert.equal((await state()).activeVehicle,null);
-  assert(requests.size>0&&[...requests].some(url=>url.includes('/flying-creature/__creature-assets/D02.glb')));
+  const definitions=await (await page.request.get(new URL('/asset-definitions.json',base).href)).json();
+  const variant=definitions.assets.find((asset:{id:string})=>asset.id==='creature.dragon.d02');
+  assert(variant,'D02 must be present in the delivered library catalog');
+  const model=variant.resources.find((resource:{path:string})=>resource.path===variant.integrationMetadata.visual.modelResource);
+  assert(model,'D02 model alias must resolve through the delivered catalog');
+  assert(requests.has(new URL(model.uri,base).href),'D02 must request its catalog-declared model bytes');
   assert.equal(page.frames().length,1);assert(![...requests].some(url=>/Havok|babylon|:5186|:5191/.test(url)));
   assert.deepEqual(errors,[]);await writeFile(path.join(output,'result.json'),JSON.stringify({initial,idle,reset,approachSamples,errors,requests:[...requests]},null,2));
   }

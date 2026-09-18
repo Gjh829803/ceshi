@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.crocodile/0.1.0/preview/CROCODILE.png",
+  "files": [
+    {
+      "path": "subjects/animals/animal.crocodile/0.1.0/preview/CROCODILE.png",
+      "sha256": "e219801aadd93c86b57cbc230a6a3c296c736d9f16cca990d65d599cdd750e47",
+      "byte_length": 89886,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/CROCODILE.png",
+      "reused_by": [
+        "animal.crocodile"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

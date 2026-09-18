@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "provenance",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "source_type": {
+      "type": "string"
+    },
+    "license": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "commercial_use": {
+          "type": "string"
+        },
+        "redistribution": {
+          "type": "string"
+        },
+        "editable_distribution": {
+          "type": "string"
+        },
+        "user_export": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "commercial_use",
+        "redistribution",
+        "editable_distribution",
+        "user_export"
+      ],
+      "additionalProperties": false
+    },
+    "license_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_type",
+    "license",
+    "license_files"
+  ],
+  "additionalProperties": true
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.motorcycle"
+  ],
+  "empty_fields": [
+    "resources"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

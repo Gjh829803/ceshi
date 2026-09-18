@@ -164,11 +164,25 @@ samples retain compact `snapshot.camera` identities; source inventory, runtime
 identity and actual adopted document hash together establish which build consumed
 which configuration. Reads do not advance simulation.
 
-Keep HUD outside the pure world image:
-```ts
-const presentation = world.createPresentation();
-presentation.ui.mount(hud); // hud is your HTMLElement
-```
+## World UI
+
+Use the shared [world UI contract](ui.md) for SDK world UI. Read it with
+`creator_get_authoring_schema({document:"ui.md"})`; request
+`creator_get_examples({topic:"streaming-ui"})` for a minimal producer binding,
+React components and JSON files. Integrate them into your authored world; the
+example's health state is illustrative, not a required gameplay feature.
+
+Declare `project.ui`, expose `__WORLDKIT_STREAM_WORLD__` with `world`, synchronous
+`readUiState()` and named `actions`, and render widgets through React + JSON.
+The local preview and stream Host own the presentation. Do not create a second
+presentation or attach a handwritten DOM HUD in scene code: such DOM is not
+serialized into the UI stream and is not included in `includeUi:true` previews.
+This leaves the Three canvas clean for recordings and model input.
+
+`world_validate` and `world_submit` report `ui.status`: `compiled` means the
+bundle is included, not that its runtime behavior or appearance has been verified;
+`not-configured` means `project.ui` is absent. Follow the returned UI guide/example
+when missing. Technical recording success alone does not establish UI completion.
 
 The Host compiles browser code with locked Three/SDK dependencies. Network access
 is same-origin; bundle resources locally. Author Node scripts and build configs
@@ -183,6 +197,8 @@ are binding references and must be adapted to an edited runtime.
 | --- | --- |
 | Does it compile? | `world_validate`; compilation does not run the world |
 | Does the opening match? | `world_preview({view:'opening'})`; pauses and resets |
+| How does the final HUD look? | `world_preview({view:'current',includeUi:true})`; authored React UI over the sampled world |
+| Check geometry without HUD? | `world_preview({view:'current',includeUi:false})`; pure Three canvas |
 | What does this state look like? | `world_preview({view:'current'})`; no pause/reset/step; a live world continues |
 | Why is movement/action blocked? | `world_inspect`: `snapshot` for state, `description` for eligibility; `hierarchy`/`diagnostics` for geometry/physics |
 | Do real controls and the route work? | `world_playtest`; resets and runs episode keys, pointer drags and explicit commands in real time |
@@ -190,6 +206,12 @@ are binding references and must be adapted to an edited runtime.
 | Does the area fit the overview? | `world_preview({view:'top-down'})`; inspect bounds and boundsSource against all playable routes |
 | Why is the page small or blurry? | `world_inspect({sections:['viewport']})`; compare live canvas render/display sizes, pixel density and camera aspect |
 | Does rendering follow a window size change? | Optional `world_check_viewport({widthCssPixels:1280,heightCssPixels:800})`; temporarily resizes the browser, samples, then restores the original viewport |
+
+Opening/current previews default to `includeUi:true`; projects without `project.ui`
+return a clean world image with `ui.included:false` and `reason:'not-defined'`.
+Top-down/entity-triview accept only omitted/false `includeUi`. Formal captures and
+recordings always stay UI-free. See [UI screenshot behavior](ui.md#agent-screenshots)
+for state, animation and failure semantics.
 
 Use existing frames and state to locate the cause before changing code or inputs.
 An edit opens a new build; keep earlier evidence associated with its original
@@ -212,6 +234,30 @@ Poll the same Creator operationId with `operations_get`; never repeat an action
 to poll. Read actual errors; unavailable telemetry is not measured success.
 
 ## Record and submit
+
+Reduce rework by settling the scene and UI before the final delivery recording:
+
+1. Inspect opening composition and the authored HUD with `world_preview({view:'opening',includeUi:true})`.
+   Resolve visible layout and control-hint issues; check relevant state-dependent hints
+   alongside the interaction that produces them.
+2. For uncertain interactions or route sections, use a short, focused episode or a
+   shorter playtest duration for its prefix. Read existing frames, `world_read_playtest`
+   samples and failure feedback before retrying; after a repair, recheck the affected
+   behavior instead of repeatedly replaying a long tour.
+3. Once those issues are resolved, finalize `episode.json` and record a compact complete
+   plan covering representative routes, requested interactions and their outcomes.
+   Omit the duration override for that complete run. If the latest recording already
+   covers these needs and is eligible for the unchanged world and episode, use it.
+
+These are workflow guidance, not additional mandatory passes or a minimum duration.
+Explorable-space capacity does not require recording a full circuit or every region.
+Do not omit requested behavior merely to shorten the recording.
+
+The current world identity includes authored UI files: even a UI-only text, style or
+layout edit after recording requires a new current-source recording. Complete those
+edits early; do not reuse old evidence by changing its identity. An `episode.json`
+edit changes the episode identity and also requires a matching complete recording.
+Short debug runs help locate problems but do not replace complete delivery evidence.
 
 Timed Episode steps run for `durationSeconds` in wall time; keys stay held until
 `keysUp`. Omit the playtest duration to execute the complete plan. A shorter

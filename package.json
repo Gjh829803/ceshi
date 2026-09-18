@@ -45,18 +45,25 @@
     "test:editor:browser": "tsx apps/sdk-playground/scripts/browser-smoke.ts",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "assets:publish": "node scripts/assets/sync-asset-contracts.mjs && node scripts/assets/sync-asset-client.mjs && node asset-library/tools/serve.mjs --publish --prepare-only",
+    "assets:serve": "node asset-library/tools/serve.mjs",
+    "assets:cli": "node packages/asset-client/src/cli.mjs",
+    "assets:check": "node scripts/assets/sync-asset-contracts.mjs --check && node scripts/assets/sync-asset-client.mjs --check && node --test asset-library/tests/*.test.mjs packages/asset-contracts/tests/*.test.mjs packages/asset-client/tests/*.test.mjs",
     "content:sync": "tsx packages/creator-host/src/cli/content-cli.ts",
-    "content:check": "tsx packages/creator-host/src/cli/content-cli.ts --check"
+    "content:check": "tsx packages/creator-host/src/cli/content-cli.ts --check",
+    "build:stream-web": "pnpm --filter @worldkit/stream-web build",
+    "dev:stream": "pnpm build:stream-web && pnpm --filter @worldkit/stream-host exec tsx src/cli.ts --worlds ../../examples/worlds --web-root ../../apps/stream-web/dist"
   },
   "dependencies": {
-    "@worldkit/three": "workspace:*",
-    "lodash-es": "^4.18.1",
-    "sharp": "0.35.4",
-    "three": "0.185.1",
+    "@worldkit/browser-capture": "workspace:*",
     "@worldkit/creator-host": "workspace:*",
     "@worldkit/episode-pipeline": "workspace:*",
     "@worldkit/preset-content": "workspace:*",
-    "@worldkit/browser-capture": "workspace:*"
+    "@worldkit/three": "workspace:*",
+    "@worldkit/world-ui": "workspace:*",
+    "lodash-es": "^4.18.1",
+    "sharp": "0.35.4",
+    "three": "0.185.1"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -65,15 +72,17 @@
     "@types/node": "^24.3.0",
     "@types/three": "0.185.4",
     "@vitest/coverage-v8": "^3.2.4",
+    "@worldkit/creator-cloud": "workspace:*",
     "ajv": "8.17.1",
     "esbuild": "0.28.2",
     "eslint": "10.10.0",
     "globals": "17.12.0",
+    "lucide-react": "1.42.0",
     "playwright": "^1.62.1",
+    "shadcn": "^4.21.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2",
     "typescript-eslint": "8.70.0",
-    "vitest": "^3.2.4",
-    "@worldkit/creator-cloud": "workspace:*"
+    "vitest": "^3.2.4"
   }
 }

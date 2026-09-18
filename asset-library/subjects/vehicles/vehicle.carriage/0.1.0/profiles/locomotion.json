@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "carriage",
+    "name": "双轴马车",
+    "en": "CARRIAGE",
+    "radius": 2.3,
+    "seat": [
+      0,
+      1.45,
+      0.55
+    ],
+    "archetype": "carriage",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.35,
+        1.4,
+        1.8
+      ],
+      "offset": [
+        0,
+        1.4,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

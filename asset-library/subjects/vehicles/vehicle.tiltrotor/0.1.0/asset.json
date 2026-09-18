@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.tiltrotor",
+  "asset_version": "0.1.0",
+  "display_name": "倾转旋翼飞机",
+  "aliases": [
+    "倾转旋翼飞机"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.tiltrotor",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "由当前 Whitebox 的实际模型构造函数导出为独立 GLB；保留几何与材质，算法和控制仍由宿主提供。",
+  "default_assembly": "subjects/vehicles/vehicle.tiltrotor/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

@@ -17,9 +17,16 @@ W 加油，S 先制动再倒车，A / D 转向，Space 刹车。Shift 不增加�
 [SDK bus.ts](../packages/three-world/src/humanoid-runtime/motion-families/ground-vehicle/bus.ts)。
 模型仅包含载具，人物、相机、输入及碰撞均沿用 SDK 的现有所有者。
 
-修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-bus.ts` 更新
-`assets/three-creator/presets/vehicles/bus.glb` 和资产目录中的哈希。
-脚本只更新该资产，不重新导入其他载具。
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-bus.ts --output .codex-tmp/bus.glb`，
+只生成待入库的 GLB 和 `.intake.json` 转换记录；输出已存在时请改用新文件名。
+按[入库流程](../asset-library/CONTRIBUTING.md)，使用 `asset-library/tools/ingest.mjs` 将候选模型
+以稳定 ID `vehicle.bus`、`--group vehicles` 和新的 `--version` 入库，审查并补齐原有
+bindings、profiles、来源与验证记录，然后在仓库根运行 `pnpm content:sync` 和 `pnpm content:check`。
+
+当前登记版本位于 `asset-library/subjects/vehicles/vehicle.bus/0.1.0/`。
+模型、挂点与参数的权威数据在主体中；包内 spec 读取生成快照。
+导出器不会替换这个版本或自动更新目录，新版本完成绑定和验证后才用于交付。
+
 运行 `pnpm build` 构建 `.codex-tmp/three-runtime/runtime/worldkit-three.js`，
 并重新启动 `pnpm dev` 使训练预览加载最新源文件。
 

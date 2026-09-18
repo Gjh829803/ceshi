@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import {readFile, mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {createRegistryServer} from '../../../../asset-library/tools/registry-server.mjs';
+import {publishLibrary} from '../../../../asset-library/tools/publish.mjs';
+import {prepareAssetLibrary,readLibraryCatalogSync,readLibraryDeniedHashes,resolveLibrarySelection,readLibraryResource} from '../../src/assets/library-source.mjs';
+import {createAssetPolicySnapshot,assetPolicyHash} from '../../src/assets/asset-policy.mjs';
+const root=path.resolve(import.meta.dirname,'../../../..');
+
+test('published Registry preserves policy and selects verified remote content without authoring fallback',async t=>{
+ const temp=await mkdtemp(path.join(tmpdir(),'host-registry-'));
+ t.after(()=>rm(temp,{recursive:true,force:true}));
+ const output=path.join(temp,'published'); await publishLibrary(path.join(root,'asset-library'),{output});
+ const policy=JSON.parse(await readFile(path.join(root,'packages/creator-host/config/asset-policy.json'),'utf8'));
+ const local=readLibraryCatalogSync(root),expected=createAssetPolicySnapshot(policy,local);
+ const requests=[]; const server=createRegistryServer(output);server.on('request',req=>requests.push(req.url));
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+ const saved={...process.env}; t.after(()=>{for(const key of ['ASSET_REGISTRY_URL','ASSET_ARTIFACT_BASE_URL','ASSET_LIBRARY_ROOT','ASSET_LIBRARY_URL','ASSET_CACHE_ROOT']){if(saved[key]===undefined)delete process.env[key];else process.env[key]=saved[key];}});
+ process.env.ASSET_REGISTRY_URL=`http://127.0.0.1:${server.address().port}/`;
+ process.env.ASSET_LIBRARY_ROOT=path.join(temp,'does-not-exist');process.env.ASSET_CACHE_ROOT=path.join(temp,'cache');delete process.env.ASSET_LIBRARY_URL;
+ const remote=await prepareAssetLibrary(root);
+ assert.equal(remote.length,policy.allowedAssetIds.length);
+ assert.equal(requests.some(p=>p.startsWith('/artifacts/')),false);
+ const actual=createAssetPolicySnapshot(policy,remote,readLibraryDeniedHashes(root,policy.allowedAssetIds));
+ assert.deepEqual(actual,expected);assert.equal(assetPolicyHash(actual),assetPolicyHash(expected));
+ const selection=await resolveLibrarySelection(root,['creature.horse'],{runtimeDigest:'a'.repeat(64),overridesDigest:'b'.repeat(64),allowedAssetIds:policy.allowedAssetIds});
+ assert.equal(selection.lock.roots.length,1);assert.equal(selection.lock.roots[0].asset_id,'creature.horse');
+ assert.equal(requests.some(p=>p.startsWith('/artifacts/')),false);
+ const horse=remote.find(a=>a.id==='creature.horse');const bytes=await readLibraryResource(root,horse);
+ assert.equal(bytes.length,horse.byteLength);assert.equal(requests.filter(p=>p.startsWith('/artifacts/')).length,1);
+ await readLibraryResource(root,horse);assert.equal(requests.filter(p=>p.startsWith('/artifacts/')).length,1);
+ assert.equal(JSON.stringify(selection.lock).includes('http'),false);
+ await assert.rejects(()=>resolveLibrarySelection(root,['creature.horse'],{allowedAssetIds:[]}),/POLICY_DENIED/);
+ process.env.ASSET_REGISTRY_URL='http://127.0.0.1:1/';
+ await assert.rejects(()=>prepareAssetLibrary(root),/TRANSPORT/);
+});

@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "resources",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "preview": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "format": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "reused_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "logical_paths": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable SDK resource identifiers mapped to this file; never disk paths."
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "byte_length",
+          "format",
+          "role",
+          "source_path",
+          "reused_by"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "inspection": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "animations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "channels": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "resource": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "glb",
+              "three-clip-json",
+              "fbx"
+            ]
+          },
+          "loop": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "root_motion": {
+            "type": "string"
+          },
+          "binding_status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "index",
+          "duration_seconds",
+          "channels",
+          "resource",
+          "format",
+          "loop",
+          "root_motion",
+          "binding_status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "model_logical_path": {
+      "type": "string",
+      "description": "Stable SDK model identifier; not a library file path."
+    }
+  },
+  "required": [
+    "schema_version",
+    "model",
+    "preview",
+    "files",
+    "inspection",
+    "animations"
+  ],
+  "additionalProperties": false
+}

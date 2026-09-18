@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {beforeAll,expect,it,vi} from 'vitest';
 import {Box3,Group,Mesh,SkinnedMesh,Vector3,PerspectiveCamera} from 'three';
@@ -62,7 +63,7 @@ it('keeps the fixed straddle rider clear of panels with supported feet while the
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character(),model=buildJetSkiModel();
  try{
-  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  await rider.load(testAssetResourceUrl);
   const identities=new Map<SkinnedMesh,unknown>();rider.root.traverse(n=>{if(n instanceof SkinnedMesh)identities.set(n,n.geometry);});
   const samples=[];const fixedBones=new Map<string,number[]>();
   for(const angle of [0,-.42,.42,0]){

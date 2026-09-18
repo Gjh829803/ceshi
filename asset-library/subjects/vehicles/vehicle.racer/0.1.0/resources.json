@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.racer/0.1.0/model/racer.glb",
+  "preview": "subjects/vehicles/vehicle.racer/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.racer/0.1.0/model/racer.glb",
+      "sha256": "43547f472b9a91b19c25925c7f63a008c4e24bcfb0dd0a8ca1669083c4bf1f59",
+      "byte_length": 104664,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/racer.glb",
+      "reused_by": [
+        "vehicle.racer"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.racer/0.1.0/preview/thumbnail.webp",
+      "sha256": "f868abdb17da9b1ed240bd840fc79056eb2525bf99225b87a3b3a5b8b6647bfe",
+      "byte_length": 18374,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.racer"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 43,
+    "meshes": 33,
+    "materials": 9,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1404,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/racer.glb"
+}

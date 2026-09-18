@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "animal.megalodon",
+  "asset_version": "0.1.0",
+  "display_name": "巨齿鲨 · 待入库",
+  "aliases": [
+    "Megalodon"
+  ],
+  "browse_group": "animals",
+  "semantic_type": "animal.aquatic.fish",
+  "semantic_subtypes": [
+    "aquatic/fish"
+  ],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+  "default_assembly": "subjects/animals/animal.megalodon/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

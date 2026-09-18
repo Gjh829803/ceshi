@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/preview/Animalia - Wild Boar young.png",
+  "files": [
+    {
+      "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/preview/Animalia - Wild Boar young.png",
+      "sha256": "45f13bdda51e40e3f0b1584cfa846e6f55681d399affdcc53e41a29cc82dd84c",
+      "byte_length": 232475,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animalia - Wild Boar young.png",
+      "reused_by": [
+        "animal.animalia-wild-boar-young"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

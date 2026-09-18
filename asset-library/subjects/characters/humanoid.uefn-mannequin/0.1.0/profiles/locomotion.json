@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "parameters": {},
+  "control_profile": {
+    "envelope": {
+      "kind": "capsule",
+      "radius": 0.28,
+      "halfHeight": 0.56,
+      "offset": [
+        0,
+        0.84,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

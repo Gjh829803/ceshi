@@ -1,5 +1,6 @@
 import {buildSoaringShell} from '@worldkit/preset-content/soaring-shell';
 import {readFile} from 'node:fs/promises';
+import {readHumanoidSource} from '../assets/library-fixture.js';
 import {expect,it,vi} from 'vitest';
 import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3,Group,Mesh,MeshStandardMaterial,Quaternion} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -12,13 +13,12 @@ import {prepareCourse} from '@worldkit/preset-content/platform/scenarios';
 vi.mock('../../../preset-content/src/assets/resources',()=>({resolvePresetResource:()=>{throw new Error('Unexpected creature resource load in road seating test');},definitions:{}}));
 
 it('fits fixed aircraft riders to actual Source101 skin, pedals and ground clearance',async()=>{
- const assetRoot=new URL('../../../../assets/three-creator/presets/humanoid/source/',import.meta.url);
  const entries=await Promise.all(['idle-loop','walk-loop','run-loop','climb-2m5'].map(async id=>{
-  const bytes=await readFile(new URL(`gasp-research/${id}.experimental.glb`,assetRoot));
+  const bytes=await readHumanoidSource(`gasp-research/${id}.experimental.glb`);
   const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
   return {id,clip:gltf.animations[0]!,model:gltf.scene};
  }));
- const seated=AnimationClip.parse(JSON.parse(await readFile(new URL('actions/sit-idle.clip.json',assetRoot),'utf8')));
+ const seated=AnimationClip.parse(JSON.parse((await readHumanoidSource('actions/sit-idle.clip.json')).toString('utf8')));
  const source=new SourceCharacter(entries[3]!.model,[...entries,{id:'sit-idle',clip:seated}]);
  const character=new humanoid.HumanoidCharacter(source);
  // Only label rasterization is stubbed. Vehicle meshes, source bones, skinned

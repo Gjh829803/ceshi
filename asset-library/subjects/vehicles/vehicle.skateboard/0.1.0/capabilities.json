@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "wheel_contact",
+      "propulsion": "external_force",
+      "degrees_of_freedom": "planar_2d_yaw",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.skateboard/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。"
+  ]
+}

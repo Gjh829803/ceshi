@@ -1,12 +1,9 @@
-import {createHash} from 'node:crypto';
-import {readFile,writeFile} from 'node:fs/promises';
+/** Verify and rebuild the generated dragon delivery closure from the asset library. */
 import path from 'node:path';
-const directory=path.resolve(import.meta.dirname,'../../../assets/dragon-training');
-const files:Record<string,{bytes:number;sha256:string}>={};
-for(const name of ['FireGenLoop01_8x8.png','dragon.glb','manifest.json','rider.glb','variants.json','variant-sources.json','ground-sources.json',
-  ...Array.from({length:10},(_,i)=>'D'+String(i+2).padStart(2,'0')+'.glb')]){
-  const relative='__creature-assets/'+name,bytes=await readFile(path.join(directory,relative));
-  files[relative]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
-}
-await writeFile(path.join(directory,'bundle.json'),JSON.stringify({kind:'native-flying-creature-assets',schemaVersion:2,files},null,2)+'\n');
-console.log('Updated native dragon asset identities; no external source workspace required.');
+import {syncAssetCatalog} from '@worldkit/creator-host/catalog-sources';
+import {readLibraryResource} from '@worldkit/creator-host/library-source';
+const root=path.resolve(import.meta.dirname,'../../..');
+const assets=await syncAssetCatalog(root,process.argv.includes('--check'));
+const dragons=assets.filter(asset=>/^creature\.dragon\.d\d{2}$/.test(asset.id));
+for(const asset of dragons)for(const resource of [asset,...asset.resources??[]])await readLibraryResource(root,resource);
+console.log(JSON.stringify({library:'asset-library',verifiedDragons:dragons.length,mode:process.argv.includes('--check')?'verified':'generated'}));

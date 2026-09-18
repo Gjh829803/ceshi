@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.crab-animated-creature/0.1.0/preview/Crab - Animated Creature.png",
+  "files": [
+    {
+      "path": "subjects/animals/animal.crab-animated-creature/0.1.0/preview/Crab - Animated Creature.png",
+      "sha256": "bb2d17279e8d158be1b09b48d5ec2bcb5293470fb553837835c586fa4a92e3bb",
+      "byte_length": 1101527,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Crab - Animated Creature.png",
+      "reused_by": [
+        "animal.crab-animated-creature"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}
