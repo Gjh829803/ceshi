@@ -258,6 +258,7 @@ export class Character {
     if (identity !== this.simulationIdentity || mode !== this.mountedMode) {this.frame = emptyFrame();this.snapPose=true;}
     this.simulationIdentity = identity; this.mountedMode = mode;
     Object.assign(this.frame, pose);
+    this.frame.locomotionTargetSpeed=pose.locomotionTargetSpeed;
     // Position and heading already belong to the host root. Keep source-local
     // placement independent while passing action state through.
     this.frame.position = this.localPosition; this.frame.facing = this.localFacing;

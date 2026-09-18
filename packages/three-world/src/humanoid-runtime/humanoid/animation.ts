@@ -25,6 +25,8 @@ export interface SourceCharacterFrame {
   traversal: { motion: MotionPlan; elapsed: number; duration: number } | null;
   completedMotion: { sourceId: string; sourceTime: number; serial: number } | null;
   speed: number;
+  /** Controller-requested ground speed (m/s); disambiguates walk/run hysteresis after a pace change. */
+  locomotionTargetSpeed?: number | undefined;
   vertical: number;
   grounded: boolean;
   animationGrounded: boolean;

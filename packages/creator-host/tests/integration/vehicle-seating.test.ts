@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {expect,it,vi} from 'vitest';
-import {AnimationClip,Box3,PerspectiveCamera,SkinnedMesh,Vector3} from 'three';
+import {AnimationClip,Box3,Mesh,PerspectiveCamera,Raycaster,SkinnedMesh,Vector3,type Object3D} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {createWorld,createHumanoidCameraDocument,humanoid} from '@worldkit/three';
 import {SourceCharacter,parseFixtureGlb} from '@worldkit/three/testing';
@@ -9,6 +9,32 @@ import {SPECS} from '@worldkit/preset-content/config';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {prepareCourse} from '@worldkit/preset-content/platform/scenarios';
 vi.mock('../../../preset-content/src/assets/resources',()=>({resolvePresetResource:()=>{throw new Error('Unexpected creature resource load in road seating test');},definitions:{}}));
+
+function measureCushionContact(character:Object3D,cushion:Mesh){
+ // Sample the visible surface in cushion-local space. A world AABB fills in
+ // the kart's centre relief and cannot represent a tilted or shaped cushion.
+ cushion.updateWorldMatrix(true,false);character.updateMatrixWorld(true);
+ cushion.geometry.computeBoundingBox();
+ const bounds=cushion.geometry.boundingBox!,surface=new Mesh(cushion.geometry,cushion.material);
+ const ray=new Raycaster(),point=new Vector3(),origin=new Vector3(),down=new Vector3(0,-1,0);
+ let contactGap=Infinity,pelvisGap=Infinity,intersectingVertices=0,pelvisSamples=0;
+ character.traverse(o=>{if(!(o instanceof SkinnedMesh))return;
+  o.skeleton.update();
+  const ids=o.geometry.attributes.skinIndex!,weights=o.geometry.attributes.skinWeight!;
+  const indices=o.geometry.index?new Set<number>(o.geometry.index.array):Array.from({length:o.geometry.attributes.position!.count},(_,i)=>i);
+  for(const index of indices){
+   o.getVertexPosition(index,point).applyMatrix4(o.matrixWorld);cushion.worldToLocal(point);
+   ray.set(origin.set(point.x,bounds.max.y+1,point.z),down);
+   const hit=ray.intersectObject(surface,false)[0];if(!hit)continue;
+   const gap=point.y-hit.point.y;contactGap=Math.min(contactGap,gap);
+   if(gap<-.002&&point.y>bounds.min.y+.002)intersectingVertices++;
+   for(let j=0;j<4;j++)if(weights.getComponent(index,j)>.5&&o.skeleton.bones[ids.getComponent(index,j)]?.name==='pelvis'){
+    pelvisSamples++;pelvisGap=Math.min(pelvisGap,gap);break;
+   }
+  }
+ });
+ return {contactGap,pelvisGap,intersectingVertices,pelvisSamples};
+}
 
 it('keeps the actual seated pelvis above car and motorcycle cushions and the first-person camera at the raised head',async()=>{
  const assetRoot=new URL('../../../../assets/three-creator/presets/humanoid/source/',import.meta.url);
@@ -48,23 +74,25 @@ it('keeps the actual seated pelvis above car and motorcycle cushions and the fir
    }
    const cushion=visuals[i]!.root.getObjectByName('seat-cushion');
    expect(cushion,`${spec.id} cushion`).toBeDefined();
-   const cushionBounds=new Box3().setFromObject(cushion!),top=cushionBounds.max.y,pelvisBounds=new Box3();
-   const cushionInterior=cushionBounds.clone().expandByScalar(-.002);let intersectingVertices=0,contactHeight=Infinity;
-   character.root.updateMatrixWorld(true);
-   character.root.traverse(o=>{if(!(o instanceof SkinnedMesh))return;
-    const ids=o.geometry.attributes.skinIndex!,weights=o.geometry.attributes.skinWeight!,p=new Vector3();
-    const indices=o.geometry.index?new Set<number>(o.geometry.index.array):Array.from({length:o.geometry.attributes.position!.count},(_,i)=>i);
-    for(const index of indices){
-     o.getVertexPosition(index,p);p.applyMatrix4(o.matrixWorld);if(cushionInterior.containsPoint(p))intersectingVertices++;
-     if(p.x>cushionInterior.min.x&&p.x<cushionInterior.max.x&&p.z>cushionInterior.min.z&&p.z<cushionInterior.max.z)contactHeight=Math.min(contactHeight,p.y);
-     for(let j=0;j<4;j++)if(weights.getComponent(index,j)>.5&&o.skeleton.bones[ids.getComponent(index,j)]?.name==='pelvis'){pelvisBounds.expandByPoint(p);break;}
-    }
-   });
-   expect(pelvisBounds.isEmpty(),`${spec.id} actual pelvis vertices`).toBe(false);
-   const gap=pelvisBounds.min.y-top;
-   expect(gap,`${spec.id} pelvis/cushion gap`).toBeGreaterThanOrEqual(-.005);
-   expect(contactHeight-top,`${spec.id} body floating over cushion`).toBeLessThan(.03);
-   expect(intersectingVertices,`${spec.id} body intersects cushion`).toBe(0);
+   expect(cushion).toBeInstanceOf(Mesh);
+   const top=new Box3().setFromObject(cushion!).max.y;
+   const contact=measureCushionContact(character.root,cushion as Mesh);
+   expect(contact.pelvisSamples,`${spec.id} actual pelvis vertices over cushion`).toBeGreaterThan(0);
+   expect(contact.pelvisGap,`${spec.id} pelvis/cushion gap`).toBeGreaterThanOrEqual(-.005);
+   expect(contact.contactGap,`${spec.id} body floating over cushion`).toBeLessThan(.03);
+   expect(contact.intersectingVertices,`${spec.id} body intersects cushion`).toBe(0);
+   if(spec.id==='kart'){
+    // Prove the surface check still rejects actual penetration and floating;
+    // do not make the test pass by increasing tolerances or skipping the kart.
+    const position=character.root.position.clone();
+    try{
+     character.root.position.y-=.04;
+     const sunk=measureCushionContact(character.root,cushion as Mesh);
+     expect(sunk.pelvisGap).toBeLessThan(-.005);expect(sunk.intersectingVertices).toBeGreaterThan(0);
+     character.root.position.copy(position);character.root.position.y+=.08;
+     expect(measureCushionContact(character.root,cushion as Mesh).contactGap).toBeGreaterThan(.03);
+    }finally{character.root.position.copy(position);character.root.updateMatrixWorld(true);}
+   }
    world.setCameraView('first-person');world.step({},1);
    const eye=new Vector3();expect(character.eyePosition(eye)).toBe(true);
    expect(world.camera.position.distanceTo(eye)).toBeLessThan(.002);

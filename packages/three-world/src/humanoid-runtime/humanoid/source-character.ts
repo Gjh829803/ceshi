@@ -313,7 +313,13 @@ export class Character {
       // foot phases. Permanently mixing them cancelled leg swing at 3.1 m/s.
       // Select a gait with hysteresis; only the short transition mixes poses.
       const runThreshold = walkSpeed * 1.2;
+      // A lower requested pace can settle inside the hysteresis band forever.
+      // Once actual movement reaches that pace, restore its walking gait rather
+      // than waiting for a collision/seam to dip below the run exit threshold.
+      const walkingPace=sim.locomotionTargetSpeed!==undefined&&sim.locomotionTargetSpeed>0
+        &&sim.locomotionTargetSpeed<=runThreshold+.15;
       if (speed < .08) this.gait = 'idle';
+      else if(walkingPace&&sim.speed<=runThreshold+.15)this.gait='walk';
       else if (this.gait === 'run') this.gait = speed < runThreshold - .15 ? 'walk' : 'run';
       else this.gait = speed > runThreshold + .15 ? 'run' : 'walk';
       targets[this.gait] = 1;
