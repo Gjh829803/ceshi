@@ -37,6 +37,12 @@ Choose content from the task; do not invent health, scores or quests just to fil
 HUD. If the user explicitly requests no visible UI, use an empty UI layer with the
 same binding. Follow [programming](programming.md#world-ui) for the authoring entry.
 
+Finish scene and UI adjustments before the final delivery recording. Inspect the
+opening and HUD first; use short real-input checks where needed to resolve uncertain
+interactions or route sections, then record a compact complete plan covering the
+requested behavior. This adds no fixed test count or recording duration. See
+[record and submit](programming.md#record-and-submit) for evidence reuse and identity rules.
+
 Check the final world with real input, state and images:
 - UI: use `world_preview({view:"current",includeUi:true})` to inspect the authored UI; clean recordings and three-views do not verify HUD appearance.
 - Playability: requested outcomes work, or free exploration works when no gameplay is requested.

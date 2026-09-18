@@ -243,6 +243,12 @@ TypeScript sources does not resolve the SDK/import map.
 
 ## Agent screenshots
 
+Inspect and adjust the HUD before the final delivery recording, including control
+hints for the relevant interaction states. UI source edits also change the world
+identity, even though recordings contain only the clean canvas; editing the HUD
+after recording requires new recording evidence. Follow the
+[record and submit workflow](programming.md#record-and-submit) to reduce repeated runs.
+
 Choose the screenshot by what you need to inspect:
 
 ```ts

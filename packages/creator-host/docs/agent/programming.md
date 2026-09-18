@@ -235,6 +235,30 @@ to poll. Read actual errors; unavailable telemetry is not measured success.
 
 ## Record and submit
 
+Reduce rework by settling the scene and UI before the final delivery recording:
+
+1. Inspect opening composition and the authored HUD with `world_preview({view:'opening',includeUi:true})`.
+   Resolve visible layout and control-hint issues; check relevant state-dependent hints
+   alongside the interaction that produces them.
+2. For uncertain interactions or route sections, use a short, focused episode or a
+   shorter playtest duration for its prefix. Read existing frames, `world_read_playtest`
+   samples and failure feedback before retrying; after a repair, recheck the affected
+   behavior instead of repeatedly replaying a long tour.
+3. Once those issues are resolved, finalize `episode.json` and record a compact complete
+   plan covering representative routes, requested interactions and their outcomes.
+   Omit the duration override for that complete run. If the latest recording already
+   covers these needs and is eligible for the unchanged world and episode, use it.
+
+These are workflow guidance, not additional mandatory passes or a minimum duration.
+Explorable-space capacity does not require recording a full circuit or every region.
+Do not omit requested behavior merely to shorten the recording.
+
+The current world identity includes authored UI files: even a UI-only text, style or
+layout edit after recording requires a new current-source recording. Complete those
+edits early; do not reuse old evidence by changing its identity. An `episode.json`
+edit changes the episode identity and also requires a matching complete recording.
+Short debug runs help locate problems but do not replace complete delivery evidence.
+
 Timed Episode steps run for `durationSeconds` in wall time; keys stay held until
 `keysUp`. Omit the playtest duration to execute the complete plan. A shorter
 value tests the prefix from opening. Read the control registry for each action;
