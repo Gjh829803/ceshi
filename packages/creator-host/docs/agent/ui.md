@@ -211,14 +211,46 @@ library is needed. The existing binding above is also used for local play.
 Local UI follows the SDK simulation clock and resets with the world. Component
 styles are isolated in Shadow DOM and JSON layout uses the same design viewport
 scaling as the public stream player. It does not encode video or open WebSockets.
-Creator captures, Episode recordings and Stream Host producer pages explicitly
-open `?ui=off`, keeping the capture page and whitebox video free of HUD pixels.
+Creator, Episode and Stream Host producer pages explicitly open `?ui=off`.
+Creator can temporarily compose a UI preview as described below; formal capture
+and recording paths always read the clean Three canvas.
 The player's own UI is independent of this producer-page query parameter.
 
 From the repository: `pnpm dev:example /absolute/path/to/case 53901`.
 The public seaside demo also supports `cd examples/worlds/seaside-town && pnpm dev`.
 Serve the compiled preview through this entry; a plain static server over uncompiled
 TypeScript sources does not resolve the SDK/import map.
+
+## Agent screenshots
+
+Choose the screenshot by what you need to inspect:
+
+```ts
+world_preview({view:'current', includeUi:true})  // World + authored React UI
+world_preview({view:'current', includeUi:false}) // Clean world canvas
+world_preview({view:'opening', includeUi:true})  // Reset and inspect initial UI
+```
+
+`opening`/`current` default to `includeUi:true`. `top-down`/`entity-triview`
+are geometry views and require `includeUi` omitted or false. No `project.ui`
+returns a clean image with `ui:{included:false,reason:'not-defined'}`; explicitly
+excluding UI reports `reason:'disabled'`. A declared UI that fails to load/render
+fails the preview with its error rather than silently returning a UI-free success.
+
+The Host samples clean pixels and `readUiState()` synchronously, then renders that
+frozen state with the same components, styles and layout as local play/the player.
+It waits for DOM layout, styles, fonts and component images, and captures only the
+world display rectangle at its CSS size. `ui.sample` records simulation tick/time.
+The temporary composition is removed afterward; it acquires no input/presentation
+lease, invokes no action and does not pause/reset/step a `current` view.
+A running world can continue while the frozen preview is being prepared.
+
+This is a **state snapshot**, not an animation-history replay: numeric transitions
+initialize at the sampled values (`ui.animation:'state-snapshot'`). Inspect actual
+transition timing in local play or the stream player. The screenshot option never
+changes `world_playtest` video/keyframes, `world_capture_triviews`, automatic submit
+captures or Episode/model-input media; those remain UI-free. Adding `?ui=on` alone
+does not make a canvas-only capture include DOM pixels.
 
 ## Current scope
 

@@ -1,5 +1,6 @@
 import {AGENT_READING_GUIDE,type AgentDocumentPath} from '../discovery/agent-docs.js';
 import type {InspectionQuery} from '../browser/bridge.js';
+import {captureUiPreview} from './ui-preview-capture.js';
 import {checkViewport} from './viewport-check.js';
 import type {ViewportSize} from '../browser/viewport-diagnostics.js';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -181,7 +182,7 @@ export class ThreeCreatorTools {
     await this.closeSession(); await verifyFiles(candidate.root, candidate.files);
     const errors: string[] = [], networkErrors: string[] = [];
     const mountPath = `/playable/${candidate.worldBuildHash}/`;
-    const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm' };
+    const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm' };
     const server = createServer(async (request, response) => {
       try {
         const url = new URL(request.url ?? '/', 'http://localhost'); const decoded = decodeURIComponent(url.pathname);
@@ -189,7 +190,9 @@ export class ThreeCreatorTools {
         if (!decoded.startsWith(mountPath)) { response.writeHead(404).end(); return; }
         const relative = decoded.slice(mountPath.length) || 'index.html', filename = path.resolve(candidate.playableRoot, relative);
         if (!isWithin(candidate.playableRoot, filename) || !(await lstat(filename)).isFile() || (await lstat(filename)).isSymbolicLink() || !isWithin(candidate.playableRoot, await realpath(filename))) { response.writeHead(403).end(); return; }
-        response.setHeader('Content-Security-Policy', "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
+        // The shared UI runtime compiles JSON schemas with Ajv in this local browser.
+        const uiScriptPolicy=candidate.project.ui?" 'unsafe-eval'":'';
+        response.setHeader('Content-Security-Policy', `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${uiScriptPolicy}; connect-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'`);
         response.setHeader('Content-Type', mime[path.extname(filename)] ?? 'application/octet-stream'); response.end(await readFile(filename));
       } catch { response.writeHead(404).end(); }
     });
@@ -330,17 +333,24 @@ export class ThreeCreatorTools {
     }
     return { sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, worldOperation };
   }
-  private async capture(session: Session, root: string, view: string, entityIds: string[] = [], frontYawRadians?: number) {
-    const result = await this.bridge(session, 'capture', [view, entityIds, frontYawRadians]); const bytes = Buffer.from(result.image.replace(/^data:image\/png;base64,/, ''), 'base64'); delete result.image;
+  private async capture(session: Session, root: string, view: string, entityIds: string[] = [], frontYawRadians?: number, includeUi=false) {
+    let result:any,bytes:Buffer;
+    if(includeUi&&session.candidate.project.ui){
+      ({result,bytes}=await withStageDeadline(()=>captureUiPreview(session.page,view as 'opening'|'current'),15000,'UI_PREVIEW_CAPTURE_TIMEOUT',()=>this.closeSession()));
+    }else{
+      result = await this.bridge(session, 'capture', [view, entityIds, frontYawRadians]); bytes = Buffer.from(result.image.replace(/^data:image\/png;base64,/, ''), 'base64'); delete result.image;
+      result.ui={included:false,reason:includeUi?'not-defined':'disabled'};
+    }
     const name = `${view}-${sha256(JSON.stringify(entityIds)).slice(0, 10)}.png`, file = path.join(root, name); await mkdir(root, { recursive: true }); await writeFile(file, bytes);
     return { ...result, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: session.candidate.sourceHash, worldBuildHash: session.candidate.worldBuildHash, runtimeHash: session.candidate.runtimeHash, runtimeSourceHash: session.candidate.runtimeSourceHash, profile: this.profile };
   }
-  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number) {
+  async preview(view = 'opening', entityIds: string[] = [], frontYawRadians?: number, includeUi = view === 'opening' || view === 'current') {
     if (!['opening', 'current', 'top-down', 'entity-triview'].includes(view) || (frontYawRadians !== undefined && !Number.isFinite(frontYawRadians))) throw new Error('THREE_PREVIEW_INPUT_INVALID');
+    if(typeof includeUi!=='boolean'||(includeUi&&view!=='opening'&&view!=='current'))throw new Error('THREE_PREVIEW_UI_VIEW_INVALID: includeUi:true requires opening or current');
     const candidate = await this.compiler.prepare(), session = await this.open(candidate);
     if (view !== 'current') await this.bridge(session, 'stop');
     if (view === 'opening') await this.bridge(session, 'reset');
-    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians);
+    return this.capture(session, path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`), view, entityIds, frontYawRadians, includeUi);
   }
   async triviews(includeAdditionalTargets=false) {
     const candidate = await this.compiler.prepare(), session = await this.open(candidate); await this.bridge(session, 'reset');

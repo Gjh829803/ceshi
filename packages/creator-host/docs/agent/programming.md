@@ -183,6 +183,8 @@ are binding references and must be adapted to an edited runtime.
 | --- | --- |
 | Does it compile? | `world_validate`; compilation does not run the world |
 | Does the opening match? | `world_preview({view:'opening'})`; pauses and resets |
+| How does the final HUD look? | `world_preview({view:'current',includeUi:true})`; authored React UI over the sampled world |
+| Check geometry without HUD? | `world_preview({view:'current',includeUi:false})`; pure Three canvas |
 | What does this state look like? | `world_preview({view:'current'})`; no pause/reset/step; a live world continues |
 | Why is movement/action blocked? | `world_inspect`: `snapshot` for state, `description` for eligibility; `hierarchy`/`diagnostics` for geometry/physics |
 | Do real controls and the route work? | `world_playtest`; resets and runs episode keys, pointer drags and explicit commands in real time |
@@ -190,6 +192,12 @@ are binding references and must be adapted to an edited runtime.
 | Does the area fit the overview? | `world_preview({view:'top-down'})`; inspect bounds and boundsSource against all playable routes |
 | Why is the page small or blurry? | `world_inspect({sections:['viewport']})`; compare live canvas render/display sizes, pixel density and camera aspect |
 | Does rendering follow a window size change? | Optional `world_check_viewport({widthCssPixels:1280,heightCssPixels:800})`; temporarily resizes the browser, samples, then restores the original viewport |
+
+Opening/current previews default to `includeUi:true`; projects without `project.ui`
+return a clean world image with `ui.included:false` and `reason:'not-defined'`.
+Top-down/entity-triview accept only omitted/false `includeUi`. Formal captures and
+recordings always stay UI-free. See [UI screenshot behavior](ui.md#agent-screenshots)
+for state, animation and failure semantics.
 
 Use existing frames and state to locate the cause before changing code or inputs.
 An edit opens a new build; keep earlier evidence associated with its original
