@@ -30,13 +30,13 @@ const definitions: ToolDefinition[] = [
     execute: (service, input) => input.document !== undefined ? service.readAuthoringDocument(input.document) : service.authoringSchema(input.topic, input.sections),
     readOnly: true,
     name: 'creator_get_authoring_schema',
-    description: 'Read a source-backed topic guide first. Read quality for task requirements, programming for coding/tools, getting-started for the SDK index and assets for resource selection. Follow returned navigation with document to read one child page; do not combine document with topic/sections. Topic/sections provide deeper interfaces. Default sections is [guide]. Request contracts, project, episode, observation, commands or humanoid only when needed; [all] returns the full topic.',
+    description: 'Read a source-backed topic guide first. Read quality for task requirements, programming for coding/tools, document:ui.md for the shared SDK world UI contract, getting-started for the SDK index and assets for resource selection. Follow returned navigation with document to read one child page; do not combine document with topic/sections. Topic/sections provide deeper interfaces. Default sections is [guide]. Request contracts, project, episode, observation, commands or humanoid only when needed; [all] returns the full topic.',
     inputSchema: {...objectSchema({ document:{enum:AGENT_DOCUMENT_PATHS}, topic: { enum: AUTHORING_TOPICS }, sections: { type: 'array', items: { enum: SCHEMA_SECTIONS }, minItems: 1, maxItems: 8, uniqueItems: true } }), allOf:[{if:{required:['document']},then:{not:{anyOf:[{required:['topic']},{required:['sections']}]}}}] } },
   {
     execute: (service, input) => service.bindingExamples(input.topic,input.files,input.variant),
     readOnly: true,
     name: 'creator_get_examples',
-    description: 'Get a binding snippet with explicit scene/map inputs; integrate it into your authored world. Choose the topic matching the subject: getting-started for a human, character-actions for requested contextual actions, mounted-interaction for creature riding (variant flying-creature for flying mounts), custom-vehicle for authored vehicles (variant car, motorcycle or plane), nonhuman-subject for an animal protagonist. Read explicit files from the manifest as needed.',
+    description: 'Get a binding snippet with explicit scene/map inputs; integrate it into your authored world. Choose the topic matching the subject: getting-started for a human, character-actions for requested contextual actions, mounted-interaction for creature riding (variant flying-creature for flying mounts), custom-vehicle for authored vehicles (variant car, motorcycle or plane), nonhuman-subject for an animal protagonist. Choose streaming-ui for React/JSON UI files and a producer binding for your existing world; merge projectUi into project.json.ui. Read explicit files from the manifest as needed.',
     inputSchema: objectSchema({ topic: { enum: BINDING_EXAMPLE_TOPICS }, variant:{enum:['car','motorcycle','plane','flying-creature']}, files:{type:'array',items:string,maxItems:32,uniqueItems:true} }) },
   {
     execute: (service, input) => service.materializeRuntime(),

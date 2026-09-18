@@ -1,9 +1,29 @@
 # Streaming world UI
 
-Use this contract when the requested world needs a separate streaming HUD. The
-world owns gameplay state; React components only present it and emit named events.
+This is the UI authoring contract for generated `three-sdk` worlds, shared by
+local play, Agent previews and the stream player. Read the [task requirements](README.md)
+for what to deliver. The world owns gameplay state; React components only present
+it and emit named events. Handwritten scene DOM is not an alternative UI transport.
 The stream Host acquires SDK input and capture leases. Do not acquire these leases
 in authored scene code, run a second simulation loop, or draw the HUD into Three.
+
+## Start from a working binding
+
+Call `creator_get_examples({topic:"streaming-ui"})`. It returns a minimal `main.ts`
+binding snippet and the UI files below, plus `projectUi` to merge into your existing
+`project.json` as its `ui` field. Keep the project's selected `assetIds`. The snippet
+uses an existing world and health state supplied by your scene; it does not create
+a second world, presentation or animation loop. Publish the binding after world
+startup. Health, buttons and property names demonstrate the protocol; replace them
+with state and hints appropriate to the actual scene. Do not add health mechanics
+to a task that does not need them.
+
+For a user-requested UI-free world, retain the project/binding and use a document
+whose only element is an empty `HudLayer` and whose `transitions` is `{}`, a catalog with empty `components` and
+`actions`, an empty-object state schema, `readUiState:()=>({})`, `actions:{}` and
+`export const components={}`. The stream can then load the world with no widgets.
+A missing `project.ui` is a missing UI bundle, not the same as an intentionally
+empty document. This SDK binding is not provided by the `three-raw` profile.
 
 ## Project files
 
@@ -19,7 +39,7 @@ Add `ui` to `project.json` with four project-relative paths:
   and `slots`. `actions` maps world action names to `{paramsSchema}`. The exact working format is in
   [the example catalog](../../../../examples/three-creator/streaming-ui/ui/catalog.json).
 - `definition.json`: `schemaVersion: 1`, matching `catalogId`, `designViewport: {width,height}` and
-  `spec: {root,elements}`. Elements have stable IDs, `type`, `props`, optional
+  `spec: {root,elements}`, plus required `transitions` (`{}` when no animations). Elements have stable IDs, `type`, `props`, optional
   `children`, state-bound `visible`, viewport `layout`, and `on` event-to-action bindings. Document-level `transitions` maps
   element IDs to prop transition settings. Bind a prop to state
   with `{"$state":"/player/health"}` (JSON Pointer). Read the

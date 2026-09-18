@@ -164,11 +164,25 @@ samples retain compact `snapshot.camera` identities; source inventory, runtime
 identity and actual adopted document hash together establish which build consumed
 which configuration. Reads do not advance simulation.
 
-Keep HUD outside the pure world image:
-```ts
-const presentation = world.createPresentation();
-presentation.ui.mount(hud); // hud is your HTMLElement
-```
+## World UI
+
+Use the shared [world UI contract](ui.md) for SDK world UI. Read it with
+`creator_get_authoring_schema({document:"ui.md"})`; request
+`creator_get_examples({topic:"streaming-ui"})` for a minimal producer binding,
+React components and JSON files. Integrate them into your authored world; the
+example's health state is illustrative, not a required gameplay feature.
+
+Declare `project.ui`, expose `__WORLDKIT_STREAM_WORLD__` with `world`, synchronous
+`readUiState()` and named `actions`, and render widgets through React + JSON.
+The local preview and stream Host own the presentation. Do not create a second
+presentation or attach a handwritten DOM HUD in scene code: such DOM is not
+serialized into the UI stream and is not included in `includeUi:true` previews.
+This leaves the Three canvas clean for recordings and model input.
+
+`world_validate` and `world_submit` report `ui.status`: `compiled` means the
+bundle is included, not that its runtime behavior or appearance has been verified;
+`not-configured` means `project.ui` is absent. Follow the returned UI guide/example
+when missing. Technical recording success alone does not establish UI completion.
 
 The Host compiles browser code with locked Three/SDK dependencies. Network access
 is same-origin; bundle resources locally. Author Node scripts and build configs
@@ -266,7 +280,3 @@ Only the first five are downstream conditioning references.
 and automatically captures missing current views. Keep the resulting
 `creator-result.json` and archive. Do not write evidence/delivery files manually.
 Submission creates the local package; it does not upload or start Episode.
-
-For a separate streaming HUD, read [streaming UI](ui.md), available through
-`creator_get_authoring_schema({document:"ui.md"})`. It defines project files,
-component props/events, state-bound visibility, source-time animation and the producer binding.

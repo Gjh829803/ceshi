@@ -28,9 +28,16 @@ export function documentNavigation(document:AgentDocumentPath){
   return {parent:parent?link(parent):null,children:(children[document]??[]).map(link)};
 }
 export function topicDocument(topic:string):AgentDocumentPath|undefined {
+  if(topic==='presentation')return 'ui.md';
   return Object.hasOwn(names,topic)?names[topic as keyof typeof names]:undefined;
 }
 export const AGENT_READING_GUIDE = Object.entries(names).map(([topic,file])=>({
   topic,source:`packages/creator-host/docs/agent/${file}`,
   tool:'creator_get_authoring_schema',arguments:{topic,sections:['guide']},
 }));
+
+/** Navigation only: UI authoring policy lives in the canonical Agent documents. */
+export const WORLD_UI_AUTHORING={
+  guide:{tool:'creator_get_authoring_schema',arguments:{document:'ui.md'}},
+  example:{tool:'creator_get_examples',arguments:{topic:'streaming-ui'}},
+} as const;

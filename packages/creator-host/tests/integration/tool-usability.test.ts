@@ -815,7 +815,7 @@ it('routes all four entry documents through the same MCP schema sources and expo
  const {THREE_CREATOR_TOOLS}=await import('../../src/cli/mcp');
  const examples=THREE_CREATOR_TOOLS.find(tool=>tool.name==='creator_get_examples')!;
  const topics=(examples.inputSchema.properties as any).topic.enum;
- expect(topics).toEqual(['getting-started','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject']);
+ expect(topics).toEqual(['getting-started','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject','streaming-ui']);
  for(const topic of topics){
   const result:any=await executeThreeCreatorTool(tools,'creator_get_examples',{topic});
   expect(result.files['main.ts']).toBeTruthy();
@@ -826,7 +826,7 @@ it('routes all four entry documents through the same MCP schema sources and expo
   expect(result.files['main.ts']).not.toMatch(/export\s+(async\s+)?function/);
   if(topic!=='getting-started')expect(result.files['main.ts']).not.toMatch(/await create(?:Humanoid)?World\(/);
   expect(result.files['main.ts']).not.toMatch(/PlaneGeometry|BoxGeometry|bounds\s*:|playerSpawn\s*:/);
-  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(['getting-started','nonhuman-subject'].includes(topic)?['main.ts','config/camera.json']:['main.ts']);
+  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(topic==='streaming-ui'?['main.ts','ui/catalog.json','ui/definition.json','ui/state.schema.json','ui/components.tsx','ui/styles.css']:['getting-started','nonhuman-subject'].includes(topic)?['main.ts','config/camera.json']:['main.ts']);
  }
  const index:any=await schema(tools,{topic:'assets'});
  expect(index.assetIndex.map((item:any)=>item.id).sort()).toEqual([...environment.assetPolicy.allowedAssetIds].sort());

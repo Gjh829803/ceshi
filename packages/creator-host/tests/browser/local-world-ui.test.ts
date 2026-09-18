@@ -110,6 +110,6 @@ test('Agent UI previews compose frozen state, preserve clean captures and clean 
     expect(await failurePage.locator('[data-world-ui-capture]').count()).toBe(0);
     const project=JSON.parse(await readFile(path.join(workspace,'project.json'),'utf8'));delete project.ui;
     await writeFile(path.join(workspace,'project.json'),JSON.stringify(project));
-    const without=await preview({view:'opening'});expect(without.ui).toEqual({included:false,reason:'not-defined'});
+    const without=await preview({view:'opening'});expect(without.ui).toMatchObject({included:false,reason:'not-defined',next:{guide:{arguments:{document:'ui.md'}}}});
   }finally{await tools.close();await rm(workspace,{recursive:true,force:true});}
 },120000);
