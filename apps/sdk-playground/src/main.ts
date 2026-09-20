@@ -35,7 +35,6 @@ import {
 import { GRAND_PRIX } from "@worldkit/preset-content/environment/grand-prix";
 import {
   applyControlProfile,
-  readEditableControlProfile,
 } from "@worldkit/preset-content/platform/profile-runtime";
 import {
   getDefaultControlProfile as getPresetDefaultControlProfile,
@@ -45,7 +44,6 @@ import {
   parseControlProfile,
   type ControlProfile,
 } from "@worldkit/preset-content/platform/profiles";
-import { resolveControlProfile } from "@worldkit/preset-content/platform/control-resolution";
 import { parseRuntimeControlOverride, RuntimeControlOverrideStore } from "@worldkit/preset-content/platform/runtime-control-overrides";
 import { buildVehicle, labelSprite, type VehicleVisual } from "@worldkit/preset-content/models";
 import { FrameRateMeter } from "@worldkit/preset-content/fps";
@@ -61,6 +59,7 @@ import {
 import { mountAssetLibrary } from "./library";
 import {
   profileScopeKey,
+  resolveProfileViews,
   scopeProfile,
   type ProfileTarget,
 } from "./profile-scopes";
@@ -304,19 +303,25 @@ function profileTargetForVehicle(): ProfileTarget {
     instanceId: vehicle.spec.id,
   };
 }
-function resolveProfileForScopedTarget(target: ProfileTarget) {
+function profileLayersForScopedTarget(target: ProfileTarget) {
   const shared = sharedProfiles.get(target.assetId);
   if (!shared) throw new Error(`profile not found: ${target.assetId}`);
-  return runtimeControlOverrides.apply(resolveControlProfile({
+  return {
     shared,
     projectAsset: projectProfiles.get(target.assetId),
     projectInstance: target.instanceId === undefined ? undefined : projectProfiles.get(profileScopeKey(target)),
     debugAsset: debugProfiles.get(target.assetId),
     debugInstance: target.instanceId === undefined ? undefined : debugProfiles.get(profileScopeKey(target)),
-  }));
+  };
 }
-function profileForScopedTarget(target: ProfileTarget): ControlProfile {
-  return resolveProfileForScopedTarget(target).profile;
+function resolveProfileViewsForScopedTarget(target: ProfileTarget) {
+  return resolveProfileViews(profileLayersForScopedTarget(target), runtimeControlOverrides.values());
+}
+function editableProfileForScopedTarget(target: ProfileTarget): ControlProfile {
+  return resolveProfileViewsForScopedTarget(target).editable.profile;
+}
+function effectiveProfileForScopedTarget(target: ProfileTarget): ControlProfile {
+  return resolveProfileViewsForScopedTarget(target).effective.profile;
 }
 function allProfileTargets(): ProfileTarget[] {
   return [{ assetId: "person" }, ...runtime.snapshot().vehicles.map(({ assetId, instanceId }) => ({
@@ -324,7 +329,7 @@ function allProfileTargets(): ProfileTarget[] {
   }) satisfies ProfileTarget)];
 }
 function applyAllScopedProfiles(): void {
-  for (const target of allProfileTargets()) applyControlProfile(runtime, scopeProfile(profileForScopedTarget(target), target));
+  for (const target of allProfileTargets()) applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
 }
 function setScopedProfile(profile: ControlProfile): void {
   projectProfiles.set(profileScopeKey(profile), profile);
@@ -831,13 +836,13 @@ const workbench = mountWorkbench(document.body, {
   getProfile: (id) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    return readEditableControlProfile(runtime, profileForScopedTarget(target));
+    return editableProfileForScopedTarget(target);
   },
   applyProfile: (value) => {
     const target = profileTargetForVehicle();
     const profile = scopeProfile(parseControlProfile(value, target.assetId), target);
     setScopedProfile(profile);
-    applyControlProfile(runtime, scopeProfile(profileForScopedTarget(target), target));
+    applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
 
     if (paused) renderPausedState();
   },
@@ -851,7 +856,7 @@ const workbench = mountWorkbench(document.body, {
     clearDebugControlProfile(localStorage, target.assetId, target.instanceId);
     debugProfiles.delete(profileScopeKey(target));
     clearScopedProfile(target);
-    applyControlProfile(runtime, scopeProfile(profileForScopedTarget(target), target));
+    applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
 
     if (paused) renderPausedState();
   },
@@ -915,13 +920,13 @@ const inspector = mountInspector(el("inspectorHost"), {
   getProfile: (id) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    return readEditableControlProfile(runtime, profileForScopedTarget(target));
+    return editableProfileForScopedTarget(target);
   },
   applyProfile: (value, tab) => {
     const target = profileTargetForVehicle();
     const profile = scopeProfile(parseControlProfile(value, target.assetId), target);
     setScopedProfile(profile);
-    if (tab === "movement") applyControlProfile(runtime, scopeProfile(profileForScopedTarget(target), target));
+    if (tab === "movement") applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
@@ -935,7 +940,7 @@ const inspector = mountInspector(el("inspectorHost"), {
     debugProfiles.delete(profileScopeKey(target));
     if (tab === "movement") {
       clearScopedProfile(target);
-      applyControlProfile(runtime, scopeProfile(profileForScopedTarget(target), target));
+      applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
     }
     if (paused) renderPausedState();
   },
@@ -1641,7 +1646,7 @@ const labAPI = {
   ...(debugControls ? { debug: debugControls } : {}),
   inspectCamera:()=>inspectDebugCamera(sdk),
   inspectControlProfile: () => {
-    const target = profileTargetForVehicle(), resolved = resolveProfileForScopedTarget(target);
+    const target = profileTargetForVehicle(), resolved = resolveProfileViewsForScopedTarget(target).effective;
     return { target, profile: resolved.profile, sources: resolved.sources };
   },
   setRuntimeControlOverride: (value: unknown) => {
