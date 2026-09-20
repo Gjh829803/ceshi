@@ -50,7 +50,10 @@ def read_private(path, require_private=True, raw=False):
             raise ClientError("凭据文件格式无效")
         if hasattr(os, "getuid") and info.st_uid != os.getuid():
             raise ClientError("凭据文件不属于当前用户")
-        if require_private and stat.S_IMODE(info.st_mode) & 0o077:
+        # Windows reports synthetic POSIX mode bits for NTFS files; the
+        # effective ACL is enforced separately there. Keep the strict mode
+        # check on POSIX platforms while allowing the Windows ACL check.
+        if require_private and os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077:
             raise ClientError("凭据文件需设置为仅本人可读写（chmod 600）")
         if not require_private:
             os.fchmod(stream.fileno(), 0o600)
