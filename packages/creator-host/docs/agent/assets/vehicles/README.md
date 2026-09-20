@@ -56,6 +56,18 @@ disabled bindings are omitted. Re-read the result after `setKeyBindings`,
 boarding, leaving a vehicle, or changing the camera document. `spec.hint` is
 descriptive legacy metadata, not the authoritative keyboard contract.
 
+### Flying sword using the spacecraft matrix
+
+If a custom flying sword is intended to follow the spacecraft/飞船 row in the
+keyboard matrix, declare it as `mode: 'spacecraft'` and
+`archetype: 'spacecraft'`, and give it `spaceFlight` (for example,
+`humanoid.SPACE_FLIGHT_PRESETS.shuttle` or `saucer`). Do not use `mode:
+'mount'` just because the rider stands on the sword, and do not copy the
+aircraft or character labels into a handwritten HUD. `world.getControlHints()`
+then produces the matching rows, including `Space / C` for pitch, `Q / E` for
+lift, `Z / X` for roll, `Ctrl` for counter-thrust, `F` for enter/exit and `V`
+for camera view when those bindings are enabled.
+
 creator_get_examples({topic:'custom-vehicle',variant:'car'}) or variant:'motorcycle' / variant:'plane'
 shows how to prepare the instance's object/spec for the vehicles option at world
 creation. The action and control interfaces operate on that same world.

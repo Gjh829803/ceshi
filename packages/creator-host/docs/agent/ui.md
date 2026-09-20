@@ -223,6 +223,12 @@ For keyboard hints, derive the rows from `world.getControlHints()` inside
 `controls` and `system` rows already reflect rebinding, mounted vehicle context,
 camera view availability, and disabled actions.
 
+For a custom flying sword whose handling follows the spacecraft/飞船 row, the
+same rule applies: its `VehicleSpec` must use `mode: 'spacecraft'`, and the HUD
+must render the returned rows. This is what makes `Space / C`, `Q / E`,
+`Z / X`, `Ctrl`, `F` and `V` agree with the actual runtime instead of a visual
+name or a stale matrix copy.
+
 ## Local play and capture
 
 Projects declaring `project.ui` automatically get the same React UI when opened

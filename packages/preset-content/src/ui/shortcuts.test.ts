@@ -55,6 +55,17 @@ describe('current input semantics in Playground HUD',()=>{
     expect(space.flat().join(' ')).not.toMatch(/Shift|侧移/);
   });
 
+  it('uses the spacecraft matrix for a flying sword authored as spacecraft',()=>{
+    const sword={mode:'spacecraft',archetype:'spacecraft'} as const;
+    const rows=controlsFor(sword),system=systemControlsFor(sword);
+    expect(rows).toContainEqual(['Space / C','抬头 / 低头']);
+    expect(rows).toContainEqual(['Q / E','局部上升 / 局部下降']);
+    expect(rows).toContainEqual(['Z / X','向左横滚 / 向右横滚']);
+    expect(rows).toContainEqual(['Ctrl','反推制动']);
+    expect(rows).toContainEqual(['F','离开载具（需满足离座条件）']);
+    expect(system).toContainEqual(['V','切换视角']);
+  });
+
   it('does not advertise tank gun pitch or dragon flame as keyboard actions',()=>{
     const tank=controlsFor({mode:'tank'}),dragon=controlsFor({mode:'dragon',flyingCreature:{}} as Parameters<typeof controlsFor>[0]);
     expect(tank).toContainEqual(['Z / X','炮塔左转 / 炮塔右转']);
