@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, LoopOnce, Mesh, MeshBasicMaterial, Quaternion, type Object3D } from 'three';
-import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { loadAsset, playLocomotion } from './assets';

@@ -1,10 +1,10 @@
 # Whitebox 独立资产库
 
-本分支 `codex/subject-library-demo` 以本目录作为唯一美术内容库。运行 `start-dashboard.cmd`，或在本目录运行 `node tools/serve.mjs --publish`，打开 http://127.0.0.1:3188/viewer/。工具使用 Node 22+；生成的 `dist/published` 可单独部署，由 Registry API 和 CDN 供消费者读取。
+内容制作和发布工具包为 `@worldkit/asset-library`。Web 平台是独立的 [Worldkit Atlas](../apps/asset-platform/README.md)，使用 Next.js 全栈服务。仓库根运行 `pnpm assets:publish`、`pnpm dev:assets`，打开 http://127.0.0.1:3188/；Windows 可运行 `start-dashboard.cmd`。工具使用 Node 22+，`dist/published` 是独立的发布数据目录。
 
 ## 权威数据与生成产物
 
-资产内容的可编辑权威来源是 `subjects / shared / assemblies`。`schemas / taxonomy` 定义约束，`viewer` 是独立预览消费者。`catalog / dist` 和仓库内 `packages/preset-content/config/generated` 是生成快照，不应手工维护第二份主体定义。宿主算法继续由 SDK 提供。
+资产内容的可编辑权威来源是 `subjects / shared / assemblies`。`schemas / taxonomy` 定义约束，`apps/asset-platform` 是独立预览消费者。`catalog / dist` 和仓库内 `packages/preset-content/config/generated` 是生成快照，不应手工维护第二份主体定义。宿主算法继续由 SDK 提供。
 
 每个主体目录为 `subjects/<browse_group>/<stable-id>/<version>/`：
 
@@ -29,6 +29,8 @@ node --test tests/contracts.test.mjs tests/whitebox.test.mjs
 ```
 
 `node tools/library.mjs materialize creature.horse --output <新目录>` 可按锁定资源导出主体。在 Whitebox 仓库根运行 `pnpm content:sync` 同步宿主适配目录和 preset 包生成快照；`pnpm content:check` 检查它们是否与权威数据一致。
+
+跨包测试通过 `@worldkit/asset-library/testing/*` 读取制作夹具和发布工具；这些子路径不允许进入生产代码。生成目录快照通过 `@worldkit/asset-library/catalog` 导出。
 
 ## 消费与验证边界
 

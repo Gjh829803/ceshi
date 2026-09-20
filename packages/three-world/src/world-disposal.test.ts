@@ -10,7 +10,7 @@ import {setObjectColor} from './object-color';
 import {WorldEngine} from './engine';
 import type {AssetDefinition} from './engine-contracts';
 import type {AssetInstance} from './contracts';
-import catalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import catalog from '@worldkit/asset-library/catalog';
 
 // Only the GPU boundary is replaced. Geometry, GLB decoding, asset ownership,
 // Rapier, camera disposal and lifecycle scheduling use the real implementation.

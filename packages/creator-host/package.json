@@ -35,7 +35,8 @@
     "@types/node": "^24.3.0",
     "@types/three": "0.185.4",
     "vitest": "^3.2.4",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "@worldkit/asset-library": "workspace:*"
   },
   "scripts": {
     "cli": "tsx src/cli/cli.ts",

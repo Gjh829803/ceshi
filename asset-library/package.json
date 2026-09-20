@@ -1,5 +1,5 @@
 {
-  "name": "@worldkit/subject-asset-library-demo",
+  "name": "@worldkit/asset-library",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,5 +9,22 @@
     "validate": "node tools/library.mjs validate",
     "test": "node --test tests/contracts.test.mjs tests/whitebox.test.mjs"
   },
-  "engines": {"node": ">=22"}
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    "./registry-server": {
+      "types": "./tools/registry-server.d.mts",
+      "import": "./tools/registry-server.mjs"
+    },
+    "./catalog": "./dist/whitebox/asset-catalog.json",
+    "./testing/core": "./tools/core.mjs",
+    "./testing/publication-fixture": "./tools/publication-fixture.mjs",
+    "./testing/publish": "./tools/publish.mjs",
+    "./testing/serve": "./tools/serve.mjs",
+    "./testing/presets": "./tools/presets.mjs",
+    "./testing/whitebox": "./tools/whitebox.mjs",
+    "./testing/standalone-materialize": "./client/materialize.mjs",
+    "./testing/standalone-client": "./client/registry-client.mjs"
+  }
 }

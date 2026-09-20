@@ -15,7 +15,7 @@
     "build": "pnpm three:creator:prebuild --profile three-sdk --output .codex-tmp/three-runtime",
     "test:independent": "tsx scripts/testing/run-independent-test-gate.ts",
     "test:independent:node": "tsx scripts/testing/run-independent-test-gate.ts --lane node",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm --filter @worldkit/asset-platform typecheck",
     "test": "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     "test:census": "tsx scripts/testing/verify-test-gate-census.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
@@ -46,13 +46,15 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "assets:publish": "node scripts/assets/sync-asset-contracts.mjs && node scripts/assets/sync-asset-client.mjs && node asset-library/tools/serve.mjs --publish --prepare-only",
-    "assets:serve": "node asset-library/tools/serve.mjs",
+    "assets:serve": "pnpm --filter @worldkit/asset-platform dev",
     "assets:cli": "node packages/asset-client/src/cli.mjs",
     "assets:check": "node scripts/assets/sync-asset-contracts.mjs --check && node scripts/assets/sync-asset-client.mjs --check && node --test asset-library/tests/*.test.mjs packages/asset-contracts/tests/*.test.mjs packages/asset-client/tests/*.test.mjs",
     "content:sync": "tsx packages/creator-host/src/cli/content-cli.ts",
     "content:check": "tsx packages/creator-host/src/cli/content-cli.ts --check",
     "build:stream-web": "pnpm --filter @worldkit/stream-web build",
-    "dev:stream": "pnpm build:stream-web && pnpm --filter @worldkit/stream-host exec tsx src/cli.ts --worlds ../../examples/worlds --web-root ../../apps/stream-web/dist"
+    "dev:stream": "pnpm build:stream-web && pnpm --filter @worldkit/stream-host exec tsx src/cli.ts --worlds ../../examples/worlds --web-root ../../apps/stream-web/dist",
+    "dev:assets": "pnpm --filter @worldkit/asset-platform dev",
+    "build:assets": "pnpm --filter @worldkit/asset-platform build"
   },
   "dependencies": {
     "@worldkit/browser-capture": "workspace:*",
@@ -83,6 +85,8 @@
     "tsx": "^4.23.12",
     "typescript": "^5.9.2",
     "typescript-eslint": "8.70.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "next": "16.3.5",
+    "@tailwindcss/postcss": "4.3.3"
   }
 }

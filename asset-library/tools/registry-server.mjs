@@ -25,7 +25,7 @@ function sendBytes(req,res,bytes,{mime_type='application/json',sha256:digest,mut
  headers['Content-Length']=Math.max(0,end-start+1);res.writeHead(status,headers);res.end(req.method==='HEAD'?undefined:bytes.subarray(start,end+1));
 }
 /** Explicit publication allowlist only. Extra UI files require an explicit sealed path list. */
-export function createRegistryHandler(publishedRoot,{artifactBaseUrl,staticFiles=[]}={}){
+export function createRegistryHandler(publishedRoot,{artifactBaseUrl,publicBaseUrl,staticFiles=[]}={}){
  const store=new RegistryStore(publishedRoot,{artifactBaseUrl});const extras=new Map();
  for(const entry of staticFiles){const relative=typeof entry==='string'?entry:entry.path;assertSafePath(relative);if(!/^(viewer|client)\//.test(relative))fail('ASSET_STATIC_PREFIX_INVALID');const file=publicationPath(publishedRoot,relative),bytes=fs.readFileSync(file);extras.set(relative,{sha256:sha256(bytes),mime_type:typeof entry==='string'?(relative.endsWith('.html')?'text/html':relative.endsWith('.css')?'text/css':relative.endsWith('.json')?'application/json':'text/javascript'):entry.mime_type,mutable:false});}
  return async(req,res)=>{
@@ -42,7 +42,7 @@ export function createRegistryHandler(publishedRoot,{artifactBaseUrl,staticFiles
    const describe=/^\/v1\/assets\/([a-z][a-z0-9._-]{0,127})(?:\/versions\/(\d+\.\d+\.\d+))?$/.exec(pathname);
    if(describe){if([...url.searchParams.keys()].some(k=>k!=='snapshot_id'))fail('ASSET_QUERY_INVALID');const {index}=store.index(url.searchParams.get('snapshot_id')||undefined),summary=store.select(index,describe[1],describe[2]||'latest');store.manifest(summary);return sendBytes(req,res,fs.readFileSync(publicationPath(publishedRoot,summary.manifest_path)),{sha256:summary.manifest_digest,mutable:!describe[2]&&!url.searchParams.has('snapshot_id')});}
    const artifact=/^\/v1\/artifacts\/(?:sha256:)?([a-f0-9]{64})$/.exec(pathname);
-   if(artifact){const address=req.headers.host;if(!address||!/^[-a-zA-Z0-9.:[\]]+(?::\d+)?$/.test(address))fail('ASSET_HOST_INVALID');return json(res,store.locateArtifact(artifact[1],{baseUrl:`http://${address}/`}));}
+   if(artifact){const address=req.headers.host;if(!address||!/^[-a-zA-Z0-9.:[\]]+(?::\d+)?$/.test(address))fail('ASSET_HOST_INVALID');return json(res,store.locateArtifact(artifact[1],{baseUrl:publicBaseUrl||`http://${address}/`}));}
    const relative=pathname.slice(1);if(!relative)fail('ASSET_ROUTE_NOT_FOUND',404);assertSafePath(relative);const metadata=extras.get(relative)||store.publishedFiles().get(relative);if(!metadata)fail('ASSET_ROUTE_NOT_FOUND',404);
    const bytes=fs.readFileSync(publicationPath(publishedRoot,relative));if(metadata.sha256&&sha256(bytes)!==metadata.sha256)fail('ASSET_ARTIFACT_CORRUPT',500);if(metadata.byte_length!==undefined&&bytes.length!==metadata.byte_length)fail('ASSET_ARTIFACT_CORRUPT',500);return sendBytes(req,res,bytes,metadata);
   }catch(error){if(res.headersSent){res.destroy();return;}const status=error.status||500;json(res,{error:{code:error.code||'ASSET_INTERNAL_ERROR',message:status>=500?'Registry data could not be served':error.message,retryable:status>=500||status===429,details:error.details||{}}},status);}

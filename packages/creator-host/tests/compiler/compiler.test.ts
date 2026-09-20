@@ -19,7 +19,7 @@ vi.mock('node:fs/promises', async importOriginal => {
 });
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { ThreeCompiler, hashTree } from '../../src/compiler/compiler.js';
-import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import {createAssetPolicySnapshot,assetPolicyHash} from '../../src/assets/asset-policy.mjs';

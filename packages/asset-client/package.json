@@ -4,10 +4,25 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": { "types": "./src/registry-client.d.mts", "import": "./src/registry-client.mjs" },
-    "./materialize": { "types": "./src/materialize.d.mts", "import": "./src/materialize.mjs" }
+    ".": {
+      "types": "./src/registry-client.d.mts",
+      "import": "./src/registry-client.mjs"
+    },
+    "./materialize": {
+      "types": "./src/materialize.d.mts",
+      "import": "./src/materialize.mjs"
+    }
   },
-  "bin": { "worldkit-assets": "./src/cli.mjs" },
-  "dependencies": { "@worldkit/asset-contracts": "workspace:*" },
-  "scripts": { "test": "node --test tests/*.test.mjs" }
+  "bin": {
+    "worldkit-assets": "./src/cli.mjs"
+  },
+  "dependencies": {
+    "@worldkit/asset-contracts": "workspace:*"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@worldkit/asset-library": "workspace:*"
+  }
 }

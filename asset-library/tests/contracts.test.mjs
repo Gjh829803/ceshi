@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {ROOT,read,write,inside,collect,sha256,walk,latest} from '../tools/core.mjs';
 import {validate,build,materialize} from '../tools/library.mjs';
-import {createServer,copyViewer} from '../tools/serve.mjs';
+import {createServer} from '../tools/serve.mjs';
 import {publishLibrary} from '../tools/publish.mjs';
 import {AssetLibrary} from '../client/asset-library.mjs';
 
@@ -21,7 +21,7 @@ test('authoring export detects corruption; published transport verifies bytes an
  const parent=fs.mkdtempSync(path.join(os.tmpdir(),'whitebox-library-test-')),dest=path.join(parent,'relocated');
  materialize(ROOT,['creature.horse','animal.animalia-brown-bear-male','robot.dog-placeholder'],dest);
  assert.equal(validate(dest).passed,true);
- const published=path.join(parent,'published');await publishLibrary(ROOT,{output:published});copyViewer(ROOT,published);
+ const published=path.join(parent,'published');await publishLibrary(ROOT,{output:published});
  const server=createServer(published);await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  const base=`http://127.0.0.1:${server.address().port}/`,client=new AssetLibrary(base);
  const result=await client.search('horse');assert.ok(result.items.some(item=>item.asset_id==='creature.horse'));const horse=await client.describe('creature.horse');
@@ -31,7 +31,6 @@ test('authoring export detects corruption; published transport verifies bytes an
  const placeholderLock=await client.resolve('robot.dog-placeholder');assert.equal(placeholderLock.compatibility.status,'unknown');assert.equal(placeholderLock.artifacts.length,0);await assert.rejects(()=>client.describe('nonexistent'),/ASSET_NOT_FOUND/);
  const missing=await fetch(base+'v1/assets/nonexistent');assert.equal(missing.status,404);const mutation=await fetch(base+'v1/assets',{method:'POST'});assert.equal(mutation.status,404);
  const request=await fetch(base+model.storage_path,{headers:{Range:'bytes=0-11'}});assert.equal(request.status,206);assert.equal((await request.arrayBuffer()).byteLength,12);
- for(const url of ['viewer/index.html','viewer/app.mjs','viewer/vendor/three/build/three.module.js','client/asset-library.mjs'])assert.equal((await fetch(base+url)).status,200,url);
  for(const url of ['catalog/index.json','dist/assembly.lock.json','tools/core.mjs'])assert.equal((await fetch(base+url)).status,404,url);
  const subject=collect(dest).find(s=>s.asset.asset_id==='creature.horse'),modelPath=inside(dest,subject.resources.model);fs.appendFileSync(modelPath,'bad');assert.equal(validate(dest).passed,false);fs.writeFileSync(modelPath,bytes);
  const placeholder=collect(dest).find(s=>s.asset.asset_id==='robot.dog-placeholder');placeholder.validation.runtime='verified';write(path.join(placeholder.base,'validation/latest.json'),placeholder.validation);assert.ok(validate(dest).errors.some(e=>e.includes('FALSE_PLACEHOLDER_RUNTIME')));

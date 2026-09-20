@@ -3,8 +3,8 @@ import test from 'node:test';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {buildWhiteboxCatalog} from '../../../../asset-library/tools/whitebox.mjs';
-import {buildPresetContent,syncContentOwnership} from '../../../../asset-library/tools/presets.mjs';
+import {buildWhiteboxCatalog} from '@worldkit/asset-library/testing/whitebox';
+import {buildPresetContent,syncContentOwnership} from '@worldkit/asset-library/testing/presets';
 import {composeAssetCatalog,composeContentSpec,createContentAdapter,presetAuthoringContext,runtimeAssetContext} from './host-adapter.mjs';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));

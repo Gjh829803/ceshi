@@ -1,6 +1,7 @@
 packages:
   - "packages/*"
   - "apps/*"
+  - "asset-library"
 
 allowBuilds:
   esbuild: true

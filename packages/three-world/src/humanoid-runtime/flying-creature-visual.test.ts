@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {fileURLToPath} from 'node:url';

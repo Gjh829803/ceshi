@@ -8,7 +8,7 @@ import type {WorldEngine} from './engine';
 import type {WorldAssets} from './assets-library';
 import type {AssetDefinition} from './engine-contracts';
 import type {AssetInstance, CommandReceipt, WorldCommand} from './contracts';
-import catalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import catalog from '@worldkit/asset-library/catalog';
 
 // Observe existing owners only. No production lifecycle API or second clock.
 function engineOf(world: ThreeWorld) {return (world as unknown as {engine: WorldEngine}).engine;}

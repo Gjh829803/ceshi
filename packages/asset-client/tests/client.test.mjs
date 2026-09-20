@@ -229,8 +229,8 @@ test('CLI search, describe, manifest resolve, online fetch and offline replay', 
 });
 
 test('source and standalone clients preserve legacy v1 manifests through download and offline replay',async t=>{
- const {RegistryClient:PortableClient}=await import('../../../asset-library/client/registry-client.mjs');
- const {materializeAssets:portableMaterialize}=await import('../../../asset-library/client/materialize.mjs');
+ const {RegistryClient:PortableClient}=await import('@worldkit/asset-library/testing/standalone-client');
+ const {materializeAssets:portableMaterialize}=await import('@worldkit/asset-library/testing/standalone-materialize');
  for(const validation of [{},{runtime:'unknown'},{runtime:'verified',evidence:['old-report.json']},{runtime:'verified',evidence:{}}]){
   const f=await fixture(t,validation);
   for(const [name,Client,materialize] of [['source',RegistryClient,materializeAssets],['standalone',PortableClient,portableMaterialize]]){

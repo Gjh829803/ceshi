@@ -82,10 +82,11 @@ it("detects missing direct, private sibling, production-to-dev, and invalid expo
   ]);
 });
 
-it("rejects production testing exports but permits an explicit testing export in tests", async () => {
+it.each(["testing", "testing/helpers"])("rejects production %s exports but permits them in tests", async (subpath) => {
   const production = await fixture({
     aDependencies: { "@fixture/b": "workspace:*" },
-    source: 'import "@fixture/b/testing";\n',
+    bExports: { ["./" + subpath]: "./src/testing.ts" },
+    source: `import "@fixture/b/${subpath}";\n`,
   });
   await expect(scanWorkspaceBoundaries(production)).resolves.toEqual([
     expect.objectContaining({ code: "WORKSPACE_PRODUCTION_TEST_EXPORT" }),
@@ -94,7 +95,8 @@ it("rejects production testing exports but permits an explicit testing export in
   const testOnly = await fixture({
     aDevDependencies: { "@fixture/b": "workspace:*" },
     sourcePath: "packages/a/src/consumer.test.ts",
-    source: 'import "@fixture/b/testing";\n',
+    bExports: { ["./" + subpath]: "./src/testing.ts" },
+    source: `import "@fixture/b/${subpath}";\n`,
   });
   await expect(scanWorkspaceBoundaries(testOnly)).resolves.toEqual([]);
 });

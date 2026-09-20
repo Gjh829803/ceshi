@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {createSpaceTrainingMap} from '@worldkit/preset-content/environment/space-training';
 import {getMap} from '@worldkit/preset-content/environment/maps';

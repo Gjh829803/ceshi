@@ -1,0 +1,40 @@
+{
+  "name": "@worldkit/asset-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "next build",
+    "start": "node dist/standalone/start.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "node scripts/integration.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@worldkit/asset-library": "workspace:*",
+    "@worldkit/asset-client": "workspace:*",
+    "@worldkit/asset-contracts": "workspace:*",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "0.185.1",
+    "lucide-react": "1.42.0",
+    "radix-ui": "1.6.7",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "tailwind-merge": "3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "tailwindcss": "4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "0.185.4",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

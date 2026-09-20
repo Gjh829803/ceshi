@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import type {HumanoidRenderState,SourceCharacterFrame} from './humanoid/animation';
 import { describe, expect, it, vi } from 'vitest';
 import { Group, Vector3 } from 'three';

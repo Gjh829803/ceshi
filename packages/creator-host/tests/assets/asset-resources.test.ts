@@ -6,7 +6,7 @@ import {createServer} from 'node:http';
 import {prepareAssetLibrary,readLibraryCatalogSync} from '../../src/assets/library-source.mjs';
 import os from 'node:os';
 import path from 'node:path';
-import catalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import catalog from '@worldkit/asset-library/catalog';
 
 describe('catalog dependency closure', () => {
   const sha256 = 'a'.repeat(64);

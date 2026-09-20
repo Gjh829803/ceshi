@@ -1,3 +1,4 @@
+import catalog from '@worldkit/asset-library/catalog';
 import {describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
@@ -58,7 +59,6 @@ describe('player workspace configuration',()=>{
  });
 
  it('exports the explicit bus brake profile without replacing it with family defaults',()=>{
-  const catalog=JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json',import.meta.url),'utf8'));
   const exported=composeAssetCatalog(catalog.assets).find((asset:{id:string})=>asset.id==='vehicle.bus')!.vehicle!.spec;
   const profile=getDefaultProfile('bus')!;
   expect(exported.brakeDamping).toBeGreaterThan(0);

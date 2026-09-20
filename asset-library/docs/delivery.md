@@ -30,6 +30,6 @@ FBX 样本尚未规范化，部分蒙皮权重会触发浏览器加载器提示�
 
 ## 操作与基线
 
-在资产库内运行 `node tools/serve.mjs` 打开独立看板；新增或更新资源遵循[入库流程](../CONTRIBUTING.md)。库内运行 validate、validate-formats、build 和合同测试；Whitebox 仓库根运行 `pnpm content:sync`、`pnpm content:check` 同步并核对消费快照。
+在仓库根运行 `pnpm dev:assets` 打开 [Worldkit Atlas](../../apps/asset-platform/README.md)；新增或更新资源遵循[入库流程](../CONTRIBUTING.md)。库内运行 validate、validate-formats、build 和合同测试；Whitebox 仓库根运行 `pnpm content:sync`、`pnpm content:check` 同步并核对消费快照。
 
 资源原始快照基于提交 `514fd6ba261f079620c47c49228c70d70f6e8cb1`。当前隔离分支的集成起点为 `63b289d541e2aa89b64dd8cfa044657e2f4dc5d1`。这两个提交分别描述资源来源和集成基线，不应改写为同一个身份。

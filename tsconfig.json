@@ -29,5 +29,11 @@
     "apps/**/*.tsx",
     "scripts/**/*.ts",
     "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/.next/**",
+    "**/dist/**",
+    "apps/asset-platform"
   ]
 }

@@ -67,7 +67,7 @@ import {JETSKI_SOCKETS} from '../vehicles/jetski/spec';
 import {RAFT_SOCKETS} from '../vehicles/raft/spec';
 import {TANK_SOCKETS} from '../vehicles/tank/spec';
 import {UNICYCLE_SOCKETS} from '../vehicles/unicycle/spec';
-import {syncPresetContent} from '../../../../asset-library/tools/presets.mjs';
+import {syncPresetContent} from '@worldkit/asset-library/testing/presets';
 import {presetAuthoringContext,createContentAdapter} from './host-adapter.mjs';
 const repositoryRoot=fileURLToPath(new URL('../../../../',import.meta.url));
 function canonical(value:unknown):unknown{

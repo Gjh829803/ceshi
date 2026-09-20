@@ -7,7 +7,7 @@ import {createWorld,createHumanoidCameraDocument,parseCameraDocument,resolveCame
 import {executeThreeCreatorTool} from '../../src/cli/mcp';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {cameraPresetSnapshots} from '../../src/discovery/camera-presets';
-import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 it('returns a complete human camera snapshot with on-foot calibration and an unrestricted authored opening',async()=>{

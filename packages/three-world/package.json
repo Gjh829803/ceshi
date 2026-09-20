@@ -27,7 +27,8 @@
     "vitest": "^3.2.4",
     "tsx": "^4.23.12",
     "ajv": "8.17.1",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@worldkit/asset-library": "workspace:*"
   },
   "scripts": {
     "test": "vitest run --root ../.. packages/three-world",
