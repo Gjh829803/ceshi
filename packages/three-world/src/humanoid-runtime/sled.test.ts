@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Group, SkinnedMesh, Vector3 } from 'three';
@@ -96,7 +97,7 @@ it('keeps the actual Source101 soles above snow throughout pushing, steering and
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character();
   try{
-    await rider.load(path=>new URL(`../../../../assets/three-creator/presets/${path}`,import.meta.url).href);
+    await rider.load(testAssetResourceUrl);
     const bounds=[];
     for(const sledPose of [{push:0,brake:0,steer:0},{push:1,brake:0,steer:0},{push:0,brake:1,steer:0},{push:0,brake:0,steer:1},{push:0,brake:0,steer:-1}]){
       rider.root.position.set(...spec.seat);

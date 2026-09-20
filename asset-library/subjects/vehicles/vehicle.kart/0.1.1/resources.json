@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
+  "preview": null,
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
+      "sha256": "24c0f1eb46826d64e64f96e03aa8393f7e0b0d17e017444da1d6f8f2fa71b7a3",
+      "byte_length": 85148,
+      "format": "glb",
+      "role": "model",
+      "source_path": "@worldkit/preset-content/models:buildVehicle(kart)",
+      "reused_by": [
+        "vehicle.kart"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 33,
+    "meshes": 23,
+    "materials": 4,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1328,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": []
+}

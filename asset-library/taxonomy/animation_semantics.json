@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "slots": [
+    "idle",
+    "walk",
+    "run",
+    "jump_start",
+    "airborne",
+    "land",
+    "attack",
+    "hit",
+    "death",
+    "takeoff",
+    "flight",
+    "swim"
+  ],
+  "root_motion": [
+    "unknown",
+    "in_place",
+    "root_translation",
+    "root_rotation"
+  ]
+}

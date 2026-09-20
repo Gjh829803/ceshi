@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "submarine",
+    "name": "探索潜艇",
+    "en": "DEEP",
+    "radius": 1.7,
+    "seat": [
+      0,
+      0.1,
+      0.5
+    ],
+    "archetype": "submarine",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.8,
+        1.6,
+        2.9
+      ],
+      "offset": [
+        0,
+        0.2,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

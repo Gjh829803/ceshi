@@ -1,12 +1,14 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { ThreeCompiler, isWithin } from '../compiler/compiler.js';
+import { ThreeCompiler, isWithin, REPOSITORY_ROOT } from '../compiler/compiler.js';
+import {prepareAssetLibrary} from '../assets/library-source.mjs';
 const workspace=path.resolve(process.argv[2]??'examples/three-creator/custom-vehicle');
 const port=Number(process.argv[3]??5175);
+await prepareAssetLibrary(REPOSITORY_ROOT);
 const compiler=new ThreeCompiler(workspace,'three-sdk',{debugTools:process.argv.includes('--debug-tools')});
 const candidate=await compiler.prepare();
-const mime:Record<string,string>={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf'};
+const mime:Record<string,string>={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.glb':'model/gltf-binary','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf'};
 const server=createServer(async(req,res)=>{try{
   const pathname=decodeURIComponent(new URL(req.url??'/',`http://127.0.0.1:${port}`).pathname);
   const file=path.resolve(candidate.playableRoot,'.'+pathname+(pathname.endsWith('/')?'index.html':''));

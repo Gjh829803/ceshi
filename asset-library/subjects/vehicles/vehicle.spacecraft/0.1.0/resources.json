@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.spacecraft/0.1.0/model/space.glb",
+  "preview": "subjects/vehicles/vehicle.spacecraft/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/model/space.glb",
+      "sha256": "65a4bcd9c4c0eff7ec8d152023086ebeb7fc45e7611ef95bf2a2d1063d34fcbf",
+      "byte_length": 59004,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/space.glb",
+      "reused_by": [
+        "vehicle.spacecraft"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/preview/thumbnail.webp",
+      "sha256": "302974adaea932c67cf88f623c16073319dd080da259a3d4a183dd85ae1de80e",
+      "byte_length": 12122,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.spacecraft"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 14,
+    "meshes": 12,
+    "materials": 6,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1584,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/space.glb"
+}

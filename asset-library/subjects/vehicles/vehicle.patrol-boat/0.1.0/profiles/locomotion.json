@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "patrol-boat",
+    "name": "水域巡逻艇",
+    "en": "PATROL",
+    "radius": 1.85,
+    "seat": [
+      0,
+      0.35,
+      -0.3
+    ],
+    "archetype": "boat",
+    "visualVariant": "patrol",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.45,
+        1.4,
+        3
+      ],
+      "offset": [
+        0,
+        0.65,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.94,
+        0
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0,
+        1.6,
+        0.05
+      ]
+    }
+  ],
+  "source_seat": [
+    0,
+    0.94,
+    0
+  ]
+}

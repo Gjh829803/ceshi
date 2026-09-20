@@ -1,0 +1,719 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/animals/animal.harpy-eagle/0.1.0/model/HarpyEagleModelLowPoly.FBX",
+  "preview": "subjects/animals/animal.harpy-eagle/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/animals/animal.harpy-eagle/0.1.0/preview/Harpy Eagle.png",
+      "sha256": "9460bd71e96bbfff5179fb1e89b4d14921cae1e92bedc3ed6a96fbca434c8917",
+      "byte_length": 55631,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Harpy Eagle.png",
+      "reused_by": [
+        "animal.harpy-eagle"
+      ]
+    },
+    {
+      "path": "subjects/animals/animal.harpy-eagle/0.1.0/model/HarpyEagleModelLowPoly.FBX",
+      "sha256": "dada0d1cf30fe23c7ddb83fe852673d26e03c638bf2379e673ce4bee43fa0817",
+      "byte_length": 904096,
+      "format": "fbx",
+      "role": "source_sample",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Harpy Eagle.zip!/Harpy Eagle/Content/HarpyEagle/FBX/HarpyEagleFBX.zip!/HarpyEagleModelLowPoly.FBX",
+      "reused_by": [
+        "animal.harpy-eagle"
+      ]
+    },
+    {
+      "path": "subjects/animals/animal.harpy-eagle/0.1.0/preview/thumbnail.webp",
+      "sha256": "2356f63d0bc5d69bac268225e4a52287f88317296463b6366e7cf98f9e1c54fa",
+      "byte_length": 3906,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "animal.harpy-eagle"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "fbx",
+    "external_uris": [],
+    "bones": [
+      {
+        "name": "Root"
+      },
+      {
+        "name": "Center"
+      },
+      {
+        "name": "Pelvis"
+      },
+      {
+        "name": "Tail1"
+      },
+      {
+        "name": "L_TailFeather11"
+      },
+      {
+        "name": "L_TailFeather12"
+      },
+      {
+        "name": "R_TailFeather41"
+      },
+      {
+        "name": "R_TailFeather42"
+      },
+      {
+        "name": "Tail2"
+      },
+      {
+        "name": "L_TailFeather31"
+      },
+      {
+        "name": "L_TailFeather32"
+      },
+      {
+        "name": "L_TailFeather41"
+      },
+      {
+        "name": "L_TailFeather42"
+      },
+      {
+        "name": "L_TailFeather51"
+      },
+      {
+        "name": "L_TailFeather52"
+      },
+      {
+        "name": "R_TailFeather31"
+      },
+      {
+        "name": "R_TailFeather32"
+      },
+      {
+        "name": "R_TailFeather21"
+      },
+      {
+        "name": "R_TailFeather22"
+      },
+      {
+        "name": "L_TailFeather21"
+      },
+      {
+        "name": "L_TailFeather22"
+      },
+      {
+        "name": "R_TailFeather11"
+      },
+      {
+        "name": "R_TailFeather12"
+      },
+      {
+        "name": "R_TailFeather51"
+      },
+      {
+        "name": "R_TailFeather52"
+      },
+      {
+        "name": "L_Femur"
+      },
+      {
+        "name": "L_Tibia"
+      },
+      {
+        "name": "L_Tarsus1"
+      },
+      {
+        "name": "L_Tarsus2"
+      },
+      {
+        "name": "LDigit31"
+      },
+      {
+        "name": "LDigit32"
+      },
+      {
+        "name": "LDigit33"
+      },
+      {
+        "name": "LDigit11"
+      },
+      {
+        "name": "LDigit12"
+      },
+      {
+        "name": "LDigit41"
+      },
+      {
+        "name": "LDigit42"
+      },
+      {
+        "name": "LDigit21"
+      },
+      {
+        "name": "LDigit22"
+      },
+      {
+        "name": "R_Femur"
+      },
+      {
+        "name": "R_Tibia"
+      },
+      {
+        "name": "R_Tarsus1"
+      },
+      {
+        "name": "R_Tarsus2"
+      },
+      {
+        "name": "RDigit31"
+      },
+      {
+        "name": "RDigit32"
+      },
+      {
+        "name": "RDigit33"
+      },
+      {
+        "name": "RDigit41"
+      },
+      {
+        "name": "RDigit42"
+      },
+      {
+        "name": "RDigit21"
+      },
+      {
+        "name": "RDigit22"
+      },
+      {
+        "name": "RDigit11"
+      },
+      {
+        "name": "RDigit12"
+      },
+      {
+        "name": "Spine1"
+      },
+      {
+        "name": "Spine2"
+      },
+      {
+        "name": "L_Breast"
+      },
+      {
+        "name": "R_Coracoid"
+      },
+      {
+        "name": "R_Humerus"
+      },
+      {
+        "name": "R_Ulna"
+      },
+      {
+        "name": "R_Metacarpus"
+      },
+      {
+        "name": "R_BasalPhalanx"
+      },
+      {
+        "name": "R_Pimary11"
+      },
+      {
+        "name": "R_Pimary12"
+      },
+      {
+        "name": "R_Pimary31"
+      },
+      {
+        "name": "R_Pimary32"
+      },
+      {
+        "name": "R_Pimary51"
+      },
+      {
+        "name": "R_Pimary52"
+      },
+      {
+        "name": "R_Pimary61"
+      },
+      {
+        "name": "R_Pimary62"
+      },
+      {
+        "name": "R_Pimary21"
+      },
+      {
+        "name": "R_Pimary22"
+      },
+      {
+        "name": "R_Pimary41"
+      },
+      {
+        "name": "R_Pimary42"
+      },
+      {
+        "name": "R_Pimary71"
+      },
+      {
+        "name": "R_Pimary72"
+      },
+      {
+        "name": "R_Pimary91"
+      },
+      {
+        "name": "R_Pimary92"
+      },
+      {
+        "name": "R_Pimary101"
+      },
+      {
+        "name": "R_Pimary102"
+      },
+      {
+        "name": "R_Alula003"
+      },
+      {
+        "name": "R_Pimary81"
+      },
+      {
+        "name": "R_Pimary82"
+      },
+      {
+        "name": "R_Secondary71"
+      },
+      {
+        "name": "R_Secondary72"
+      },
+      {
+        "name": "R_Secondary11"
+      },
+      {
+        "name": "R_Secondary12"
+      },
+      {
+        "name": "R_Secondary21"
+      },
+      {
+        "name": "R_Secondary22"
+      },
+      {
+        "name": "R_Secondary61"
+      },
+      {
+        "name": "R_Secondary62"
+      },
+      {
+        "name": "R_Secondary41"
+      },
+      {
+        "name": "R_Secondary42"
+      },
+      {
+        "name": "R_Secondary81"
+      },
+      {
+        "name": "R_Secondary82"
+      },
+      {
+        "name": "R_Secondary51"
+      },
+      {
+        "name": "R_Secondary52"
+      },
+      {
+        "name": "R_Secondary31"
+      },
+      {
+        "name": "R_Secondary32"
+      },
+      {
+        "name": "R_Secondary91"
+      },
+      {
+        "name": "R_Secondary92"
+      },
+      {
+        "name": "R_Covert52"
+      },
+      {
+        "name": "R_Covert1"
+      },
+      {
+        "name": "R_Covert42"
+      },
+      {
+        "name": "R_Covert3"
+      },
+      {
+        "name": "R_Covert51"
+      },
+      {
+        "name": "R_Covert41"
+      },
+      {
+        "name": "R_Secondary101"
+      },
+      {
+        "name": "R_Secondary102"
+      },
+      {
+        "name": "R_Covert2"
+      },
+      {
+        "name": "R_Tertial21"
+      },
+      {
+        "name": "R_Tertial22"
+      },
+      {
+        "name": "R_Tertial31"
+      },
+      {
+        "name": "R_Tertial32"
+      },
+      {
+        "name": "R_ScapularFeather11"
+      },
+      {
+        "name": "R_ScapularFeather12"
+      },
+      {
+        "name": "R_ScapularFeather5"
+      },
+      {
+        "name": "R_ScapularFeather4"
+      },
+      {
+        "name": "R_Tertial11"
+      },
+      {
+        "name": "R_Tertial12"
+      },
+      {
+        "name": "R_ScapularFeather21"
+      },
+      {
+        "name": "R_ScapularFeather31"
+      },
+      {
+        "name": "R_ScapularFeather32"
+      },
+      {
+        "name": "R_Breast"
+      },
+      {
+        "name": "Spine3"
+      },
+      {
+        "name": "Neck1"
+      },
+      {
+        "name": "Neck2"
+      },
+      {
+        "name": "Neck3"
+      },
+      {
+        "name": "HeadFeather_L003"
+      },
+      {
+        "name": "HeadFeather_L004"
+      },
+      {
+        "name": "HeadFeather_R005"
+      },
+      {
+        "name": "HeadFeather_L000"
+      },
+      {
+        "name": "HeadFeather_L001"
+      },
+      {
+        "name": "Head"
+      },
+      {
+        "name": "L_LowerEyelid"
+      },
+      {
+        "name": "R_ThirdEyelid"
+      },
+      {
+        "name": "R_Eye"
+      },
+      {
+        "name": "L_ThirdEyelid"
+      },
+      {
+        "name": "L_Eye"
+      },
+      {
+        "name": "Beak"
+      },
+      {
+        "name": "Tongue1"
+      },
+      {
+        "name": "Tongue2"
+      },
+      {
+        "name": "R_UpperEyeLid"
+      },
+      {
+        "name": "L_UpperEyeLid"
+      },
+      {
+        "name": "R_LowerEyelid"
+      },
+      {
+        "name": "HeadFeather_R000"
+      },
+      {
+        "name": "HeadFeather_R003"
+      },
+      {
+        "name": "HeadFeather_R001"
+      },
+      {
+        "name": "HeadFeather_L002"
+      },
+      {
+        "name": "HeadFeather_R002"
+      },
+      {
+        "name": "HeadFeather_R004"
+      },
+      {
+        "name": "HeadFeather_L005"
+      },
+      {
+        "name": "HeadFeather_R007"
+      },
+      {
+        "name": "HeadFeatherTop"
+      },
+      {
+        "name": "HeadFeatherBottom"
+      },
+      {
+        "name": "HeadFeather_L007"
+      },
+      {
+        "name": "HeadFeather_R006"
+      },
+      {
+        "name": "HeadFeather_L006"
+      },
+      {
+        "name": "Keel1"
+      },
+      {
+        "name": "Keel2"
+      },
+      {
+        "name": "L_Coracoid"
+      },
+      {
+        "name": "L_Humerus"
+      },
+      {
+        "name": "L_ScapularFeather21"
+      },
+      {
+        "name": "L_ScapularFeather11"
+      },
+      {
+        "name": "L_ScapularFeather12"
+      },
+      {
+        "name": "L_ScapularFeather4"
+      },
+      {
+        "name": "L_ScapularFeather5"
+      },
+      {
+        "name": "L_Tertial11"
+      },
+      {
+        "name": "L_Tertial12"
+      },
+      {
+        "name": "L_Tertial21"
+      },
+      {
+        "name": "L_Tertial22"
+      },
+      {
+        "name": "L_Tertial31"
+      },
+      {
+        "name": "L_Tertial32"
+      },
+      {
+        "name": "L_ScapularFeather31"
+      },
+      {
+        "name": "L_ScapularFeather32"
+      },
+      {
+        "name": "L_Ulna"
+      },
+      {
+        "name": "L_Covert3"
+      },
+      {
+        "name": "L_Covert42"
+      },
+      {
+        "name": "L_Secondary91"
+      },
+      {
+        "name": "L_Secondary92"
+      },
+      {
+        "name": "L_Covert2"
+      },
+      {
+        "name": "L_Covert51"
+      },
+      {
+        "name": "L_Secondary101"
+      },
+      {
+        "name": "L_Secondary102"
+      },
+      {
+        "name": "L_Covert41"
+      },
+      {
+        "name": "L_Covert52"
+      },
+      {
+        "name": "L_Covert1"
+      },
+      {
+        "name": "L_Secondary81"
+      },
+      {
+        "name": "L_Secondary82"
+      },
+      {
+        "name": "L_Secondary51"
+      },
+      {
+        "name": "L_Secondary52"
+      },
+      {
+        "name": "L_Secondary71"
+      },
+      {
+        "name": "L_Secondary72"
+      },
+      {
+        "name": "L_Secondary61"
+      },
+      {
+        "name": "L_Secondary62"
+      },
+      {
+        "name": "L_Metacarpus"
+      },
+      {
+        "name": "L_BasalPhalanx"
+      },
+      {
+        "name": "L_Pimary11"
+      },
+      {
+        "name": "L_Pimary12"
+      },
+      {
+        "name": "L_Pimary21"
+      },
+      {
+        "name": "L_Pimary22"
+      },
+      {
+        "name": "L_Pimary31"
+      },
+      {
+        "name": "L_Pimary32"
+      },
+      {
+        "name": "L_Pimary51"
+      },
+      {
+        "name": "L_Pimary52"
+      },
+      {
+        "name": "L_Pimary61"
+      },
+      {
+        "name": "L_Pimary62"
+      },
+      {
+        "name": "L_Pimary41"
+      },
+      {
+        "name": "L_Pimary42"
+      },
+      {
+        "name": "L_Pimary101"
+      },
+      {
+        "name": "L_Pimary102"
+      },
+      {
+        "name": "L_Pimary71"
+      },
+      {
+        "name": "L_Pimary72"
+      },
+      {
+        "name": "L_Pimary81"
+      },
+      {
+        "name": "L_Pimary82"
+      },
+      {
+        "name": "L_Pimary91"
+      },
+      {
+        "name": "L_Pimary92"
+      },
+      {
+        "name": "L_Alula003"
+      },
+      {
+        "name": "L_Secondary21"
+      },
+      {
+        "name": "L_Secondary22"
+      },
+      {
+        "name": "L_Secondary11"
+      },
+      {
+        "name": "L_Secondary12"
+      },
+      {
+        "name": "L_Secondary31"
+      },
+      {
+        "name": "L_Secondary32"
+      },
+      {
+        "name": "L_Secondary41"
+      },
+      {
+        "name": "L_Secondary42"
+      }
+    ],
+    "meshes": 1,
+    "source": "actual FBXLoader browser inspection",
+    "normalization": "not_done"
+  },
+  "animations": []
+}

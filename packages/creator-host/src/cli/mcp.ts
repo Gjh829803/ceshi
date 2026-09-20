@@ -11,6 +11,8 @@ import { profileFrom, THREE_CREATOR_VERSION, sha256, type CreatorProfile } from 
 import { creatorToolErrorResponse } from '../tools/tool-errors.js';
 import { CREATOR_QUALITY_SUMMARY } from '../discovery/quality-guidance.js';
 import type { CompilerOptions } from '../compiler/compiler.js';
+import {REPOSITORY_ROOT} from '../compiler/compiler.js';
+import {prepareAssetLibrary} from '../assets/library-source.mjs';
 export async function toolContent(service: ThreeCreatorTools, result: any) {
   const content: any[] = [{ type: 'text', text: JSON.stringify(result) }];
   const image = result?.status === 'succeeded' ? result.result?.image : result?.image;
@@ -21,6 +23,7 @@ export async function toolContent(service: ThreeCreatorTools, result: any) {
   return content;
 }
 export async function serveThreeCreatorMcp(workspace: string, profile: CreatorProfile, policyOptions:CompilerOptions={}) {
+  await prepareAssetLibrary(REPOSITORY_ROOT,{policySnapshotPath:policyOptions.assetPolicySnapshotPath});
   const service = new ThreeCreatorTools(workspace, profile, policyOptions);
   const server = new Server({ name: 'worldkit_three_creator', version: THREE_CREATOR_VERSION }, { capabilities: { tools: {} }, instructions: `Use ordinary Three scene code in the selected raw/SDK profile. Read environment and relevant schema/examples. ${CREATOR_QUALITY_SUMMARY} Inspect real screenshots and input playtests, repair the same project, and preserve external task goals. Long tools return operation IDs. Delivery technical success is separate from semantic/reference review.` });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: THREE_CREATOR_TOOLS }));

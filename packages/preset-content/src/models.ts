@@ -35,7 +35,7 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   if(s.archetype==='jetski'){const root=buildJetSkiModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=2.4;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='kayak'||s.archetype==='canoe'||s.archetype==='raft'){const root=s.archetype==='raft'?buildRaftModel():s.archetype==='canoe'?buildCanoeModel():buildKayakModel(),seat=new T.Group(),label=labelSprite(s.name);seat.position.set(...s.seat);label.position.y=1.65;root.add(seat,label);return {root,seat,label,wheels:[],wheelRigs:[],rotors:[],steering:[],engine:[]};}
   if(s.archetype==='bus'){
-    const visual=buildBusModel(),seat=new T.Group();seat.position.set(...s.seat);visual.root.add(seat);visual.root.name=s.id;
+    const visual=buildBusModel(s),seat=new T.Group();seat.position.set(...s.seat);visual.root.add(seat);visual.root.name=s.id;
     const label=labelSprite(s.name);label.position.y=3.2;visual.root.add(label);
     return {...visual,seat,label,rotors:[],engine:[]};
   }
@@ -80,6 +80,8 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
   }else if(archetype==='atv'){root.add(buildAtvModel());
   }else if(archetype==='tank'){root.add(buildTankModel());
   }else if(s.id==='supercar') {
+    const wheelPhysics=s.wheelPhysics;
+    if(!wheelPhysics?.wheels||wheelPhysics.wheelWidth===undefined)throw new Error('Supercar model requires an explicit wheel profile');
     // Concave plan profiles preserve a narrow cockpit between broad wheel
     // shoulders. All bodywork and exhausts fit the existing collision envelope.
     type Point=readonly[number,number];
@@ -108,10 +110,8 @@ export function buildVehicle(s:VehicleSpec):VehicleVisual {
       panel(`supercar-side-intake-${side}`,[[side*.98,-.28],[side*1.05,-.88],[side*1.10,-1.28],[side*.97,-1.20],[side*.87,-.45]],.47,.63,dark);
       panel(`supercar-front-shoulder-${side}`,[[side*.84,.68],[side*1.12,1.05],[side*1.1,1.72],[side*.89,1.91],[side*.85,1.15]],.46,z=>.87-(z-.68)*.14,paint);
     }
-    for(const x of [-1.02,1.02]) {
-      for(const z of [-1.5,1.5]){const axle=wheel(x,.37,z,.37,.32);if(z>0)steering.push(axle);}
-      box(root,.09,.32,.10,x*.74,1.01,.50,dark).rotation.x=-.5;
-    }
+    for(const layout of wheelPhysics.wheels){const axle=wheel(layout.x,wheelPhysics.hubHeight,layout.z,wheelPhysics.radius,wheelPhysics.wheelWidth);if(layout.steering)steering.push(axle);}
+    for(const x of [-.7548,.7548])box(root,.09,.32,.10,x,1.01,.50,dark).rotation.x=-.5;
     panel('supercar-rear-deck',[[-.65,-1.03],[.65,-1.03],[1.10,-1.50],[1.02,-2.12],[.86,-2.30],[-.86,-2.30],[-1.02,-2.12],[-1.10,-1.50]],.45,z=>.88+(z+1.03)*.10,paint);
     panel('supercar-engine-cover',[[-.48,-1.10],[.48,-1.10],[.64,-1.92],[-.64,-1.92]],.86,.90,dark);
     roadSeat();

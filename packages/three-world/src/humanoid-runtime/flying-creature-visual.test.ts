@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {fileURLToPath} from 'node:url';
@@ -22,7 +23,7 @@ afterEach(()=>{vi.restoreAllMocks();});
 async function fixture(id='D01'){
   vi.stubGlobal('ProgressEvent',class{constructor(public type:string){}});
   const variant=DRAGON_VARIANTS.find(v=>v.id===id)!;
-  const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
+  const bytes=readFileSync(new URL(testAssetResourceUrl(`flying-creatures/${variant.id}/model.glb`)));
   const model=await parseFixtureGlb(bytes);
   vi.spyOn(GLTFLoader.prototype,'loadAsync').mockResolvedValue(model);vi.spyOn(T.TextureLoader.prototype,'loadAsync').mockResolvedValue(new T.Texture());
   const visual=new FlyingCreatureVisual();await visual.load({dragonUrl:'fixture',flameTextureUrl:'fixture',animationPrefix:id});
@@ -84,7 +85,7 @@ it.each(DRAGON_VARIANTS.map(v=>v.id))('%s keeps mounted views at real Source101 
     const bytes=readFileSync(fileURLToPath(url));return parseFixtureGlb(bytes);
   });
   vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(readFileSync(fileURLToPath(String(input)))));
-  const rider=new Character();await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  const rider=new Character();await rider.load(testAssetResourceUrl);
   const world=await createWorld({camera:new T.PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map:createDragonTrainingMap(),
     character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:'dragon',assetId:`creature.dragon.${id.toLowerCase()}`,spec:{...createFlyingCreatureSpec('dragon'),flyingCreatureGround:variant.ground!,...(variant.collisionProbes?{flyingCreatureCollision:variant.collisionProbes}:{})},object:visual.root,flyingVisual:visual}]}});
   try{
@@ -209,14 +210,14 @@ it.each(DRAGON_VARIANTS.slice(1).map(v=>v.id))('%s uses its own clips and stable
 it('publishes eleven selectable complete rigs with embedded textures and source-timed clips',()=>{
   const imported=DRAGON_VARIANTS.filter(v=>/^D\d+$/.test(v.id));
   expect(imported.map(v=>v.id)).toEqual(Array.from({length:11},(_,i)=>'D'+String(i+1).padStart(2,'0')));
-  const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
+  const sources=JSON.parse(readFileSync(new URL(testAssetResourceUrl('flying-creatures/variant-sources.json')),'utf8'));
   for(const variant of imported.slice(1)){
     const profile=getDefaultProfile('dragon')!;
     expect(()=>parseAssetProfile({...profile,envelope:variant.envelope})).toThrow('unknown control profile field');
-    const bytes=readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/'+variant.file,import.meta.url));
+    const bytes=readFileSync(new URL(testAssetResourceUrl(`flying-creatures/${variant.id}/model.glb`)));
     const json=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)).toString());
     const source=sources.find((s:{id:string})=>s.id===variant.id);
-    const groundSources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/ground-sources.json',import.meta.url),'utf8'));
+    const groundSources=JSON.parse(readFileSync(new URL(testAssetResourceUrl('flying-creatures/ground-sources.json')),'utf8'));
     Object.assign(source.clips,groundSources.find((g:{id:string})=>g.id===variant.id).clips);
     expect(source.parts[0].source.toLowerCase()).toContain('naked');expect(source.parts[1].source).toContain('Harness01');
     expect(json.images.length).toBeGreaterThanOrEqual(2);expect(json.images.every((image:{bufferView?:number;uri?:string})=>image.bufferView!==undefined&&!image.uri)).toBe(true);
@@ -231,9 +232,9 @@ it('publishes eleven selectable complete rigs with embedded textures and source-
 
 it.each(['D04','D06','D07','D10','D11'])('%s preserves bind translations for UE Skeleton-mode bones in every exported clip',async id=>{
   const {visual,model}=await fixture(id);
-  const sources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/variant-sources.json',import.meta.url),'utf8'));
+  const sources=JSON.parse(readFileSync(new URL(testAssetResourceUrl('flying-creatures/variant-sources.json')),'utf8'));
   const source=sources.find((s:{id:string})=>s.id===id);
-  const groundSources=JSON.parse(readFileSync(new URL('../../../../assets/dragon-training/__creature-assets/ground-sources.json',import.meta.url),'utf8'));Object.assign(source.clips,groundSources.find((g:{id:string})=>g.id===id).clips);
+  const groundSources=JSON.parse(readFileSync(new URL(testAssetResourceUrl('flying-creatures/ground-sources.json')),'utf8'));Object.assign(source.clips,groundSources.find((g:{id:string})=>g.id===id).clips);
   // 直接从蒙皮逆绑定矩阵恢复局部绑定位置，避免拿错误动画自身生成的包围盒充当正确性证据。
   const mesh=model.scene.getObjectByProperty('isSkinnedMesh',true) as T.SkinnedMesh;
   const bind=new Map(mesh.skeleton.bones.map((bone,i)=>[bone.name,mesh.skeleton.boneInverses[i]!.clone().invert()]));

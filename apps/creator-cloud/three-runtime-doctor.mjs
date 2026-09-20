@@ -47,7 +47,7 @@ export async function loadDoctorFixture(toolkitRoot,profile,nodeBinary,env) {
   'main.ts':profile==='three-raw'?RAW_EXAMPLE:SDK_EXAMPLE,
   'project.json':JSON.stringify({schemaVersion:1,assetIds:profile==='three-sdk'?['humanoid.uefn-mannequin']:[]})
  }));`;
- const {stdout}=await promisify(execFile)(nodeBinary,['--import',path.join(toolkitRoot,'node_modules/tsx/dist/loader.mjs'),'--input-type=module','-e',program],{cwd:toolkitRoot,env,timeout:30000,maxBuffer:1024*1024});
+ const {stdout}=await promisify(execFile)(nodeBinary,['--import',pathToFileURL(path.join(toolkitRoot,'node_modules/tsx/dist/loader.mjs')).href,'--input-type=module','-e',program],{cwd:toolkitRoot,env,timeout:30000,maxBuffer:1024*1024});
  return JSON.parse(stdout);
 }
 async function main() {

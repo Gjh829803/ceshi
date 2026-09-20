@@ -309,7 +309,13 @@ simulation cost. Worlds without a renderer skip GPU preparation.
 `stop()` pauses; `await world.reset()` restores the baseline and preserves the
 previous running/paused state. Use `onReset` for author-owned visual state and
 `onDispose` for external cleanup; `dispose()` releases the world. Each hook returns
-an unsubscribe function.
+an idempotent unsubscribe function. Subscribe while the world is alive; new
+subscriptions during or after disposal reject with `WORLD_DISPOSED`. Disposal
+releases callback registrations; an existing unsubscribe stays safe afterward.
+Module construction and optional enable/disable stay with each module. Pausing
+the world does not destroy modules or unsubscribe them; explicit manual steps
+while paused still run registered updates. See the
+[lifecycle ownership boundary](../../docs/world-lifecycle-maintenance.md).
 For synchronous headless checks, the first `world.step(input,ticks)` also seals
 both entity metadata and runtime state, even for zero ticks. Finish registration
 first. If resources or parameters need initialization, await `world.start()` and
@@ -1030,6 +1036,13 @@ Successful `world.humanoid.switchMap(map)` retires the previous simulation's tas
 queued commands, asynchronous task scopes and entity generations. Old work cannot
 write into replacement actors or bodies. Failed candidate validation preserves the
 current world and its tasks. `onSimulationReplaced` reports `map` or `reset`.
+Preparation errors release the candidate owners and retain the previous environment.
+Once old-owner retirement begins, replacement finishes before a cleanup error is
+reported. A thrown error therefore does not always mean the map stayed unchanged:
+compare the saved `world.humanoid.environment` object with its current value.
+If it changed, callers must finish adopting their new scene visuals and report the
+cleanup error; they must not roll visuals back to the retired map. Reset records
+old-owner cleanup errors in the world diagnostics after completing its reset.
 Map replacement pauses patrol until an explicit `actor.resume-autonomy`; world
 reset restores the sealed autonomy configuration. Switching keyboard control
 preserves other actors' explicitly assigned inputs.
@@ -1192,6 +1205,25 @@ captures, configurable with `historyFrames`). `modelInput.createStream({
 framesPerSecond:24})` instead returns a clean canvas MediaStream and `close()`.
 Its frame rate does not prove source-to-output frame correspondence.
 
+`world.resize(width,height)` updates renderer size (CSS pixels) and camera projection
+without resetting or advancing simulation. It preserves renderer pixel ratio.
+
+Streaming Hosts may call `captureFrame({readMetadata})`. The synchronous callback
+receives the frozen source key and returns JSON metadata copied into the captured
+packet. It must only observe state. The callback and clean pixel copy share the
+capture transaction; neither advances simulation. Existing callers without this
+option still receive the same `{image,source}` shape.
+
+A Host may acquire `world.acquireRemoteInput()` while live playback owns the
+world. The exclusive lease accepts monotonic `sequence`, `heldKeys`, ordered
+`keyEdges` and optional camera deltas (yaw/pitch radians, distance metres).
+Packets drain at the next existing fixed tick. Native keyboard/pointer input is
+suppressed while the lease is active; `clear()` releases remote held input and
+`dispose()` restores local admission. World stop/disposal revokes the lease.
+Episode acquisition and remote input are mutually exclusive; release the remote
+lease before preparing an Episode segment. This API does not create another clock.
+
+
 The application supplies model transport. Display a returned decoded image with
 `output.presentFrame({image,source})`, using the source key returned by the
 service. Keep the source aspect ratio; mismatched decoded output is rejected.
@@ -1347,6 +1379,61 @@ mount/dismount clips, rein contact solver or guarantee against visible body
 interpenetration. Browser visual and capture acceptance are separate checks.
 
 <!-- /asset-info -->
+
+<!-- topic:extensions -->
+## Optional entity lifecycle callbacks
+
+Register a behavior after adding its entity. This works with current authored
+objects and future library instances; it does not load assets or replace their
+physics, animation owner, camera, or the world's existing fixed clock.
+
+```ts
+const lamp = new THREE.Group();
+const glow = new THREE.PointLight(0xffcc88, 2);
+lamp.add(glow);
+world.addEntity({id: 'lamp-1', object: lamp, role: 'decoration'});
+let elapsed = 0;
+const releaseBehavior = world.registerEntityLifecycle('lamp-1', {
+  onInit: () => { elapsed = 0; },
+  onEnable: () => { glow.visible = true; },
+  onDisable: () => { glow.visible = false; },
+  onUpdate: ({deltaSeconds}) => {
+    elapsed += deltaSeconds;
+    glow.intensity = 2 + Math.sin(elapsed);
+  },
+  onReset: () => { elapsed = 0; glow.intensity = 2; },
+  onDispose: () => { glow.removeFromParent(); glow.dispose(); },
+});
+// Optional early release of this behavior only; safe to call repeatedly.
+// releaseBehavior();
+```
+
+All six hooks are optional and synchronous. Registering calls `onInit` once,
+then `onEnable` if the entity is effectively active. Parent and mounted-group
+activation use the existing SDK rules. Visibility alone is not activation.
+`onUpdate` runs after existing world `onUpdate` subscribers in the same fixed
+step; snapshots/renders do not update it. World stop/pause does not call
+`onDisable`; explicit manual stepping still advances the existing clock.
+
+Baseline `entity.despawn` disables but retains the registration for reset.
+Reset invokes `onReset` on surviving baseline instances, then enables those
+restored from inactivity; it never repeats initialization. Objects added after
+the baseline are destroyed on reset. `entity.destroy`, transient removal, world
+disposal, or the returned release function disable and dispose once. An explicitly
+released registration never comes back on reset, and a reused ID does not inherit
+another object's hooks. Multiple registrations may share an entity independently.
+
+Callbacks own only their own listeners, child visuals and resources. Do not dispose
+shared asset geometry, the SDK mixer, or the entity's SDK-owned asset instance in
+`onDispose`. Load asynchronously through existing asset/task APIs **before**
+registration. Callbacks cannot create another loop or synchronously re-enter world
+step/reset/disposal. Direct Three writes remain limited to visual descendants;
+managed roots and SDK camera writes use the existing public control APIs.
+
+A throwing hook is recorded in `world.snapshot().errors` with entity ID and hook
+phase; its registration is detached and cleanup attempted, while siblings continue.
+Initialization/initial-enable failures also throw to the registering caller.
+This is failure isolation, not rollback of arbitrary user callback side effects.
 
 <!-- topic:extensions -->
 ## Developer tuning
@@ -1828,3 +1915,124 @@ The update includes all fixed steps in that frame; it excludes presentation,
 render submission, GPU work and observer callbacks. Timing runs only while
 subscribed; the returned function unsubscribes. Manual stepping and capture emit
 no samples. Callback failures are isolated from runtime execution.
+
+## Entity removal and owned asset lifetime
+
+`world.execute({type:'entity.despawn',entityId})` retains its existing reset behavior.
+`world.execute({type:'entity.destroy',entityId})` destroys a currently registered
+entity subtree, removes its reset entries, cancels its transitions/interactions,
+and releases asset instances owned by this world under that subtree. Other live
+instances retain their shared geometry and textures through the existing asset
+reference counts. Loading the source asset again remains supported.
+
+Both commands use the existing command validation and fixed-step commit, reject
+removing the controlled actor or its ancestors, and invalidate stale generations.
+Destroying an already removed or destroyed ID returns `ENTITY_NOT_FOUND`; it does
+not guess which historical instance an ID means. Use destruction directly when
+an instance should not return on reset. Native characters now use this same
+command to release their existing controller, capsule, animation and model lease.
+Finish boarding, dismount, and release active carry/seat/climb/action relationships
+before destroying a character; deleting the controlled character still requires
+explicit control transfer or clearing control first.
+
+Native vehicles also accept `entity.destroy`. If occupied, the SDK checks the
+existing family dismount rules, automatically places the rider at a safe exit,
+and then releases the vehicle. Excess speed, an airborne dragon, submerged cabin,
+blocked/missing exit, an unfinished boarding transition, or deletion of the exit
+support rejects before mutation. It does not silently delete the rider or start
+a landing/autopilot job. A suspended rider remains suspended after dismount.
+Destruction removes vehicle bodies/query proxies, owned special visuals, display
+samples, profile entries and reset registration. Other vehicle/driver identities
+remain stable even when the internal arrays compact. External visual consumers
+must resolve live states by instance ID rather than retain an array index.
+Native vehicle `entity.despawn` remains unsupported; use activation for reversible
+suspension, or destruction for removal that must survive reset/map replacement.
+
+Deleting a camera's logical target retires its invalid follow reset binding into
+an authored opening pose; it does not change an unrelated live follow target.
+Deleting a ridden vehicle preserves a camera bound to the surviving rider.
+
+Raw Three geometry/materials supplied by the caller remain caller-owned. The SDK
+does not traverse arbitrary meshes and dispose everything it finds. Asset-backed
+characters and ordinary entities containing roots loaded through `world.assets`
+release their managed instances. A successful `runTask` entity registration also
+transfers matching task-loaded assets to world ownership. Untransferred task assets
+still clean up at task completion, and world disposal releases remaining assets.
+Cleanup errors are reported as committed operation failures after independent
+owners are attempted; removing pixels is not evidence of successful disposal.
+
+
+## Entity runtime activation
+
+`world.execute({type:'entity.set-active',entityId,isActive:false})` suspends an
+ordinary entity subtree in the existing runtime: character input/custom movement,
+autonomy, asset animation, transform transitions and physics participation stop.
+Rendering remains controlled separately by `entity.set-visible`; a disabled model
+can stay visible for inspection. `getEntityState().isActive` reports effective
+activation, including ancestors. Reactivating a parent respects independently
+disabled children. Repeated calls are idempotent, and reset restores the sealed
+activation baseline.
+
+Reactivation reuses the same model, controller and body. Animation/transitions
+resume their existing time. Navigation tasks are cancelled on deactivation and
+must be reissued; the existing character physics switch clears vertical velocity
+and contact state, so this is not a mid-flight momentum checkpoint. New movement
+and animation commands reject with `ENTITY_INACTIVE` until reactivation. World
+callbacks remain world-owned; arbitrary external writes to Three objects are not
+intercepted.
+
+Native humanoids and vehicles now route this same activation command to their
+existing runtime owner. A mounted rider and current vehicle form one activation
+group: targeting either toggles both and retains the mount relationship. Body
+integration, controller updates and owned animation stop for that group; other
+entities and the shared clock continue. Retained native bodies preserve their
+state and instance-local elapsed time excludes suspension. Input overrides and
+navigation intent are cleared rather than replayed on resume. Physical-query
+proxies may be rebuilt; this is not an allocation-free promise.
+
+Boarding transitions and active carry/seat/climb/action relationships reject an
+activation change with `HUMANOID_TRANSITION_ACTIVE` or `ACTOR_RESOURCE_BUSY` before
+partial changes. Complete or release those interactions first. A disabled ancestor
+that would leave half a mounted pair active rejects with
+`MOUNT_GROUP_INACTIVE_ANCESTOR`; reactivate that ancestor first. New native input,
+boarding and exit commands reject with `ENTITY_INACTIVE` until reactivation.
+Map replacement preserves the effective inactive flags; reset uses the world's
+sealed baseline. Custom world-wide visual callbacks remain responsible for
+checking `runtime.simulation.isActive(instanceId)` and using
+`runtime.simulation.entityTime(instanceId)` where an instance-local clock is needed.
+For permanent native removal, use `entity.destroy` under the ownership and safe
+dismount contract above. Activation remains reversible and does not release assets.
+
+`world.clearControlledEntity()` releases character input ownership and the current
+camera subject binding through existing owners. Call it before removing/destroying
+the controlled actor, or select another actor. It does not dispose that character.
+Activation retains resources; explicit destruction releases owned instances as
+specified above. No additional simulation clock or animation loop is introduced.
+
+
+## Native vehicle creation
+
+`world.addVehicle({instanceId, assetId, spec, object, ...visualBindings})` registers
+an already-built native vehicle in a humanoid world. It uses the existing motion
+family, simulation clock, physics environment and display sampler. Placement uses
+`spec.spawn` in world metres and `spec.yaw` in radians, with the existing safe-spawn
+floor adjustment. An unsupported map mode, occupied/out-of-bounds spawn, duplicate
+identity or reused object rejects before admission. Supply an unscaled,
+matrix-auto-updated root directly in the world scene or detached; nested roots
+are not supported by this native placement contract.
+
+Successful registration transfers native horse/flying visual controller cleanup
+to the runtime. Authored mesh geometry, materials and textures remain caller-owned,
+just as with the initial `createHumanoidWorld({vehicles})` list. Failed registration
+returns no instance and retains caller ownership. The API does not load an asset,
+create another world, mount a rider or take control of the camera. Use the existing
+vehicle approach/enter/input commands after creation.
+
+Before the initial start/step seals the baseline, a created vehicle belongs to that
+baseline and resets to its supplied safe spawn. Later creations disappear on reset,
+including their native physics/query/display state. Explicitly destroyed instances
+never return on reset; reusing their ID creates a fresh instance and does not inherit
+an old initial-mount relationship. Visual callbacks must resolve the current
+instance ID rather than retaining an array index. The Playground native lifecycle
+page demonstrates creation, actual driving, safe destruction and recreation in one
+world. These operations do not change the motion algorithms of the vehicle families.

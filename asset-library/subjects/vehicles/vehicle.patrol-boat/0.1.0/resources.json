@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.patrol-boat/0.1.0/model/patrol-boat.glb",
+  "preview": "subjects/vehicles/vehicle.patrol-boat/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/model/patrol-boat.glb",
+      "sha256": "96a590c8a2378bb5648f9fd01d7bb14ab4c6bd5686154d6322ec8b9642936bf7",
+      "byte_length": 45912,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/patrol-boat.glb",
+      "reused_by": [
+        "vehicle.patrol-boat"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/preview/thumbnail.webp",
+      "sha256": "c2e0f89179209a04ecb0664b2a070b43a412a8b68e35c8a034c7cec0fadede97",
+      "byte_length": 10196,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.patrol-boat"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 14,
+    "meshes": 12,
+    "materials": 5,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 964,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/patrol-boat.glb"
+}

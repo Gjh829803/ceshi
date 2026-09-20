@@ -1,4 +1,4 @@
-import { isEqual } from 'lodash-es';
+import isEqual from 'lodash-es/isEqual.js';
 export const EPISODE_SCHEDULING_VERSION = 'episode-single-l4-v1';
 /** Positive allowlists are mandatory even when an unrelated GPU pool lacks taints. */
 export function episodeScheduling({gpuCount=0,nodeSelector={},tolerations=[]}={}) {

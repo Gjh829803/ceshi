@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {contactColliderVolume} from '../physics-box';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {RAFT_SPEC} from '@worldkit/preset-content/raft';
@@ -98,7 +99,7 @@ describe('kayak water and paddle mechanics',()=>{
   expect(spec.mode).toBe('paddled_boat');expect(spec.archetype).toBe(spec.id);expect(spec.characterPose).toBe('paddling');expect(spec).not.toHaveProperty('visualVariant');
   const loader=vi.spyOn(GLTFLoader.prototype,'loadAsync').mockImplementation(async url=>{const bytes=await readFile(fileURLToPath(url));return parseFixtureGlb(bytes);});
   const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
-  const rider=new Character();try{await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);rider.root.position.set(...spec.seat);
+  const rider=new Character();try{await rider.load(testAssetResourceUrl);rider.root.position.set(...spec.seat);
    const hands:Vector3[]=[];
    for(const side of ((spec.archetype==='canoe'||spec.archetype==='raft')?[-1,1]:[-1]))for(const phase of [0,.25,.5,.85,1.25,1.5]){const k={...createVehicle(spec).motion.kayak!,...((spec.archetype==='canoe'||spec.archetype==='raft')?{side}:{}),phase,effort:1};
     rider.update(1/60,{position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:2,vertical:0,grounded:false,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null,mounted:'paddling',kayakPose:k});
@@ -167,7 +168,7 @@ it('keeps vehicle rider poses fixed while preserving wearable ground locomotion 
  const frame:HumanoidRenderState={position:new Vector3(),facing:new Vector3(0,0,1),motionSerial:0,traversal:null,completedMotion:null,speed:0,vertical:0,grounded:true,animationGrounded:true,stance:'stand',swimming:false,swimStyle:'freestyle',animationEvent:null,surface:null,skills:null};
  const locals=()=>{const values:number[]=[];rider.actor.traverse(n=>{if(n.type==='Bone'||n===rider.actor){n.updateMatrix();values.push(...n.matrix.toArray());}});return values;};
  try{
-  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  await rider.load(testAssetResourceUrl);
   const modes:NonNullable<HumanoidRenderState['mounted']>[]=['drive','ride','stand','unicycle','atv','tank','submarine','paddling','sled','ski','wingsuit','paraglider'];
   for(const mounted of modes){
    rider.update(0,{...frame,mounted});const before=locals();

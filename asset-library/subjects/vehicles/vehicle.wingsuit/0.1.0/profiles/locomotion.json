@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "wingsuit",
+    "name": "翼装飞行",
+    "en": "WINGSUIT",
+    "radius": 0.6,
+    "seat": [
+      0,
+      1,
+      0
+    ],
+    "archetype": "plane",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.5,
+        1,
+        0.5
+      ],
+      "offset": [
+        0,
+        1,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

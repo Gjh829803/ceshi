@@ -1,0 +1,243 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "subject",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "asset_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "asset_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "browse_group": {
+      "type": "string",
+      "enum": [
+        "characters",
+        "animals",
+        "vehicles",
+        "robots",
+        "fantastical",
+        "objects"
+      ]
+    },
+    "semantic_type": {
+      "type": "string"
+    },
+    "semantic_subtypes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "morphology": {
+      "type": "object",
+      "properties": {
+        "architecture": {
+          "type": "string",
+          "enum": [
+            "skinned_articulated",
+            "rigid_articulated",
+            "rigid_single",
+            "soft_body",
+            "composite",
+            "swarm",
+            "unknown"
+          ]
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "biped",
+              "quadruped",
+              "hexapod",
+              "octopod",
+              "serpentine",
+              "two_wheel",
+              "four_wheel",
+              "multi_wheel",
+              "tracked",
+              "winged",
+              "finned",
+              "rotorcraft"
+            ]
+          }
+        },
+        "appendages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "leg",
+                  "arm",
+                  "hand",
+                  "foot",
+                  "wing",
+                  "fin",
+                  "tail",
+                  "neck",
+                  "head",
+                  "jaw",
+                  "wheel",
+                  "track",
+                  "rotor",
+                  "propeller",
+                  "thruster",
+                  "tentacle",
+                  "manipulator",
+                  "tool_mount"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "role",
+              "count"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "stance": {
+          "type": "string",
+          "enum": [
+            "upright",
+            "forward_leaning",
+            "horizontal",
+            "low_profile",
+            "suspended",
+            "floating",
+            "variable",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "architecture",
+        "profiles",
+        "appendages",
+        "stance"
+      ],
+      "additionalProperties": false
+    },
+    "scale": {
+      "type": "object",
+      "properties": {
+        "units": {
+          "type": "string",
+          "enum": [
+            "meter",
+            "unknown"
+          ]
+        },
+        "up_axis": {
+          "type": "string",
+          "enum": [
+            "Y",
+            "Z",
+            "unknown"
+          ]
+        },
+        "forward_axis": {
+          "type": "string"
+        },
+        "dimensions_m": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "source_transform": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "units",
+        "up_axis",
+        "forward_axis",
+        "dimensions_m",
+        "source_transform"
+      ],
+      "additionalProperties": false
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "placeholder",
+        "assets_ready",
+        "deprecated"
+      ]
+    },
+    "placeholder": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "default_assembly": {
+      "type": "string"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]*$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          }
+        },
+        "required": [
+          "asset_id",
+          "version"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "asset_id",
+    "asset_version",
+    "display_name",
+    "aliases",
+    "browse_group",
+    "semantic_type",
+    "semantic_subtypes",
+    "morphology",
+    "scale",
+    "lifecycle",
+    "placeholder",
+    "description",
+    "default_assembly",
+    "dependencies"
+  ],
+  "additionalProperties": false
+}

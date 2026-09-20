@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.animals-rat/0.1.0/preview/Animals Rat.jpg",
+  "files": [
+    {
+      "path": "subjects/animals/animal.animals-rat/0.1.0/preview/Animals Rat.jpg",
+      "sha256": "6210d4fd47178943dbaa4abca0193968f4ad03322f15df60f1da6e45f1655100",
+      "byte_length": 568290,
+      "format": "jpg",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Animals Rat.jpg",
+      "reused_by": [
+        "animal.animals-rat"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

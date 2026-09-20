@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "contract.rideable_v1",
+  "version": "0.1.0",
+  "stage": "planned",
+  "roles": [
+    "rider",
+    "mount"
+  ],
+  "required_anchors": [
+    "rider_seat",
+    "enter_anchor",
+    "exit_anchor"
+  ],
+  "control_transfer": {
+    "enter": "host_defined",
+    "exit": "restore_previous_owner",
+    "cancel": "restore_previous_owner"
+  },
+  "runtime_verified": false
+}

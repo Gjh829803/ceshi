@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "touring-motorcycle",
+    "name": "长途巡航摩托",
+    "en": "TOURER",
+    "radius": 0.9,
+    "seat": [
+      0,
+      1.135,
+      -0.19999999999999996
+    ],
+    "archetype": "motorcycle",
+    "visualVariant": "touring",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.65,
+        1.2,
+        1.65
+      ],
+      "offset": [
+        0,
+        1.2,
+        0
+      ]
+    },
+    "wheelPhysics": {
+      "radius": 0.48,
+      "hubHeight": 0.48,
+      "halfTrack": 0.3,
+      "halfWheelbase": 1.1,
+      "wheelWidth": 0.28,
+      "wheels": [
+        {
+          "x": 0,
+          "z": -1.1,
+          "steering": false,
+          "driven": true
+        },
+        {
+          "x": 0,
+          "z": 1.1,
+          "steering": true,
+          "driven": false
+        }
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

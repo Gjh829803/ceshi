@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3, type DataTexture, type SkinnedMesh } from 'three';
-import catalog from '../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { WorldAssets } from './assets-library.js';
 import type { AssetInstance } from './contracts.js';
 import type { AssetDefinition } from './engine-contracts.js';
@@ -145,4 +147,16 @@ describe('WorldAssets', () => {
     expect(instance.recommendedBody).toBeNull(); expect(instance.actionIds).toEqual([]);
     expect(library.internal(instance).currentActionId).toBeUndefined(); expect(library.internal(instance).timeSeconds).toBe(0);
   });
+});
+
+
+it.each([undefined,null])('preserves a falsy first disposal error %s while releasing all shared instances',async firstError=>{
+ const {library}=fixture();const first=await library.load(humanoid.id),second=await library.clone(first);
+ const material=meshOf(first).material as MeshStandardMaterial;
+ material.addEventListener('dispose',()=>{throw firstError;});
+ const secondDisposed=vi.fn(()=>{throw new Error('LATER_DISPOSAL_FAILURE');});(meshOf(second).material as MeshStandardMaterial).addEventListener('dispose',secondDisposed);
+ let failed=false,caught:unknown;
+ try{library.dispose();}catch(error){failed=true;caught=error;}
+ expect(failed).toBe(true);expect(caught).toBe(firstError);expect(secondDisposed).toHaveBeenCalledOnce();
+ expect(library.owns(first)).toBe(false);expect(library.owns(second)).toBe(false);expect(()=>library.dispose()).not.toThrow();
 });

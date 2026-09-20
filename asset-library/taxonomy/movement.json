@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "environment": [
+    "ground",
+    "wall",
+    "ceiling",
+    "water_surface",
+    "underwater",
+    "air",
+    "space",
+    "underground",
+    "rail",
+    "path_constrained"
+  ],
+  "support": [
+    "foot_contact",
+    "body_contact",
+    "wheel_contact",
+    "track_contact",
+    "buoyancy",
+    "aerodynamic_lift",
+    "rotor_lift",
+    "adhesion",
+    "suspension",
+    "path_constraint",
+    "none",
+    "ballistic"
+  ],
+  "propulsion": [
+    "legged_step",
+    "hopping",
+    "wheel_drive",
+    "track_drive",
+    "body_undulation",
+    "paddling",
+    "fin_oscillation",
+    "flapping",
+    "propeller",
+    "rotor",
+    "jet",
+    "thruster",
+    "sail",
+    "gravity",
+    "external_force"
+  ],
+  "degrees_of_freedom": [
+    "path_1d",
+    "surface_2d",
+    "planar_2d_yaw",
+    "full_3d"
+  ],
+  "gaits": [
+    "idle",
+    "walk",
+    "trot",
+    "pace",
+    "canter",
+    "run",
+    "gallop",
+    "sprint",
+    "crawl"
+  ],
+  "transitions": [
+    "start",
+    "stop",
+    "takeoff",
+    "land",
+    "enter_water",
+    "exit_water",
+    "surface",
+    "dive",
+    "attach_surface",
+    "detach_surface",
+    "enter_rail",
+    "leave_rail"
+  ]
+}

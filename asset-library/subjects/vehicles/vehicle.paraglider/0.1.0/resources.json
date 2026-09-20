@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.paraglider/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.paraglider/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.paraglider/0.1.0/model/model.glb",
+      "sha256": "037c32a1e968d8c94eb2581079f523a8d5f3bc4804d92cc8c75aa8acf9961893",
+      "byte_length": 8376,
+      "format": "glb",
+      "role": "model",
+      "source_path": "paraglider.glb",
+      "reused_by": [
+        "vehicle.paraglider"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.paraglider/0.1.0/preview/thumbnail.webp",
+      "sha256": "427578a619697154c205ffbda7f4fb4ea8ca48741c640bb5f99800938931dfb1",
+      "byte_length": 4278,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.paraglider"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 10,
+    "meshes": 7,
+    "materials": 7,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 164,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": []
+}

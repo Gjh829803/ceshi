@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.kayak/0.1.0/model/kayak.glb",
+  "preview": "subjects/vehicles/vehicle.kayak/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.kayak/0.1.0/model/kayak.glb",
+      "sha256": "457fdeaa2f57cc106d91a9eece34a457b1545d46553e138eb9d3c4281ccf8ab7",
+      "byte_length": 49508,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/kayak.glb",
+      "reused_by": [
+        "vehicle.kayak"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kayak/0.1.0/preview/thumbnail.webp",
+      "sha256": "dce84e96803122f5e668a469ab75aeb1612ab5a142a9a062c1140cb7c3f2da42",
+      "byte_length": 8478,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.kayak"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 11,
+    "meshes": 8,
+    "materials": 2,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1503,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/kayak.glb"
+}

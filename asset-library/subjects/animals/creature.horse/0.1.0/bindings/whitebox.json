@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.horse"
+  ],
+  "integrationMetadata": {
+    "classification": "ground-mount",
+    "useWhen": "骑马、地面骑乘及上下马交互；复用马匹骨骼动画与独立的人形骑手。",
+    "requiredAssetIds": [
+      "humanoid.uefn-mannequin",
+      "creature.horse"
+    ],
+    "clips": [
+      "Idle",
+      "Walk",
+      "Gallop"
+    ],
+    "seatSource": "vehicle.spec.seat is authoritative; optional measured Body anchor, no seat.driver GLB node."
+  },
+  "empty_fields": [
+    "sockets"
+  ],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

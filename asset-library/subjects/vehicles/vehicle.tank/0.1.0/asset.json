@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.tank",
+  "asset_version": "0.1.0",
+  "display_name": "履带坦克 / Tank",
+  "aliases": [
+    "tank",
+    "履带坦克"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.tank",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Enlarged enclosed single-driver humanoid tank; differential tracked drive and independent turret/elevation. No firing, ballistics, damage, full suspension or interior walking. F transfers control at a safe boarding point.",
+  "default_assembly": "subjects/vehicles/vehicle.tank/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

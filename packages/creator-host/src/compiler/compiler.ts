@@ -1,3 +1,4 @@
+import {compileWorldUi,worldUiCompilerIdentity} from './world-ui.js';
 import { build, type Plugin } from 'esbuild';
 import {readWorkspaceRuntime,materializeWorkspaceRuntime,type WorkspaceRuntime} from './workspace-runtime.js';
 import Ajv from 'ajv';
@@ -8,6 +9,7 @@ import { createRequire } from 'node:module';
 import { realpathSync, readFileSync, lstatSync } from 'node:fs';
 import { PROJECT_SCHEMA, type Project, type CreatorProfile, sha256 } from '../contracts.js';
 import { catalogResources, publicCatalogValue, readCatalogResource } from '../assets/asset-resources.js';
+import {readLibraryCatalog,readLibraryCatalogSync,readLibraryDeniedHashes,resolveLibrarySelection,materializeLibrarySelection} from '../assets/library-source.mjs';
 import { createAssetPolicySnapshot, validateAssetPolicySnapshot, assetPolicyHash, verifyAssetPolicySources, verifyAssetPolicyBundle, type AssetPolicySnapshot } from '../assets/asset-policy.mjs';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -46,11 +48,7 @@ export async function verifyFiles(root: string, expected: Record<string, string>
   if (JSON.stringify(await hashTree(root)) !== JSON.stringify(expected)) throw new Error('THREE_ARTIFACT_CHANGED: sealed content differs');
 }
 export async function readCatalog(): Promise<AssetCatalogEntry[]> {
-  try {
-    const catalog = JSON.parse(await readFile(path.join(REPOSITORY_ROOT, 'assets/three-creator/asset-catalog.json'), 'utf8'));
-    if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.assets)) throw new Error('THREE_CATALOG_INVALID');
-    return catalog.assets;
-  } catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
+  return readLibraryCatalog(REPOSITORY_ROOT);
 }
 export function publicAsset(entry: AssetCatalogEntry): Record<string, unknown> { return publicCatalogValue(entry); }
 async function copyTree(from: string, to: string) {
@@ -80,9 +78,7 @@ export class ThreeCompiler {
     if(this.policyContext)return this.policyContext;
     const options=this.policyOptions;
     let frozenPolicy:AssetPolicySnapshot;
-    const catalog = JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'assets/three-creator/asset-catalog.json'),'utf8'));
-    if(catalog.schemaVersion!==1||!Array.isArray(catalog.assets))throw new Error('THREE_CATALOG_INVALID');
-    const frozenCatalog:AssetCatalogEntry[]=catalog.assets;
+    const frozenCatalog:AssetCatalogEntry[]=readLibraryCatalogSync(REPOSITORY_ROOT);
     const hasPin=options.assetPolicySnapshotPath!==undefined||options.assetPolicySha256!==undefined;
     if(hasPin&&(!options.assetPolicySnapshotPath||!options.assetPolicySha256))throw new Error('THREE_ASSET_POLICY_PIN_REQUIRED');
     if(options.assetPolicySnapshotPath){
@@ -90,9 +86,10 @@ export class ThreeCompiler {
       if(!stat.isFile()||stat.isSymbolicLink()||file===this.workspace||isWithin(this.workspace,file))throw new Error('THREE_ASSET_POLICY_HOST_PATH_REQUIRED');
       frozenPolicy=validateAssetPolicySnapshot(JSON.parse(readFileSync(file,'utf8')));
       if(assetPolicyHash(frozenPolicy)!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_HASH_MISMATCH');
-      if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
+      if(assetPolicyHash(createAssetPolicySnapshot(frozenPolicy.policy,frozenCatalog,readLibraryDeniedHashes(REPOSITORY_ROOT,frozenPolicy.policy.allowedAssetIds)))!==options.assetPolicySha256)throw new Error('THREE_ASSET_POLICY_CATALOG_CHANGED');
     }else{
-      frozenPolicy=createAssetPolicySnapshot(JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'packages/creator-host/config/asset-policy.json'),'utf8')),frozenCatalog);
+      const policy=JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'packages/creator-host/config/asset-policy.json'),'utf8'));
+      frozenPolicy=createAssetPolicySnapshot(policy,frozenCatalog,readLibraryDeniedHashes(REPOSITORY_ROOT,policy.allowedAssetIds));
     }
     return this.policyContext={snapshot:frozenPolicy,catalog:frozenCatalog,hash:assetPolicyHash(frozenPolicy)};
   }
@@ -111,7 +108,7 @@ export class ThreeCompiler {
       for (const name of (await readdir(dir)).sort()) {
         if (EXCLUDED.has(name) || name.startsWith('.') || (dir === root && HOST_OWNED_ROOTS.has(name))) continue;
         const file = path.join(dir, name), stat = await lstat(file);
-        if (stat.isSymbolicLink()) throw new Error(`THREE_SOURCE_SYMLINK: ${path.relative(root, file)}`);
+        if (stat.isSymbolicLink()) throw new Error(`THREE_SOURCE_SYMLINK: ${path.relative(root, file).split(path.sep).join('/')}`);
         if (stat.isDirectory()) await walk(file);
         else if (stat.isFile() && SOURCE_EXTENSIONS.has(path.extname(name).toLowerCase())) {
           const relative = path.relative(root, file).split(path.sep).join('/');
@@ -158,7 +155,7 @@ export class ThreeCompiler {
       this.runtimes.set(cacheIdentity, { files: manifest.files, hash: manifest.runtimeHash }); return { root, hash: manifest.runtimeHash, hit: true, cacheIdentity };
     }
     await rm(root, { recursive: true, force: true }); await mkdir(root, { recursive: true });
-    const base = { tsconfigRaw: {compilerOptions: {target:'ES2022',useDefineForClassFields:true}}, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
+    const base = { absWorkingDir: REPOSITORY_ROOT, tsconfigRaw: {compilerOptions: {target:'ES2022',useDefineForClassFields:true}}, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', logLevel: 'silent' as const, sourcemap: false };
     const threeEsmEntry = path.join(path.dirname(require.resolve('three')), 'three.module.js');
     await build({ ...base, entryPoints: [threeEsmEntry], outfile: path.join(root, 'three.js') });
     await build({ ...base, entryPoints: [path.join(REPOSITORY_ROOT, 'packages/creator-host/src/browser/bridge.ts')], external: ['three'], outfile: path.join(root, 'bridge.js') });
@@ -193,7 +190,8 @@ export class ThreeCompiler {
       for(const [name,bytes]of workspaceRuntime.files)if(!sourceFiles.get(`sdk/${name}`)?.equals(bytes))throw new Error('THREE_RUNTIME_SOURCE_CHANGED');
     }
     const runtime = await this.prepareRuntime({workspaceRuntime:workspaceRuntime??null});
-    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256 }));
+    const selection=await resolveLibrarySelection(REPOSITORY_ROOT,(project as Project).assetIds,{runtimeDigest:runtime.hash,overridesDigest:sha256(JSON.stringify(sources)),allowedAssetIds:this.assetPolicy().policy.allowedAssetIds,...(this.profile==='three-raw'?{runtimeId:'three',runtimeVersion:JSON.parse(readFileSync(path.join(REPOSITORY_ROOT,'package.json'),'utf8')).dependencies.three,authorRuntime:true}:{})});
+    const sourceHash = sha256(JSON.stringify({ sources, assets: selected.map(publicAsset), assetPolicySha256:this.assetPolicySha256,...(selection?{assetLockDigest:selection.lock.lock_digest}:{}),...(project.ui?{uiCompilerIdentity:await worldUiCompilerIdentity()}:{}) }));
     const worldBuildHash = sha256(JSON.stringify({ sourceHash, runtimeHash: runtime.hash, profile: this.profile }));
     const previous = this.candidates.get(worldBuildHash);
     if (previous) { await verifyFiles(previous.root, previous.files); return { ...previous, candidateCacheHit: true, runtimeCacheHit: true }; }
@@ -201,6 +199,11 @@ export class ThreeCompiler {
     await rm(root, { recursive: true, force: true }); await mkdir(sourceRoot, { recursive: true }); await mkdir(playableRoot, { recursive: true });
     for (const [name, data] of sourceFiles) { const file = path.join(sourceRoot, name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, data); }
     await copyTree(sourceRoot, playableRoot); await copyTree(runtime.root, path.join(playableRoot, 'runtime'));
+    if(selection){
+      await materializeLibrarySelection(REPOSITORY_ROOT,selection.lock,{outputRoot:playableRoot});
+      await writeFile(path.join(playableRoot,'project.assets.json'),JSON.stringify(selection.manifest,null,2));
+      await writeFile(path.join(playableRoot,'project.assets.lock.json'),JSON.stringify(selection.lock,null,2));
+    }
       for (const asset of selected) {
         for (const resource of catalogResources(asset)) {
           const bytes = await readCatalogResource(REPOSITORY_ROOT, resource);
@@ -209,6 +212,7 @@ export class ThreeCompiler {
     }
     await writeFile(path.join(playableRoot, 'asset-definitions.json'), JSON.stringify({ schemaVersion: 1, assets: selected.map(publicAsset) }, null, 2));
     await writeFile(path.join(playableRoot, 'asset-policy.json'), JSON.stringify(this.assetPolicy(), null, 2));
+    if(project.ui){const ui=await compileWorldUi(sourceRoot,path.join(playableRoot,'world-ui'),(project as Project).ui!);await writeFile(path.join(playableRoot,'world-ui-identity.json'),JSON.stringify({uiBundleHash:ui.hash,worldBuildHash}));}
     const imports: Record<string, string> = { three: './runtime/three.js' };
     if (this.profile === 'three-sdk') imports['@worldkit/three'] = './runtime/worldkit-three.js';
     if(this.debugTools)imports['@worldkit/three/debug']='./runtime/worldkit-debug.js';
@@ -241,7 +245,7 @@ export class ThreeCompiler {
       const entry = src ? path.resolve(sourceRoot, src) : path.join(sourceRoot, `inline-${entryCount}.ts`);
       if (!isWithin(sourceRoot, entry)) throw new Error('THREE_ENTRY_PATH_ESCAPE');
       const out = `compiled/entry-${entryCount++}.js`;
-      const common = { bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const, '.woff': 'file' as const, '.woff2': 'file' as const, '.ttf': 'file' as const } };
+      const common = { absWorkingDir: sourceRoot, bundle: true, format: 'esm' as const, platform: 'browser' as const, target: 'es2022', tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } }, plugins: [boundary], outfile: path.join(playableRoot, out), sourcemap: true, logLevel: 'silent' as const, loader: { '.png': 'file' as const, '.glb': 'file' as const, '.jpg': 'file' as const, '.svg': 'file' as const, '.wasm': 'file' as const, '.woff': 'file' as const, '.woff2': 'file' as const, '.ttf': 'file' as const } };
       if (src) await build({ ...common, entryPoints: [entry] }); else await build({ ...common, stdin: { contents: body, loader: 'ts', resolveDir: sourceRoot, sourcefile: path.basename(entry) } });
       const css = out.replace(/\.js$/, '.css'); let cssTag = '';
       try { await lstat(path.join(playableRoot, css)); cssTag = `<link rel="stylesheet" href="./${css}">`; } catch (error: any) { if (error.code !== 'ENOENT') throw error; }
@@ -253,13 +257,14 @@ export class ThreeCompiler {
       const cache = path.join(this.outputRoot, 'addons', runtime.cacheIdentity, filename); await mkdir(path.dirname(cache), { recursive: true });
       const expected = this.addons.get(cache);
       if (expected) { if (sha256(await readFile(cache)) !== expected) throw new Error('THREE_ADDON_CACHE_CHANGED'); } else {
-        await build({ entryPoints: [require.resolve(specifier)], outfile: cache, bundle: true, platform: 'browser', format: 'esm', external: ['three'], target: 'es2022', logLevel: 'silent' });
+        await build({ absWorkingDir: REPOSITORY_ROOT, entryPoints: [require.resolve(specifier)], outfile: cache, bundle: true, platform: 'browser', format: 'esm', external: ['three'], target: 'es2022', logLevel: 'silent' });
         this.addons.set(cache, sha256(await readFile(cache)));
       }
       await copyFile(cache, path.join(playableRoot, 'runtime', filename)); imports[specifier] = `./runtime/${filename}`;
     }
     const debugInjection=this.debugTools?`<script id="worldkit-debug-identity" type="application/json">${JSON.stringify({sourceHash,runtimeHash:runtime.hash,worldBuildHash}).replace(/</g,'\\u003c')}</script><script type="module" src="./runtime/debug-tools.js"></script>`:'';
-    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>${debugInjection}`;
+    const uiInjection=project.ui?`<script type="module">if(new URLSearchParams(location.search).get('ui')!=='off'){import('./world-ui/local-preview.js').then(m=>m.startLocalPreview(new URL('./world-ui/',document.baseURI))).catch(error=>console.error('UI_PREVIEW_START_FAILED',error));}</script>`:'';
+    const injected = `<script type="importmap">${JSON.stringify({ imports }).replace(/</g, '\\u003c')}</script><script type="module" src="./runtime/bridge.js"></script>${debugInjection}${uiInjection}`;
     html = /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, value => value + injected) : injected + html;
     await writeFile(path.join(playableRoot, 'index.html'), html);
     const candidate: Candidate = { id: worldBuildHash, profile: this.profile, worldBuildHash, sourceHash, runtimeHash: runtime.hash, runtimeSourceHash:workspaceRuntime?.sourceHash??null, assetPolicySha256:this.assetPolicySha256, root, sourceRoot, playableRoot, project: project as Project, files: await hashTree(root), compiledAt: new Date().toISOString(), runtimeCacheHit: runtime.hit, candidateCacheHit: false };

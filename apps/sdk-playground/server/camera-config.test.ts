@@ -10,16 +10,18 @@ const source = await readFile(new URL('../config/camera.json', import.meta.url),
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => { vi.unstubAllEnvs(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
-async function fixture(host = '127.0.0.1') {
+async function fixture(host = '127.0.0.1', initialCamera?:string) {
  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'camera-file-'))); cleanups.push(() => rm(root, {recursive:true,force:true}));
  await mkdir(path.join(root,'config/cameras'),{recursive:true});
- const server = await createServer({configFile:false,root,plugins:[cameraConfigPlugin(root)],server:{host,port:0}});
+ if(initialCamera!==undefined)await writeFile(path.join(root,'config/camera.json'),initialCamera);
+ let watchReady=Promise.resolve();
+ const server = await createServer({configFile:false,root,plugins:[cameraConfigPlugin(root),{name:'test-watch-ready',configureServer(server){watchReady=new Promise<void>(resolve=>server.watcher.once('ready',resolve));}}],server:{host,port:0}});
  cleanups.push(()=>server.close());await server.listen();
  const address=server.httpServer!.address(); if(!address||typeof address==='string')throw Error('address');
  const origin=`http://127.0.0.1:${address.port}`;
  const request=(route:string, body:unknown, session?:string, from=origin)=>fetch(origin+'/__camera-config/'+route,{method:'POST',headers:{Origin:from,'Content-Type':'application/json',...(session?{'X-Camera-Session':session}:{})},body:JSON.stringify(body)});
  const sessionResponse=await request('session',{});const session= sessionResponse.ok ? (await sessionResponse.json()).session : '';
- return {root,server,origin,request,session};
+ return {root,server,origin,request,session,watchReady};
 }
 describe('local camera file HTTP service',()=>{
  it('reads missing, creates only if absent, updates by SHA and returns current conflict',async()=>{
@@ -109,10 +111,12 @@ describe('Vite exact imported camera bytes',()=>{
   }
  });
  it('binds actual dev module bytes and invalidates on changed JSON bytes',async()=>{
-  const f=await fixture();const file=path.join(f.root,'config/camera.json');await writeFile(file,source);
+  // Seed before watcher startup and await its initial scan: creating and immediately editing can coalesce into add.
+  const f=await fixture('127.0.0.1',source);const file=path.join(f.root,'config/camera.json');await f.watchReady;
   const first=await f.server.transformRequest('/config/camera.json?camera-document');expect(first!.code).toContain(sha(source));
   const changed=source+'\n ';await writeFile(file,changed);
-  await new Promise<void>((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('HMR not invalidated')),4000);const check=()=>{const module=f.server.moduleGraph.getModuleById(file.split(path.sep).join('/')+'?camera-document');if(module?.transformResult===null){clearTimeout(timeout);resolve();}else setTimeout(check,20);};check();});
+  // waitFor releases its polling timer on success and failure; a timeout must not keep probing a closed server.
+  await vi.waitFor(()=>expect(f.server.moduleGraph.getModuleById(file.split(path.sep).join('/')+'?camera-document')?.transformResult).toBeNull(),{timeout:4000,interval:20});
   const second=await f.server.transformRequest('/config/camera.json?camera-document');expect(second!.code).toContain(sha(changed));expect(second!.code).not.toContain(sha(source));
  });
  it.each(['config/camera.json','config/cameras/indoor-lab.json','config/cameras/npc-workshop.json'])('static bundle pairs exact input bytes for %s, not a later disk read',async(relativeFile)=>{

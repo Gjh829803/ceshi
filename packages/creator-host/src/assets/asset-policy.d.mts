@@ -11,7 +11,7 @@ export interface AssetPolicySnapshot {
  allowedAssets: Record<string, any>[];
  deniedResourceSha256: string[];
 }
-export function createAssetPolicySnapshot(policy: unknown, catalog: Record<string, any>[]): AssetPolicySnapshot;
+export function createAssetPolicySnapshot(policy: unknown, catalog: Record<string, any>[], additionalDeniedHashes?:string[]): AssetPolicySnapshot;
 export function validateAssetPolicySnapshot(snapshot: unknown): AssetPolicySnapshot;
 export function assetPolicyHash(snapshot: AssetPolicySnapshot): string;
 export function verifyAssetPolicySources(snapshot: AssetPolicySnapshot, files: Record<string, Uint8Array>): void;

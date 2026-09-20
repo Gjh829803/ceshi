@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.helicopter/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
+      "sha256": "7419a6f70a6832c7a06c035217271c3a5470ee1eb232cfab0c5ef09f3a1583b4",
+      "byte_length": 146688,
+      "format": "glb",
+      "role": "model",
+      "source_path": "helicopter.glb",
+      "reused_by": [
+        "vehicle.helicopter"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.0/preview/thumbnail.webp",
+      "sha256": "5d0133948ce9775c645df7f0992bad77a6069da059aba5570d5ad112141aecf0",
+      "byte_length": 12062,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.helicopter"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 58,
+    "meshes": 45,
+    "materials": 10,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 2318,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": []
+}

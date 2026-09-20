@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "hovercraft",
+    "name": "定高悬浮艇",
+    "en": "FLOAT",
+    "radius": 1.5,
+    "seat": [
+      0,
+      0.48,
+      -0.1
+    ],
+    "archetype": "hover",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.7,
+        1.15,
+        2.2
+      ],
+      "offset": [
+        0,
+        0.775,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

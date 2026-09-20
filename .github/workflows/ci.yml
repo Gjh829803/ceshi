@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -19,6 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-validation
+
+      - name: Verify install preserves every tracked source file and mode
+        run: |
+          pnpm install --prefer-offline --no-frozen-lockfile
+          git diff --exit-code
+
+      - name: Verify unique asset library and generated consumers
+        run: |
+          node asset-library/tools/library.mjs validate
+          pnpm content:check
+          node scripts/assets/sync-asset-contracts.mjs --check
+          node scripts/assets/sync-asset-client.mjs --check
+          node --test asset-library/tests/*.test.mjs
 
       - name: Lint
         run: pnpm lint
@@ -38,6 +51,9 @@ jobs:
       - name: Build Three runtime
         run: pnpm build
 
+      - name: Verify real Creator MCP startup and asset discovery
+        run: node scripts/integration/creator-startup-smoke.mjs .codex-tmp/three-runtime
+
       - name: Assert checks left the tracked tree clean
         run: git diff --exit-code
 
@@ -55,7 +71,23 @@ jobs:
 
       # Each runner retains the existing single-fork isolation and test limits.
       - name: Run resource-heavy test shard
-        run: pnpm test:resource-heavy --shard=${{ matrix.shard }}/3
+        run: pnpm test:resource-heavy --shard=${{ matrix.shard }}/3 --exclude apps/sdk-playground/src/asset-lifecycle/asset-catalog.test.ts
+
+      - name: Assert tests left the tracked tree clean
+        run: git diff --exit-code
+
+  catalog-lifecycle:
+    name: Full catalog lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-validation
+
+      # One live campus and all models, with the original 20s/150s test limits.
+      # The other resource shards exclude exactly this file; validate requires it.
+      - name: Run full catalog lifecycle in an independent runner
+        run: pnpm test:resource-heavy apps/sdk-playground/src/asset-lifecycle/asset-catalog.test.ts
 
       - name: Assert tests left the tracked tree clean
         run: git diff --exit-code
@@ -63,7 +95,7 @@ jobs:
   # Preserve the required check name and reject failed, cancelled or skipped lanes.
   validate:
     if: ${{ always() }}
-    needs: [checks, resource-heavy]
+    needs: [checks, resource-heavy, catalog-lifecycle]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -71,6 +103,8 @@ jobs:
         env:
           CHECKS_RESULT: ${{ needs.checks.result }}
           RESOURCE_TESTS_RESULT: ${{ needs.resource-heavy.result }}
+          CATALOG_TESTS_RESULT: ${{ needs.catalog-lifecycle.result }}
         run: |
           test "$CHECKS_RESULT" = success
           test "$RESOURCE_TESTS_RESULT" = success
+          test "$CATALOG_TESTS_RESULT" = success

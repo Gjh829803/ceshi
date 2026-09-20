@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "sockets": [
+    {
+      "id": "seat.driver",
+      "node": "seat.driver",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        -0.45
+      ]
+    },
+    {
+      "id": "seat.passenger.1",
+      "node": "seat.passenger.1",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        0.85
+      ]
+    },
+    {
+      "id": "seat.passenger.2",
+      "node": "seat.passenger.2",
+      "positionMetersXYZ": [
+        0,
+        0.45,
+        -1.25
+      ]
+    },
+    {
+      "id": "entry.left",
+      "node": "entry.left",
+      "positionMetersXYZ": [
+        1.4,
+        0.05,
+        -0.45
+      ]
+    },
+    {
+      "id": "entry.right",
+      "node": "entry.right",
+      "positionMetersXYZ": [
+        -1.4,
+        0.05,
+        -0.45
+      ]
+    },
+    {
+      "id": "camera.driver",
+      "node": "camera.driver",
+      "positionMetersXYZ": [
+        0,
+        1.08,
+        -0.3
+      ]
+    },
+    {
+      "id": "control.foot.left",
+      "node": "control.foot.left",
+      "positionMetersXYZ": [
+        0.123174,
+        0.389302,
+        0.52132
+      ]
+    },
+    {
+      "id": "control.foot.right",
+      "node": "control.foot.right",
+      "positionMetersXYZ": [
+        -0.122625,
+        0.391087,
+        0.496006
+      ]
+    },
+    {
+      "id": "control.hand.left",
+      "node": "control.hand.left",
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "control.hand.right",
+      "node": "control.hand.right",
+      "positionMetersXYZ": [
+        0,
+        -0.56,
+        0
+      ]
+    }
+  ],
+  "source_seat": [
+    0,
+    0.45,
+    -0.45
+  ]
+}

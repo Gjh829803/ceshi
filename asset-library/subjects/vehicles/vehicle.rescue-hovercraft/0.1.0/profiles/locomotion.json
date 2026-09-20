@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "rescue-hovercraft",
+    "name": "救援悬浮艇",
+    "en": "LIFTER",
+    "radius": 1.65,
+    "seat": [
+      0,
+      0.48,
+      -0.1
+    ],
+    "archetype": "hover",
+    "visualVariant": "rescue",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        1.75,
+        1.15,
+        2.3
+      ],
+      "offset": [
+        0,
+        0.775,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

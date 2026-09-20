@@ -1,7 +1,10 @@
+import {testAssetResourceSourcePath} from './test-asset-library';
 import {readFile} from 'node:fs/promises';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import catalog from '../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import {Character as SourceCharacter} from './humanoid-runtime/humanoid/source-character';
 import {Character} from './humanoid-runtime/character';
 
@@ -184,7 +187,7 @@ it('rejects an undeclared manifest model before loading graphics and permits a c
 
 it('loads an alternate declared model filename and keeps the factory URL closure after its caller changes',async()=>{
   const model='skins/alternate.glb';
-  const {resolve,counts,requestedUrls}=resources({manifestModel:()=>model,modelAliases:{[model]:'assets/three-creator/presets/humanoid/source/uefn-mannequin-lod1.glb'}});
+  const {resolve,counts,requestedUrls}=resources({manifestModel:()=>model,modelAliases:{[model]:testAssetResourceSourcePath('humanoid/source/uefn-mannequin-lod1.glb')}});
   let version='original';
   const resolver=(logical:string)=>{
     if(logical.endsWith('/uefn-mannequin-lod1.glb'))throw new Error('Default skin must not be resolved');

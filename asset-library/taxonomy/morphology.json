@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "architecture": [
+    "skinned_articulated",
+    "rigid_articulated",
+    "rigid_single",
+    "soft_body",
+    "composite",
+    "swarm",
+    "unknown"
+  ],
+  "profiles": [
+    "biped",
+    "quadruped",
+    "hexapod",
+    "octopod",
+    "serpentine",
+    "two_wheel",
+    "four_wheel",
+    "multi_wheel",
+    "tracked",
+    "winged",
+    "finned",
+    "rotorcraft"
+  ],
+  "appendage_roles": [
+    "leg",
+    "arm",
+    "hand",
+    "foot",
+    "wing",
+    "fin",
+    "tail",
+    "neck",
+    "head",
+    "jaw",
+    "wheel",
+    "track",
+    "rotor",
+    "propeller",
+    "thruster",
+    "tentacle",
+    "manipulator",
+    "tool_mount"
+  ],
+  "stance": [
+    "upright",
+    "forward_leaning",
+    "horizontal",
+    "low_profile",
+    "suspended",
+    "floating",
+    "variable",
+    "unknown"
+  ]
+}

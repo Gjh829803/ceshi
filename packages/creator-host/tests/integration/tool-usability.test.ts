@@ -10,7 +10,9 @@ import { ThreeCreatorTools } from '../../src/tools/tools';
 import { RuntimeGuidance } from '../../src/discovery/runtime-guidance';
 import { executeThreeCreatorTool } from '../../src/cli/mcp';
 import { createAssetPolicySnapshot, assetPolicyHash } from '../../src/assets/asset-policy.mjs';
-import catalog from '../../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { CREATOR_QUALITY_SUMMARY } from '../../src/discovery/quality-guidance.js';
 
 // Narrow the dynamic MCP dispatch result to the wire contract exercised by each test.
@@ -57,6 +59,42 @@ it('asset naming lets a permitted flying variant use the generic binding without
   const result = await search(tools, { query: '飞行', limit: 20 });
   expect(result.assets.map(row => row.id)).toEqual(['creature.dragon.d02']);
   expect(result.mountUsage[0]).toMatchObject({ integrationReady: true, requiredAssetIds: ['humanoid.uefn-mannequin', 'creature.dragon.d02'], exampleTopic: 'mounted-interaction', exampleVariant: 'flying-creature' });
+});
+
+it('discovers a permitted registered helicopter with its supplied visual and SDK subtype guidance', async () => {
+  const tools = await service(['humanoid.uefn-mannequin', 'vehicle.helicopter']);
+  const result = await search(tools, { query: 'helicopter' });
+  expect(result.assets).toEqual([expect.objectContaining({
+    id: 'vehicle.helicopter',
+    details: { tool: 'assets_describe', arguments: { assetId: 'vehicle.helicopter' } },
+  })]);
+  const detail: any = await describeAsset(tools, { assetId: 'vehicle.helicopter' });
+  const asset = detail.assets[0];
+  expect(asset).toMatchObject({
+    id: 'vehicle.helicopter',
+    sha256: '7419a6f70a6832c7a06c035217271c3a5470ee1eb232cfab0c5ef09f3a1583b4',
+    byteLength: 146688,
+    usage: 'reusable',
+    vehicle: { spec: { mode: 'plane', aircraftSubtype: 'helicopter', seat: [0,1.3,.1] } },
+    integrationMetadata: { documentation: 'assets/vehicles/README.md', visual: {
+      load: 'world.assets.load', modelAssetId: 'vehicle.helicopter',
+    } },
+  });
+  expect(asset.integrationMetadata.binding).toContain("humanoid.createAircraftSpec('plane')");
+  expect(asset.integrationMetadata.visual.rotors).toHaveLength(2);
+  expect(detail.documentation.arguments.document).toBe('assets/vehicles/README.md');
+  expect(Object.keys(detail.cameraPresetSnapshots.presets)).toEqual([
+    'vehicle.helicopter.third-person','vehicle.helicopter.first-person','vehicle.helicopter.shoulder',
+  ]);
+  const vehicleGuide:any = await executeThreeCreatorTool(tools, detail.documentation.tool, detail.documentation.arguments);
+  expect(vehicleGuide.guide).toContain('node.userData.name ?? node.name');
+  expect(vehicleGuide.guide).toContain('aircraft-rotor_1');
+  expect(vehicleGuide.guide).toContain('rotorPhases` is empty before the first simulation update and after reset');
+  expect(vehicleGuide.guide).toContain('sample.vehicles[vehicleIndex]?.aircraft?.rotorPhases[index] ?? 0');
+  expect(vehicleGuide.guide).toContain('Number.isFinite(phase) ? phase : 0');
+  const gettingStarted:any = await schema(tools, { topic: 'getting-started' });
+  expect(gettingStarted.subjectAuthoring.vehicleAuthoring.modelPolicy).toContain('node.userData.name ?? node.name');
+  expect(gettingStarted.subjectAuthoring.vehicleAuthoring.modelPolicy).toContain('phases[index] ?? 0');
 });
 
 const roots: string[] = [];
@@ -815,7 +853,7 @@ it('routes all four entry documents through the same MCP schema sources and expo
  const {THREE_CREATOR_TOOLS}=await import('../../src/cli/mcp');
  const examples=THREE_CREATOR_TOOLS.find(tool=>tool.name==='creator_get_examples')!;
  const topics=(examples.inputSchema.properties as any).topic.enum;
- expect(topics).toEqual(['getting-started','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject']);
+ expect(topics).toEqual(['getting-started','character-actions','mounted-interaction','custom-vehicle','nonhuman-subject','streaming-ui']);
  for(const topic of topics){
   const result:any=await executeThreeCreatorTool(tools,'creator_get_examples',{topic});
   expect(result.files['main.ts']).toBeTruthy();
@@ -826,7 +864,7 @@ it('routes all four entry documents through the same MCP schema sources and expo
   expect(result.files['main.ts']).not.toMatch(/export\s+(async\s+)?function/);
   if(topic!=='getting-started')expect(result.files['main.ts']).not.toMatch(/await create(?:Humanoid)?World\(/);
   expect(result.files['main.ts']).not.toMatch(/PlaneGeometry|BoxGeometry|bounds\s*:|playerSpawn\s*:/);
-  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(['getting-started','nonhuman-subject'].includes(topic)?['main.ts','config/camera.json']:['main.ts']);
+  expect(result.fileManifest.map((file:any)=>file.path)).toEqual(topic==='streaming-ui'?['main.ts','ui/catalog.json','ui/definition.json','ui/state.schema.json','ui/components.tsx','ui/styles.css']:['getting-started','nonhuman-subject'].includes(topic)?['main.ts','config/camera.json']:['main.ts']);
  }
  const index:any=await schema(tools,{topic:'assets'});
  expect(index.assetIndex.map((item:any)=>item.id).sort()).toEqual([...environment.assetPolicy.allowedAssetIds].sort());

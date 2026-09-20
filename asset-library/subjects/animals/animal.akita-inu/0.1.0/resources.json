@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.akita-inu/0.1.0/preview/Akita Inu.png",
+  "files": [
+    {
+      "path": "subjects/animals/animal.akita-inu/0.1.0/preview/Akita Inu.png",
+      "sha256": "d3988f5d964e0452087652be2f9016c1da5082207584a9adb4a11123190bc86a",
+      "byte_length": 78535,
+      "format": "png",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/Akita Inu.png",
+      "reused_by": [
+        "animal.akita-inu"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

@@ -6,21 +6,14 @@ Playground 顶部选择“飞龙 · 空中训练场”，或打开
 
 ## 资源与绑定
 
-[资源清单](../assets/dragon-training/bundle.json)包含 17 个文件，逐项记录字节数
-与 SHA-256。D01 使用 `dragon.glb`，D02–D11 分别使用同名 GLB；其余文件为
-H01 参考骑手、火焰图集及四份 JSON。模型和动作来自已有 Century 本地提取；
-[manifest.json](../assets/dragon-training/__creature-assets/manifest.json)记录 D01/H01
-装配信息，[variant-sources.json](../assets/dragon-training/__creature-assets/variant-sources.json)
-记录其他变体的源模型、材质、动作与重定向参数，
-[ground-sources.json](../assets/dragon-training/__creature-assets/ground-sources.json)
-记录地面动作来源。
+资产唯一来源为 [asset-library](../asset-library/README.md)。D01–D11 各有独立主体目录，例如
+[D01](../asset-library/subjects/fantastical/creature.dragon.d01/0.1.0/asset.json)，模型在主体的 model/，骨架与动作保存在 GLB，火焰图集在 shared/materials/。
+[锁文件](../asset-library/dist/assembly.lock.json)记录所有文件的 SHA-256 与字节数；旧提取清单只在 migrations 与 shared/source_documents 中作来源证据，不参与加载。H01 参考骑手保留在 D01 的 source/rider.glb。
 
-[variants.json](../assets/dragon-training/__creature-assets/variants.json)是各变体的
-模型文件、镜头距离、鞍座、空中/地面球组与支撑范围的标定源。Playground 通过
-[dragon-variants.ts](../packages/preset-content/src/creatures/dragon-variants.ts)读取它，并把配置
-交给 SDK；不得只换模型而沿用另一变体的碰撞与座位尺寸。顶部飞龙选择器会以
-`?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物
-的位置在通过 SDK 起点检查后保留。
+各变体的 profiles/locomotion.json、profiles/camera.json 和 bindings/sockets.json 保存专属标定；
+[dragon-variants.ts](../packages/preset-content/src/creatures/dragon-variants.ts)读取由同一库生成的消费快照。
+修改主体后执行 `pnpm content:sync`；不得手改 package 的 config/generated，也不得只换模型而沿用另一变体的尺寸。
+顶部飞龙选择器以 `?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物的位置在通过 SDK 起点检查后保留。
 
 真实骑手始终是当前 `humanoid.uefn-mannequin` 人物，绑定既有 Source101 骨架与动作。
 原始 UEFN 外形资源包含黑色关节贴图；浏览器中的完整人物默认保留这些贴图，
@@ -42,7 +35,7 @@ Agent 提供所选资产、实例、参考图中的位置与资源解析器，�
 `createHumanoidWorld`。场地、开场镜头和输入路线由当前需求决定；召唤、登乘、
 起降的条件和结果通过当前接口及状态查询确认。
 
-目录中的 [`creature.dragon-evolved`](../assets/three-creator/catalog/creature.dragon-evolved.json)
+目录中的 [`creature.dragon-evolved`](../asset-library/subjects/fantastical/creature.dragon-evolved/0.1.0/asset.json)
 是另一份 WYVERN 资源，路径为 `presets/creatures/dragon.glb`。它与这些原生变体是
 不同资产；查到该 ID 不代表加载了原生飞行、召唤、上下龙或喷火能力。
 

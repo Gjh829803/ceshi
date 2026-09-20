@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "source_type": "whitebox_snapshot",
+  "source_url": null,
+  "source_creator": null,
+  "source_commit": "514fd6ba261f079620c47c49228c70d70f6e8cb1",
+  "original_asset_id": "vehicle.raft",
+  "original": {
+    "source": "Local procedural geometry",
+    "generator": "packages/creator-host/scripts/assets/export-raft.ts"
+  },
+  "license": {
+    "status": "see_source_notices",
+    "commercial_use": "unknown",
+    "redistribution": "unknown",
+    "editable_distribution": "unknown",
+    "user_export": "unknown"
+  },
+  "license_files": [],
+  "modified_from": null,
+  "conversion_pipeline": {
+    "method": "byte_preserving_copy",
+    "tool": "import-whitebox.mjs",
+    "version": "1.0"
+  }
+}

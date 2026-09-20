@@ -6,6 +6,7 @@
 | 快速理解轻量 SDK 的背景与设计取舍 | [设计背景与取舍](three-sdk-architecture.md#设计背景与取舍) |
 | 判断生产门禁与 Agent 反馈的边界 | [Harness 反馈与生产校验](three-sdk-architecture.md#harness-反馈与生产校验) |
 | 理解创作自由、四层能力与执行职责 | [Three SDK 架构](three-sdk-architecture.md) |
+| 评审 CLI 世界流服务、视频同步 UI 与公共 React 播放器（提案） | [世界流与 UI 技术设计](superpowers/specs/2026-09-17-world-streaming-ui-design.md) |
 | 选择主体入口、绑定自制 Mesh、查询动作条件 | [SDK 用法](../packages/three-world/README.md) · [入口与封装边界](three-sdk-architecture.md#入口与封装边界) |
 | 评审多角色运行时、批量资产/动作/操控接入的长期设计（提案） | [可扩展运行时与内容接入设计](superpowers/specs/2026-09-10-extensible-world-and-content-design.md) |
 | 生产新资产、接入行动模式并提交 PR | [资产包提交与 Agent 接入规范](asset-production-integration.md) |

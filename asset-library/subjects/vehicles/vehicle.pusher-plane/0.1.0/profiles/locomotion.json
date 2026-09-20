@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "pusher-plane",
+    "name": "机尾推进式飞机",
+    "en": "PUSHER",
+    "radius": 2,
+    "seat": [
+      0,
+      1.3,
+      0.1
+    ],
+    "archetype": "plane",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        4.5,
+        1.4,
+        3.6
+      ],
+      "offset": [
+        0,
+        1.4,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

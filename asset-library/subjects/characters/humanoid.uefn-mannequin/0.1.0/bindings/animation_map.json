@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "slots": {
+    "idle": {
+      "clipName": "idle",
+      "loop": true,
+      "blendSeconds": 0.1,
+      "timeScale": 1
+    },
+    "walk": {
+      "clipName": "walk",
+      "loop": true,
+      "blendSeconds": 0.1,
+      "timeScale": 1.2
+    },
+    "run": {
+      "clipName": "run",
+      "loop": true,
+      "blendSeconds": 0.1,
+      "timeScale": 0.96
+    },
+    "jump": {
+      "clipName": "jump",
+      "loop": false,
+      "blendSeconds": 0.1,
+      "timeScale": 1
+    },
+    "fall": {
+      "clipName": "fall",
+      "loop": true,
+      "blendSeconds": 0.1,
+      "timeScale": 1
+    }
+  },
+  "note": "保留已有 action 映射；clipName 未命中真实片段时需要宿主派生动作。"
+}

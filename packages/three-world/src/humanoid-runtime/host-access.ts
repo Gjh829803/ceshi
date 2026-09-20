@@ -8,6 +8,11 @@ import type { SkillResult } from './humanoid/action-schema';
 export interface HumanoidHostAccess {
   readonly resources:import('../actor-resources').ActorResources;
   isDisposed(): boolean;
+  activationMembers(id:string):readonly string[];
+  validateActivation(id:string,active:boolean):void;
+  validateDestruction(id:string,removedIds:ReadonlySet<string>):void;
+  prepareVehicleDestruction(id:string,removedIds:ReadonlySet<string>):()=>unknown[];
+  addVehicle(instance:import('./runtime').VehicleInstance):()=>void;
   setMapValidator(validate:(map:import('./environment/types').EnvironmentDefinition)=>void):void;
   interactionBody(id:string):import('../interaction-body').InteractionBody;
   claimCharacter(id:string,character:import('./character').Character):()=>void;
@@ -16,7 +21,7 @@ export interface HumanoidHostAccess {
   command(command: HumanoidCommand): SkillResult | undefined;
   setEpisodeOwned(owned: boolean): void;
   advance(input: WorldInput, dt: number, pointer?: CameraPointerInput, drives?:Readonly<Record<string,import('../engine-contracts').CharacterDrive>>,controlYawRadians?:number): void;
-  reset(): void;
+  reset(retainedVehicleIds?:ReadonlySet<string>): readonly unknown[];
   finishReset():void;
   clearInput(): void;
   setControlledActor(id:string|undefined):void;

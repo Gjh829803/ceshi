@@ -7,7 +7,7 @@ import {measureDragonCore} from './dragon-core-collision.mjs';
 import {humanoid} from '@worldkit/three';
 const {FlyingCreatureVisual,createFlyingCreatureStateV1}=humanoid;
 const [source,output]=process.argv.slice(2);
-if(!source||!output)throw new Error('Usage: node measure-century-dragons.mjs <export-directory> <asset-directory>');
+if(!source||!output)throw new Error('Usage: node --import tsx scripts/assets/measure-century-dragons.mjs <export-directory> <intake-directory>');
 globalThis.ProgressEvent=class{constructor(type){this.type=type;}};
 const selected=process.argv[4]?.split(',');
 const variants=selected?JSON.parse(await fs.readFile(path.join(output,'variants.json'),'utf8')).filter(v=>!selected.includes(v.id)):[{id:'D01',name:'D01 · 原始飞龙',file:'dragon.glb'}];

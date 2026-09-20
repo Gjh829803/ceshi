@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "animal.animals-rat",
+  "asset_version": "0.1.0",
+  "display_name": "鼠 · 待入库",
+  "aliases": [
+    "Animals Rat"
+  ],
+  "browse_group": "animals",
+  "semantic_type": "animal.quadruped.mammal.rodent",
+  "semantic_subtypes": [
+    "quadruped/mammal/rodent"
+  ],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [
+      "quadruped"
+    ],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "来源资料占位，待导出完整 GLB、绑定骨架与动作。",
+  "default_assembly": "subjects/animals/animal.animals-rat/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

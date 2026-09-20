@@ -3,18 +3,19 @@ import { Group, PerspectiveCamera } from "three";
 import { createWorld, type ThreeWorld } from "../world";
 import type { EnvironmentDefinition } from "./environment/types";
 import type { VehicleSpec } from "./config";
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog = JSON.parse(
   readFileSync(
     new URL(
-      "../../../../assets/three-creator/asset-catalog.json",
+      "../../../../asset-library/dist/whitebox/asset-catalog.json",
       import.meta.url,
     ),
     "utf8",
   ),
 );
-const source = catalog.assets.find(
+const source = composeAssetCatalog(catalog.assets).find(
   (entry: { id: string }) => entry.id === "creature.horse",
-).vehicle.spec as VehicleSpec;
+)!.vehicle!.spec as VehicleSpec;
 export async function createMountedFixture(
   options: {
     boxes?: EnvironmentDefinition["boxes"];

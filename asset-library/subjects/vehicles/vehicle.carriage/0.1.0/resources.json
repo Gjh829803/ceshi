@@ -1,0 +1,251 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.carriage/0.1.0/model/carriage.glb",
+  "preview": "subjects/vehicles/vehicle.carriage/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.carriage/0.1.0/model/carriage.glb",
+      "sha256": "949de81de7b40aacf27194f4c841c37ff2de28ebf994b46847d5e5e1dc2fe04f",
+      "byte_length": 261664,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/carriage.glb",
+      "reused_by": [
+        "vehicle.carriage"
+      ]
+    },
+    {
+      "path": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
+      "byte_length": 2215736,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/creatures/horse.glb",
+      "reused_by": [
+        "creature.horse",
+        "vehicle.carriage"
+      ],
+      "logical_paths": [
+        "creatures/horse.glb"
+      ]
+    },
+    {
+      "path": "shared/source_documents/7bccbd5906a1d199-manifest.json",
+      "sha256": "7bccbd5906a1d1993ab730b07510c6e4bd828baaa19556d4a6aabac2abecd535",
+      "byte_length": 1612,
+      "format": "json",
+      "role": "source",
+      "source_path": "assets/three-creator/presets/creatures/manifest.json",
+      "reused_by": [
+        "creature.dragon-evolved",
+        "creature.horse",
+        "vehicle.carriage"
+      ],
+      "logical_paths": [
+        "creatures/manifest.json"
+      ]
+    },
+    {
+      "path": "shared/source_documents/83d8959f9fc56353-LICENSE-ANIMALS.txt",
+      "sha256": "83d8959f9fc56353ed571fbe2dc52e4bcd64508e2399501cd45ac2ce3df0bf8c",
+      "byte_length": 364,
+      "format": "txt",
+      "role": "license",
+      "source_path": "assets/three-creator/presets/creatures/LICENSE-ANIMALS.txt",
+      "reused_by": [
+        "creature.dragon-evolved",
+        "creature.horse",
+        "vehicle.carriage"
+      ],
+      "logical_paths": [
+        "creatures/LICENSE-ANIMALS.txt"
+      ]
+    },
+    {
+      "path": "shared/source_documents/de990ef6fc68cffd-LICENSE-MONSTERS.txt",
+      "sha256": "de990ef6fc68cffd7fd1ae342c4d0c823b541b8848d8f76bca5d3339f4de6f6e",
+      "byte_length": 374,
+      "format": "txt",
+      "role": "license",
+      "source_path": "assets/three-creator/presets/creatures/LICENSE-MONSTERS.txt",
+      "reused_by": [
+        "creature.dragon-evolved",
+        "creature.horse",
+        "vehicle.carriage"
+      ],
+      "logical_paths": [
+        "creatures/LICENSE-MONSTERS.txt"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.carriage/0.1.0/preview/thumbnail.webp",
+      "sha256": "e8db888d9792792ba5bfc5f927dd8970aac89e5c426f09b83fedc797fb6dc994",
+      "byte_length": 12946,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.carriage"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 107,
+    "meshes": 85,
+    "materials": 9,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 4196,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": [
+    {
+      "index": 0,
+      "name": "Attack_Headbutt",
+      "duration_seconds": 1.0333333333333334,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 1,
+      "name": "Attack_Kick",
+      "duration_seconds": 1,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 2,
+      "name": "Death",
+      "duration_seconds": 1,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 3,
+      "name": "Eating",
+      "duration_seconds": 6,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 4,
+      "name": "Gallop",
+      "duration_seconds": 0.6,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 5,
+      "name": "Gallop_Jump",
+      "duration_seconds": 1.4666666666666666,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 6,
+      "name": "Idle",
+      "duration_seconds": 3.3333333333333335,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 7,
+      "name": "Idle_2",
+      "duration_seconds": 3.3333333333333335,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 8,
+      "name": "Idle_Headlow",
+      "duration_seconds": 3.3333333333333335,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 9,
+      "name": "Idle_HitReact1",
+      "duration_seconds": 0.6666666666666666,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 10,
+      "name": "Idle_HitReact2",
+      "duration_seconds": 0.6666666666666666,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 11,
+      "name": "Jump_toIdle",
+      "duration_seconds": 1.7333333333333334,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    },
+    {
+      "index": 12,
+      "name": "Walk",
+      "duration_seconds": 1.1666666666666667,
+      "channels": 150,
+      "loop": null,
+      "root_motion": "unknown",
+      "resource": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "format": "glb",
+      "binding_status": "requires_compatibility_check"
+    }
+  ],
+  "model_logical_path": "vehicles/carriage.glb"
+}

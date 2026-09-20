@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "slots": {},
+  "note": "保留已有 action 映射；clipName 未命中真实片段时需要宿主派生动作。"
+}

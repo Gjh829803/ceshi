@@ -3,13 +3,14 @@ import { test } from 'node:test';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { projectLock, auditCapsule, sha256, stageContext, CREATOR_RUNTIME_PACKAGES } from '@worldkit/creator-cloud/three-capsule';
 import { freezeRunAssetPolicy } from '@worldkit/creator-cloud/three-eval-mcp-bridge';
+import { composeAssetCatalog } from '@worldkit/preset-content/assets/host-adapter';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const rootManifest = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json')));
-const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8');
+const lock = readFileSync(path.join(repositoryRoot, 'pnpm-lock.yaml'), 'utf8').replaceAll('\r\n', '\n');
 
 test('minimal importer projection preserves exact package resolutions and integrity records', () => {
   const projected = projectLock(lock, rootManifest);
@@ -23,6 +24,7 @@ test('minimal importer projection preserves exact package resolutions and integr
   assert(importers.includes('      typescript:\n'), 'Runtime authoring schema requires the pinned TypeScript compiler API');
   assert.equal(projected.slice(projected.indexOf('\npackages:\n')), lock.slice(lock.indexOf('\npackages:\n')));
   assert.equal(projected.slice(0, projected.indexOf('\nimporters:\n')), lock.slice(0, lock.indexOf('\nimporters:\n')));
+  assert.equal(projectLock(projected,rootManifest),projected, 'Runtime peer projection must be idempotent');
 });
 
 test('projection rejects changed dependency versions and unknown lock formats', () => {
@@ -70,6 +72,19 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
   try {
     stageContext(repositoryRoot, outputRoot);
     const sourceRoot = path.join(outputRoot, 'context/sources');
+    const stagedPackages=new Map(CREATOR_RUNTIME_PACKAGES.map(directory=>{
+      const manifest=JSON.parse(readFileSync(path.join(sourceRoot,directory,'package.json'),'utf8'));return [manifest.name,manifest];
+    }));
+    for(const manifest of stagedPackages.values())for(const [name,version] of Object.entries(manifest.dependencies??{})){
+      if(version.startsWith('workspace:'))assert(stagedPackages.has(name),`Missing production workspace dependency: ${manifest.name} -> ${name}`);
+    }
+    for(const relative of ['packages/world-ui/src/react.tsx','packages/world-ui/src/schema.ts','packages/creator-host/docs/agent/ui.md','examples/three-creator/streaming-ui/ui/components.tsx','examples/three-creator/streaming-ui/ui/definition.json']){
+      assert.deepEqual(readFileSync(path.join(sourceRoot,relative)),readFileSync(path.join(repositoryRoot,relative)));
+    }
+    assert.equal(stagedPackages.get('@worldkit/world-ui').dependencies.react,JSON.parse(readFileSync(path.join(repositoryRoot,'packages/world-ui/package.json'))).devDependencies.react);
+    assert(!stagedPackages.get('@worldkit/world-ui').devDependencies);
+    assert(!existsSync(path.join(sourceRoot,'apps/stream-web')), 'Development console is not a Creator production dependency');
+
     const nativeBuild = JSON.parse(readFileSync(path.join(repositoryRoot, 'vendor/rapier-query-refresh/build.json'), 'utf8'));
     const nativeArchive = readFileSync(path.join(sourceRoot, 'vendor/rapier-query-refresh', nativeBuild.archive));
     assert.equal(sha256(nativeArchive), `sha256:${nativeBuild.sha256}`, 'Cloud install must include the current SDK native archive');
@@ -87,7 +102,7 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
       const relative = `packages/preset-content/${name}`;
       assert.deepEqual(readFileSync(path.join(sourceRoot, relative)), readFileSync(path.join(repositoryRoot, relative)));
     }
-    for (const name of ['asset-policy.mjs', 'asset-policy.d.mts']) {
+    for (const name of ['asset-policy.mjs', 'asset-policy.d.mts', 'library-source.mjs']) {
       const relative = `packages/creator-host/src/assets/${name}`;
       assert.equal(readFileSync(path.join(sourceRoot, relative), 'utf8'), readFileSync(path.join(repositoryRoot, relative), 'utf8'));
     }
@@ -105,7 +120,7 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     const frozen = await freezeRunAssetPolicy({toolkitRoot: sourceRoot});
     assert.deepEqual(frozen.assetPolicySnapshot.policy, JSON.parse(policyBytes));
     assert.deepEqual(frozen, await freezeRunAssetPolicy({toolkitRoot: repositoryRoot}));
-    const catalogPath = 'assets/three-creator/asset-catalog.json';
+    const catalogPath = 'asset-library/dist/whitebox/asset-catalog.json';
     const catalogBytes = readFileSync(path.join(sourceRoot, catalogPath));
     assert.deepEqual(catalogBytes, readFileSync(path.join(repositoryRoot, catalogPath)));
     assert.equal(manifest.files.find(file => file.path === catalogPath)?.sha256, sha256(catalogBytes));
@@ -117,12 +132,30 @@ test('staged assets preserve catalog bytes and new runs freeze the packaged Host
     for(const dragon of dragons)for(const resource of dragon.resources){
       const bytes=readFileSync(path.join(sourceRoot,resource.sourcePath));assert.equal(bytes.length,resource.byteLength);assert.equal(sha256(bytes),`sha256:${resource.sha256}`);
     }
-    assert(!existsSync(path.join(sourceRoot,'assets/dragon-training/__creature-assets/rider.glb')), 'Source101 remains the only supplied rider in this closure');
-    for (const asset of catalog.assets) {
-      assert(/^assets\/(?:three-creator|dragon-training)\//.test(asset.sourcePath), 'Three assets must not depend on an application directory');
-      const bytes = readFileSync(path.join(sourceRoot, asset.sourcePath));
-      assert.equal(sha256(bytes), `sha256:${asset.sha256}`);
-      assert.equal(bytes.length, asset.byteLength);
+    assert(!existsSync(path.join(sourceRoot,'assets')), 'The staged toolkit has no legacy authoring assets directory');
+    assert(!manifest.files.some(file => file.path.startsWith('assets/')));
+    assert(!existsSync(path.join(sourceRoot,'asset-library/tools')), 'Runtime reads generated library metadata, not source generators');
+    assert(!existsSync(path.join(sourceRoot,'asset-library/viewer')));
+    assert(!existsSync(path.join(sourceRoot,'asset-library/tests')));
+    const {readLibraryCatalog, readLibraryResource} = await import(pathToFileURL(path.join(sourceRoot,'packages/creator-host/src/assets/library-source.mjs')).href);
+    assert.deepEqual(await readLibraryCatalog(sourceRoot), composeAssetCatalog(catalog.assets));
+    for (const asset of catalog.assets) for (const resource of [asset, ...(asset.resources ?? [])]) {
+      assert(/^asset-library\//.test(resource.sourcePath), 'Every supplied resource originates in the unique library');
+      const bytes = await readLibraryResource(sourceRoot, resource);
+      assert.equal(sha256(bytes), `sha256:${resource.sha256}`);
+      assert.equal(bytes.length, resource.byteLength);
+      assert.equal(manifest.files.find(file => file.path === resource.sourcePath)?.sha256, sha256(bytes));
+    }
+    // Revalidating packaged sources must preserve the already promoted peer pins.
+    // Reject unrelated dist files and source escapes before attempting their IO.
+    for (const [sourcePath, error] of [
+      ['asset-library/dist/whitebox/unapproved.json', /Forbidden staged path/],
+      ['untrusted/model.glb', /Asset outside resource allowlist/],
+      ['asset-library/subjects/../model.glb', /Asset outside resource allowlist/],
+    ]) {
+      const changed = structuredClone(catalog); changed.assets[0].sourcePath = sourcePath;
+      writeFileSync(path.join(sourceRoot, catalogPath), JSON.stringify(changed));
+      assert.throws(() => stageContext(sourceRoot, path.join(sourceRoot, '.codex-tmp/rejected-stage')), error);
     }
   } finally { rmSync(outputRoot, { recursive: true, force: true }); }
 });

@@ -1,0 +1,526 @@
+{
+  "schema_version": "1.0",
+  "semantic_bones": {},
+  "mapping_status": "unmapped",
+  "bones": [
+    {
+      "node_index": 41,
+      "name": "Body",
+      "parent_index": 51,
+      "translation": [
+        0,
+        0.9120701551437378,
+        0.001748950919136405
+      ]
+    },
+    {
+      "node_index": 36,
+      "name": "Back",
+      "parent_index": 41,
+      "translation": [
+        -1.978869956786866e-9,
+        2.228177070617676,
+        -1.4354817867279053
+      ]
+    },
+    {
+      "node_index": 20,
+      "name": "Torso",
+      "parent_index": 36,
+      "translation": [
+        9.070522111187529e-13,
+        0.7713034152984619,
+        -2.086162567138672e-7
+      ]
+    },
+    {
+      "node_index": 19,
+      "name": "Torso2",
+      "parent_index": 20,
+      "translation": [
+        6.474914463101833e-13,
+        0.8170892000198364,
+        3.3493467554990275e-8
+      ]
+    },
+    {
+      "node_index": 12,
+      "name": "Torso3",
+      "parent_index": 19,
+      "translation": [
+        -1.649835216360751e-12,
+        0.9302803874015808,
+        -7.650975675232985e-8
+      ]
+    },
+    {
+      "node_index": 11,
+      "name": "Neck1",
+      "parent_index": 12,
+      "translation": [
+        2.3714777971223233e-12,
+        0.48983263969421387,
+        8.082366775852279e-9
+      ]
+    },
+    {
+      "node_index": 10,
+      "name": "Neck2",
+      "parent_index": 11,
+      "translation": [
+        -2.535334951963425e-13,
+        0.41649889945983887,
+        2.3120277603538852e-7
+      ]
+    },
+    {
+      "node_index": 9,
+      "name": "Neck3",
+      "parent_index": 10,
+      "translation": [
+        -6.955876846737041e-13,
+        0.6049953699111938,
+        1.1738745797629235e-7
+      ]
+    },
+    {
+      "node_index": 8,
+      "name": "Head",
+      "parent_index": 9,
+      "translation": [
+        -2.9824005678275034e-13,
+        0.6304813623428345,
+        2.381351436042678e-7
+      ]
+    },
+    {
+      "node_index": 3,
+      "name": "Ear1.L",
+      "parent_index": 8,
+      "translation": [
+        -0.1772894263267517,
+        -0.05872519314289093,
+        0.09774810075759888
+      ]
+    },
+    {
+      "node_index": 2,
+      "name": "Ear2.L",
+      "parent_index": 3,
+      "translation": [
+        1.109777514329835e-7,
+        0.14990733563899994,
+        -1.6200654329168174e-7
+      ]
+    },
+    {
+      "node_index": 1,
+      "name": "Ear3.L",
+      "parent_index": 2,
+      "translation": [
+        2.1363759117321024e-7,
+        0.10467850416898727,
+        -7.954849223779092e-9
+      ]
+    },
+    {
+      "node_index": 0,
+      "name": "Ear4.L",
+      "parent_index": 1,
+      "translation": [
+        1.6904166955100663e-8,
+        0.12096872925758362,
+        -1.3107644969423404e-9
+      ]
+    },
+    {
+      "node_index": 7,
+      "name": "Ear1.R",
+      "parent_index": 8,
+      "translation": [
+        0.1772897094488144,
+        -0.05872541666030884,
+        0.0977480411529541
+      ]
+    },
+    {
+      "node_index": 6,
+      "name": "Ear2.R",
+      "parent_index": 7,
+      "translation": [
+        1.9569158737908765e-8,
+        0.14990824460983276,
+        3.6379427115207363e-7
+      ]
+    },
+    {
+      "node_index": 5,
+      "name": "Ear3.R",
+      "parent_index": 6,
+      "translation": [
+        2.6969649979946553e-7,
+        0.10467904806137085,
+        2.1653566761870024e-7
+      ]
+    },
+    {
+      "node_index": 4,
+      "name": "Ear4.R",
+      "parent_index": 5,
+      "translation": [
+        -1.6763806343078613e-8,
+        0.1209695041179657,
+        3.4924596548080444e-8
+      ]
+    },
+    {
+      "node_index": 15,
+      "name": "FrontShoulder.L",
+      "parent_index": 19,
+      "translation": [
+        -0.22147715091705322,
+        1.270050048828125,
+        -0.3972007930278778
+      ]
+    },
+    {
+      "node_index": 14,
+      "name": "FrontUpperLeg.L",
+      "parent_index": 15,
+      "translation": [
+        -1.7560941500960325e-7,
+        0.1997261941432953,
+        -2.2713063430046532e-8
+      ]
+    },
+    {
+      "node_index": 13,
+      "name": "FrontLowerLeg.L",
+      "parent_index": 14,
+      "translation": [
+        3.708682783098993e-8,
+        1.1859976053237915,
+        1.337496229325552e-7
+      ]
+    },
+    {
+      "node_index": 18,
+      "name": "FrontShoulder.R",
+      "parent_index": 19,
+      "translation": [
+        0.22144383192062378,
+        1.270050048828125,
+        -0.39721909165382385
+      ]
+    },
+    {
+      "node_index": 17,
+      "name": "FrontUpperLeg.R",
+      "parent_index": 18,
+      "translation": [
+        4.968222810930456e-7,
+        0.1997261643409729,
+        -1.3052907377186784e-7
+      ]
+    },
+    {
+      "node_index": 16,
+      "name": "FrontLowerLeg.R",
+      "parent_index": 17,
+      "translation": [
+        -4.1822577401262606e-8,
+        1.1859978437423706,
+        2.473295808158582e-7
+      ]
+    },
+    {
+      "node_index": 24,
+      "name": "BackShoulder.L",
+      "parent_index": 36,
+      "translation": [
+        0.08888116478919983,
+        0.2498980164527893,
+        0.10972382873296738
+      ]
+    },
+    {
+      "node_index": 23,
+      "name": "BackLeg.L",
+      "parent_index": 24,
+      "translation": [
+        -1.1808381827904668e-7,
+        0.3311329185962677,
+        8.924797612053226e-8
+      ]
+    },
+    {
+      "node_index": 22,
+      "name": "BackUpperLeg.L",
+      "parent_index": 23,
+      "translation": [
+        5.973222982902371e-8,
+        0.8220421075820923,
+        -1.0199040190173037e-7
+      ]
+    },
+    {
+      "node_index": 21,
+      "name": "BackLowerLeg.L",
+      "parent_index": 22,
+      "translation": [
+        8.634155790332443e-8,
+        1.2523726224899292,
+        1.8538061397066485e-7
+      ]
+    },
+    {
+      "node_index": 28,
+      "name": "BackShoulder.R",
+      "parent_index": 36,
+      "translation": [
+        -0.08888067305088043,
+        0.2498980164527893,
+        0.10972420871257782
+      ]
+    },
+    {
+      "node_index": 27,
+      "name": "BackLeg.R",
+      "parent_index": 28,
+      "translation": [
+        1.3943270005256636e-7,
+        0.3311329782009125,
+        8.763562675540015e-8
+      ]
+    },
+    {
+      "node_index": 26,
+      "name": "BackUpperLeg.R",
+      "parent_index": 27,
+      "translation": [
+        -6.443853806104016e-8,
+        0.8220421075820923,
+        -4.229711692005367e-8
+      ]
+    },
+    {
+      "node_index": 25,
+      "name": "BackLowerLeg.R",
+      "parent_index": 26,
+      "translation": [
+        -8.684837382588739e-8,
+        1.2523726224899292,
+        3.0811759188509313e-7
+      ]
+    },
+    {
+      "node_index": 35,
+      "name": "Tail1",
+      "parent_index": 36,
+      "translation": [
+        1.0234035840994693e-12,
+        -1.1920928955078125e-7,
+        -4.172325134277344e-7
+      ]
+    },
+    {
+      "node_index": 34,
+      "name": "Tail2",
+      "parent_index": 35,
+      "translation": [
+        6.306066779870889e-14,
+        0.3100966215133667,
+        5.960464477539063e-8
+      ]
+    },
+    {
+      "node_index": 33,
+      "name": "Tail3",
+      "parent_index": 34,
+      "translation": [
+        -3.454129885761825e-14,
+        0.2738276422023773,
+        -2.557383993462281e-7
+      ]
+    },
+    {
+      "node_index": 32,
+      "name": "Tail4",
+      "parent_index": 33,
+      "translation": [
+        -7.967110586711013e-14,
+        0.4269500970840454,
+        -3.8117886447253113e-7
+      ]
+    },
+    {
+      "node_index": 31,
+      "name": "Tail5",
+      "parent_index": 32,
+      "translation": [
+        -7.621386974212413e-14,
+        0.31185439229011536,
+        -5.626834109762058e-9
+      ]
+    },
+    {
+      "node_index": 30,
+      "name": "Tail6",
+      "parent_index": 31,
+      "translation": [
+        -1.796791085736287e-15,
+        0.345664918422699,
+        -1.5784358708970103e-7
+      ]
+    },
+    {
+      "node_index": 29,
+      "name": "Tail7",
+      "parent_index": 30,
+      "translation": [
+        7.550342106937282e-16,
+        0.4043011963367462,
+        2.194136925481871e-7
+      ]
+    },
+    {
+      "node_index": 37,
+      "name": "PoleTargetBack.L",
+      "parent_index": 41,
+      "translation": [
+        0.41898584365844727,
+        -0.011044502258300781,
+        3.7869808673858643
+      ]
+    },
+    {
+      "node_index": 38,
+      "name": "PoleTarget.L",
+      "parent_index": 41,
+      "translation": [
+        0.4194774925708771,
+        -0.007272303104400635,
+        3.230870246887207
+      ]
+    },
+    {
+      "node_index": 39,
+      "name": "PoleTargetBack.R",
+      "parent_index": 41,
+      "translation": [
+        -0.41898584365844727,
+        -0.011044502258300781,
+        3.7869808673858643
+      ]
+    },
+    {
+      "node_index": 40,
+      "name": "PoleTarget.R",
+      "parent_index": 41,
+      "translation": [
+        -0.4194774925708771,
+        -0.007272303104400635,
+        3.230870246887207
+      ]
+    },
+    {
+      "node_index": 43,
+      "name": "IKBackLeg.L",
+      "parent_index": 51,
+      "translation": [
+        0.4189858138561249,
+        0.39356961846351624,
+        -1.8231959342956543
+      ]
+    },
+    {
+      "node_index": 42,
+      "name": "FFB.L",
+      "parent_index": 43,
+      "translation": [
+        -2.283378819356585e-9,
+        0.2691129744052887,
+        7.713143901355579e-8
+      ]
+    },
+    {
+      "node_index": 45,
+      "name": "IKFrontLeg.L",
+      "parent_index": 51,
+      "translation": [
+        0.4194774329662323,
+        0.39356961846351624,
+        1.312917947769165
+      ]
+    },
+    {
+      "node_index": 44,
+      "name": "FF.L",
+      "parent_index": 45,
+      "translation": [
+        3.3853062575417425e-8,
+        0.2691129148006439,
+        -4.2398152544365075e-8
+      ]
+    },
+    {
+      "node_index": 47,
+      "name": "IKBackLeg.R",
+      "parent_index": 51,
+      "translation": [
+        -0.4189858138561249,
+        0.39356961846351624,
+        -1.8231959342956543
+      ]
+    },
+    {
+      "node_index": 46,
+      "name": "FFB.R",
+      "parent_index": 47,
+      "translation": [
+        2.283378819356585e-9,
+        0.2691129744052887,
+        7.713143901355579e-8
+      ]
+    },
+    {
+      "node_index": 49,
+      "name": "IKFrontLeg.R",
+      "parent_index": 51,
+      "translation": [
+        -0.4194774329662323,
+        0.39356961846351624,
+        1.312917947769165
+      ]
+    },
+    {
+      "node_index": 48,
+      "name": "FF.R",
+      "parent_index": 49,
+      "translation": [
+        -3.3853062575417425e-8,
+        0.2691129148006439,
+        -4.2398152544365075e-8
+      ]
+    }
+  ],
+  "skin_count": 1,
+  "selected_node_indices": null,
+  "source_transform": {
+    "positionMetersXYZ": [
+      0,
+      0,
+      0
+    ],
+    "rotationEulerRadiansXYZ": [
+      0,
+      0,
+      0
+    ],
+    "scaleXYZ": [
+      1,
+      1,
+      1
+    ]
+  }
+}

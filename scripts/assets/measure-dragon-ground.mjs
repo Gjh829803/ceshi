@@ -4,7 +4,9 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {measureDragonCore} from './dragon-core-collision.mjs';
 import {humanoid} from '@worldkit/three';
 const {dragonGroundHeading}=humanoid;
-const directory='assets/dragon-training/__creature-assets';
+const [directory,sourceDirectory,output,codeOutput]=process.argv.slice(2);
+if(!directory||!sourceDirectory||!output)throw new Error('Usage: node --import tsx scripts/assets/measure-dragon-ground.mjs <model-directory> <ground-source-directory> <new-measurements-directory> [code-output.ts]; review measurements for library bindings');
+await fs.mkdir(output,{recursive:false});
 globalThis.ProgressEvent=class{};
 const variants=JSON.parse(await fs.readFile(directory+'/variants.json','utf8'));
 const sources=[];
@@ -37,12 +39,12 @@ for(const variant of variants){
   variant.ground={rootHeight:Math.max(.025,+height.toFixed(3)),seat:seat.map(x=>+x.toFixed(3)),probes:core.probes,
     support:[bounds.min.x,bounds.max.x,bounds.min.z,bounds.max.z].map(x=>+x.toFixed(3)),
     landingSeconds:1.8,takeoffSeconds:1.4};
-  const source=JSON.parse(await fs.readFile(process.argv[2]+'/'+variant.id+'.json','utf8'));
+  const source=JSON.parse(await fs.readFile(sourceDirectory+'/'+variant.id+'.json','utf8'));
   delete source.clips[variant.id+'_Ground_ReferenceHover'];sources.push(source);
   console.log(variant.id,JSON.stringify(variant.ground));
   mixer.stopAllAction();mixer.uncacheRoot(gltf.scene);
 }
-await fs.writeFile(directory+'/variants.json',JSON.stringify(variants,null,2)+'\n');
+await fs.writeFile(output+'/variants.json',JSON.stringify(variants,null,2)+'\n');
 await fs.writeFile(directory+'/ground-sources.json',JSON.stringify(sources,null,2)+'\n');
-await fs.writeFile('packages/three-world/src/humanoid-runtime/motion-families/flying-creature/ground-default.ts',
+if(codeOutput)await fs.writeFile(codeOutput,
   '/** 由 measure-dragon-ground.mjs 从 D01 原生待机蒙皮生成，米制。 */\nimport type {FlyingCreatureGround} from "./ground";\nexport const DEFAULT_DRAGON_GROUND: FlyingCreatureGround = '+JSON.stringify(variants[0].ground,null,2)+';\n');

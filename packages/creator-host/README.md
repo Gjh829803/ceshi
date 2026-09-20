@@ -53,11 +53,18 @@ project/episode validation remain independent. See
 ## Asset selection
 
 The Host freezes [asset policy](config/asset-policy.json)
-against the [catalog](../../assets/three-creator/asset-catalog.json).
+against the generated [library catalog](../../asset-library/dist/whitebox/asset-catalog.json).
 Search/details and example dependencies respect that policy. Project assetIds
 select resources without expanding permissions. Exact definitions, resource bytes
 and policy hashes are verified when packaging and importing into Episode.
 An externally pinned task uses `--asset-policy-snapshot` and `--asset-policy-sha256`.
+
+`asset-library/` is the only authoring source. `ASSET_LIBRARY_ROOT` relocates its
+local root; `ASSET_LIBRARY_URL` selects HTTP metadata and resource bytes. CLI/MCP
+startup prepares the selected catalog before constructing the synchronous policy
+owner. API callers using HTTP first await `prepareAssetLibrary(REPOSITORY_ROOT)`
+from the public `@worldkit/creator-host/library-source` export. Missing or corrupt
+library content fails explicitly and never falls back to a former asset folder.
 The asset index links categories and their child documents. assets_describe.documentation
 can enter a registered asset document directly; its bindingExample selects a minimal
 variant under the corresponding capability. Flying mounts live under animals.
@@ -88,3 +95,10 @@ packaging. [Discovery](src/discovery/creator-discovery.ts) returns guides and re
 [binding examples](src/discovery/binding-examples.ts) returns typed integration snippets and their hashed manifest; complete internal fixtures support maintainer regression.
 Detailed SDK contracts stay in the [SDK manual](../three-world/README.md)
 and actual source. Maintainer checks are not extra steps in each generation task.
+
+## Direct local play
+
+`pnpm dev:example /absolute/case 53901` compiles and serves a case without a video
+stream service. Projects with `project.ui` show their authored React HUD by default.
+See [local UI and capture rules](docs/agent/ui.md#local-play-and-capture) for URL
+controls and presentation ownership. The SDK simulation remains the single clock.

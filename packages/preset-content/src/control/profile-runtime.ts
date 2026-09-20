@@ -1,10 +1,14 @@
 import { humanoid } from '@worldkit/three';
+import { assetIdForPreset } from '../assets/catalog';
+import { SPECS } from '../config';
 type Runtime=humanoid.HumanoidRuntime;
 
 import { parseControlProfile, type ControlProfile } from './profiles';
 
 function matchesProfileAsset(assetId: string, vehicle: ReturnType<Runtime['snapshot']>['vehicles'][number]): boolean {
+  const spec = SPECS.find(candidate => candidate.id === assetId);
   return vehicle.assetId===assetId
+    || !!spec && vehicle.assetId===assetIdForPreset(spec)
     || vehicle.assetId===`vehicle.${assetId}`
     || vehicle.assetId===`creature.${assetId}`
     || assetId==='dragon'&&vehicle.assetId.startsWith('creature.dragon');

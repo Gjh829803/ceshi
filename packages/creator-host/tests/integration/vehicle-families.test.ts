@@ -6,7 +6,9 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 // Headless physical integration evidence, not rendered Creator self-check or Episode
 // video acceptance. Starts use the native physical placement helper; subsequent motion
 // uses only the SDK fixed input path, with no renderer or campus imports.
-const catalog = JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json', import.meta.url), 'utf8'));
+const catalog = JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json', import.meta.url), 'utf8'));
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+catalog.assets=composeAssetCatalog(catalog.assets);
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
 const families = ['paddled_boat', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'bus', 'sled', 'ski', 'hover', 'boat', 'submarine', 'glider', 'plane', 'spacecraft', 'mount', 'carriage', 'dragon'] as const;
@@ -24,7 +26,7 @@ function course(family: Family | 'character', barrier = false): EnvironmentDefin
     boxes: [{ id: 'floor', position: [0, floor - 1, 0], size: [4000, 2, 4000] },
       ...(barrier ? [{ id: 'barrier', position: [0, 650, 60] as const, size: [4000, 1500, 2] as const }] : [])],
     water: aquatic ? [{ id: 'water', min: [-1900, -79, -1900], max: [1900, 0, 1900], surface: 0 }] : [],
-    regions: [{ id: 'course', name: 'Course', description: '', center: [0, 0, 0], size: [3800, 3800], color: '#aaa', modes: ['character', family] }],
+    regions: [{ id: 'course', name: 'Course', description: '', center: [0, 0, 0], size: [3800, 3800], color: '#aaa', modes: ['character', family === 'glider' ? 'plane' : family] }],
     spawns: [], playerSpawn: [-100, aquatic ? -1.25 : .03, -100],
   };
 }
@@ -60,8 +62,10 @@ function drive(family: Family) {
 
 describe('catalog humanoid families in an independent physical world', () => {
   it('covers every supported runtime family with an explicit catalog fixture', () => {
-    for(const family of families)expect(representative(family).vehicle.spec.mode).toBe(family);
-    expect([...new Set(assets.map(asset => asset.vehicle.spec.mode))].sort()).toEqual([...families].sort());
+    const familyOf = (spec: VehicleSpec) => spec.aircraftSubtype === 'glider' ? 'glider' : spec.mode;
+    for(const family of families)expect(familyOf(representative(family).vehicle.spec)).toBe(family);
+    expect(representative('glider').vehicle.spec).toMatchObject({mode:'plane',aircraftSubtype:'glider'});
+    expect([...new Set(assets.map(asset => familyOf(asset.vehicle.spec)))].sort()).toEqual([...families].sort());
   });
 
   for (const family of families) {
@@ -79,7 +83,22 @@ describe('catalog humanoid families in an independent physical world', () => {
           expect(snapshot.errors).toEqual([]);
           expect(snapshot.humanoid?.mountedInstanceId).toBe('subject');
           expect([...actor.position.toArray(), ...actor.velocity.toArray(), ...actor.rotation.toArray()].every(Number.isFinite)).toBe(true);
-          expect(runtime.environment.overlaps(actor.position, actor.spec.wheelPhysics?.chassis??humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
+          if (actor.spec.wheelPhysics) {
+            // Suspension and beveled chassis leave empty space inside the broad envelope.
+            // Check every native solid against the actual course colliders instead.
+            const physics = runtime.environment.borrowPhysics();
+            const colliderOwner = physics.colliderOwner;
+            if (!colliderOwner) throw new Error('Native vehicle collision ownership is required');
+            let colliders = 0;
+            physics.world.forEachCollider(collider => {
+              if (colliderOwner(collider.handle) !== actor.spec.id || !collider.parent()?.isDynamic()) return;
+              colliders++;
+              const overlap = physics.world.intersectionWithShape(collider.translation(), collider.rotation(), collider.shape,
+                undefined, undefined, collider, undefined, other => !other.isSensor() && colliderOwner(other.handle) !== actor.spec.id && (other.parent()?.isFixed() ?? true));
+              expect(overlap, `${family}: native collider ${collider.handle}, sample ${sample}`).toBeNull();
+            });
+            expect(colliders).toBeGreaterThan(0);
+          } else expect(runtime.environment.overlaps(actor.position, humanoid.vehicleBody(actor.spec), actor.rotation)).toBe(false);
           travelled += actor.position.distanceTo(previous); previous.copy(actor.position);
         }
         expect(world.simulationTick).toBe(1800);

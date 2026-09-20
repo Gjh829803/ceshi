@@ -111,12 +111,15 @@ export type SpawnTemplate =
  | {readonly kind:'character';readonly options:WithoutId<CharacterOptions>};
 export interface PrototypeDefinition {readonly id:string;readonly description:string;readonly template:SpawnTemplate}
 export type PrimitiveCommand =
+ | {readonly type:'entity.set-active';readonly entityId:string;readonly isActive:boolean}
  | {readonly type:'entity.set-visible';readonly entityId:string;readonly isVisible:boolean}
  | {readonly type:'entity.set-scale';readonly entityId:string;readonly scaleLocalXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.set-position';readonly entityId:string;readonly positionWorldMetersXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.set-rotation';readonly entityId:string;readonly rotationLocalRadiansXYZ:Vec3;readonly durationSeconds?:number}
  | {readonly type:'entity.spawn';readonly prototypeId:string;readonly entityId:string;readonly positionWorldMetersXYZ:Vec3}
  | {readonly type:'entity.despawn';readonly entityId:string}
+ /** Destroy this live entity and descendants, release owned asset instances, and remove their reset entries. Authored resources remain caller-owned. */
+ | {readonly type:'entity.destroy';readonly entityId:string}
  | {readonly type:'entity.attach';readonly childEntityId:string;readonly parentEntityId:string;readonly positionLocalMetersXYZ:Vec3}
  | {readonly type:'entity.play-action';readonly entityId:string;readonly actionId:string;readonly playback?:'once'|'loop'}
  | {readonly type:'entity.stop-action';readonly entityId:string}
@@ -270,6 +273,8 @@ export interface EntityState {
  readonly positionWorldMetersXYZ:Vec3;
  readonly rotationLocalRadiansXYZ:Vec3;
  readonly scaleLocalXYZ:Vec3;
+ /** Effective participation in input, animation and physics; rendering remains separately controlled. */
+ readonly isActive:boolean;
  readonly isVisibleLocal:boolean;
  readonly isVisibleEffective:boolean;
  readonly parentEntityId?:string;
@@ -350,15 +355,33 @@ export interface TaskScope {
  execute(command:WorldCommand):Promise<CommandReceipt>;
 }
 export interface UpdateContext {readonly deltaSeconds:number;readonly simulationTick:number;readonly simulationSeconds:number}
+/** Optional synchronous hooks bound to one registered entity instance, not a shared asset template.
+ * World pause stops clock updates; it does not disable entities. Failures detach only this registration.
+ */
+export interface EntityLifecycleCallbacks {
+ /** Called once at registration; partial initialization is cleaned with onDispose if this throws. */
+ onInit?():void;
+ /** Effective activation includes parent and mounted-group state. */
+ onEnable?():void;
+ onDisable?():void;
+ /** Existing fixed step, after world onUpdate subscribers; visual descendants only for direct Three writes. */
+ onUpdate?(context:UpdateContext):void;
+ /** Surviving baseline instance reset; restore callback-owned local state here, without reinitializing. */
+ onReset?():void;
+ /** Release callback-owned listeners/resources once, before SDK-owned instance resources are freed. */
+ onDispose?():void;
+}
 /** Identity is local to one presentation and reset epoch. A tick alone is not a frame identity. */
 export interface SourceFrameKey {readonly presentationId:string;readonly epoch:number;readonly sourceFrameId:number}
 export interface SourceFrame extends SourceFrameKey {
  readonly simulationTick:number;readonly worldRevision:number;
  readonly capturedAtMilliseconds:number;readonly widthPixels:number;readonly heightPixels:number;
 }
-export interface ModelInputFrame {
+export interface ModelInputFrame<T extends JsonValue = JsonValue> {
  /** Clean world pixels only. The receiver owns and must close this bitmap. */
  readonly image:ImageBitmap;readonly source:SourceFrame;
+ /** JSON frozen synchronously with the pixels; never sampled after bitmap decoding. */
+ readonly metadata?:T;
 }
 export interface PresentationOptions {
  /** Must be the source canvas's parent. Give it an explicit size; camera/render resolution stay owned by the world. */
@@ -392,9 +415,24 @@ export interface PresentationUI {
  /** Automatically mounts; hidden behind camera, outside frame, or when model frame identity is unknown. */
  anchor(anchor:UIAnchor):()=>void;
 }
+/** Input intent queued for the existing live fixed clock. Pointer units match camera intent. */
+export interface RemoteInputState {
+ readonly sequence:number;
+ readonly heldKeys:readonly string[];
+ readonly keyEdges:readonly {readonly code:string;readonly kind:'down'|'up'}[];
+ readonly yawDeltaRadians?:number;
+ readonly pitchDeltaRadians?:number;
+ readonly distanceDeltaMeters?:number;
+}
+export interface RemoteInputLease {
+ /** False for duplicate/old packets. Admission never advances simulation. */
+ submit(input:RemoteInputState):boolean;
+ clear():void;
+ dispose():void;
+}
 export interface ModelInput {
  /** Renders without advancing simulation, freezes pure world pixels and local UI samples. */
- captureFrame():Promise<ModelInputFrame>;
+ captureFrame<T extends JsonValue = JsonValue>(options?:{readonly readMetadata:(source:SourceFrame)=>T}):Promise<ModelInputFrame<T>>;
  /** Clean canvas MediaStream. Does not promise per-frame correspondence. Close stops SDK-owned tracks. */
  createStream(options?:{readonly framesPerSecond?:number}):{readonly stream:MediaStream;close():void};
 }
@@ -414,6 +452,8 @@ export interface WorldPresentation {
  dispose():void;
 }
 export interface World {
+ /** Resize the renderer and camera projection without resetting or advancing the world. Dimensions are CSS pixels; renderer pixel ratio remains unchanged. */
+ resize(width:number,height:number):void;
  readonly shadowSettings:Readonly<ShadowSettings>;
  /** Apply this world's settings once to an authored directional light. Does not move or own it. */
  configureShadowLight(light:THREE.DirectionalLight):void;
@@ -429,9 +469,13 @@ export interface World {
  setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void;
  /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
  createPresentation(options?:PresentationOptions):WorldPresentation;
+ /** Exclusive remote input; stop/reset/dispose revoke the lease. Incompatible with Episode. */
+ acquireRemoteInput():RemoteInputLease;
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
+ /** Release input ownership and the current subject binding without removing the character. */
+ clearControlledEntity():void;
  /** Install the complete camera document; explicit preserve-opening framing can adopt the first authored view. */
  setCameraFollow(options:CameraFollowOptions):void;
  setCameraView(viewId:string):void;
@@ -459,8 +503,13 @@ export interface World {
  defineParameter<const S extends ScalarSchema>(definition:ParameterDefinition<S>):ParameterHandle<ScalarValue<S>>;
  registerAction<const S extends ObjectSchema>(definition:ActionDefinition<S>):void;
  onInteract(entityId:string,plan:()=>WorldCommand|readonly WorldCommand[]):()=>void;
- /** Direct Three writes are for visual descendants; managed root channels use execute(). */
+ /** Subscribe while alive; returns an idempotent unsubscribe. Direct Three writes are for visual descendants; managed root channels use execute(). */
  onUpdate(callback:(context:UpdateContext)=>void):()=>void;
+ /** Initialize hooks for a current entity; returns idempotent disable/dispose/unsubscribe.
+  * Baseline despawn retains hooks for reset. Permanent destroy, transient removal and world disposal release them.
+  * Registration is forbidden inside simulation/author callbacks. Load assets before registering.
+  */
+ registerEntityLifecycle(entityId:string,callbacks:EntityLifecycleCallbacks):()=>void;
  /** No extra clock or render. Throwing observers are detached without stopping gameplay. */
  onRuntimeSample(callback:(sample:RuntimeSample)=>void):()=>void;
  /** After temporary presentation restores; supplies the rendered interpolation alpha (0–1). */
@@ -469,7 +518,9 @@ export interface World {
   * Reuse onRender's alpha for a matching frame. Object views retain the complete body.
   * Does not render or advance simulation; the callback must not mutate world state. */
  withPresentation<T>(work:()=>T,options?:{readonly interpolationAlpha?:number;readonly view?:'world'|'object'}):T;
+ /** Subscribe while alive; reset preserves registrations until unsubscribed or disposed. */
  onReset(callback:()=>void):()=>void;
+ /** Subscribe while alive; called once at world cleanup, then released. Unsubscribe remains safe after disposal. */
  onDispose(callback:()=>void):()=>void;
  execute(command:WorldCommand,options?:ExecutionOptions):Promise<CommandReceipt>;
  runTask<T>(task:(scope:TaskScope)=>Promise<T>):Promise<T>;

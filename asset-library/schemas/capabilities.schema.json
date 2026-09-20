@@ -1,0 +1,301 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "capabilities",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "movement_modes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]*$"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "ground",
+              "wall",
+              "ceiling",
+              "water_surface",
+              "underwater",
+              "air",
+              "space",
+              "underground",
+              "rail",
+              "path_constrained"
+            ]
+          },
+          "support": {
+            "type": "string",
+            "enum": [
+              "foot_contact",
+              "body_contact",
+              "wheel_contact",
+              "track_contact",
+              "buoyancy",
+              "aerodynamic_lift",
+              "rotor_lift",
+              "adhesion",
+              "suspension",
+              "path_constraint",
+              "none",
+              "ballistic"
+            ]
+          },
+          "propulsion": {
+            "type": "string",
+            "enum": [
+              "legged_step",
+              "hopping",
+              "wheel_drive",
+              "track_drive",
+              "body_undulation",
+              "paddling",
+              "fin_oscillation",
+              "flapping",
+              "propeller",
+              "rotor",
+              "jet",
+              "thruster",
+              "sail",
+              "gravity",
+              "external_force"
+            ]
+          },
+          "degrees_of_freedom": {
+            "type": "string",
+            "enum": [
+              "path_1d",
+              "surface_2d",
+              "planar_2d_yaw",
+              "full_3d"
+            ]
+          },
+          "gaits": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "walk",
+                "trot",
+                "pace",
+                "canter",
+                "run",
+                "gallop",
+                "sprint",
+                "crawl"
+              ]
+            }
+          },
+          "control_archetype": {
+            "type": "string",
+            "enum": [
+              "directional",
+              "throttle_steer",
+              "differential_drive",
+              "bike_balance",
+              "aircraft",
+              "rotorcraft",
+              "marine_3d",
+              "space_6dof",
+              "path_speed_control",
+              "target_position",
+              "unknown"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "assets_ready",
+              "integrated",
+              "verified",
+              "deprecated"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "environment",
+          "support",
+          "propulsion",
+          "degrees_of_freedom",
+          "gaits",
+          "control_archetype",
+          "stage"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "movement_transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "transition": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "takeoff",
+              "land",
+              "enter_water",
+              "exit_water",
+              "surface",
+              "dive",
+              "attach_surface",
+              "detach_surface",
+              "enter_rail",
+              "leave_rail"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "assets_ready",
+              "integrated",
+              "verified",
+              "deprecated"
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "transition",
+          "stage"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "archetype": {
+          "type": "string",
+          "enum": [
+            "directional",
+            "throttle_steer",
+            "differential_drive",
+            "bike_balance",
+            "aircraft",
+            "rotorcraft",
+            "marine_3d",
+            "space_6dof",
+            "path_speed_control",
+            "target_position",
+            "unknown"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "assets_ready",
+            "integrated",
+            "verified",
+            "deprecated"
+          ]
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "archetype",
+        "stage",
+        "profile"
+      ],
+      "additionalProperties": false
+    },
+    "interactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "pick_up",
+              "hold",
+              "drop",
+              "throw",
+              "push",
+              "pull",
+              "carry",
+              "be_carried",
+              "equip",
+              "be_equipped",
+              "weapon_use",
+              "tool_use",
+              "mount",
+              "be_mounted",
+              "drive",
+              "be_driven",
+              "ride",
+              "be_ridden",
+              "passenger",
+              "tow",
+              "be_towed",
+              "climb",
+              "be_climbed"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "assets_ready",
+              "integrated",
+              "verified",
+              "deprecated"
+            ]
+          },
+          "contract": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action",
+          "stage",
+          "contract"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "movement_modes",
+    "movement_transitions",
+    "control",
+    "interactions",
+    "limitations"
+  ],
+  "additionalProperties": false
+}

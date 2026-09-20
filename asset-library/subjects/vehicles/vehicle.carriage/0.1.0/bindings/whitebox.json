@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "usage": "reusable",
+  "locomotionBindingIds": [
+    "locomotion.carriage"
+  ],
+  "empty_fields": [],
+  "vehicle": {
+    "schemaVersion": 1,
+    "spec": {}
+  }
+}

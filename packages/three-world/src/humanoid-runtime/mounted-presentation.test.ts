@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import type {HumanoidRenderState,SourceCharacterFrame} from './humanoid/animation';
 import { describe, expect, it, vi } from 'vitest';
 import { Group, Vector3 } from 'three';
@@ -277,7 +278,7 @@ it('fits the kart seat anchor without straightening the driver knees or piercing
  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
  try{
-  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  await rider.load(testAssetResourceUrl);
   const spec=structuredClone(SPECS.find(s=>s.id==='kart')!);
   const {buildVehicle}=await import('@worldkit/preset-content/models');
   vi.stubGlobal('document',{createElement:()=>({width:0,height:0,getContext:()=>({beginPath(){},roundRect(){},fill(){},fillText(){}})})});
@@ -338,7 +339,7 @@ it('places wearable ground shoes at the support in fixed and interpolated presen
  const transport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
  try{
-  await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+  await rider.load(testAssetResourceUrl);
   const map=getMap('campus'),spec=structuredClone(SPECS.find(s=>s.id==='wingsuit')!);
   world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:spec.id,assetId:spec.id,spec,object:new Group()}]}});
   const runtime=world.humanoid!,actor=runtime.simulation.controlledActor,v=runtime.simulation.vehicles[0]!;
@@ -381,7 +382,7 @@ it('keeps the actual paraglider rider above the floor while steering through tou
  try{for(const steer of [-1,1]){
   const rider=new Character();let world:Awaited<ReturnType<typeof createWorld>>|undefined;
   try{
-   await rider.load(p=>new URL(`../../../../assets/three-creator/presets/${p}`,import.meta.url).href);
+   await rider.load(testAssetResourceUrl);
    const spec={...SPECS.find(s=>s.id==='paraglider')!,spawn:[0,25,0] as [number,number,number],yaw:0};
    const map={...getMap('aircraft-training'),spawns:[{id:'canopy-descent',name:'Canopy descent',vehicleId:spec.id,position:spec.spawn,yaw:0,regionId:'airfield'}]};
    world=await createWorld({camera:new PerspectiveCamera(),navigation:false,assetDefinitions:{},humanoid:{map,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{instanceId:spec.id,assetId:spec.id,spec,object:new Group()}]}});

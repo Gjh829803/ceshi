@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "assembly_id": "assembly.creature.dragon-evolved",
+  "subject": {
+    "asset_id": "creature.dragon-evolved",
+    "version": "0.1.0"
+  },
+  "model": "subjects/fantastical/creature.dragon-evolved/0.1.0/model/dragon.glb",
+  "bindings": {
+    "rig": "subjects/fantastical/creature.dragon-evolved/0.1.0/bindings/rig.json",
+    "animations": "subjects/fantastical/creature.dragon-evolved/0.1.0/bindings/animation_map.json",
+    "sockets": "subjects/fantastical/creature.dragon-evolved/0.1.0/bindings/sockets.json"
+  },
+  "profiles": {
+    "control": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/locomotion.json",
+    "camera": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/camera.json"
+  },
+  "modules": [
+    {
+      "asset_id": "module.host.subject",
+      "version": "1.0.0"
+    }
+  ],
+  "authority": {
+    "root_transform": "host.motor",
+    "animation": "host.animation",
+    "camera": "host.camera"
+  },
+  "stage": "assets_ready",
+  "runtime_ready": false
+}

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ThreePhysics } from './physics.js';
 import { createWorld } from './world.js';
+import type { WorldEngine } from './engine.js';
 import type { WorldObservation } from './contracts.js';
 import {emptyInput} from './humanoid-runtime/simulation';
 
@@ -348,4 +349,39 @@ it.each([0,1/60,1/30,.1])('prepares automatic swimming with a blend and %s secon
   await port.advance({},12);
   expect(world.snapshot().camera).toMatchObject({viewId:'water',viewSelection:{source:'rule'}});
  }finally{port.release();world.dispose();}
+});
+
+
+describe('Episode lease cleanup at world disposal',()=>{
+ it.each([false,true])('finishes independent world cleanup if viewport restoration fails, native=%s',async native=>{
+  const {world,port,renderer}=await fixture(false,false,false,false,native);
+  const engine=(world as unknown as {engine:WorldEngine}).engine;
+  const physics=vi.spyOn(engine.physics,'dispose'),camera=vi.spyOn(engine.cameraController,'dispose');
+  const assets=vi.spyOn(world.assets,'dispose'),disposed=vi.fn();world.onDispose(disposed);
+  let broken:ReturnType<typeof vi.spyOn>|undefined;
+  try{
+   await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+   const fault=new Error('VIEWPORT_RESTORE_FAILURE');
+   broken=vi.spyOn(renderer,'setPixelRatio').mockImplementation(()=>{throw fault;});
+   expect(()=>world.dispose()).toThrow(fault);
+   expect(physics).toHaveBeenCalledOnce();expect(camera).toHaveBeenCalledOnce();expect(assets).toHaveBeenCalledOnce();expect(disposed).toHaveBeenCalledOnce();
+   expect(engine.snapshot().entities).toEqual([]);expect(()=>engine.start()).toThrow('WORLD_DISPOSED');
+   expect(()=>world.addEntity({id:'late',object:root(),role:'decoration'})).toThrow('WORLD_DISPOSED');
+   expect(()=>world.dispose()).not.toThrow();expect(()=>port.release()).not.toThrow();
+   expect(broken).toHaveBeenCalledOnce();expect(disposed).toHaveBeenCalledOnce();
+  }finally{broken?.mockRestore();world.dispose();physics.mockRestore();camera.mockRestore();assets.mockRestore();}
+ });
+ it('marks disposal before the borrowed renderer can re-enter world cleanup',async()=>{
+  const {world,port,renderer}=await fixture();
+  const disposed=vi.fn();world.onDispose(disposed);
+  const assets=vi.spyOn(world.assets,'dispose'),setRatio=renderer.setPixelRatio.bind(renderer);
+  let restore:ReturnType<typeof vi.spyOn>|undefined;
+  try{
+   await port.prepareSegment({positionWorldMetersXYZ:[0,0,0],facingYawRadians:0},{widthPixels:640,heightPixels:360});
+   restore=vi.spyOn(renderer,'setPixelRatio').mockImplementationOnce(value=>{world.dispose();setRatio(value);});
+   world.dispose();
+   expect(disposed).toHaveBeenCalledOnce();expect(assets).toHaveBeenCalledOnce();expect(restore).toHaveBeenCalledOnce();
+   world.dispose();expect(disposed).toHaveBeenCalledOnce();
+  }finally{restore?.mockRestore();world.dispose();assets.mockRestore();}
+ });
 });

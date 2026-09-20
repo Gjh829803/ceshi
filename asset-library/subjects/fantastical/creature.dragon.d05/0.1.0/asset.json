@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "creature.dragon.d05",
+  "asset_version": "0.1.0",
+  "display_name": "飞龙 D05 / Flying dragon D05",
+  "aliases": [
+    "d05",
+    "飞龙 D05"
+  ],
+  "browse_group": "fantastical",
+  "semantic_type": "fantastical.dragon",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "skinned_articulated",
+    "profiles": [
+      "quadruped",
+      "winged"
+    ],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount. Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles. Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced.",
+  "default_assembly": "subjects/fantastical/creature.dragon.d05/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

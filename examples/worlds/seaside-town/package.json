@@ -1,0 +1,8 @@
+{
+  "name": "@worldkit/demo-seaside-town",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --dir ../../.. dev:example examples/worlds/seaside-town 53901"
+  }
+}

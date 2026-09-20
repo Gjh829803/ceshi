@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "parameters": {},
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

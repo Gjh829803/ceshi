@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "plane",
+    "name": "动力飞机",
+    "en": "AERO",
+    "radius": 2,
+    "seat": [
+      0,
+      1.3,
+      0.1
+    ],
+    "archetype": "plane",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        4.2,
+        1.25,
+        3.35
+      ],
+      "offset": [
+        0,
+        1.25,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

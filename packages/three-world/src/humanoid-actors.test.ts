@@ -3,7 +3,9 @@ import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {Raw} from '@recast-navigation/core';
 import type RAPIER from '@dimforge/rapier3d-compat';
-import catalog from '../../../assets/three-creator/asset-catalog.json';
+import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
+const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import {createHumanoidWorld} from './humanoid';
 import type {ThreeWorld} from './world';
 import {emptyInput} from './humanoid-runtime/simulation';
@@ -545,4 +547,292 @@ it('forwards explicit character model texture options through createHumanoidWorl
   const clone=await world.humanoid!.createCharacter();
   try{let maps=0;clone.root.traverse(node=>{if(node instanceof THREE.Mesh)for(const material of Array.isArray(node.material)?node.material:[node.material]){if(material.map instanceof THREE.DataTexture){maps++;expect(material.map.image.width).toBeGreaterThan(0);}}});expect(maps).toBeGreaterThan(0);}
   finally{clone.dispose();}
+});
+
+
+it('destroys a native actor through its visual parent using the native cleanup owner',async()=>{
+ const world=await setup(),runtime=world.humanoid!,npc=await runtime.createCharacter();npc.root.position.set(5,.04,0);
+ const parent=new THREE.Group();world.addEntity({id:'parent',object:parent,role:'decoration'});world.addCharacter({id:'npc',humanoid:npc});world.step({},1);
+ parent.add(npc.root);const dispose=vi.spyOn(npc,'dispose');
+ expect(await world.execute({type:'entity.set-active',entityId:'parent',isActive:false})).toMatchObject({status:'applied'});
+ expect(await world.execute({type:'entity.destroy',entityId:'parent'})).toMatchObject({status:'applied'});
+ expect(dispose).toHaveBeenCalledOnce();expect(runtime.hasActor('npc')).toBe(false);expect(npc.root.parent).toBeNull();
+ await world.reset();expect(world.snapshot().entities.some(e=>e.id==='npc'||e.id==='parent')).toBe(false);world.step({},2);expect(world.snapshot().errors).toEqual([]);
+});
+
+
+it('freezes a real native character while another actor continues, clears stale input and restores the reset baseline',async()=>{
+ const world=await setup(),runtime=world.humanoid!,peer=await runtime.createCharacter();peer.root.position.set(4,.04,0);world.addCharacter({id:'peer',humanoid:peer});world.step({},30);
+ await world.execute({type:'humanoid.set-input',actorId:'player',input:{...emptyInput(),forward:1}});
+ await world.execute({type:'humanoid.set-input',actorId:'peer',input:{...emptyInput(),forward:1}});world.step({},10);
+ const frozen=world.getEntityState('player'),peerBefore=world.getEntityState('peer'),bodies=runtime.environment.borrowPhysics().world.bodies.len();
+ expect(await world.execute({type:'entity.set-active',entityId:'player',isActive:false})).toMatchObject({status:'applied'});
+ const controller=vi.spyOn(runtime.actorController('player'),'step');world.step({moveZRatio:-1,run:true,jump:true},20);
+ expect(controller).not.toHaveBeenCalled();expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(frozen.positionWorldMetersXYZ);expect(world.getEntityState('player').animation).toEqual(frozen.animation);
+ expect(world.getEntityState('peer').positionWorldMetersXYZ).not.toEqual(peerBefore.positionWorldMetersXYZ);expect(runtime.actorController('player').body.isEnabled()).toBe(false);
+ expect(await world.execute({type:'humanoid.set-input',actorId:'player',input:emptyInput()})).toMatchObject({status:'rejected',error:{code:'ENTITY_INACTIVE'}});
+ expect(await world.execute({type:'entity.set-active',entityId:'player',isActive:true})).toMatchObject({status:'applied'});expect(runtime.inspectControls('player').override).toBeNull();
+ world.step({moveZRatio:-1},10);expect(controller).toHaveBeenCalled();expect(runtime.environment.borrowPhysics().world.bodies.len()).toBe(bodies);
+ await world.execute({type:'entity.set-active',entityId:'player',isActive:false});await world.reset();expect(world.getEntityState('player').isActive).toBe(true);expect(runtime.actorController('player').body.isEnabled()).toBe(true);
+});
+
+it('suspends and resumes a mounted driver and native car as one group without advancing their physics or animation',async()=>{
+ const spec=createRoadVehicleSpec('car'),world=await setup(undefined,{map:{...map,spawns:[{id:'car-spawn',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}],regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}]},vehicles:[{instanceId:'car',assetId:'custom.car',spec,object:new THREE.Group()}]});
+ const runtime=world.humanoid!;expect(runtime.approach('car')).toBe(true);expect(runtime.enter('car')).toBe(true);world.step({},40);world.step({moveZRatio:-1},15);
+ const sim=runtime.simulation,car=sim.vehicles[0]!,pose=car.position.clone(),wheels=structuredClone(car.motion.wheelPhysics?.wheels),before=world.simulationTick,animation=world.getEntityState('player').animation;
+ expect(await world.execute({type:'entity.set-active',entityId:'car',isActive:false})).toMatchObject({status:'applied'});
+ expect(world.getEntityState('car').isActive).toBe(false);expect(world.getEntityState('player').isActive).toBe(false);
+ const chassis:import('@dimforge/rapier3d-compat').RigidBody[]=[];runtime.environment.borrowPhysics().world.colliders.forEach(c=>{if(runtime.environment.colliderId(c.handle)==='car'&&c.parent())chassis.push(c.parent()!);});expect(chassis.length).toBeGreaterThan(0);expect(chassis.every(body=>!body.isEnabled())).toBe(true);
+ world.step({moveZRatio:-1,run:true},45);expect(car.position.toArray()).toEqual(pose.toArray());expect(car.motion.wheelPhysics?.wheels).toEqual(wheels);expect(world.getEntityState('player').animation).toEqual(animation);expect(world.simulationTick).toBe(before+45);expect(sim.actor('player').vehicle).toBe(car);
+ expect(await world.execute({type:'vehicle.exit'})).toMatchObject({status:'rejected',error:{code:'ENTITY_INACTIVE'}});
+ expect(await world.execute({type:'entity.set-active',entityId:'player',isActive:true})).toMatchObject({status:'applied'});
+ expect(world.getEntityState('car').isActive).toBe(true);world.step({moveZRatio:-1},15);expect(car.position.toArray()).not.toEqual(pose.toArray());expect(world.snapshot().errors).toEqual([]);
+ const parent=new THREE.Group();world.addEntity({id:'holder',object:parent,role:'decoration'});parent.add(runtime.options.character.object);
+ expect(await world.execute({type:'entity.set-active',entityId:'holder',isActive:false})).toMatchObject({status:'applied'});
+ expect(await world.execute({type:'entity.set-active',entityId:'car',isActive:true})).toMatchObject({status:'rejected',error:{code:'MOUNT_GROUP_INACTIVE_ANCESTOR'}});expect(world.getEntityState('car').isActive).toBe(false);
+ expect(await world.execute({type:'entity.set-active',entityId:'holder',isActive:true})).toMatchObject({status:'applied'});expect(world.getEntityState('player').isActive).toBe(true);expect(world.getEntityState('car').isActive).toBe(true);world.scene.add(runtime.options.character.object);
+
+});
+
+
+it.each(['rover','plane','boat','submarine','horse','dragon','spacecraft'])('keeps the inactive %s family state frozen and resettable',async id=>{
+ const spec=structuredClone(SPECS.find(s=>s.id===id)!);spec.spawn=[0,.1,0];
+ const world=await setup(undefined,{map:{...map,playerSpawn:[-25,.04,0],bounds:{min:[-60,-15,-60],max:[60,80,60]},boxes:[{id:'floor',position:[0,-.5,0],size:[120,1,120]}],spawns:[{id:'spawn',name:'fixture',vehicleId:id,position:[0,.1,0],yaw:0,regionId:'fixture'}],regions:[{id:'fixture',name:'fixture',description:'',center:[0,0,0],size:[120,120],color:'#aaa',modes:[spec.mode]}]},vehicles:[{instanceId:id,assetId:'test.'+id,spec,object:new THREE.Group()}]});
+ world.step({},5);const r=world.humanoid!,v=r.simulation.vehicles[0]!,pose=v.position.clone(),rotation=v.rotation.clone();
+ expect(await world.execute({type:'entity.set-active',entityId:id,isActive:false})).toMatchObject({status:'applied'});const dynamics=r.snapshot().vehicleDynamics[0];world.step({},12);
+ expect(v.position.toArray()).toEqual(pose.toArray());expect(v.rotation.toArray()).toEqual(rotation.toArray());expect(r.snapshot().vehicleDynamics[0]).toEqual(dynamics);
+ expect(await world.execute({type:'entity.set-active',entityId:id,isActive:true})).toMatchObject({status:'applied'});world.step({},2);expect(world.snapshot().errors).toEqual([]);
+ await world.execute({type:'entity.set-active',entityId:id,isActive:false});await world.reset();expect(world.getEntityState(id).isActive).toBe(true);world.step({},2);expect(world.snapshot().errors).toEqual([]);
+});
+
+it('preserves native inactivity through map replacement and refuses activation changes during an in-progress interaction',async()=>{
+ const world=await setup(),runtime=world.humanoid!;
+ await world.execute({type:'entity.set-active',entityId:'player',isActive:false});runtime.switchMap({...map,id:'replacement'});const before=world.getEntityState('player').positionWorldMetersXYZ;world.step({moveZRatio:-1},10);expect(world.getEntityState('player').positionWorldMetersXYZ).toEqual(before);expect(runtime.actorController('player').body.isEnabled()).toBe(false);
+ await world.execute({type:'entity.set-active',entityId:'player',isActive:true});const actor=runtime.simulation.actor('player');actor.transition=.3;
+ expect(await world.execute({type:'entity.set-active',entityId:'player',isActive:false})).toMatchObject({status:'rejected',error:{code:'HUMANOID_TRANSITION_ACTIVE'}});expect(world.getEntityState('player').isActive).toBe(true);
+});
+
+
+it('does not inherit native inactivity when a removed id is reused by a new character',async()=>{
+ const world=await setup(),r=world.humanoid!,first=await r.createCharacter();first.root.position.set(4,.04,0);world.addCharacter({id:'reused',humanoid:first});
+ await world.execute({type:'entity.set-active',entityId:'reused',isActive:false});expect((await world.execute({type:'entity.despawn',entityId:'reused'})).status).toBe('applied');
+ const second=await r.createCharacter();second.root.position.set(6,.04,0);world.addCharacter({id:'reused',humanoid:second});const update=vi.spyOn(second,'update');world.step({},3);expect(world.getEntityState('reused').isActive).toBe(true);expect(r.simulation.isActive('reused')).toBe(true);expect(update).toHaveBeenCalled();
+});
+
+
+it('does not snap another moving native actor presentation when toggling an unrelated character',async()=>{
+ const {renderer}=rendererFixture(),world=await setup(renderer),runtime=world.humanoid!,peer=await runtime.createCharacter();peer.root.position.set(4,.04,0);world.addCharacter({id:'peer',humanoid:peer});
+ await world.execute({type:'humanoid.set-input',actorId:'peer',input:{...emptyInput(),forward:1}});world.step({},20);
+ const engine=(world as unknown as {engine:import('./engine').WorldEngine}).engine;let displayed:number[]=[];vi.mocked(renderer.render).mockImplementation(()=>{displayed=peer.root.position.toArray();});await world.start();engine.render(1);const before=peer.root.position.clone();
+ const pending=world.execute({type:'entity.set-active',entityId:'player',isActive:false});await vi.waitFor(()=>expect((world as unknown as {queued:unknown[]}).queued.length).toBe(1));world.step({},1);expect(await pending).toMatchObject({status:'applied'});const after=peer.root.position.clone();engine.render(.25);expect(new THREE.Vector3(...displayed).distanceTo(before.lerp(after,.25))).toBeLessThan(1e-8);world.stop();
+});
+
+
+it('destroys a sealed native actor independently and excludes it from reset and map replacement',async()=>{
+ const world=await setup(),r=world.humanoid!,victim=await r.createCharacter(),peer=await r.createCharacter();victim.root.position.set(1,.04,0);peer.root.position.set(6,.04,0);
+ world.addCharacter({id:'victim',humanoid:victim});const handle=r.actorController('victim').body;world.addCharacter({id:'peer',humanoid:peer});world.step({},30);
+ const physics=r.environment.borrowPhysics().world,bodies=physics.bodies.len(),colliders=r.environment.colliderCount;
+ const mixer=victim.sourceCharacter!.mixer,uncache=vi.spyOn(mixer,'uncacheRoot'),dispose=vi.spyOn(victim,'dispose'),update=vi.spyOn(victim,'update');
+ await world.execute({type:'humanoid.set-input',actorId:'victim',input:{...emptyInput(),forward:1}});
+ await world.execute({type:'entity.set-active',entityId:'victim',isActive:false});
+ const before=world.getEntityState('peer').animation!.timeSeconds;
+ expect(await world.execute({type:'entity.destroy',entityId:'victim'})).toMatchObject({status:'applied'});
+ expect(handle.isValid()).toBe(false);expect(r.hasActor('victim')).toBe(false);expect(victim.loaded).toBe(false);expect(physics.bodies.len()).toBe(bodies-1);expect(r.environment.colliderCount).toBe(colliders-1);
+ expect(dispose).toHaveBeenCalledOnce();expect(uncache).toHaveBeenCalledOnce();update.mockClear();world.step({},20);expect(update).not.toHaveBeenCalled();expect(world.getEntityState('peer').animation!.timeSeconds).toBeGreaterThan(before);
+ expect(await world.execute({type:'entity.destroy',entityId:'victim'})).toMatchObject({status:'rejected',error:{code:'ENTITY_NOT_FOUND'}});
+ await world.reset();expect(r.hasActor('victim')).toBe(false);r.switchMap({...map,id:'after-destroy'});world.step({},2);expect(r.hasActor('victim')).toBe(false);expect(world.snapshot().errors).toEqual([]);
+ const fresh=await r.createCharacter();fresh.root.position.set(1,.04,0);world.addCharacter({id:'victim',humanoid:fresh});const replacement=r.actorController('victim').body;expect(replacement.isValid()).toBe(true);expect(fresh).not.toBe(victim);world.step({},2);expect(fresh.loaded).toBe(true);
+ world.dispose();expect(dispose).toHaveBeenCalledOnce();expect(fresh.loaded).toBe(false);
+});
+
+it('destroys the original source actor after control transfer without breaking its factory or peer',async()=>{
+ const world=await setup(),r=world.humanoid!,original=r.options.character.animation!,peer=await r.createCharacter();peer.root.position.set(5,.04,0);world.addCharacter({id:'peer',humanoid:peer});world.step({},2);
+ expect(await world.execute({type:'entity.destroy',entityId:'player'})).toMatchObject({status:'rejected',error:{code:'CONTROLLED_ENTITY_CANNOT_DESPAWN'}});
+ world.setControlledEntity('peer');expect(await world.execute({type:'entity.destroy',entityId:'player'})).toMatchObject({status:'applied'});expect(original.loaded).toBe(false);
+ const fresh=await r.createCharacter();fresh.root.position.set(8,.04,0);world.addCharacter({id:'fresh',humanoid:fresh});world.step({},2);expect(peer.loaded).toBe(true);
+ await world.reset();expect(world.snapshot().entities.some(e=>e.id==='player')).toBe(false);expect(r.hasActor('player')).toBe(false);world.setControlledEntity('peer');world.step({moveZRatio:-1},2);expect(world.snapshot().errors).toEqual([]);
+});
+
+it('rejects destroying a mounted native rider before changing any state',async()=>{
+ const spec=createRoadVehicleSpec('car'),world=await setup(undefined,{map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[{instanceId:'car',assetId:'car',spec,object:new THREE.Group()}]});
+ const r=world.humanoid!,peer=await r.createCharacter();peer.root.position.set(6,.04,0);world.addCharacter({id:'peer',humanoid:peer});expect(r.approach('car')).toBe(true);expect(r.enter('car')).toBe(true);world.step({},40);world.setControlledEntity('peer');
+ const bodyCount=r.environment.borrowPhysics().world.bodies.len(),vehicle=r.simulation.actor('player').vehicle;
+ expect(await world.execute({type:'entity.destroy',entityId:'player'})).toMatchObject({status:'rejected',error:{code:'HUMANOID_MOUNT_ACTIVE'}});expect(r.hasActor('player')).toBe(true);expect(r.simulation.actor('player').vehicle).toBe(vehicle);expect(r.environment.borrowPhysics().world.bodies.len()).toBe(bodyCount);world.step({},2);
+});
+
+it('reports a committed native cleanup failure but still releases sibling characters and reset entries',async()=>{
+ const world=await setup(),r=world.humanoid!,a=await r.createCharacter(),b=await r.createCharacter();a.root.position.set(2,.04,0);b.root.position.set(6,.04,0);
+ const parent=new THREE.Group();world.addEntity({id:'group',role:'decoration',object:parent});world.addCharacter({id:'a',humanoid:a});world.addCharacter({id:'b',humanoid:b});world.step({},1);parent.add(a.root,b.root);
+ const actual=a.dispose.bind(a);vi.spyOn(a,'dispose').mockImplementation(()=>{actual();throw Error('injected cleanup failure');});const second=vi.spyOn(b,'dispose');
+ const receipt=await world.execute({type:'entity.destroy',entityId:'group'});expect(receipt.status).toBe('accepted');if(receipt.status==='accepted')expect(world.operations.get(receipt.operationId)).toMatchObject({status:'failed'});expect(second).toHaveBeenCalledOnce();expect(r.hasActor('a')).toBe(false);expect(r.hasActor('b')).toBe(false);expect(world.snapshot().entities.some(e=>['a','b','group'].includes(e.id))).toBe(false);
+ await world.reset();expect(r.hasActor('a')).toBe(false);expect(r.hasActor('b')).toBe(false);
+});
+
+
+it('automatically dismounts safely before destroying a native car and never restores it on reset',async()=>{
+ const spec=createRoadVehicleSpec('car'),object=new THREE.Group(),world=await setup(undefined,{initialMountId:'car',map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[{instanceId:'car',assetId:'car',spec,object}]});
+ const r=world.humanoid!,peer=await r.createCharacter();peer.root.position.set(8,.04,0);world.addCharacter({id:'peer',humanoid:peer});world.step({},30);
+ const physics=r.environment.borrowPhysics().world,count=physics.bodies.len(),peerBody=r.actorController('peer').body;
+ const receipt=await world.execute({type:'entity.destroy',entityId:'car'});expect(receipt,JSON.stringify(receipt)).toMatchObject({status:'applied'});
+ expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(r.actorController('player').isMounted).toBe(false);expect(r.actorController('player').capsule.isEnabled()).toBe(true);
+ expect(r.simulation.vehicles).toHaveLength(0);expect(r.options.vehicles).toHaveLength(0);expect(object.parent).toBeNull();expect(physics.bodies.len()).toBeLessThan(count);expect(r.actorController('peer').body).toBe(peerBody);
+ world.step({},40);expect(r.snapshot().vehicles).toEqual([]);expect(r.actorController('player').grounded).toBe(true);expect(world.inspectCamera().mode).toBe('follow');expect(world.snapshot().errors).toEqual([]);
+ await world.reset();world.step({},2);expect(world.inspectCamera().mode).toBe('follow');expect(r.simulation.vehicles).toEqual([]);expect(r.simulation.actor('player').vehicle).toBeUndefined();r.switchMap({...map,id:'without-car'});world.step({},2);expect(world.snapshot().entities.some(e=>e.id==='car')).toBe(false);expect(world.snapshot().errors).toEqual([]);
+});
+
+it('preserves later vehicle and driver identities when deleting an earlier unoccupied vehicle slot',async()=>{
+ const spec=createRoadVehicleSpec('car'),vehicles=['first','second'].map(id=>({instanceId:id,assetId:id,spec,object:new THREE.Group()})),world=await setup(undefined,{initialMountId:'second',vehicles,map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:vehicles.map((v,n)=>({id:v.instanceId,name:v.instanceId,vehicleId:v.instanceId,position:[n*10,.1,0] as [number,number,number],yaw:0,regionId:'road'}))}});
+ const r=world.humanoid!;world.step({},30);const survivor=r.simulation.vehicles[1]!,root=vehicles[1]!.object,pose=survivor.position.clone();
+ expect(await world.execute({type:'entity.destroy',entityId:'first'})).toMatchObject({status:'applied'});
+ expect(vehicles).toHaveLength(2);expect(r.simulation.vehicles[0]).toBe(survivor);expect(r.simulation.actor('player').vehicle).toBe(survivor);expect(r.simulation.actor('player').vehicleIndex).toBe(0);expect(r.options.vehicles[0]!.object).toBe(root);expect(survivor.position.equals(pose)).toBe(true);
+ world.step({moveZRatio:-1},15);expect(survivor.position.distanceTo(pose)).toBeGreaterThan(.01);expect(r.snapshot().vehicles).toHaveLength(1);await world.reset();expect(r.simulation.actor('player').vehicle?.spec.id).toBe('second');expect(r.simulation.vehicles).toHaveLength(1);expect(world.snapshot().errors).toEqual([]);
+});
+
+it('rejects unsafe occupied-vehicle destruction without dismounting or deleting anything',async()=>{
+ const spec=createRoadVehicleSpec('car'),world=await setup(undefined,{initialMountId:'car',map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[{instanceId:'car',assetId:'car',spec,object:new THREE.Group()}]});
+ const r=world.humanoid!;world.step({},30);const v=r.simulation.vehicles[0]!,count=r.environment.colliderCount;
+ v.velocity.set(0,0,6);expect(await world.execute({type:'entity.destroy',entityId:'car'})).toMatchObject({status:'rejected',error:{code:'VEHICLE_MOUNT_TOO_FAST'}});expect(r.simulation.actor('player').vehicle).toBe(v);expect(r.environment.colliderCount).toBe(count);
+ v.velocity.set(0,0,0);v.position.y=10;expect(await world.execute({type:'entity.destroy',entityId:'car'})).toMatchObject({status:'rejected',error:{code:'VEHICLE_DISMOUNT_NO_SAFE_POINT'}});expect(r.simulation.actor('player').vehicle).toBe(v);expect(world.snapshot().entities.some(e=>e.id==='car')).toBe(true);expect(r.environment.colliderCount).toBe(count);
+});
+
+
+it.each(['rover','plane','boat','submarine','horse','dragon','spacecraft'])('destroys an unoccupied %s without retaining its physical queries or reset entry',async id=>{
+ const spec=structuredClone(SPECS.find(s=>s.id===id)!),object=new THREE.Group();
+ const world=await setup(undefined,{map:{...map,playerSpawn:[-25,.04,0],bounds:{min:[-60,-15,-60],max:[60,80,60]},boxes:[{id:'floor',position:[0,-.5,0],size:[120,1,120]}],spawns:[{id:'spawn',name:'fixture',vehicleId:id,position:[0,.1,0],yaw:0,regionId:'fixture'}],regions:[{id:'fixture',name:'fixture',description:'',center:[0,0,0],size:[120,120],color:'#aaa',modes:[spec.mode]}]},vehicles:[{instanceId:id,assetId:'test.'+id,spec,object}]});
+ world.step({},5);const r=world.humanoid!,parent=new THREE.Group();world.addEntity({id:'holder',role:'decoration',object:parent});parent.add(object);
+ expect(await world.execute({type:'entity.despawn',entityId:'holder'})).toMatchObject({status:'rejected',error:{code:'HUMANOID_USE_RUNTIME_COMMANDS'}});
+ expect(await world.execute({type:'entity.set-active',entityId:id,isActive:false})).toMatchObject({status:'applied'});
+ expect(await world.execute({type:'entity.destroy',entityId:'holder'})).toMatchObject({status:'applied'});
+ expect(r.audit().entities.some(e=>e.id===id)).toBe(false);expect(r.simulation.preparedVehicleSpawns.has(id)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.vehicles).toHaveLength(0);expect(r.exportProfile().vehicles?.[id]).toBeUndefined();expect(r.exportProfile().aircraftFlight?.[id]).toBeUndefined();
+ expect([...r.environment.cameraFallbackBounds().keys()].some(key=>key===id)).toBe(false);world.step({},3);await world.reset();world.step({},3);expect(r.simulation.vehicles).toHaveLength(0);expect(world.snapshot().errors).toEqual([]);
+});
+
+
+it('preserves peer interpolation when deleting a different native vehicle',async()=>{
+ const spec=createRoadVehicleSpec('car'),{renderer}=rendererFixture(),world=await setup(renderer,{map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[{instanceId:'car',assetId:'car',spec,object:new THREE.Group()}]});
+ const r=world.humanoid!,peer=await r.createCharacter();peer.root.position.set(7,.04,0);world.addCharacter({id:'peer',humanoid:peer});await world.execute({type:'humanoid.set-input',actorId:'peer',input:{...emptyInput(),forward:1}});world.step({},20);
+ const engine=(world as unknown as {engine:import('./engine').WorldEngine}).engine;let displayed:number[]=[];vi.mocked(renderer.render).mockImplementation(()=>{displayed=peer.root.position.toArray();});await world.start();engine.render(1);const before=peer.root.position.clone();
+ const pending=world.execute({type:'entity.destroy',entityId:'car'});await vi.waitFor(()=>expect((world as unknown as {queued:unknown[]}).queued.length).toBe(1));world.step({},1);expect(await pending).toMatchObject({status:'applied'});const after=peer.root.position.clone();engine.render(.25);expect(new THREE.Vector3(...displayed).distanceTo(before.lerp(after,.25))).toBeLessThan(1e-8);world.stop();
+});
+
+it('rejects occupied vehicle destruction if the same subtree also deletes its exit support',async()=>{
+ const spec=createRoadVehicleSpec('car'),object=new THREE.Group(),world=await setup(undefined,{initialMountId:'car',map:{...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#fff',modes:['wheeled']}],spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[{instanceId:'car',assetId:'car',spec,object}]});
+ const r=world.humanoid!;world.step({},30);const group=new THREE.Group(),platform=new THREE.Mesh(new THREE.BoxGeometry(14,.2,14));platform.position.y=.1;
+ world.addEntity({id:'platform',object:platform,role:'terrain',physics:{kind:'fixed'}});world.addEntity({id:'holder',object:group,role:'decoration'});group.add(platform,object);
+ const receipt=await world.execute({type:'entity.destroy',entityId:'holder'});expect(receipt,JSON.stringify(receipt)).toMatchObject({status:'rejected',error:{code:'VEHICLE_DISMOUNT_NO_SAFE_POINT'}});expect(r.simulation.actor('player').vehicle?.spec.id).toBe('car');expect(world.snapshot().entities.some(e=>e.id==='platform')).toBe(true);
+ platform.geometry.dispose();(platform.material as THREE.Material).dispose();
+});
+
+
+const nativeCreationMap:EnvironmentDefinition={...map,regions:[{id:'road',name:'Road',description:'',center:[0,0,0],size:[40,40],color:'#aaa',modes:['wheeled']}]};
+function nativeCar(instanceId='created-car',x=4,z=0){return {instanceId,assetId:'custom.car',spec:{...createRoadVehicleSpec('car'),spawn:[x,.1,z] as [number,number,number],yaw:0},object:new THREE.Group()};}
+it('creates a drivable native car inside the existing physics world and removes its complete runtime on reset',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!;world.step({},1);
+ const physics=r.environment.borrowPhysics().world,bodies=physics.bodies.len(),car=nativeCar();world.addVehicle(car);
+ expect(r.environment.borrowPhysics().world).toBe(physics);expect(world.getEntityState(car.instanceId).positionWorldMetersXYZ[0]).toBe(4);expect(r.options.vehicles).toHaveLength(1);
+ expect(r.approach(car.instanceId)).toBe(true);expect(r.enter(car.instanceId)).toBe(true);world.step({},40);const before=r.simulation.vehicles[0]!.position.clone();world.step({moveZRatio:-1},45);
+ expect(r.simulation.vehicles[0]!.position.distanceTo(before)).toBeGreaterThan(.2);expect(physics.bodies.len()).toBeGreaterThan(bodies);
+ await world.reset();expect(world.snapshot().entities.some(e=>e.id===car.instanceId)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.vehicles).toHaveLength(0);expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(car.object.parent).toBeNull();expect(r.environment.borrowPhysics().world.bodies.len()).toBe(bodies);world.step({},2);expect(world.snapshot().errors).toEqual([]);
+});
+it.each(['boarding','mounted','inactive'] as const)('reset retires the %s rider before removing its post-baseline vehicle',async phase=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!;world.step({},1);
+ const car=nativeCar();world.addVehicle(car);expect(r.approach(car.instanceId)).toBe(true);expect(r.enter(car.instanceId)).toBe(true);
+ if(phase!=='boarding')world.step({},40);
+ const previous=r.simulation,rider=previous.actor('player');expect(rider.vehicle?.spec.id).toBe(car.instanceId);
+ if(phase==='boarding')expect(rider.transition).toBeGreaterThan(0);
+ if(phase==='inactive')expect(await world.execute({type:'entity.set-active',entityId:car.instanceId,isActive:false})).toMatchObject({status:'applied'});
+ // Occupied removal must still reject outside reset; reset must retire actors first.
+ expect(()=>previous.removeVehicle(car.instanceId)).toThrow('HUMANOID_MOUNT_ACTIVE');
+ const dispose=vi.spyOn(rider,'dispose'),remove=previous.removeVehicle.bind(previous);
+ const observed=vi.spyOn(previous,'removeVehicle').mockImplementation(id=>{
+  expect(previous.actors.size).toBe(0);expect(dispose).toHaveBeenCalledTimes(1);return remove(id);
+ });
+ await world.reset();expect(observed).toHaveBeenCalledWith(car.instanceId);expect(r.simulation).not.toBe(previous);
+ expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(r.simulation.actor('player')).not.toBe(rider);
+ expect(world.snapshot().entities.some(e=>e.id===car.instanceId)).toBe(false);expect(r.options.vehicles).toHaveLength(0);expect(car.object.parent).toBeNull();
+ world.step({},2);expect(world.snapshot().errors).toEqual([]);world.dispose();expect(dispose).toHaveBeenCalledTimes(1);
+});
+it('recreates a destroyed initial vehicle id without restoring its old mount, inactive state or reset baseline',async()=>{
+ const first=nativeCar('car',0),world=await setup(undefined,{map:{...nativeCreationMap,spawns:[{id:'slot',name:'Car',vehicleId:'car',position:[0,.1,0],yaw:0,regionId:'road'}]},vehicles:[first],initialMountId:'car'}),r=world.humanoid!;world.step({},2);
+ await world.execute({type:'entity.set-active',entityId:'car',isActive:false});expect(await world.execute({type:'entity.destroy',entityId:'car'})).toMatchObject({status:'applied'});
+ const replacement=nativeCar('car',8);world.addVehicle(replacement);expect(world.getEntityState('car').isActive).toBe(true);expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(r.simulation.vehicles[0]!.position.x).toBe(8);expect(r.actorController('player').body.isEnabled()).toBe(false);expect(await world.execute({type:'entity.set-active',entityId:'player',isActive:true})).toMatchObject({status:'applied'});world.step({},35);
+ expect(r.approach('car')).toBe(true);expect(r.enter('car')).toBe(true);world.step({},40);await world.reset();expect(r.simulation.vehicles).toHaveLength(0);expect(r.simulation.actor('player').vehicle).toBeUndefined();expect(world.snapshot().entities.some(e=>e.id==='car')).toBe(false);
+});
+it('preserves a pre-baseline native creation at its explicit spawn through reset and map replacement',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!,car=nativeCar();world.addVehicle(car);world.step({},1);await world.reset();
+ expect(r.simulation.vehicles).toHaveLength(1);expect(r.simulation.vehicles[0]!.position.x).toBe(4);expect(r.simulation.preparedVehicleSpawns.get(car.instanceId)!.position[0]).toBe(4);
+ r.switchMap({...nativeCreationMap});expect(r.simulation.vehicles[0]!.position.x).toBe(4);world.step({},2);expect(world.snapshot().errors).toEqual([]);
+});
+it('rejects native creation conflicts and blocked placements before taking model ownership or leaking physics',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!,physics=r.environment.borrowPhysics().world;
+ const bodies=physics.bodies.len(),colliders=physics.colliders.len(),count=world.snapshot().entities.length;
+ for(const car of [nativeCar('player'),nativeCar('floor'),nativeCar('outside',100),nativeCar('on-player',-4),{...nativeCar('invalid'),spec:{...nativeCar().spec,yaw:NaN}}]){
+  expect(()=>world.addVehicle(car)).toThrow();expect(car.object.parent).toBeNull();expect(r.options.vehicles).toHaveLength(0);expect(physics.bodies.len()).toBe(bodies);expect(physics.colliders.len()).toBe(colliders);expect(world.snapshot().entities).toHaveLength(count);
+ }
+ world.addVehicle(nativeCar());expect(()=>world.addVehicle(nativeCar('overlap'))).toThrow('HUMANOID_VEHICLE_SPAWN_BLOCKED');expect(r.options.vehicles).toHaveLength(1);
+});
+it('rolls back native staging when world registration fails, without disposing supplied visuals',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!,car=nativeCar(),engine=(world as unknown as {engine:import('./engine').WorldEngine}).engine;
+ const before=car.object.position.clone(),physics=r.environment.borrowPhysics().world,colliders=physics.colliders.len();const register=vi.spyOn(engine,'addCharacter').mockImplementationOnce(()=>{throw Error('injected-registration-failure');});
+ expect(()=>world.addVehicle(car)).toThrow('injected-registration-failure');expect(car.object.position).toEqual(before);expect(car.object.parent).toBeNull();expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.preparedVehicleSpawns.size).toBe(0);expect(physics.colliders.len()).toBe(colliders);register.mockRestore();world.addVehicle(car);world.step({},1);expect(world.snapshot().errors).toEqual([]);
+});
+it('repeatedly creates and destroys native cars without retaining rigs, profiles or stale display samples',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!;world.step({},1);const physics=r.environment.borrowPhysics().world,bodies=physics.bodies.len(),colliders=physics.colliders.len();
+ for(let n=0;n<20;n++){
+  world.addVehicle(nativeCar());world.step({},2);expect(await world.execute({type:'entity.destroy',entityId:'created-car'})).toMatchObject({status:'applied'});
+  expect(r.simulation.vehicles).toHaveLength(0);expect(r.options.vehicles).toHaveLength(0);expect(r.exportProfile().vehicles?.['created-car']).toBeUndefined();expect(physics.bodies.len()).toBe(bodies);expect(physics.colliders.len()).toBe(colliders);
+ }
+ world.step({},2);expect(world.snapshot().errors).toEqual([]);
+});
+
+it.each(['rover','plane','boat','submarine','horse','dragon','spacecraft'])('creates and releases %s using its existing native motion family',async preset=>{
+ const spec=structuredClone(SPECS.find(v=>v.id===preset)!);spec.spawn=[8,.1,0];spec.yaw=0;
+ const world=await setup(undefined,{map:{...nativeCreationMap,bounds:{min:[-100,-20,-100],max:[100,100,100]},regions:[{...nativeCreationMap.regions[0]!,modes:[spec.mode]}]}}),r=world.humanoid!;world.step({},1);const physics=r.environment.borrowPhysics().world,bodies=physics.bodies.len();
+ world.addVehicle({instanceId:'new-vehicle',assetId:preset,spec,object:new THREE.Group()});expect(r.simulation.vehicles[0]!.spec.mode).toBe(spec.mode);world.step({},3);
+ expect(await world.execute({type:'entity.destroy',entityId:'new-vehicle'})).toMatchObject({status:'applied'});expect(physics.bodies.len()).toBe(bodies);expect(r.simulation.vehicles).toHaveLength(0);expect(world.snapshot().errors).toEqual([]);
+});
+it('preserves moving peer interpolation when adding a native vehicle',async()=>{
+ const {renderer}=rendererFixture(),world=await setup(renderer,{map:nativeCreationMap}),runtime=world.humanoid!;
+ await world.execute({type:'humanoid.set-input',actorId:'player',input:{...emptyInput(),forward:1}});world.step({},20);
+ const engine=(world as unknown as {engine:import('./engine').WorldEngine}).engine;let displayed:number[]=[];vi.mocked(renderer.render).mockImplementation(()=>{displayed=runtime.options.character.object.position.toArray();});
+ await world.start();engine.render(.4);const before=[...displayed];world.addVehicle(nativeCar());engine.render(.4);expect(displayed).toEqual(before);expect(runtime.simulation.vehicles).toHaveLength(1);world.stop();
+});
+
+it('does not retain transient native roots across repeated reset cycles',async()=>{
+ const world=await setup(undefined,{map:nativeCreationMap}),r=world.humanoid!,engine=(world as unknown as {engine:{retired:Set<unknown>}}).engine;world.step({},1);
+ for(let n=0;n<8;n++){world.addVehicle(nativeCar());world.step({},1);await world.reset();expect(engine.retired.size).toBe(0);expect(r.options.vehicles).toHaveLength(0);expect(r.simulation.preparedVehicleSpawns.size).toBe(0);}
+});
+
+
+it.each(['simulation','actor','interaction','skills'] as const)('project lifecycle teardown continues independent native owners after a %s failure',async stage=>{
+ const world=await setup(),r=world.humanoid!,peer=await r.createCharacter();peer.root.position.set(5,.04,0);world.addCharacter({id:'peer',humanoid:peer});world.step({},1);
+ const first=r.simulation.actor('player'),second=r.simulation.actor('peer'),physics=r.environment.borrowPhysics().world;
+ const ordinary=(r as unknown as {ordinaryPhysics:import('./physics').ThreePhysics}).ordinaryPhysics;
+ const ordinaryDispose=ordinary.dispose.bind(ordinary),environmentDispose=r.environment.dispose.bind(r.environment);
+ const ordinarySpy=vi.spyOn(ordinary,'dispose'),peerDispose=vi.spyOn(second,'dispose'),free=vi.spyOn(physics,'free'),rigRelease=vi.spyOn(r.environment,'releaseHumanoidRig');
+ const marker=Error(`INJECTED_${stage}`),events:string[]=[];world.onDispose(()=>events.push('world callback'));
+ const target=stage==='simulation'?r.simulation:stage==='actor'?first:stage==='interaction'?r.environment.interactions:first.controller.skills;
+ const original=target.dispose.bind(target);const injected=vi.spyOn(target,'dispose').mockImplementation(()=>{if(stage==='interaction')r.environment.dispose();original();throw marker;});
+ try{
+  let caught:unknown;try{world.dispose();}catch(error){caught=error;}expect(caught).toBe(marker);
+  expect(peerDispose).toHaveBeenCalledOnce();expect(ordinarySpy).toHaveBeenCalledOnce();expect(free).toHaveBeenCalledOnce();expect(rigRelease).toHaveBeenCalledTimes(2);expect(events).toEqual(['world callback']);
+  world.dispose();r.dispose();expect(free).toHaveBeenCalledOnce();expect(injected).toHaveBeenCalledOnce();
+ }finally{injected.mockRestore();if(!free.mock.calls.length){ordinaryDispose();environmentDispose();}}
+});
+
+it.each([undefined,null])('project lifecycle preserves a falsy original disposal failure (%s) after finishing cleanup',async marker=>{
+ const world=await setup(),r=world.humanoid!,physics=r.environment.borrowPhysics().world,original=r.simulation.dispose.bind(r.simulation),free=vi.spyOn(physics,'free');
+ vi.spyOn(r.simulation,'dispose').mockImplementation(()=>{original();throw marker;});
+ let threw=false,caught:unknown;try{world.dispose();}catch(error){threw=true;caught=error;}
+ expect(threw).toBe(true);expect(caught).toBe(marker);expect(free).toHaveBeenCalledOnce();expect(()=>world.dispose()).not.toThrow();
+});
+it('project lifecycle retains native owner disposal order on the successful path',async()=>{
+ const world=await setup(),r=world.humanoid!,peer=await r.createCharacter();peer.root.position.set(5,.04,0);world.addCharacter({id:'peer',humanoid:peer});
+ const internal=r as unknown as {releaseOrdinarySubstep:()=>void;ordinaryPhysics:import('./physics').ThreePhysics},order:string[]=[];
+ const track=(target:{dispose:()=>void},name:string)=>{const original=target.dispose.bind(target);vi.spyOn(target,'dispose').mockImplementation(()=>{order.push(name);original();});};
+ track(r.simulation,'simulation');track(r.simulation.actor('player'),'player');track(r.simulation.actor('peer'),'peer');
+ const unsubscribe=internal.releaseOrdinarySubstep;vi.spyOn(internal,'releaseOrdinarySubstep').mockImplementation(()=>{order.push('unsubscribe');unsubscribe();});
+ track(internal.ordinaryPhysics,'ordinary');track(r.environment,'environment');track(r.environment.interactions,'interactions');
+ const physics=r.environment.borrowPhysics().world,free=physics.free.bind(physics);vi.spyOn(physics,'free').mockImplementation(()=>{order.push('free');free();});world.dispose();
+ expect(order).toEqual(['simulation','player','peer','unsubscribe','ordinary','environment','interactions','free']);
 });

@@ -10,7 +10,6 @@ apps/playground/dist
 apps/playground/public/scene-plans
 apps/studio/builtin-results
 apps/studio/data
-assets/subjects/source-fbx/**/source.fbx
 docs
 sites
 coverage

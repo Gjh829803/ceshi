@@ -223,6 +223,12 @@ const Library = forwardRef<
       flushSync(() => update({ opened: true }));
       options.onOpenChange(true);
       searchRef.current?.focus({ preventScroll: true });
+      // The host may reveal its panel after this synchronous bridge returns.
+      // Retry then, but never take focus back from a different user target.
+      queueMicrotask(() => {
+        if (current.current.opened && document.activeElement === restoreFocus.current)
+          searchRef.current?.focus({ preventScroll: true });
+      });
     },
     close,
     isOpen: () => current.current.opened,

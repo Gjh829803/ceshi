@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "source_type": "whitebox_snapshot",
+  "source_url": null,
+  "source_creator": null,
+  "source_commit": "514fd6ba261f079620c47c49228c70d70f6e8cb1",
+  "original_asset_id": "creature.dragon.d02",
+  "original": {
+    "source": "Local Century D02 extraction",
+    "variantId": "D02",
+    "registeredWithoutChangingAssetBytes": true,
+    "registrationScript": "scripts/assets/register-flying-creatures.ts",
+    "noticesResource": "flying-creatures/README.md",
+    "sourceRecords": [
+      "flying-creatures/variants.json",
+      "flying-creatures/variant-sources.json",
+      "flying-creatures/ground-sources.json",
+      "flying-creatures/manifest.json"
+    ]
+  },
+  "license": {
+    "status": "see_source_notices",
+    "commercial_use": "unknown",
+    "redistribution": "unknown",
+    "editable_distribution": "unknown",
+    "user_export": "unknown"
+  },
+  "license_files": [],
+  "modified_from": null,
+  "conversion_pipeline": {
+    "method": "byte_preserving_copy",
+    "tool": "import-whitebox.mjs",
+    "version": "1.0"
+  },
+  "preview_sources": [
+    {
+      "path": "subjects/fantastical/creature.dragon.d02/0.1.0/preview/selector.png",
+      "source_path": "apps/sdk-playground/public/dragon-thumbnails/D02.png",
+      "source_commit": "63b289d541e2aa89b64dd8cfa044657e2f4dc5d1",
+      "sha256": "5d8e137a763974ef98d71ef41b73c876fe4e0e8cfb15582fd8e46df09f2e96bb",
+      "byte_length": 54417,
+      "conversion": "byte_preserving_copy"
+    }
+  ]
+}

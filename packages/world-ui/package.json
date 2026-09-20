@@ -1,0 +1,36 @@
+{
+  "name": "@worldkit/world-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --root ../.. packages/world-ui",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./schema": "./src/schema.ts",
+    "./core": "./src/core.ts",
+    "./react": "./src/react.tsx",
+    "./local": "./src/local.tsx"
+  },
+  "dependencies": {
+    "@json-render/core": "0.20.0",
+    "@json-render/react": "0.20.0",
+    "motion": "13.4.0",
+    "zod": "4.5.4",
+    "ajv": "8.17.1",
+    "fast-json-patch": "3.1.1"
+  },
+  "peerDependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "vitest": "^3.2.4",
+    "typescript": "^5.9.2"
+  }
+}

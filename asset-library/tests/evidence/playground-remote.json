@@ -1,0 +1,311 @@
+{
+  "passed": true,
+  "checked_at": "2026-09-17T10:54:06.195Z",
+  "library": "http://127.0.0.1:3188/",
+  "delivery_mode": "Host reads selected HTTP library, verifies hashes, then serves immutable browser payloads",
+  "delivered_resources": [
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/e2b9494c35643b9f1c292695712e408512c1cceaa7ffefda58ad73b5219fce88.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/0e1a189955a2647ad0edf1161bb8a10152b91d9146bbb53b0b1996c7c5b0ea7f.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c3afe8bc96d59048ae58068c9d9081f61488b6e62b982f1dad7bba2fdf2a48c7.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/eeb6e4e509fcbb3e4d7fbbcd440e07e9b14b416b56df569ff1dce4f43619e514.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/173f77a0a67ed2d2bb2eaf061a042328a6683d0753b68593b258a33b6573fa1c.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1ca566664d1bb74e9a32559cdc8fb392b906cb9f2877c92ceb5774176e80f0d5.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/fa2ea1d7f1a0c93b6e5bd12efbf4c5c0c9d333e5b89048762ace6722b270ed9a.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1d65446d0eb40548464a80d89321bc08b93b7e875852d4aa95c7c98a49275ecc.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/fb817380cfa070628a3b2fa5f6c0163012af31fc69361a30db5da20e24cfed1f.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/142de55d4eafa223b516deccffee13504225ad262eb6f4ac2cb3e02d6d92440d.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/f868c4cfbaf61bf2bbb4da483d7941b2d34cec7d3f6a66f23eac2dd2ca756bc4.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c5b2dc80c9e3224a3c1f1f4d74a8f226df5b24c5fd4b27efa54bb35908343208.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/d8122f0ee93c334a51df3912d6619ad2afe6787454ab305c56de83541a929490.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/0ff31325e9300f18ea8ee22183170be8816d393636ba7600eba18a0d890461a2.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1b12549eb5814ce9ac2be172f2df3bcb7c3b55484299e7a35396825ff1b15833.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/ab2a34a9d4899244d3ea3979d7275265eae964e06dc28e5b086836b50b4e7779.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/855b90cc0b22c08b07395466213b2f8f97fa8c46a82fc7bddb14ccf88a1f9a67.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/08a8a54d5cd1406cca9d3ebd9543be42fc44cb0331a1c2f387903cad2b102d20.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/95637ba1def417385e36174a370d9fa08b605f9c2a4433fe227144c560e2ebce.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/aa6d62cc23e9418b47f85c7babc68feaf0b4eed7a2ec1d88790085cb83038ab1.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/477768875ef3f7702b253062d61023feb70820e3955f0cfd98538a3048e9636c.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7.png",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/947d9b47cbd6f1d5cc5ecdf0b91f6b31ead9bda199987db3bfaacb41a0562330.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/364d53d6e73547f4b0daf200add5794ae460bc57e2ce9af3217880659e6590d3.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/0e1a189955a2647ad0edf1161bb8a10152b91d9146bbb53b0b1996c7c5b0ea7f.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c3afe8bc96d59048ae58068c9d9081f61488b6e62b982f1dad7bba2fdf2a48c7.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/eeb6e4e509fcbb3e4d7fbbcd440e07e9b14b416b56df569ff1dce4f43619e514.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/173f77a0a67ed2d2bb2eaf061a042328a6683d0753b68593b258a33b6573fa1c.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1ca566664d1bb74e9a32559cdc8fb392b906cb9f2877c92ceb5774176e80f0d5.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c6ac0a6e247cdfb4df642fbce5989f7dc96cb2e4f51db5664da96211ce414ca1.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/fa2ea1d7f1a0c93b6e5bd12efbf4c5c0c9d333e5b89048762ace6722b270ed9a.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1d65446d0eb40548464a80d89321bc08b93b7e875852d4aa95c7c98a49275ecc.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/fb817380cfa070628a3b2fa5f6c0163012af31fc69361a30db5da20e24cfed1f.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/142de55d4eafa223b516deccffee13504225ad262eb6f4ac2cb3e02d6d92440d.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/f868c4cfbaf61bf2bbb4da483d7941b2d34cec7d3f6a66f23eac2dd2ca756bc4.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/c5b2dc80c9e3224a3c1f1f4d74a8f226df5b24c5fd4b27efa54bb35908343208.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/d8122f0ee93c334a51df3912d6619ad2afe6787454ab305c56de83541a929490.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/0ff31325e9300f18ea8ee22183170be8816d393636ba7600eba18a0d890461a2.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/1b12549eb5814ce9ac2be172f2df3bcb7c3b55484299e7a35396825ff1b15833.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/ab2a34a9d4899244d3ea3979d7275265eae964e06dc28e5b086836b50b4e7779.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/855b90cc0b22c08b07395466213b2f8f97fa8c46a82fc7bddb14ccf88a1f9a67.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/08a8a54d5cd1406cca9d3ebd9543be42fc44cb0331a1c2f387903cad2b102d20.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/95637ba1def417385e36174a370d9fa08b605f9c2a4433fe227144c560e2ebce.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/aa6d62cc23e9418b47f85c7babc68feaf0b4eed7a2ec1d88790085cb83038ab1.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/477768875ef3f7702b253062d61023feb70820e3955f0cfd98538a3048e9636c.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5199/assets/resources/5195300ad4aee7efb985afd08bfdd198514e67a1ee7dbba06a34640dd95e00f7.png",
+      "status": 200
+    }
+  ],
+  "checked": [
+    {
+      "id": "humanoid.uefn-mannequin",
+      "sha256": "260467e477fa3682de7900da461ed6677030e94457123fce31eb56d14e8c7461",
+      "bytes": 7029028
+    },
+    {
+      "id": "creature.horse",
+      "sha256": "6f18806f1d80490b0375070737f54fdc966a3298afff934a149cab0123d3c7ae",
+      "bytes": 2215736
+    },
+    {
+      "id": "creature.dragon.d01",
+      "sha256": "e2b9494c35643b9f1c292695712e408512c1cceaa7ffefda58ad73b5219fce88",
+      "bytes": 15710552
+    }
+  ],
+  "errors": [],
+  "failed": [],
+  "camera": {
+    "schemaVersion": 1,
+    "source": "committed-camera",
+    "sample": {
+      "simulationTick": 0,
+      "worldRevision": 41,
+      "isRunning": true,
+      "cameraSimulationTick": 0,
+      "cameraFrameStatus": "current"
+    },
+    "identity": {
+      "mode": "follow",
+      "controlledEntityId": "person",
+      "logicalTargetId": "person",
+      "resolvedSubjectId": "person",
+      "subjectGeneration": 40,
+      "lifecycleGeneration": 0,
+      "viewId": "third-person",
+      "viewKind": "third-person",
+      "documentHash": "961fb6d8183a8c2215b6d9b604cac6e6d600ec72ed8dac1a79645c080766cad4",
+      "configurationRevision": 1,
+      "cameraCommitRevision": 3
+    },
+    "desired": {
+      "eyeWorldMetersXYZ": [
+        -25,
+        4.142900657924256,
+        -43.26647987305694
+      ],
+      "pivotWorldMetersXYZ": [
+        -25,
+        1.125399952316284,
+        -35
+      ],
+      "armDistanceMeters": 8.800000000000002,
+      "nominalDistanceMeters": 8.8
+    },
+    "current": {
+      "eyeWorldMetersXYZ": [
+        -25,
+        4.142900657924256,
+        -43.26647987305694
+      ],
+      "pivotWorldMetersXYZ": [
+        -25,
+        1.125399952316284,
+        -35
+      ],
+      "armDistanceMeters": 8.800000000000002,
+      "nominalDistanceMeters": 8.8
+    },
+    "relativeRoll": {
+      "status": "measured",
+      "degrees": 3.5311250384401273e-31,
+      "referenceUpWorldXYZ": [
+        0,
+        1,
+        0
+      ]
+    },
+    "orbit": {
+      "yawRadians": -3.141592653589793,
+      "pitchRadians": 0.35,
+      "distanceMeters": 8.8
+    },
+    "collision": {
+      "status": "measured",
+      "phase": "clear",
+      "limited": false,
+      "safeDistanceMeters": 8.800000000000002,
+      "effectiveDistanceMeters": 8.800000000000002,
+      "simulationTick": 0,
+      "stale": false
+    },
+    "queries": {
+      "status": "not-sampled"
+    },
+    "errors": {
+      "camera": null,
+      "world": [],
+      "omittedWorldErrors": 0
+    }
+  },
+  "scope": "Playground initial scene with remote source selection; gameplay quality not revalidated."
+}

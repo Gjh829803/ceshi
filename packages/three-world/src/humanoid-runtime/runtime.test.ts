@@ -178,6 +178,24 @@ describe('SDK humanoid runtime',()=>{
    expect(r.snapshot().vehicleDynamics[0]).toMatchObject({condition:'stuck',recoveryAvailable:true});
   }finally{world.dispose();}
  });
+ it('freezes obstruction history while the mounted group is inactive and resumes recovery afterward',async()=>{
+  const world=await fixture();try{
+   const r=world.humanoid!,sim=r.simulation,v=sim.vehicles[0]!;
+   r.approach('car-1');expect(r.enter('car-1')).toBe(true);
+   v.position.set(0,.03,8.5);v.rotation.identity();sim.syncActorBodies();
+   world.step({humanoid:{...emptyInput(),forward:1}},60);
+   expect(sim.vehicleCondition(v)).toMatchObject({condition:'stuck',recoveryAvailable:true});
+   expect(await world.execute({type:'entity.set-active',entityId:v.spec.id,isActive:false})).toMatchObject({status:'applied'});
+   const position=v.position.clone(),time=sim.entityTime(v.spec.id);
+   world.step({humanoid:emptyInput()},240);
+   expect(v.position.toArray()).toEqual(position.toArray());expect(sim.entityTime(v.spec.id)).toBeCloseTo(time,10);
+   expect(sim.vehicleCondition(v)).toMatchObject({condition:'stuck',recoveryAvailable:true});
+   expect(await world.execute({type:'vehicle.recover'})).toMatchObject({status:'rejected',error:{code:'ENTITY_INACTIVE'}});
+   expect(await world.execute({type:'entity.set-active',entityId:v.spec.id,isActive:true})).toMatchObject({status:'applied'});
+   expect(await world.execute({type:'vehicle.recover'})).toMatchObject({status:'applied'});
+   expect(sim.vehicleCondition(v).recoveryAvailable).toBe(false);expect(world.snapshot().errors).toEqual([]);
+  }finally{world.dispose();}
+ });
  it('treats a partially fallen motorcycle as flipped but keeps an airborne one airborne',()=>{
   const q=new EnvironmentQueries({...map,regions:[{...map.regions[0]!,modes:['wheeled','motorcycle']}]});
   const sim=new Simulation(q,[{...spec,id:'motorcycle',mode:'motorcycle',archetype:'motorcycle',wheelPhysics:createRoadPhysicsProfile('motorcycle')}],{id:'player'});try{
@@ -836,4 +854,46 @@ it('keeps native preparation independent of camera installation and named view s
   runtime.prepareEpisodeStart(start);expect(world.inspectCamera().current!.viewId).toBe('third-person');
   world.setCameraView('first-person');expect(world.snapshot().camera.viewId).toBe('first-person');
  }finally{world.dispose();}
+});
+
+
+describe('replacement lifecycle cleanup',()=>{
+ it.each(['map','reset'] as const)('keeps the old world usable and releases all staged owners after %s preparation and cleanup both fail',async mode=>{
+  const world=await fixture(),runtime=world.humanoid!,previous=runtime.environment,simulation=runtime.simulation;
+  world.setCameraFollow({configuration:createHumanoidCameraDocument('player')});world.step({},2);
+  const before=world.snapshot(),cause=Error('STAGING_FAILED'),order:string[]=[];
+  const simDispose=Simulation.prototype.dispose,physicsDispose=ThreePhysics.prototype.dispose,envDispose=EnvironmentQueries.prototype.dispose;
+  const prepare=vi.spyOn(Simulation.prototype,'addActor').mockImplementationOnce(()=>{throw cause;});
+  const sim=vi.spyOn(Simulation.prototype,'dispose').mockImplementation(function(this:Simulation){expect(this).not.toBe(simulation);order.push('simulation');simDispose.call(this);throw Error('STAGED_DISPOSE_FAILED');});
+  const physics=vi.spyOn(ThreePhysics.prototype,'dispose').mockImplementation(function(this:ThreePhysics){order.push('physics');physicsDispose.call(this);});
+  const environment=vi.spyOn(EnvironmentQueries.prototype,'dispose').mockImplementation(function(this:EnvironmentQueries){expect(this).not.toBe(previous);order.push('environment');envDispose.call(this);});
+  const warning=vi.spyOn(console,'warn').mockImplementation(()=>{});
+  try{
+   expect(()=>mode==='map'?runtime.switchMap({...map,id:'new-map'}):runtime.reset()).toThrow(cause);
+   expect(order).toEqual(['simulation','physics','environment']);expect(runtime.environment).toBe(previous);expect(runtime.simulation).toBe(simulation);expect(world.snapshot()).toEqual(before);
+   prepare.mockRestore();sim.mockRestore();physics.mockRestore();environment.mockRestore();
+   world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(1);
+   expect(world.inspectCamera().resolved).toBeDefined();
+  }finally{prepare.mockRestore();sim.mockRestore();physics.mockRestore();environment.mockRestore();warning.mockRestore();world.dispose();}
+ });
+ it('finishes an already committed map replacement when old simulation disposal throws',async()=>{
+  const world=await fixture(),runtime=world.humanoid!,old=runtime.simulation,previous=runtime.environment,cause=Error('OLD_SIMULATION_CLEANUP_FAILED');
+  const dispose=old.dispose.bind(old),cleanup=vi.spyOn(old,'dispose').mockImplementation(()=>{dispose();throw cause;});
+  const environment=vi.spyOn(previous,'dispose'),replaced=vi.fn();const off=runtime.onSimulationReplaced(replaced);
+  try{
+   expect(()=>runtime.switchMap({...map,id:'new-map'})).toThrow(cause);
+   expect(runtime.simulation).not.toBe(old);expect(runtime.environment.map.id).toBe('new-map');expect(environment).toHaveBeenCalledOnce();expect(replaced).toHaveBeenCalledWith('map');
+   world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(1);expect(world.snapshot().errors).toEqual([]);
+  }finally{off();cleanup.mockRestore();environment.mockRestore();world.dispose();}
+ });
+ it('finishes world reset and records old simulation cleanup failure instead of stranding half the reset',async()=>{
+  const world=await fixture(),runtime=world.humanoid!;world.step({},2);const old=runtime.simulation,previous=runtime.environment;
+  const dispose=old.dispose.bind(old),cleanup=vi.spyOn(old,'dispose').mockImplementation(()=>{dispose();throw Error('OLD_SIMULATION_CLEANUP_FAILED');});
+  const environment=vi.spyOn(previous,'dispose');
+  try{
+   await expect(world.reset()).resolves.toBeUndefined();expect(runtime.simulation).not.toBe(old);expect(environment).toHaveBeenCalledOnce();
+   expect(world.snapshot().errors.some(e=>e.message.includes('OLD_SIMULATION_CLEANUP_FAILED'))).toBe(true);
+   world.step({moveZRatio:-1},60);expect(world.getEntityState('player').positionWorldMetersXYZ[2]).toBeGreaterThan(1);
+  }finally{cleanup.mockRestore();environment.mockRestore();world.dispose();}
+ });
 });

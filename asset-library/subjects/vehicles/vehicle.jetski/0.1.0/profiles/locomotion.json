@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "jetski",
+    "name": "水上摩托",
+    "en": "JET SKI",
+    "archetype": "jetski",
+    "radius": 1.8,
+    "seat": [
+      0,
+      1,
+      -0.15
+    ],
+    "bodyPhysics": {
+      "water": {
+        "depth": 0.6,
+        "bottom": 0.3
+      }
+    },
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        0.72,
+        0.84,
+        1.65
+      ],
+      "offset": [
+        0,
+        0.54,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

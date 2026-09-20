@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "parameters": {
+    "id": "dragon",
+    "name": "进化龙",
+    "en": "Evolved dragon",
+    "radius": 5.5,
+    "seat": [
+      0,
+      2.1,
+      0.4
+    ],
+    "archetype": "dragon",
+    "envelope": {
+      "kind": "box",
+      "halfExtents": [
+        5.5,
+        2.8,
+        4.5
+      ],
+      "offset": [
+        0,
+        2.6,
+        0
+      ]
+    }
+  },
+  "runtime_contract": "external",
+  "runtime_requirements": [
+    {
+      "runtime_id": "@worldkit/three",
+      "contract": "whitebox.content-facts@1.0"
+    }
+  ]
+}

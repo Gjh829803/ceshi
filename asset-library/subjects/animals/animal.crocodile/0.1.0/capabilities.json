@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "unknown",
+    "stage": "planned",
+    "profile": null
+  },
+  "interactions": [],
+  "limitations": [
+    "Placeholder：不得当作可运行主体。"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "fantastical.slime-placeholder",
+  "asset_version": "0.1.0",
+  "display_name": "史莱姆 · 分类占位",
+  "aliases": [
+    "史莱姆 · 分类占位"
+  ],
+  "browse_group": "fantastical",
+  "semantic_type": "fantastical.slime",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "分类模板占位，待引入真实资源。",
+  "default_assembly": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

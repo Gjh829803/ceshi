@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.supercar/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.supercar/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0/model/model.glb",
+      "sha256": "e305b62eecec0ac96aba6f3371c3af10dd20affb44f66021353ecec8cb168949",
+      "byte_length": 141744,
+      "format": "glb",
+      "role": "model",
+      "source_path": "supercar.glb",
+      "reused_by": [
+        "vehicle.supercar"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0/preview/thumbnail.webp",
+      "sha256": "a5ba85e2261f58ecccea3b10b45ccc5e5486c2daa689c6f9651ee0b5522974b0",
+      "byte_length": 16618,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.supercar"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 62,
+    "meshes": 48,
+    "materials": 8,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1880,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": []
+}

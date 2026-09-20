@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "source_type": "procedural_export",
+  "source_url": null,
+  "license": {
+    "status": "whitebox_authored_procedural",
+    "commercial_use": "unknown",
+    "redistribution": "unknown",
+    "editable_distribution": "unknown",
+    "user_export": "unknown"
+  },
+  "license_files": [],
+  "source_hash": "24c0f1eb46826d64e64f96e03aa8393f7e0b0d17e017444da1d6f8f2fa71b7a3",
+  "conversion_pipeline": {
+    "tool": "Three.js GLTFExporter",
+    "version": "0.185.1",
+    "method": "buildVehicle(SPECS[kart]) after merging dev 8b6854ea; remove UI label; Node GLTFExporter binary export",
+    "source_entrypoints": [
+      "@worldkit/preset-content/models",
+      "@worldkit/preset-content/config"
+    ]
+  },
+  "source_commit": "8b6854ea",
+  "modified_from": {
+    "asset_id": "vehicle.kart",
+    "version": "0.1.0"
+  }
+}

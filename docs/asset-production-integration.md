@@ -49,7 +49,7 @@ AI 可以编辑所属资源、binding、配置和必要代码，不要求内容�
 
 资产包可以包含一个或多个配套主体、动画、行动模式和场景组件，按实际用途组合，不要求每个包都包含全部内容。**包是提交组织单位，资产 ID 是 Agent 的选择单位**；可独立使用的模型分别登记稳定 ID，依赖已有资产时引用其 ID，不重复复制。
 
-资源放到 `assets/three-creator/<资产包>/`，多个模型可各设子目录：
+资源唯一来源是 `asset-library/subjects/<分类>/<稳定ID>/<版本>/`。模型在 `model/`，独立动作在 `animations/`，实际文件与哈希在 `resources.json`；原有双目录已退役。
 
 | 内容 | 何时提供 | 交付要求 |
 | --- | --- | --- |
@@ -114,7 +114,7 @@ packages/creator-host/docs/agent/
 
 | 注册内容 | 放在哪里 | Agent 如何获取 |
 | --- | --- | --- |
-| 资产及能力信息 | [catalog/](../assets/three-creator/catalog/) 下各自 `<assetId>.json`：稳定 ID、名称、文件路径/哈希/依赖、动作或模式配置、限制；`pnpm content:sync` 派生 Host 的 asset-catalog.json | `assets_search` 查找，`assets_describe` 读取详情 |
+| 资产及能力信息 | [subjects/](../asset-library/subjects/) 下的 asset.json、capabilities.json、resources.json、bindings/whitebox.json 和 profiles：稳定 ID、真实资源、能力、绑定和限制；`pnpm content:sync` 生成 Host 目录和 package 配置快照 | `assets_search` 查找，`assets_describe` 读取详情 |
 | 可用权限 | [asset-policy.json](../packages/creator-host/config/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
 | 分类阅读入口 | [Agent 资产索引](../packages/creator-host/docs/agent/assets/README.md) 及人、动物、载具、场景对象子目录；新增子页时接入 [agent-docs.ts](../packages/creator-host/src/discovery/agent-docs.ts) 的路径和父子导航 | `creator_get_authoring_schema({document:...})` 按层读取，页面再链接具体资产与能力 topic |
 | 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../packages/creator-host/src/discovery/authoring-schema.ts) / [creator-discovery.ts](../packages/creator-host/src/discovery/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、humanoid 等接口 |

@@ -18,7 +18,7 @@ import { mountShell } from "./shell";
 import {createPanelStateStore} from "./panel-state";
 import { performanceDetails } from "./performance-details";
 import { DRAGON_TRAINING } from "./training-destinations";
-import { DRAGON_VARIANTS, readDragonVariant } from '@worldkit/preset-content/dragon-variants';
+import { DRAGON_VARIANTS, readDragonVariant, readDragonSpec } from '@worldkit/preset-content/dragon-variants';
 import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
@@ -123,9 +123,7 @@ const camera = new T.PerspectiveCamera(
 );
 const dragonVariant=readDragonVariant(location.search);
 shell.update({dragonId:dragonVariant.id});
-const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...humanoid.createFlyingCreatureSpec('dragon'),name:dragonVariant.name,...(dragonVariant.ground?{flyingCreatureGround:dragonVariant.ground}:{}),
-  ...(dragonVariant.seat?{seat:dragonVariant.seat}:{}),...(dragonVariant.envelope?{envelope:dragonVariant.envelope}:{}),
-  ...(dragonVariant.collisionProbes?{flyingCreatureCollision:dragonVariant.collisionProbes}:{}),spawn:[80,40,35] as [number,number,number]}:spec);
+const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...spec,...readDragonSpec(dragonVariant.id),id:'dragon',name:dragonVariant.name,spawn:[80,40,35] as [number,number,number]}:spec);
 function getDefaultProfile(id:string):ControlProfile|undefined{
   const profile=getPresetDefaultControlProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
@@ -141,7 +139,7 @@ const visuals:VehicleVisual[] = SPECS.map(spec=>{
 try {
   await Promise.all([
     character.load(resolvePresetResource),
-    nativeDragon.load({dragonUrl:'./flying-creature/__creature-assets/'+dragonVariant.file,loadTextures:true,animationPrefix:dragonVariant.id,flameTextureUrl:'./flying-creature/__creature-assets/FireGenLoop01_8x8.png'}),
+    nativeDragon.load({dragonUrl:resolvePresetResource('flying-creatures/'+dragonVariant.id+'/model.glb'),loadTextures:true,animationPrefix:dragonVariant.id,flameTextureUrl:resolvePresetResource('flying-creatures/flame.png')}),
     ...visuals.map((v) => v.creature?.load()),
   ]);
 } catch (error) {
@@ -231,7 +229,8 @@ const session = {
   switchMap(id: string) {
     if (id === currentMap.id) return;
     const next = getMap(id),
-      visual = buildWorld(scene, next);
+      visual = buildWorld(scene, next),
+      previousEnvironment = runtime.environment;
     try {
       sdk.configureShadowLight(visual.sun);
       npcLab?.beforeMapChange();
@@ -239,8 +238,12 @@ const session = {
       runtime.switchMap(next);
       applyAllScopedProfiles();
     } catch (error) {
-      visual.dispose();
-      throw error;
+      // Preparation failures keep the previous map. Cleanup failures after adoption must keep its new visuals.
+      if (runtime.environment === previousEnvironment) {
+        visual.dispose();
+        throw error;
+      }
+      console.warn('WORLD_MAP_CLEANUP_FAILED', error);
     }
     world.dispose();
     displayPreview.clearMaterials();
@@ -286,7 +289,7 @@ const localProfileOverridesEnabled =
 function profileAssetIdForIdentity(identity: { instanceId: string; assetId: string }): string {
   const candidates = [
     identity.assetId,
-    identity.assetId.replace(/^vehicle\./, ""),
+    identity.assetId.replace(/^(?:vehicle|creature)\./, ""),
     ...(identity.assetId.startsWith("creature.dragon") ? ["dragon"] : []),
     identity.instanceId,
   ];
@@ -373,9 +376,9 @@ function displayColliderId(handle:number) {
 }
 function readDisplayTargets():DisplayInteractionTarget[] {
   const targets:DisplayInteractionTarget[]=[...humanoid.readInteractionTargets(sim.environment)];
-  sim.vehicles.forEach((vehicle,n)=>{
+  sim.vehicles.forEach(vehicle=>{
     if(!sim.available(vehicle))return;
-    const root=visuals[n]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
+    const root=visuals[SPECS.findIndex(spec=>spec.id===vehicle.spec.id)]!.root,rotation=root.getWorldQuaternion(new T.Quaternion());
     targets.push({id:'vehicle-seat:'+vehicle.spec.id,ownerIds:[vehicle.spec.id],kind:'seat',slotId:'seat',state:'available',
       position:new T.Vector3(...vehicle.spec.seat).applyQuaternion(rotation).add(root.getWorldPosition(new T.Vector3()))});
   });
@@ -385,7 +388,7 @@ function readDisplayCatalog() {
   const colliderIds=new Set<string>();sim.controlledActor.controller?.world.forEachCollider(c=>{if(c.isEnabled())colliderIds.add(displayColliderId(c.handle));});
   return buildDisplayCatalog({scene,map:session.map,environment:world.root,person:character.root,
     actors: npcLab?.displayActors() ?? [],
-    vehicles:visuals.map((visual,n)=>({id:SPECS[n]!.id,name:SPECS[n]!.name,object:visual.root,available:sim.available(sim.vehicles[n]!),type:(SPECS[n]!.mode==='mount'||SPECS[n]!.mode==='dragon'?'creature':'vehicle') as DisplayType})),
+    vehicles:visuals.flatMap((visual,n)=>{const spec=SPECS[n]!,state=sim.vehicles.find(v=>v.spec.id===spec.id);return state?[{id:spec.id,name:spec.name,object:visual.root,available:sim.available(state),type:(spec.mode==='mount'||spec.mode==='dragon'?'creature':'vehicle') as DisplayType}]:[];}),
     ...(sim.controlledActor.vehicle?{currentVehicleId:sim.controlledActor.vehicle.spec.id}:{}),colliderIds});
 }
 let displayCatalog=readDisplayCatalog();
@@ -416,7 +419,7 @@ const displayPreview = createDisplayPreview({
   scene, camera, source: renderer, mount: canvas.parentElement!,
   context: () => {
     const person=controlledCharacter().root;
-    const vehicle=sim.controlledActor.vehicleIndex>=0?visuals[sim.controlledActor.vehicleIndex]!.root:undefined;
+    const vehicle=runtime.options.vehicles.find(instance=>instance.instanceId===sim.controlledActor.vehicle?.spec.id)?.object;
     return {...displayCatalog.context,subjects:vehicle?[person,vehicle]:[person],followTarget:vehicle??person};
   },
   overlay: createDisplayOverlays(scene, () => ({physics: sim.controlledActor.controller, map: session.map,
@@ -525,7 +528,8 @@ function selectAsset(id: string) {
     return;
   }
   const v = sim.vehicles.find((v) => v.spec.id === id);
-  if (v && !sim.available(v)) {
+  if(!v){toast("该载具实例已销毁。");return;}
+  if (!sim.available(v)) {
     toast("这个载具不适配当前地图，请在测试场景中切换到综合园区。");
     return;
   }
@@ -683,7 +687,7 @@ const onModalPanelChange=(id:typeof modalPanelIds[number],open:boolean)=>{
   panelState.update(id,{open});onPanelChange(open);
 };
 const catalog = buildWorkspaceCatalog(SPECS).map(asset=>asset.dragonVariantId
-  ? {...asset,thumbnail:`./dragon-thumbnails/${asset.dragonVariantId}.png`} : asset);
+  ? {...asset,thumbnail:resolvePresetResource('flying-creatures/'+asset.dragonVariantId+'/thumbnail.png')} : asset);
 function libraryAssetId(instanceId:string):string {
   return instanceId==='dragon' ? catalog.find(asset=>asset.dragonVariantId===dragonVariant.id)?.id??instanceId : instanceId;
 }
@@ -868,7 +872,7 @@ const workbench = mountWorkbench(document.body, {
     相机避障: cameraCollisionLimited(),
     视野度: +camera.fov.toFixed(1),
     动画: sim.controlledActor.player.animation,
-    生物模型: visuals[sim.controlledActor.vehicleIndex]?.creature?.sourceStatus,
+    生物模型: visuals[SPECS.findIndex(spec=>spec.id===sim.controlledActor.vehicle?.spec.id)]?.creature?.sourceStatus,
     步态: sim.controlledActor.vehicle?.motion.creature?.gait,
     骑乘姿势:
       sim.controlledActor.vehicle?.spec.characterPose === "ride"
@@ -1384,7 +1388,7 @@ function updateUI(force = false) {
             ? `${key('interact')} 进入攀爬`
             : null) ??
         (nearest >= 0
-          ? `${key('interact')} ${SPECS[nearest]!.aircraftSubtype==='wingsuit'?'穿戴':'进入'} ${SPECS[nearest]!.name}`
+          ? `${key('interact')} ${sim.vehicles[nearest]!.spec.aircraftSubtype==='wingsuit'?'穿戴':'进入'} ${sim.vehicles[nearest]!.spec.name}`
           : (traversalPrompt ?? "")),
     );
   if (!v) {
@@ -1450,8 +1454,8 @@ function updateUI(force = false) {
 
 function updateCreatureVisual(n: number, dt: number) {
   const visual = visuals[n]!,
-    state = sim.vehicles[n]!,
-    c = state.motion.creature;
+    state = sim.vehicles.find(v=>v.spec.id===SPECS[n]!.id);
+  if(!state)return;const c = state.motion.creature;
   if (visual.root.visible && visual.creature)
     visual.creature.update(
       {
@@ -1473,22 +1477,24 @@ let movingVisualRoot:T.Group|undefined;
 let movingVisuals:{id:string;mesh:T.Object3D}[]=[];
 function updateVisuals(dt: number,sample?:humanoid.HumanoidDisplaySample) {
   visuals.forEach((vis, n) => {
-    const state = sim.vehicles[n]!;
+    const index=sim.vehicles.findIndex(v=>v.spec.id===SPECS[n]!.id);if(index<0)return;
+    const state = sim.vehicles[index]!;
+    if(!sim.isActive(state.spec.id))return;
     if(state.motion.family==='space')updateSpaceExhaust(vis.engine,state.motion.appliedForceNewtonsXYZ,state.rotation,state.spec.spaceFlight!.thrustNewtonsXYZ[2]);
     updateCreatureVisual(n, dt);
-    updateVehicleWheels(vis, sample?.vehicles[n]??state, {
+    updateVehicleWheels(vis, sample?.vehicles[index]??state, {
       grounded: state.grounded && !state.submerged,
       dt,
       revision: sim.controlledActor.teleportRevision,
-      active: n === sim.controlledActor.vehicleIndex,
+      active: index === sim.controlledActor.vehicleIndex,
     });
-    if (n === sim.controlledActor.vehicleIndex)
-      vis.aircraftCockpit?.update({...state,aircraft:state.motion.aircraft},sim.time);
-    vis.soaringShell?.update({...state,aircraft:state.motion.aircraft},n===sim.controlledActor.vehicleIndex?character.root:undefined);
-    if(state.motion.aircraft)vis.aircraftShell?.update(sample?.vehicles[n]?.aircraft??state.motion.aircraft);
-    if(n===sim.controlledActor.vehicleIndex&&!state.motion.aircraft)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
+    if (index === sim.controlledActor.vehicleIndex)
+      vis.aircraftCockpit?.update({...state,aircraft:state.motion.aircraft},sim.entityTime(state.spec.id));
+    vis.soaringShell?.update({...state,aircraft:state.motion.aircraft},index===sim.controlledActor.vehicleIndex?character.root:undefined);
+    if(state.motion.aircraft)vis.aircraftShell?.update(sample?.vehicles[index]?.aircraft??state.motion.aircraft);
+    if(index===sim.controlledActor.vehicleIndex&&!state.motion.aircraft)vis.rotors.forEach((r) => (r.rotation.z += (state.motion.aircraft?state.throttle*70:(state.speed+4)*4)*dt));
     vis.label.visible =
-      n !== sim.controlledActor.vehicleIndex &&
+      index !== sim.controlledActor.vehicleIndex &&
       camera.position.distanceToSquared(state.position) < 8100;
   });
   const held = [character, ...(npcLab?.characters() ?? [])].flatMap(actor => actor.carriedAttachment ? [actor.carriedAttachment] : []);

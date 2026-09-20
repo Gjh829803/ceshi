@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "air",
+      "support": "rotor_lift",
+      "propulsion": "rotor",
+      "degrees_of_freedom": "full_3d",
+      "control_archetype": "rotorcraft",
+      "gaits": [],
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "rotorcraft",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "控制与物理由 SDK aircraftSubtype helicopter 提供；本 GLB 不含动画片段，两个 aircraft-rotor 枢轴需要在 onVisualUpdate 中绑定 rotorPhases。",
+    "0.1.1 已接通 Registry/Creator 元数据，实际人形登乘、飞行、降落与退出仍需本地运行验收。"
+  ]
+}

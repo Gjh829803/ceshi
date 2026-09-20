@@ -1,5 +1,12 @@
 node_modules/
 dist/
+!asset-library/dist/
+!asset-library/dist/**
+asset-library/dist/published/
+.asset-cache/
+asset-library/tests/evidence/*-failure.json
+asset-library/tests/evidence/server*.log
+asset-library/tests/evidence/*.png
 .DS_Store
 coverage/
 /outputs/

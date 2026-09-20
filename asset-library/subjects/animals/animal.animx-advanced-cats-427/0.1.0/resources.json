@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "model": null,
+  "preview": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/preview/AnimX Advanced Cats 427.jpg",
+  "files": [
+    {
+      "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/preview/AnimX Advanced Cats 427.jpg",
+      "sha256": "46e5bb1c0bd35ff6cee150f26bead16ba25b4e3088af640d3b927efe0673ec11",
+      "byte_length": 14311,
+      "format": "jpg",
+      "role": "reference",
+      "source_path": "D:/01_Workspace/01_Loopit/098_游戏参考库/动物角色动画包/AnimX Advanced Cats 427.jpg",
+      "reused_by": [
+        "animal.animx-advanced-cats-427"
+      ]
+    }
+  ],
+  "inspection": null,
+  "animations": []
+}

@@ -83,3 +83,19 @@ describe('asset aircraft profiles',()=>{
   expect((applied[0] as {vehicles:Record<string,unknown>}).vehicles).toHaveProperty('horse');
  });
 });
+
+
+it('routes mount profiles by catalog identity, independently of scene instance names',()=>{
+ const applyProfile=vi.fn(),profile=getDefaultProfile('horse')!,vehicles=[
+  {instanceId:'riding-one',assetId:'creature.horse'},
+  {instanceId:'riding-two',assetId:'creature.horse'},
+  {instanceId:'cart',assetId:'vehicle.carriage'},
+ ];
+ const runtime={snapshot:()=>({vehicles}),applyProfile,exportProfile:()=>({vehicles:{'riding-two':{speed:7}}})} as unknown as humanoid.HumanoidRuntime;
+ applyControlProfile(runtime,profile);
+ expect(Object.keys(applyProfile.mock.calls[0]![0].vehicles)).toEqual(['riding-one','riding-two']);
+ applyControlProfile(runtime,{...profile,instanceId:'riding-two'});
+ expect(Object.keys(applyProfile.mock.calls[1]![0].vehicles)).toEqual(['riding-two']);
+ expect(readEditableProfile(runtime,{...profile,instanceId:'riding-two'}).control.speed).toBe(7);
+ expect(()=>applyControlProfile(runtime,{...profile,instanceId:'cart'})).toThrow('profile instance asset mismatch');
+});

@@ -1,0 +1,36 @@
+{
+  "name": "@worldkit/stream-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "tsx src/cli.ts",
+    "test": "vitest run --root ../.. packages/stream-host",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/server.ts",
+    "./producer": "./src/producer.ts",
+    "./build": "./src/build.ts"
+  },
+  "dependencies": {
+    "@worldkit/three": "workspace:*",
+    "@worldkit/world-ui": "workspace:*",
+    "@worldkit/stream-protocol": "workspace:*",
+    "@worldkit/browser-capture": "workspace:*",
+    "@worldkit/creator-host": "workspace:*",
+    "ws": "8.21.3",
+    "playwright": "^1.62.1",
+    "tsx": "^4.23.12",
+    "esbuild": "0.28.2"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "@types/node": "^24.3.0",
+    "@types/dom-webcodecs": "0.1.17",
+    "@types/three": "0.185.4",
+    "three": "0.185.1",
+    "vitest": "^3.2.4",
+    "typescript": "^5.9.2"
+  }
+}

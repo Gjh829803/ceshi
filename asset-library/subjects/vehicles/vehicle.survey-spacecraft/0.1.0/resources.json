@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/model/survey-space.glb",
+  "preview": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/model/survey-space.glb",
+      "sha256": "5faf4cc740ef8979a205b92f25743a18c67a31a53c498de6b0a91187509b8069",
+      "byte_length": 81936,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/presets/vehicles/survey-space.glb",
+      "reused_by": [
+        "vehicle.survey-spacecraft"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/preview/thumbnail.webp",
+      "sha256": "441de78758b6c7fe4aca13de62d4902042dade8dc745a72cc67cbad7d08b31d1",
+      "byte_length": 11102,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.survey-spacecraft"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 17,
+    "meshes": 15,
+    "materials": 8,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 2328,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": [],
+  "model_logical_path": "vehicles/survey-space.glb"
+}

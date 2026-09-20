@@ -1,4 +1,5 @@
 import {createHumanoidCameraDocument} from '@worldkit/three';
+import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 import {describe,it,expect} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {Group,PerspectiveCamera,Vector3,Quaternion} from 'three';
@@ -35,6 +36,17 @@ describe('player family route input',()=>{
   expect(glider.forward).toBeLessThan(0);
   expect(glider.boost).toBe(false);
  });
+ it('uses glider airspeed trim for the catalog plane subtype',()=>{
+  const glider=vehicleDirectionInput('plane',[0,20,0],[0,0,0],[0,0,30],[0,40,50],{subtype:'glider',throttle:.7}).humanoid!;
+  expect(glider.forward).toBeLessThan(0);expect(glider.pitch).toBeLessThan(0);expect(glider.boost).toBe(false);
+ });
+ it('banks catalog gliders against lateral drift even when the nose points at the target',()=>{
+  for(const lateralSpeed of [-5,5]){
+   const glider=vehicleDirectionInput('plane',[0,20,0],[0,0,0],[lateralSpeed,0,30],[0,20,100],{subtype:'glider',throttle:0}).humanoid!;
+   expect(glider.steer*lateralSpeed).toBeGreaterThan(0);
+   expect(Math.abs(glider.steer)).toBeLessThanOrEqual(1);
+  }
+ });
  it('uses rotor lift for altitude instead of boost or slow',()=>{
   const rotor=vehicleDirectionInput('plane',[0,20,0],[0,0,0],[0,0,0],[0,23,25],{subtype:'helicopter',throttle:.5}).humanoid!;
   expect(rotor.lift).toBeGreaterThan(0);
@@ -45,13 +57,15 @@ describe('player family route input',()=>{
 });
 
 describe('actual player capture controller and humanoid physics integration',()=>{
- const assets=JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets as {id:string;vehicle?:{spec:VehicleSpec}}[];
+ const assets=composeAssetCatalog(JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json',import.meta.url),'utf8')).assets) as {id:string;vehicle?:{spec:VehicleSpec}}[];
  for(const family of ['motorcycle','unicycle','raft','observation-submarine','jetski','canoe','atv','kayak','wheeled','bus','tank','plane','glider','submarine','spacecraft'] as const){
   it(`${family}: reaches successive three-dimensional waypoints through thirty seconds of capture input`,async()=>{
-   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-submarine'?a.id==='vehicle.observation-submarine':family==='submarine'?a.id==='vehicle.submarine':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':family==='kayak'?a.vehicle?.spec.archetype==='kayak':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
+   const asset=assets.find(a=>family==='unicycle'?a.id==='vehicle.unicycle':family==='raft'?a.id==='vehicle.raft':family==='jetski'?a.id==='vehicle.jetski':family==='observation-submarine'?a.id==='vehicle.observation-submarine':family==='submarine'?a.id==='vehicle.submarine':family==='canoe'?a.id==='vehicle.canoe':family==='atv'?a.vehicle?.spec.archetype==='atv':family==='kayak'?a.vehicle?.spec.archetype==='kayak':family==='glider'?a.id==='vehicle.glider':family==='plane'?a.id==='vehicle.plane':a.vehicle?.spec.mode===family)!,spec=structuredClone(asset.vehicle!.spec);
    // The two submarine assets share a mode but have different speeds and routes.
    // Catalog order must not replace the fast submarine with the observation sub.
    if(family==='submarine')expect(asset.id).toBe('vehicle.submarine');
+   if(family==='plane')expect(asset.id).toBe('vehicle.plane');
+   if(family==='glider')expect(spec).toMatchObject({mode:'plane',aircraftSubtype:'glider'});
    const aquatic=family==='raft'||family==='jetski'||family==='observation-submarine'||family==='submarine'||family==='kayak'||family==='canoe',flight=family==='plane'||family==='glider';
    const y=(family==='raft'||family==='jetski'||family==='kayak'||family==='canoe')?.1:aquatic?-15:flight||family==='spacecraft'?100:.03;
    const floor=aquatic?-80:0;
@@ -65,6 +79,8 @@ describe('actual player capture controller and humanoid physics integration',()=
      ...(flight?{velocityWorldMetersPerSecondXYZ:[0,0,30],throttle:.7,launched:true}:{})}},
     waypoints:family==='unicycle'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:family==='observation-submarine'?[{positionWorldMetersXYZ:[2,y-2,15],gait:'walk'},{positionWorldMetersXYZ:[4,y-4,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,120],gait:'walk'}]:family==='canoe'?[{positionWorldMetersXYZ:[2,y,8],gait:'walk'},{positionWorldMetersXYZ:[4,y,20],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:(family==='raft'||family==='kayak')?[{positionWorldMetersXYZ:[2,y,15],gait:'walk'},{positionWorldMetersXYZ:[4,y,35],gait:'walk'},{positionWorldMetersXYZ:[0,y,100],gait:'walk'}]:[{positionWorldMetersXYZ:[5,y+(aquatic&&family!=='jetski'?-5:flight||family==='spacecraft'?5:0),100],gait:'walk'},
      {positionWorldMetersXYZ:[15,y,250],gait:'walk'},{positionWorldMetersXYZ:[0,y,1500],gait:'walk'}]};
+   // The aerodynamic glider has no thrust after launch; its route trades altitude for range.
+   if(family==='glider')segment.waypoints=[{positionWorldMetersXYZ:[5,y-5,100],gait:'walk'},{positionWorldMetersXYZ:[15,y-15,250],gait:'walk'},{positionWorldMetersXYZ:[0,y-70,1500],gait:'walk'}];
    const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:asset.id,spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
    try{
     world.setCameraFollow({configuration:createHumanoidCameraDocument('person')});const runtime=world.humanoid!;expect(runtime.probeEpisodeStart(segment.start).isValid).toBe(true);runtime.prepareEpisodeStart(segment.start);
@@ -118,8 +134,8 @@ it('holds mounted action waypoints without route timeout, then synchronizes segm
 });
 
 for(const subtype of ['helicopter','multirotor','tiltrotor'] as const)it(`${subtype} follows an Episode route using rotor inputs`,async()=>{
- const assets=JSON.parse(readFileSync(new URL('../../../../assets/three-creator/asset-catalog.json',import.meta.url),'utf8')).assets;
- const spec={...structuredClone(assets.find((a:any)=>a.vehicle?.spec.mode==='plane').vehicle.spec),aircraftSubtype:subtype};
+ const assets=composeAssetCatalog(JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json',import.meta.url),'utf8')).assets);
+ const spec={...structuredClone(assets.find((a:any)=>a.id==='vehicle.plane')!.vehicle!.spec),aircraftSubtype:subtype};
  const map:EnvironmentDefinition={id:'rotor-route',name:'Rotor route',description:'',bounds:{min:[-2000,-100,-2000],max:[2000,1000,2000]},boxes:[{id:'floor',position:[0,-1,0],size:[4000,2,4000]}],water:[],regions:[{id:'route',name:'Route',description:'',center:[0,0,0],size:[3800,3800],color:'#aaa',modes:['character','plane']}],spawns:[{id:'parked',name:'Parked',vehicleId:'subject',position:[0,0,0],yaw:0,regionId:'route'}],playerSpawn:[-10,0,0]};
  const world=await createWorld({assetDefinitions:{},camera:new PerspectiveCamera(),humanoid:{map,vehicles:[{instanceId:'subject',assetId:'rotor',spec,object:new Group()}],character:{instanceId:'person',object:new Group()}}});
  try{

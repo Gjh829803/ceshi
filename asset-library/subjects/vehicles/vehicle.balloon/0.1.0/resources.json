@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/vehicles/vehicle.balloon/0.1.0/model/model.glb",
+  "preview": "subjects/vehicles/vehicle.balloon/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/vehicles/vehicle.balloon/0.1.0/model/model.glb",
+      "sha256": "dd9f6198051cdc35c4bc589b3c37bbf8d9f83bfc462a558b3339b349dad19414",
+      "byte_length": 53088,
+      "format": "glb",
+      "role": "model",
+      "source_path": "balloon.glb",
+      "reused_by": [
+        "vehicle.balloon"
+      ]
+    },
+    {
+      "path": "subjects/vehicles/vehicle.balloon/0.1.0/preview/thumbnail.webp",
+      "sha256": "6acf655d4de5328607941767f99bd2596798fe5b5c34a70ba1b5967b16ef70b9",
+      "byte_length": 8342,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "vehicle.balloon"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 18,
+    "meshes": 16,
+    "materials": 7,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 1351,
+    "extensions": [
+      "KHR_materials_unlit"
+    ],
+    "external_uris": []
+  },
+  "animations": []
+}

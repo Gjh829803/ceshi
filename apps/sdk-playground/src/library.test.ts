@@ -122,6 +122,23 @@ describe("React asset library browser contracts", () => {
     );
   });
 
+  it("focuses the library after its host becomes visible and keeps Escape out of gameplay", async () => {
+    await page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>('#host')!;
+      host.hidden = true;
+      document.querySelector<HTMLElement>('#open')!.onclick = () => {
+        (window as any).libraryTest.open();
+        host.hidden = false;
+      };
+    });
+    await open();
+    expect(await page.getByRole('searchbox').evaluate(node => node === document.activeElement)).toBe(true);
+    await page.keyboard.press('Escape');
+    expect((await state()).open).toBe(false);
+    expect(await page.evaluate(() => (window as any).keyEvents)).not.toContain('down:Escape');
+    expect(await page.locator('#open').evaluate(node => node === document.activeElement)).toBe(true);
+  });
+
   it("filters metadata and categories, sorts recent assets, and preserves selection", async () => {
     await open();
     await browse(3).click();

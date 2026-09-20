@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "model": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/model/quadruped-animal.glb",
+  "preview": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/preview/thumbnail.webp",
+  "files": [
+    {
+      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/model/quadruped-animal.glb",
+      "sha256": "70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
+      "byte_length": 27616,
+      "format": "glb",
+      "role": "model",
+      "source_path": "assets/three-creator/xier120/quadruped-animal/v1/quadruped-animal.glb",
+      "reused_by": [
+        "creature.quadruped-static-diagnostic"
+      ]
+    },
+    {
+      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/preview/thumbnail.webp",
+      "sha256": "0c263d97114d3982cb310c88e6af6cc755e2b391be7af8f0f01e21ab1530b74f",
+      "byte_length": 7486,
+      "format": "webp",
+      "role": "rendered_preview",
+      "source_path": "viewer:Chrome/Three.js",
+      "reused_by": [
+        "creature.quadruped-static-diagnostic"
+      ]
+    }
+  ],
+  "inspection": {
+    "format": "glb",
+    "gltf_version": "2.0",
+    "nodes": 19,
+    "meshes": 18,
+    "materials": 1,
+    "skins": 0,
+    "bones": [],
+    "clips": [],
+    "triangles": 216,
+    "extensions": [],
+    "external_uris": []
+  },
+  "animations": []
+}

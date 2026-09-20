@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.bus",
+  "asset_version": "0.1.0",
+  "display_name": "复古小巴 / Bus",
+  "aliases": [
+    "bus",
+    "复古小巴"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.bus",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Shared rigid-body wheel physics, raycast suspension, tire forces and automatic powertrain; no deformable tires or damage simulation. W throttle; S brakes before reversing; Space brakes. Shift adds no boost.",
+  "default_assembly": "subjects/vehicles/vehicle.bus/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

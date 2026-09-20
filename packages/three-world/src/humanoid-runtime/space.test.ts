@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {createHumanoidCameraDocument} from '../config/camera/index';
 import {createSpaceTrainingMap} from '@worldkit/preset-content/environment/space-training';
 import {getMap} from '@worldkit/preset-content/environment/maps';
@@ -124,10 +125,9 @@ describe('native space family',()=>{
 });
 
 async function loadSpaceDriver(){
- const assetRoot=new URL('../../../../assets/three-creator/presets/humanoid/source/',import.meta.url);
- const entries=await Promise.all(['idle-loop','walk-loop','run-loop','climb-2m5'].map(async id=>{const gltf=await parseFixtureGlb(await readFile(new URL(`gasp-research/${id}.experimental.glb`,assetRoot)));return {id,clip:gltf.animations[0]!,model:gltf.scene};}));
- const gltf=await parseFixtureGlb(await readFile(new URL('uefn-mannequin-lod1.glb',assetRoot)));
- const seated=AnimationClip.parse(JSON.parse(await readFile(new URL('actions/sit-idle.clip.json',assetRoot),'utf8')));
+ const entries=await Promise.all(['idle-loop','walk-loop','run-loop','climb-2m5'].map(async id=>{const gltf=await parseFixtureGlb(await readFile(new URL(testAssetResourceUrl(`humanoid/source/gasp-research/${id}.experimental.glb`))));return {id,clip:gltf.animations[0]!,model:gltf.scene};}));
+ const gltf=await parseFixtureGlb(await readFile(new URL(testAssetResourceUrl('humanoid/source/uefn-mannequin-lod1.glb'))));
+ const seated=AnimationClip.parse(JSON.parse(await readFile(new URL(testAssetResourceUrl('humanoid/source/actions/sit-idle.clip.json')),'utf8')));
  return new Character(new SourceCharacter(gltf.scene,[...entries,{id:'sit-idle',clip:seated}]));
 }
 

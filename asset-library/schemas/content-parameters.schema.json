@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {},
+    "name": {},
+    "en": {},
+    "radius": {},
+    "seat": {},
+    "envelope": {},
+    "archetype": {},
+    "visualVariant": {},
+    "wheelbaseMeters": {},
+    "rearAxleZMeters": {},
+    "wheelPhysics": {
+      "type": "object",
+      "properties": {
+        "radius": {},
+        "hubHeight": {},
+        "halfTrack": {},
+        "halfWheelbase": {},
+        "wheelWidth": {},
+        "chassis": {},
+        "cabin": {},
+        "bodyParts": {},
+        "wheels": {}
+      },
+      "additionalProperties": false
+    },
+    "flyingCreatureCollision": {},
+    "flyingCreatureGround": {
+      "type": "object",
+      "properties": {
+        "rootHeight": {},
+        "seat": {},
+        "probes": {},
+        "support": {}
+      },
+      "additionalProperties": false
+    },
+    "bodyPhysics": {
+      "type": "object",
+      "properties": {
+        "water": {
+          "type": "object",
+          "properties": {
+            "depth": {},
+            "bottom": {}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "spaceFlight": {
+      "type": "object",
+      "properties": {
+        "hull": {}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "title": "Whitebox content parameters"
+}

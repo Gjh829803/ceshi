@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "air",
+      "support": "aerodynamic_lift",
+      "propulsion": "flapping",
+      "degrees_of_freedom": "full_3d",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/fantastical/creature.dragon.d11/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Ground support is stationary on sufficiently wide, flat, dry surfaces; no ground walking, foot terrain IK, slope perching or airborne dismount.",
+    "Collision uses measured body, neck and head core probes; wing tips, tail tips and fur may overlap obstacles.",
+    "Flame is visual feedback only; no damage, combat resolution or audio. Original game material graphs and cloth/fur simulation are not reproduced."
+  ]
+}

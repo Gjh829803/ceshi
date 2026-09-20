@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "air",
+      "support": "rotor_lift",
+      "propulsion": "rotor",
+      "degrees_of_freedom": "full_3d",
+      "control_archetype": "rotorcraft",
+      "gaits": [],
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "rotorcraft",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.multirotor/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "外观与当前宿主控制参数已导出；独立库中的控制适配尚未重验。"
+  ]
+}

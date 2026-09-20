@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "object.ball-placeholder",
+  "asset_version": "0.1.0",
+  "display_name": "滚动球 · 分类占位",
+  "aliases": [
+    "滚动球 · 分类占位"
+  ],
+  "browse_group": "objects",
+  "semantic_type": "object.ball",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "分类模板占位，待引入真实资源。",
+  "default_assembly": "subjects/objects/object.ball-placeholder/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

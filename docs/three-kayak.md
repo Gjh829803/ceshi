@@ -30,8 +30,16 @@ W 交替划桨，S 倒划，A / D 单侧扫桨，Space 压桨制动。
 - [物理与真实骨架测试](../packages/three-world/src/humanoid-runtime/kayak.test.ts)
 - [浏览器键盘验证](../packages/creator-host/scripts/smoke/kayak-browser-smoke.ts)
 
-导出 `pnpm exec tsx packages/creator-host/scripts/assets/export-kayak.ts` 会更新
-`assets/three-creator/presets/vehicles/kayak.glb` 及 `vehicle.kayak` 的目录哈希。
+修改模型后运行 `pnpm exec tsx packages/creator-host/scripts/assets/export-kayak.ts --output .codex-tmp/kayak.glb`，
+只生成待入库的 GLB 和 `.intake.json` 转换记录；输出已存在时请改用新文件名。
+按[入库流程](../asset-library/CONTRIBUTING.md)，使用 `asset-library/tools/ingest.mjs` 将候选模型
+以稳定 ID `vehicle.kayak`、`--group vehicles` 和新的 `--version` 入库，审查并补齐原有
+bindings、profiles、来源与验证记录，然后在仓库根运行 `pnpm content:sync` 和 `pnpm content:check`。
+
+当前登记版本位于 `asset-library/subjects/vehicles/vehicle.kayak/0.1.0/`。
+模型、挂点与参数的权威数据在主体中；包内 spec 读取生成快照。
+导出器不会替换这个版本或自动更新目录，新版本完成绑定和验证后才用于交付。
+
 SDK 修改后执行 `pnpm build` 并重启预览服务。
 在仓库根目录执行 `pnpm dev`，打开终端显示的 React 编辑器地址（默认 5178）。
 

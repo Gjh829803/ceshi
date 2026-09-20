@@ -11,6 +11,6 @@ Production configuration belongs to its consumer:
 | [Three SDK](../packages/three-world/src/config/README.md) | Runtime defaults and developer effect switches |
 
 Real credentials and instance-specific runtime settings stay outside Git in ignored
-`.codex-tmp` or deployment Secrets. Asset metadata stays under `assets/three-creator`;
+`.codex-tmp` or deployment Secrets. Asset metadata stays under `asset-library/subjects`;
 deployment resources stay under `deploy/`. The SDK does not import Host production
 configuration. See [production entry points](../docs/three-sdk-data-production.md).

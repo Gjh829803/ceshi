@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "movement_modes": [
+    {
+      "id": "primary",
+      "environment": "ground",
+      "support": "body_contact",
+      "propulsion": "gravity",
+      "degrees_of_freedom": "surface_2d",
+      "gaits": [],
+      "control_archetype": "directional",
+      "stage": "assets_ready"
+    }
+  ],
+  "movement_transitions": [],
+  "control": {
+    "archetype": "directional",
+    "stage": "assets_ready",
+    "profile": "subjects/vehicles/vehicle.ski/0.1.0/profiles/locomotion.json"
+  },
+  "interactions": [],
+  "limitations": [
+    "资源预览不等于控制器、碰撞或骑乘验证。",
+    "Unpowered parallel skiing on packed snow; no deep-snow deformation, independent leg physics or ski tricks.",
+    "W pole pushes only below groundSpeed; turns retain momentum, S / Space brakes, gravity drives downhill."
+  ]
+}

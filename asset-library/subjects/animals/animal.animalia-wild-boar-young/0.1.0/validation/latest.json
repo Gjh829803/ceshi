@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "structure": "passed",
+  "format": "not_applicable",
+  "visual": "not_run",
+  "runtime": "not_run",
+  "checked_at": "2026-09-17T10:20:41.744Z",
+  "evidence": [
+    "tests/evidence/gltf-validation.json"
+  ],
+  "limitations": [
+    "尚无可加载三维资源。"
+  ],
+  "source_hashes": "passed"
+}

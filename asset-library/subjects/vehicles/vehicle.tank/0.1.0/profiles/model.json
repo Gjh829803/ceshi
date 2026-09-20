@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "socket_ids": [
+    "seat.driver",
+    "control.hand.left",
+    "control.hand.right",
+    "control.foot.left",
+    "control.foot.right",
+    "entry.left",
+    "entry.right",
+    "camera.driver"
+  ]
+}

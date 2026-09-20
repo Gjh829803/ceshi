@@ -2,11 +2,15 @@ import * as T from 'three';
 import {createInstancedParts} from '../shared/instanced-parts';
 import type {WheelRig} from '../../models';
 import {BUS_SPEC} from './spec';
+import type {VehicleSpec} from '../../config';
 
 /** Vehicle geometry only; rider, camera, input and physics belong to the SDK. */
-export function buildBusModel(){
+export function buildBusModel(spec:VehicleSpec=BUS_SPEC){
+  const wheelPhysics=spec.wheelPhysics;
+  if(!wheelPhysics?.wheels||wheelPhysics.wheelWidth===undefined)throw new Error('Bus model requires an explicit wheel profile');
+  const {radius,hubHeight,wheelWidth}=wheelPhysics;
   const root=new T.Group();root.name='retro-minibus';
-  const mint=new T.MeshStandardMaterial({color:BUS_SPEC.color,roughness:.8});
+  const mint=new T.MeshStandardMaterial({color:spec.color,roughness:.8});
   const cream=new T.MeshStandardMaterial({color:'#eee9db',roughness:.85});
   const dark=new T.MeshStandardMaterial({color:'#26363a',roughness:.9});
   const steel=new T.MeshStandardMaterial({color:'#9aa6a5',roughness:.7,metalness:.1});
@@ -65,12 +69,12 @@ export function buildBusModel(){
     const light=new T.Mesh(new T.CircleGeometry(.113,20),lamp);light.position.set(x,y,2.84);root.add(light);
   }
   for(const x of [-.83,.83])box('tail.lamp',[.16,.3,.045],[x,.91,-2.80],new T.MeshStandardMaterial({color:'#ba5548'}));
-  for(const x of [-1.035,1.035])for(const z of [-1.45,1.85]){
-    const pivot=new T.Group(),spin=new T.Group();pivot.position.set(x,.46,z);pivot.add(spin);root.add(pivot);
-    const tire=new T.Mesh(new T.CylinderGeometry(.46,.46,.22,24),dark);tire.rotation.z=Math.PI/2;spin.add(tire);
-    const rim=new T.Mesh(new T.CylinderGeometry(.29,.29,.235,20),cream);rim.rotation.z=Math.PI/2;spin.add(rim);
-    const hub=new T.Mesh(new T.CylinderGeometry(.14,.14,.25,12),steel);hub.rotation.z=Math.PI/2;spin.add(hub);
-    wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius:.46});if(z>0)steering.push(pivot);
+  for(const layout of wheelPhysics.wheels){
+    const pivot=new T.Group(),spin=new T.Group();pivot.position.set(layout.x,hubHeight,layout.z);pivot.add(spin);root.add(pivot);
+    const tire=new T.Mesh(new T.CylinderGeometry(radius,radius,wheelWidth,24),dark);tire.rotation.z=Math.PI/2;spin.add(tire);
+    const rim=new T.Mesh(new T.CylinderGeometry(radius*(29/46),radius*(29/46),wheelWidth+.015,20),cream);rim.rotation.z=Math.PI/2;spin.add(rim);
+    const hub=new T.Mesh(new T.CylinderGeometry(radius*(7/23),radius*(7/23),wheelWidth+.03,12),steel);hub.rotation.z=Math.PI/2;spin.add(hub);
+    wheels.push(spin);wheelRigs.push({steering:pivot,spin,radius});if(layout.steering)steering.push(pivot);
   }
   const seats=[[.47,1.38],[-.47,1.38],...[.24,-.94,-2.04].flatMap(z=>[-.49,.49].map(x=>[x,z]))] as [number,number][];
   const cushions=createInstancedParts(new T.BoxGeometry(.66,.10,.62),dark,seats.map(([x,z])=>new T.Matrix4().makeTranslation(x,.94,z)));cushions.name='seat.cushion';

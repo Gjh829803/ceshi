@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "vehicle.ski",
+  "asset_version": "0.1.0",
+  "display_name": "双板滑雪 / Skis",
+  "aliases": [
+    "ski",
+    "双板滑雪"
+  ],
+  "browse_group": "vehicles",
+  "semantic_type": "vehicle.ski",
+  "semantic_subtypes": [],
+  "morphology": {
+    "architecture": "rigid_articulated",
+    "profiles": [],
+    "appendages": [],
+    "stance": "horizontal"
+  },
+  "scale": {
+    "units": "meter",
+    "up_axis": "Y",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": {
+      "positionMetersXYZ": [
+        0,
+        0,
+        0
+      ],
+      "rotationEulerRadiansXYZ": [
+        0,
+        0,
+        0
+      ],
+      "scaleXYZ": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "lifecycle": "assets_ready",
+  "placeholder": false,
+  "description": "Unpowered parallel skiing on packed snow; no deep-snow deformation, independent leg physics or ski tricks. W pole pushes only below groundSpeed; turns retain momentum, S / Space brakes, gravity drives downhill.",
+  "default_assembly": "subjects/vehicles/vehicle.ski/0.1.0/assemblies/default.json",
+  "dependencies": []
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "module.host.subject",
+  "version": "1.0.0",
+  "kind": "host_contract",
+  "implementation": "provided_by_consumer",
+  "required_services": [
+    "model_loader",
+    "animation_player",
+    "motor",
+    "camera",
+    "physics"
+  ],
+  "authority": {
+    "root_transform": "one motor owner",
+    "animation": "one animation owner",
+    "camera": "one active camera owner"
+  },
+  "lifecycle": [
+    "load",
+    "bind",
+    "instantiate",
+    "update_by_host_clock",
+    "dispose"
+  ],
+  "note": "Interface description only. No controller implementation ships in this library."
+}

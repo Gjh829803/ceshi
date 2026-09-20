@@ -1,0 +1,629 @@
+{
+  "schema_version": "1.0",
+  "catalog": "catalog/index.json",
+  "lock": "dist/assembly.lock.json",
+  "base_url_policy": "All paths resolve relative to the deployed library root.",
+  "subjects": [
+    {
+      "asset_id": "animal.akita-inu",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.akita-inu/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.akita-inu/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.animalia-brown-bear-male",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/assemblies/default.json",
+      "model": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.animalia-wild-boar-young",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.animals-rat",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.animals-rat/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.animals-rat/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.animx-advanced-cats-427",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.crab-animated-creature",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.crab-animated-creature/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.crab-animated-creature/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.crocodile",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.crocodile/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.crocodile/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.elephant",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.elephant/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.elephant/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.giant-scorpion",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.giant-scorpion/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.giant-scorpion/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.giant-viper",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.giant-viper/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.giant-viper/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.harpy-eagle",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.harpy-eagle/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.harpy-eagle/0.1.0/assemblies/default.json",
+      "model": "subjects/animals/animal.harpy-eagle/0.1.0/model/HarpyEagleModelLowPoly.FBX",
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.megalodon",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.megalodon/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.megalodon/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "animal.tyannosaurus-rex-sue-rd",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/asset.json",
+      "assembly": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon-evolved",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon-evolved/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon-evolved/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon-evolved/0.1.0/model/dragon.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d01",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d01/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d01/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d01/0.1.0/model/dragon.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d02",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d02/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d02/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d02/0.1.0/model/D02.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d03",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d03/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d03/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d03/0.1.0/model/D03.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d04",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d04/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d04/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d04/0.1.0/model/D04.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d05",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d05/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d05/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d05/0.1.0/model/D05.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d06",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d06/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d06/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d06/0.1.0/model/D06.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d07",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d07/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d07/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d07/0.1.0/model/D07.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d08",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d08/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d08/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d09",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d09/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d09/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d09/0.1.0/model/D09.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d10",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d10/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d10/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d10/0.1.0/model/D10.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.dragon.d11",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/creature.dragon.d11/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/creature.dragon.d11/0.1.0/assemblies/default.json",
+      "model": "subjects/fantastical/creature.dragon.d11/0.1.0/model/D11.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.horse",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/creature.horse/0.1.0/asset.json",
+      "assembly": "subjects/animals/creature.horse/0.1.0/assemblies/default.json",
+      "model": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "creature.quadruped-static-diagnostic",
+      "version": "0.1.0",
+      "descriptor": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/asset.json",
+      "assembly": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/assemblies/default.json",
+      "model": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/model/quadruped-animal.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "fantastical.slime-placeholder",
+      "version": "0.1.0",
+      "descriptor": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/asset.json",
+      "assembly": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "humanoid.uefn-mannequin",
+      "version": "0.1.0",
+      "descriptor": "subjects/characters/humanoid.uefn-mannequin/0.1.0/asset.json",
+      "assembly": "subjects/characters/humanoid.uefn-mannequin/0.1.0/assemblies/default.json",
+      "model": "subjects/characters/humanoid.uefn-mannequin/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "object.ball-placeholder",
+      "version": "0.1.0",
+      "descriptor": "subjects/objects/object.ball-placeholder/0.1.0/asset.json",
+      "assembly": "subjects/objects/object.ball-placeholder/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "robot.dog-placeholder",
+      "version": "0.1.0",
+      "descriptor": "subjects/robots/robot.dog-placeholder/0.1.0/asset.json",
+      "assembly": "subjects/robots/robot.dog-placeholder/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "robot.humanoid-placeholder",
+      "version": "0.1.0",
+      "descriptor": "subjects/robots/robot.humanoid-placeholder/0.1.0/asset.json",
+      "assembly": "subjects/robots/robot.humanoid-placeholder/0.1.0/assemblies/default.json",
+      "model": null,
+      "stage": "placeholder",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.atv",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.atv/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.atv/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.atv/0.1.0/model/atv.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.balloon",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.balloon/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.balloon/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.balloon/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.boat",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.boat/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.boat/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.boat/0.1.0/model/boat.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.bus",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.bus/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.bus/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.bus/0.1.0/model/bus.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.canoe",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.canoe/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.canoe/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.canoe/0.1.0/model/canoe.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.carriage",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.carriage/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.carriage/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.carriage/0.1.0/model/carriage.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.glider",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.glider/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.glider/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.glider/0.1.0/model/glider.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.helicopter",
+      "version": "0.1.1",
+      "descriptor": "subjects/vehicles/vehicle.helicopter/0.1.1/asset.json",
+      "assembly": "subjects/vehicles/vehicle.helicopter/0.1.1/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.hovercraft",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.hovercraft/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.hovercraft/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.hovercraft/0.1.0/model/hover.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.jetski",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.jetski/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.jetski/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.jetski/0.1.0/model/jetski.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.kart",
+      "version": "0.1.1",
+      "descriptor": "subjects/vehicles/vehicle.kart/0.1.1/asset.json",
+      "assembly": "subjects/vehicles/vehicle.kart/0.1.1/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.kayak",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.kayak/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.kayak/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.kayak/0.1.0/model/kayak.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.motorcycle",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.motorcycle/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.motorcycle/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.motorcycle/0.1.0/model/bike.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.multirotor",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.multirotor/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.multirotor/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.multirotor/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.observation-submarine",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.observation-submarine/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.observation-submarine/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.observation-submarine/0.1.0/model/observation-sub.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.paraglider",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.paraglider/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.paraglider/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.paraglider/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.patrol-boat",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.patrol-boat/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.patrol-boat/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.patrol-boat/0.1.0/model/patrol-boat.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.plane",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.plane/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.plane/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.plane/0.1.0/model/plane.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.pusher-plane",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.pusher-plane/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.pusher-plane/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.pusher-plane/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.racer",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.racer/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.racer/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.racer/0.1.0/model/racer.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.raft",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.raft/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.raft/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.raft/0.1.0/model/raft.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.rescue-hovercraft",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/model/rescue-hover.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.rover",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.rover/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.rover/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.rover/0.1.0/model/rover.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.skateboard",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.skateboard/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.skateboard/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.skateboard/0.1.0/model/slide.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.ski",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.ski/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.ski/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.ski/0.1.0/model/ski.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.sled",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.sled/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.sled/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.sled/0.1.0/model/sled.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.spacecraft",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.spacecraft/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.spacecraft/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.spacecraft/0.1.0/model/space.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.submarine",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.submarine/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.submarine/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.submarine/0.1.0/model/sub.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.supercar",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.supercar/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.supercar/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.supercar/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.survey-spacecraft",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/model/survey-space.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.tank",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.tank/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.tank/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.tank/0.1.0/model/tank.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.tiltrotor",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.tiltrotor/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.tiltrotor/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.tiltrotor/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.touring-motorcycle",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/model/touring-bike.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.trail-rover",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.trail-rover/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.trail-rover/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.trail-rover/0.1.0/model/trail-rover.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.trainer-plane",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.trainer-plane/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.trainer-plane/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.trainer-plane/0.1.0/model/trainer-plane.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.unicycle",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.unicycle/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.unicycle/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    },
+    {
+      "asset_id": "vehicle.wingsuit",
+      "version": "0.1.0",
+      "descriptor": "subjects/vehicles/vehicle.wingsuit/0.1.0/asset.json",
+      "assembly": "subjects/vehicles/vehicle.wingsuit/0.1.0/assemblies/default.json",
+      "model": "subjects/vehicles/vehicle.wingsuit/0.1.0/model/model.glb",
+      "stage": "assets_ready",
+      "runtime_ready": false
+    }
+  ]
+}

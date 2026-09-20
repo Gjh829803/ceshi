@@ -1,0 +1,1566 @@
+{
+  "schema_version": "1.0",
+  "runtime_id": "@worldkit/three",
+  "runtime_version": "0.0.0",
+  "adapter_id": "@worldkit/preset-content",
+  "adapter_version": "0.0.0",
+  "supported_contracts": [
+    {
+      "contract_id": "module.host.subject",
+      "version": "1.0.0"
+    }
+  ],
+  "assets": {
+    "animal.akita-inu": {
+      "asset_version": "0.1.0"
+    },
+    "animal.animalia-brown-bear-male": {
+      "asset_version": "0.1.0"
+    },
+    "animal.animalia-wild-boar-young": {
+      "asset_version": "0.1.0"
+    },
+    "animal.animals-rat": {
+      "asset_version": "0.1.0"
+    },
+    "animal.animx-advanced-cats-427": {
+      "asset_version": "0.1.0"
+    },
+    "animal.crab-animated-creature": {
+      "asset_version": "0.1.0"
+    },
+    "animal.crocodile": {
+      "asset_version": "0.1.0"
+    },
+    "animal.elephant": {
+      "asset_version": "0.1.0"
+    },
+    "animal.giant-scorpion": {
+      "asset_version": "0.1.0"
+    },
+    "animal.giant-viper": {
+      "asset_version": "0.1.0"
+    },
+    "animal.harpy-eagle": {
+      "asset_version": "0.1.0"
+    },
+    "animal.megalodon": {
+      "asset_version": "0.1.0"
+    },
+    "animal.tyannosaurus-rex-sue-rd": {
+      "asset_version": "0.1.0"
+    },
+    "creature.dragon-evolved": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            80,
+            0.225,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon-evolved.third-person",
+          "source": "presets",
+          "key": "dragon.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon-evolved.first-person",
+          "source": "presets",
+          "key": "dragon.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon-evolved.shoulder",
+          "source": "presets",
+          "key": "dragon.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d01": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d01.third-person",
+          "source": "dragon-variants",
+          "key": "D01",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d01.first-person",
+          "source": "dragon-variants",
+          "key": "D01",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d01.shoulder",
+          "source": "dragon-variants",
+          "key": "D01",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d02": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d02.third-person",
+          "source": "dragon-variants",
+          "key": "D02",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d02.first-person",
+          "source": "dragon-variants",
+          "key": "D02",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d02.shoulder",
+          "source": "dragon-variants",
+          "key": "D02",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d03": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d03.third-person",
+          "source": "dragon-variants",
+          "key": "D03",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d03.first-person",
+          "source": "dragon-variants",
+          "key": "D03",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d03.shoulder",
+          "source": "dragon-variants",
+          "key": "D03",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d04": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d04.third-person",
+          "source": "dragon-variants",
+          "key": "D04",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d04.first-person",
+          "source": "dragon-variants",
+          "key": "D04",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d04.shoulder",
+          "source": "dragon-variants",
+          "key": "D04",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d05": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d05.third-person",
+          "source": "dragon-variants",
+          "key": "D05",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d05.first-person",
+          "source": "dragon-variants",
+          "key": "D05",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d05.shoulder",
+          "source": "dragon-variants",
+          "key": "D05",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d06": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d06.third-person",
+          "source": "dragon-variants",
+          "key": "D06",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d06.first-person",
+          "source": "dragon-variants",
+          "key": "D06",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d06.shoulder",
+          "source": "dragon-variants",
+          "key": "D06",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d07": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d07.third-person",
+          "source": "dragon-variants",
+          "key": "D07",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d07.first-person",
+          "source": "dragon-variants",
+          "key": "D07",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d07.shoulder",
+          "source": "dragon-variants",
+          "key": "D07",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d08": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d08.third-person",
+          "source": "dragon-variants",
+          "key": "D08",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d08.first-person",
+          "source": "dragon-variants",
+          "key": "D08",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d08.shoulder",
+          "source": "dragon-variants",
+          "key": "D08",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d09": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d09.third-person",
+          "source": "dragon-variants",
+          "key": "D09",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d09.first-person",
+          "source": "dragon-variants",
+          "key": "D09",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d09.shoulder",
+          "source": "dragon-variants",
+          "key": "D09",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d10": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d10.third-person",
+          "source": "dragon-variants",
+          "key": "D10",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d10.first-person",
+          "source": "dragon-variants",
+          "key": "D10",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d10.shoulder",
+          "source": "dragon-variants",
+          "key": "D10",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.dragon.d11": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#527a59",
+          "spawn": [
+            0,
+            40,
+            0
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.dragon.d11.third-person",
+          "source": "dragon-variants",
+          "key": "D11",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.dragon.d11.first-person",
+          "source": "dragon-variants",
+          "key": "D11",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.dragon.d11.shoulder",
+          "source": "dragon-variants",
+          "key": "D11",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.horse": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#a46942",
+          "spawn": [
+            38,
+            0,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "creature.horse.third-person",
+          "source": "presets",
+          "key": "horse.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "creature.horse.first-person",
+          "source": "presets",
+          "key": "horse.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "creature.horse.shoulder",
+          "source": "presets",
+          "key": "horse.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "creature.quadruped-static-diagnostic": {
+      "asset_version": "0.1.0"
+    },
+    "fantastical.slime-placeholder": {
+      "asset_version": "0.1.0"
+    },
+    "humanoid.uefn-mannequin": {
+      "asset_version": "0.1.0"
+    },
+    "object.ball-placeholder": {
+      "asset_version": "0.1.0"
+    },
+    "robot.dog-placeholder": {
+      "asset_version": "0.1.0"
+    },
+    "robot.humanoid-placeholder": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.atv": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#bc3543",
+          "spawn": [
+            -212,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.atv.third-person",
+          "source": "presets",
+          "key": "atv.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.atv.first-person",
+          "source": "presets",
+          "key": "atv.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.atv.shoulder",
+          "source": "presets",
+          "key": "atv.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.balloon": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.boat": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#68baf1",
+          "spawn": [
+            207,
+            -1.9,
+            10
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.boat.third-person",
+          "source": "presets",
+          "key": "boat.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.boat.first-person",
+          "source": "presets",
+          "key": "boat.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.boat.shoulder",
+          "source": "presets",
+          "key": "boat.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.bus": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#83c7bb",
+          "spawn": [
+            -226,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.bus.third-person",
+          "source": "presets",
+          "key": "bus.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.bus.first-person",
+          "source": "presets",
+          "key": "bus.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.bus.shoulder",
+          "source": "presets",
+          "key": "bus.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.canoe": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#95643a",
+          "spawn": [
+            205,
+            -1.888,
+            -140.5
+          ],
+          "yaw": 1.5707963267948966
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.canoe.third-person",
+          "source": "presets",
+          "key": "canoe.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.canoe.first-person",
+          "source": "presets",
+          "key": "canoe.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.canoe.shoulder",
+          "source": "presets",
+          "key": "canoe.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.carriage": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#6b4b31",
+          "spawn": [
+            56,
+            0,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.carriage.third-person",
+          "source": "presets",
+          "key": "carriage.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.carriage.first-person",
+          "source": "presets",
+          "key": "carriage.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.carriage.shoulder",
+          "source": "presets",
+          "key": "carriage.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.glider": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#e2e8eb",
+          "spawn": [
+            -130,
+            33,
+            -146
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.glider.third-person",
+          "source": "presets",
+          "key": "glider.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.glider.first-person",
+          "source": "presets",
+          "key": "glider.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.glider.shoulder",
+          "source": "presets",
+          "key": "glider.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.helicopter": {
+      "asset_version": "0.1.1",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#e4b251",
+          "spawn": [
+            -234,
+            0,
+            -205
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.helicopter.third-person",
+          "source": "presets",
+          "key": "helicopter.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.helicopter.first-person",
+          "source": "presets",
+          "key": "helicopter.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.helicopter.shoulder",
+          "source": "presets",
+          "key": "helicopter.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.hovercraft": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#55cec5",
+          "spawn": [
+            32,
+            1.3,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.hovercraft.third-person",
+          "source": "presets",
+          "key": "hovercraft.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.hovercraft.first-person",
+          "source": "presets",
+          "key": "hovercraft.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.hovercraft.shoulder",
+          "source": "presets",
+          "key": "hovercraft.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.jetski": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#bad43e",
+          "spawn": [
+            220,
+            -1.98,
+            -145
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.jetski.third-person",
+          "source": "presets",
+          "key": "jetski.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.jetski.first-person",
+          "source": "presets",
+          "key": "jetski.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.jetski.shoulder",
+          "source": "presets",
+          "key": "jetski.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.kart": {
+      "asset_version": "0.1.1"
+    },
+    "vehicle.kayak": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#b84047",
+          "spawn": [
+            205,
+            -1.93,
+            -124
+          ],
+          "yaw": 1.5707963267948966
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.kayak.third-person",
+          "source": "presets",
+          "key": "kayak.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.kayak.first-person",
+          "source": "presets",
+          "key": "kayak.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.kayak.shoulder",
+          "source": "presets",
+          "key": "kayak.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.motorcycle": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#a4d479",
+          "spawn": [
+            4,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.motorcycle.third-person",
+          "source": "presets",
+          "key": "motorcycle.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.motorcycle.first-person",
+          "source": "presets",
+          "key": "motorcycle.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.motorcycle.shoulder",
+          "source": "presets",
+          "key": "motorcycle.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.multirotor": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.observation-submarine": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#d4ad38",
+          "spawn": [
+            205,
+            -1.88,
+            -105
+          ],
+          "yaw": 1.5707963267948966
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.observation-submarine.third-person",
+          "source": "presets",
+          "key": "observation-submarine.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.observation-submarine.first-person",
+          "source": "presets",
+          "key": "observation-submarine.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.observation-submarine.shoulder",
+          "source": "presets",
+          "key": "observation-submarine.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.paraglider": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.patrol-boat": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#315f91",
+          "spawn": [
+            207,
+            -1.9,
+            24
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.patrol-boat.third-person",
+          "source": "presets",
+          "key": "patrol-boat.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.patrol-boat.first-person",
+          "source": "presets",
+          "key": "patrol-boat.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.patrol-boat.shoulder",
+          "source": "presets",
+          "key": "patrol-boat.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.plane": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#e27e58",
+          "spawn": [
+            -285,
+            0,
+            -205
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.plane.third-person",
+          "source": "presets",
+          "key": "plane.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.plane.first-person",
+          "source": "presets",
+          "key": "plane.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.plane.shoulder",
+          "source": "presets",
+          "key": "plane.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.pusher-plane": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.racer": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#f37659",
+          "spawn": [
+            -10,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.racer.third-person",
+          "source": "presets",
+          "key": "racer.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.racer.first-person",
+          "source": "presets",
+          "key": "racer.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.racer.shoulder",
+          "source": "presets",
+          "key": "racer.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.raft": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#343b40",
+          "spawn": [
+            201,
+            -1.88,
+            -176
+          ],
+          "yaw": 1.5707963267948966
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.raft.third-person",
+          "source": "presets",
+          "key": "raft.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.raft.first-person",
+          "source": "presets",
+          "key": "raft.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.raft.shoulder",
+          "source": "presets",
+          "key": "raft.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.rescue-hovercraft": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#e36b55",
+          "spawn": [
+            -10,
+            1.3,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.rescue-hovercraft.third-person",
+          "source": "presets",
+          "key": "rescue-hovercraft.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.rescue-hovercraft.first-person",
+          "source": "presets",
+          "key": "rescue-hovercraft.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.rescue-hovercraft.shoulder",
+          "source": "presets",
+          "key": "rescue-hovercraft.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.rover": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#f0b64d",
+          "spawn": [
+            -24,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.rover.third-person",
+          "source": "presets",
+          "key": "rover.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.rover.first-person",
+          "source": "presets",
+          "key": "rover.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.rover.shoulder",
+          "source": "presets",
+          "key": "rover.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.skateboard": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#f39eae",
+          "spawn": [
+            17,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.skateboard.third-person",
+          "source": "presets",
+          "key": "skateboard.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.skateboard.first-person",
+          "source": "presets",
+          "key": "skateboard.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.skateboard.shoulder",
+          "source": "presets",
+          "key": "skateboard.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.ski": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#e67839",
+          "spawn": [
+            -184,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.ski.third-person",
+          "source": "presets",
+          "key": "ski.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.ski.first-person",
+          "source": "presets",
+          "key": "ski.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.ski.shoulder",
+          "source": "presets",
+          "key": "ski.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.sled": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#b89465",
+          "spawn": [
+            -198,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.sled.third-person",
+          "source": "presets",
+          "key": "sled.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.sled.first-person",
+          "source": "presets",
+          "key": "sled.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.sled.shoulder",
+          "source": "presets",
+          "key": "sled.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.spacecraft": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#a398eb",
+          "spawn": [
+            -84,
+            0.8,
+            -70
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.spacecraft.third-person",
+          "source": "presets",
+          "key": "spacecraft.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.spacecraft.first-person",
+          "source": "presets",
+          "key": "spacecraft.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.spacecraft.shoulder",
+          "source": "presets",
+          "key": "spacecraft.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.submarine": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#f4ca58",
+          "spawn": [
+            230,
+            -3.1,
+            45
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.submarine.third-person",
+          "source": "presets",
+          "key": "submarine.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.submarine.first-person",
+          "source": "presets",
+          "key": "submarine.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.submarine.shoulder",
+          "source": "presets",
+          "key": "submarine.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.supercar": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.survey-spacecraft": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#64c8d0",
+          "spawn": [
+            -70,
+            1,
+            -70
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.survey-spacecraft.third-person",
+          "source": "presets",
+          "key": "survey-spacecraft.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.survey-spacecraft.first-person",
+          "source": "presets",
+          "key": "survey-spacecraft.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.survey-spacecraft.shoulder",
+          "source": "presets",
+          "key": "survey-spacecraft.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.tank": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#7c8061",
+          "spawn": [
+            -240,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.tank.third-person",
+          "source": "presets",
+          "key": "tank.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.tank.first-person",
+          "source": "presets",
+          "key": "tank.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.tank.shoulder",
+          "source": "presets",
+          "key": "tank.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.tiltrotor": {
+      "asset_version": "0.1.0"
+    },
+    "vehicle.touring-motorcycle": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#507fc4",
+          "spawn": [
+            -24,
+            0,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.touring-motorcycle.third-person",
+          "source": "presets",
+          "key": "touring-motorcycle.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.touring-motorcycle.first-person",
+          "source": "presets",
+          "key": "touring-motorcycle.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.touring-motorcycle.shoulder",
+          "source": "presets",
+          "key": "touring-motorcycle.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.trail-rover": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#568f72",
+          "spawn": [
+            -38,
+            0,
+            35
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.trail-rover.third-person",
+          "source": "presets",
+          "key": "trail-rover.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.trail-rover.first-person",
+          "source": "presets",
+          "key": "trail-rover.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.trail-rover.shoulder",
+          "source": "presets",
+          "key": "trail-rover.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.trainer-plane": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#f0d04f",
+          "spawn": [
+            -270,
+            0,
+            -205
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.trainer-plane.third-person",
+          "source": "presets",
+          "key": "trainer-plane.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.trainer-plane.first-person",
+          "source": "presets",
+          "key": "trainer-plane.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.trainer-plane.shoulder",
+          "source": "presets",
+          "key": "trainer-plane.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.unicycle": {
+      "asset_version": "0.1.0",
+      "vehicle": {
+        "schemaVersion": 1,
+        "spec": {
+          "color": "#d9bd36",
+          "spawn": [
+            -170,
+            0,
+            64
+          ],
+          "yaw": 0
+        }
+      },
+      "cameraPresetReferences": [
+        {
+          "presetId": "vehicle.unicycle.third-person",
+          "source": "presets",
+          "key": "unicycle.third-person",
+          "viewId": "third-person"
+        },
+        {
+          "presetId": "vehicle.unicycle.first-person",
+          "source": "presets",
+          "key": "unicycle.first-person",
+          "viewId": "first-person"
+        },
+        {
+          "presetId": "vehicle.unicycle.shoulder",
+          "source": "presets",
+          "key": "unicycle.shoulder",
+          "viewId": "shoulder"
+        }
+      ]
+    },
+    "vehicle.wingsuit": {
+      "asset_version": "0.1.0"
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import {testAssetResourceUrl} from '../test-asset-library';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +16,7 @@ vi.setConfig({ testTimeout: 30_000 });
 const parsed: Awaited<ReturnType<GLTFLoader['parseAsync']>>[] = [];
 function resolveFixtureResource(path: string): string {
   if (path !== 'creatures/horse.glb') throw new Error('UNEXPECTED_FIXTURE_RESOURCE');
-  return new URL('../../../../assets/three-creator/presets/creatures/horse.glb', import.meta.url).href;
+  return testAssetResourceUrl('creatures/horse.glb');
 }
 const transport = vi.spyOn(GLTFLoader.prototype, 'loadAsync').mockImplementation(async url => {
   const bytes = await readFile(fileURLToPath(url));
@@ -71,7 +72,7 @@ it('aligns actual Source101 pelvis at yaw +/-90 without moving the logical root'
   const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input => new Response(await readFile(fileURLToPath(String(input)))));
   const rider=new Character(), horse=createHorse();
   try {
-    await rider.load(path=>new URL(`../../../../assets/three-creator/presets/${path}`,import.meta.url).href);
+    await rider.load(testAssetResourceUrl);
     await horse.load(resolveFixtureResource);
     rider.update(0,riderPose('ride'));
     for (const yaw of [-Math.PI/2, Math.PI/2]) {
@@ -130,7 +131,7 @@ it('calibrates all real horse clips with actual Source101 rider geometry at 64 i
     return new T.Box3().setFromObject(object);
   };
   try {
-    await rider.load(path=>new URL(`../../../../assets/three-creator/presets/${path}`,import.meta.url).href);
+    await rider.load(testAssetResourceUrl);
     await horse.load(resolveFixtureResource);
     const limits={nodeName:'Body',maximumOffsetMeters:.145579,maximumRotationRadians:.122951};
     const report=[];
@@ -189,7 +190,7 @@ it('uses the real horse sample and Source101 pelvis in a mounted display transac
   const fixture=await createMountedFixture();const options=fixture.humanoid!.options;fixture.dispose();
   let runtime:import('./runtime').HumanoidRuntime|undefined,world:import('../world').ThreeWorld|undefined;
   try {
-    await rider.load(path=>new URL(`../../../../assets/three-creator/presets/${path}`,import.meta.url).href);
+    await rider.load(testAssetResourceUrl);
     await horse.load(resolveFixtureResource);
     const seatAnchor={nodeName:'Body',maximumOffsetMeters:.145579,maximumRotationRadians:.122951};
     world=await createWorld({camera:new T.PerspectiveCamera(),assetDefinitions:{},navigation:false,humanoid:{...options,character:{instanceId:'person',object:rider.root,animation:rider},vehicles:[{...options.vehicles[0]!,object:horse.root,visual:horse,seatAnchor}]}});runtime=world.humanoid!;
@@ -269,7 +270,7 @@ it('keeps head/back/hand/foot attachments bound to actual Source101 bones across
  const fetchTransport=vi.spyOn(globalThis,'fetch').mockImplementation(async input=>new Response(await readFile(fileURLToPath(String(input)))));
  const rider=new Character();
  try {
-  await rider.load(logical=>new URL(`../../../../assets/three-creator/presets/${logical}`,import.meta.url).href);
+  await rider.load(testAssetResourceUrl);
   const points=['head','back','handLeft','handRight','footLeft','footRight'] as const;
   const bones=['head','spine_05','hand_l','hand_r','foot_l','foot_r'];
   expect(rider.attachmentPoints).toEqual(points);

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "asset_id": "animal.harpy-eagle",
+  "asset_version": "0.1.0",
+  "display_name": "角雕 · 待入库",
+  "aliases": [
+    "Harpy Eagle"
+  ],
+  "browse_group": "animals",
+  "semantic_type": "animal.biped.bird",
+  "semantic_subtypes": [
+    "biped/bird"
+  ],
+  "morphology": {
+    "architecture": "unknown",
+    "profiles": [
+      "biped",
+      "winged"
+    ],
+    "appendages": [],
+    "stance": "unknown"
+  },
+  "scale": {
+    "units": "unknown",
+    "up_axis": "unknown",
+    "forward_axis": "unknown",
+    "dimensions_m": null,
+    "source_transform": null
+  },
+  "lifecycle": "placeholder",
+  "placeholder": true,
+  "description": "来源 FBX 样本，可检查模型与骨架；贴图、单位、语义和 Runtime 接入待完成。",
+  "default_assembly": "subjects/animals/animal.harpy-eagle/0.1.0/assemblies/default.json",
+  "dependencies": []
+}
