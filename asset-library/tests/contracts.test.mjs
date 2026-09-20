@@ -56,3 +56,98 @@ test('legacy removal evidence retains all original bytes without legacy folders'
   assert.equal(sha256(bytes),row.sha256,row.source_path);
  }
 });
+
+// Exercise authoring validation and the actual publisher/Registry together.
+import {subjectFixture} from '../tools/publication-fixture.mjs';
+import {RegistryStore} from '../tools/registry.mjs';
+import {ingestAsset} from '../tools/ingest.mjs';
+import {buildWhiteboxCatalog} from '../tools/whitebox.mjs';
+
+test('runtime evidence survives authoring validation and publication with exact identity',async t=>{
+ const f=subjectFixture(t,ROOT),p=path.join(f.base,'validation/latest.json');
+ const ref={asset_id:f.asset.asset_id,version:f.asset.asset_version};
+ const runtime={runtime_id:'test',runtime_version:'1',runtime_digest:'a'.repeat(64),adapter_id:'test',adapter_version:'1.0.0',preset_digest:'b'.repeat(64),overrides_digest:null,supported_contracts:read(path.join(f.base,'assemblies/default.json')).modules.map(m=>({contract_id:m.asset_id,version:m.version}))};
+ const original=read(p),record={status:'verified',...ref,evidence_id:'case-1',...runtime};
+ write(p,{...original,runtime:'verified',evidence:['format-report.json',record]});
+ assert.equal(validate(f.root).passed,true);
+ await publishLibrary(f.root,{output:f.output});const registry=new RegistryStore(f.output);
+ assert.equal(registry.checkCompatibility({assets:[ref],runtime}).status,'compatible');
+ for(const field of ['runtime_digest','preset_digest','overrides_digest'])assert.equal(registry.checkCompatibility({assets:[ref],runtime:{...runtime,[field]:'c'.repeat(64)}}).status,'unknown',field);
+ for(const evidence of [['format-report.json'],[{...record,version:'9.0.0'}],[{...record,runtime_digest:'bad'}],[{...record,evidence_id:''}]]){
+  write(p,{...original,runtime:'verified',evidence});
+  assert.equal(validate(f.root).passed,false,JSON.stringify(evidence));
+  await assert.rejects(()=>publishLibrary(f.root,{output:path.join(f.root,'invalid')}),/ASSET_CONTRACT_INVALID|ASSET_VALIDATION_IDENTITY_MISMATCH/);
+ }
+ write(p,{...original,runtime:'incompatible',evidence:['failed-case.json']});
+ assert.equal(validate(f.root).passed,true);await publishLibrary(f.root,{output:path.join(f.root,'incompatible')});
+ assert.equal(new RegistryStore(path.join(f.root,'incompatible')).checkCompatibility({assets:[ref],runtime}).status,'incompatible');
+});
+
+test('invalid physical facts cannot pass authoring, publication or Whitebox adaptation',async t=>{
+ const f=subjectFixture(t,ROOT),file=path.join(f.base,'facts/physical.json'),original=read(file);
+ for(const patch of [{radius:'bad'},{radius:0},{seat:[0,false,0]},{seat:[0,1]},{envelope:{kind:'box',halfExtents:[-1,1,1],offset:[0,0,0]}},{wheelPhysics:{radius:-1}},{flyingCreatureCollision:[{id:'probe',center:[0,0,0],radius:0}]}]){
+  write(file,{...original,parameters:{...original.parameters,...patch}});
+  assert.equal(validate(f.root).passed,false,JSON.stringify(patch));
+  assert.throws(()=>buildWhiteboxCatalog(f.root),/CONTENT_FACTS_INVALID/);
+  await assert.rejects(()=>publishLibrary(f.root,{output:f.output}),/CONTENT_FACTS_INVALID/);
+  assert.equal(fs.existsSync(path.join(f.output,'registry.json')),false);
+ }
+ write(file,original);assert.equal(validate(f.root).passed,true);
+});
+
+test('model ingestion declares only observed rig and animation components, with no assumed runtime',async t=>{
+ const f=subjectFixture(t,ROOT),input=inside(f.root,read(path.join(f.base,'resources.json')).model);
+ await ingestAsset({root:f.root,input,id:'object.new-static',group:'objects',name:'Static model'});
+ const base=path.join(f.root,'subjects/objects/object.new-static/0.1.0');
+ const assembly=read(path.join(base,'assemblies/default.json'));
+ for(const field of ['bindings','facts','modules','authority'])assert.equal(assembly[field],undefined,field);
+ for(const folder of ['bindings','facts','profiles','collision'])assert.equal(fs.existsSync(path.join(base,folder)),false,folder);
+ assert.equal(validate(f.root).passed,true);
+ // Optional bindings remain optional even when the model is explicitly selected for Whitebox.
+ write(path.join(base,'bindings/whitebox.json'),{schema_version:'1.0'});
+ const entry=buildWhiteboxCatalog(f.root).assets.find(a=>a.id==='object.new-static');
+ assert.deepEqual(entry.actions,{});assert.equal(entry.vehicle,undefined);
+ await publishLibrary(f.root,{output:f.output});const manifest=new RegistryStore(f.output).describeAsset('object.new-static');
+ assert.deepEqual(manifest.runtime_requirements,[]);assert.deepEqual(manifest.sections.bindings,{});
+ // A reference that IS declared must never silently fall back to an empty binding.
+ assembly.bindings={rig:'subjects/missing.json'};write(path.join(base,'assemblies/default.json'),assembly);
+ assert.equal(validate(f.root).passed,false);await assert.rejects(()=>publishLibrary(f.root,{output:path.join(f.root,'missing')}),/ENOENT/);
+});
+
+test('animated model ingestion preserves actual rig and clips without declaring motor or camera support',async t=>{
+ const f=subjectFixture(t,ROOT,'creature.horse'),input=inside(f.root,read(path.join(f.base,'resources.json')).model);
+ await ingestAsset({root:f.root,input,id:'animal.new-animated',group:'animals',name:'Animated model'});
+ const base=path.join(f.root,'subjects/animals/animal.new-animated/0.1.0');
+ const assembly=read(path.join(base,'assemblies/default.json')),resources=read(path.join(base,'resources.json'));
+ assert.ok(resources.inspection.bones.length>0);assert.ok(resources.animations.length>0);
+ assert.ok(assembly.bindings.rig);assert.ok(assembly.bindings.animations);
+ assert.equal(assembly.bindings.sockets,undefined);assert.equal(assembly.modules,undefined);assert.equal(assembly.authority,undefined);
+ assert.equal(validate(f.root).passed,true);await publishLibrary(f.root,{output:f.output});
+ const manifest=new RegistryStore(f.output).describeAsset('animal.new-animated');
+ assert.ok(manifest.sections.bindings.rig.bones.length>0);assert.deepEqual(manifest.runtime_requirements,[]);
+ assert.equal(manifest.sections.validation.runtime,'not_run');
+});
+
+test('model facts, sockets and collision are validated before catalog generation or publication',async t=>{
+ const f=subjectFixture(t,ROOT,'vehicle.atv');
+ const cases=[
+  ['facts/model.json',m=>{m.roadCushion={center:[0,0,0],size:['bad',1,1]};},/ASSET_CONTENT_FACTS_INVALID/],
+  ['facts/model.json',m=>{m.roadCushion={center:[0,0,0],size:[1,-1,1]};},/ASSET_CONTENT_FACTS_INVALID/],
+  ['facts/model.json',m=>{m.socket_ids=['missing.socket'];},/ASSET_MODEL_SOCKET_MISSING/],
+  ['bindings/sockets.json',s=>{s.sockets[0].positionMetersXYZ=[false,1,2];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['bindings/sockets.json',s=>{s.sockets[0].positionMetersXYZ=[1,2];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['bindings/sockets.json',s=>{s.sockets.push({...s.sockets[0],positionMetersXYZ:[1,2,3]});},/ASSET_SOCKET_ID_DUPLICATE/],
+  ['collision/collision.json',c=>{c.shapes=[{kind:'box',halfExtents:[-1,1,1],offset:[0,0,0]}];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['collision/collision.json',c=>{c.shapes=[{kind:'box',halfExtents:[1,1,1],offset:[false,0,0]}];},/ASSET_CONTENT_FACTS_INVALID/],
+ ];
+ assert.equal(validate(f.root).passed,true);
+ for(const [relative,mutate,error] of cases){
+  const file=path.join(f.base,relative),original=read(file),invalid=structuredClone(original);mutate(invalid);write(file,invalid);
+  assert.equal(validate(f.root).passed,false,relative);
+  assert.throws(()=>buildWhiteboxCatalog(f.root),error);
+  await assert.rejects(()=>publishLibrary(f.root,{output:f.output}),error);
+  assert.equal(fs.existsSync(path.join(f.output,'registry.json')),false);
+  write(file,original);
+ }
+ assert.equal(validate(f.root).passed,true);await publishLibrary(f.root,{output:f.output});
+});

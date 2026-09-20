@@ -425,8 +425,8 @@
     },
     {
       "path": "subjects/animals/animal.akita-inu/0.1.0/assemblies/default.json",
-      "sha256": "c3e53d280ba6a255d5db46ee6d7355108c0778676b70dbc62c3c6503fff5eb5c",
-      "byte_length": 881
+      "sha256": "1007ef473810b7528d2e5292a28a12fe93a0b8e5311018664f621912a9b5d5ff",
+      "byte_length": 796
     },
     {
       "path": "subjects/animals/animal.akita-inu/0.1.0/asset.json",
@@ -450,8 +450,8 @@
     },
     {
       "path": "subjects/animals/animal.akita-inu/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.akita-inu/0.1.0/collision/collision.json",
@@ -459,19 +459,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.akita-inu/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.akita-inu/0.1.0/preview/Akita Inu.png",
       "sha256": "d3988f5d964e0452087652be2f9016c1da5082207584a9adb4a11123190bc86a",
       "byte_length": 78535
-    },
-    {
-      "path": "subjects/animals/animal.akita-inu/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.akita-inu/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.akita-inu/0.1.0/provenance.json",
@@ -490,8 +485,8 @@
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/assemblies/default.json",
-      "sha256": "e0641c2322225c03e170c3e28b2f40355d826938ee8987ef09e22583f0dfa905",
-      "byte_length": 1068
+      "sha256": "574250e0d16ce6afcba09e96ac3c25969f81a0ae640998314cc7b7bbca3247c5",
+      "byte_length": 968
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/asset.json",
@@ -515,13 +510,18 @@
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/model/SK-AnimalsBear_Bear.FBX",
@@ -537,16 +537,6 @@
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/preview/thumbnail.webp",
       "sha256": "d62b0a4c0782d45585bff25dea09358a490f9537be4c62f5b2b8aa0175a660a4",
       "byte_length": 6152
-    },
-    {
-      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.animalia-brown-bear-male/0.1.0/provenance.json",
@@ -565,8 +555,8 @@
     },
     {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/assemblies/default.json",
-      "sha256": "a9c1ac976b8adc11502d5d8a182846e8ae1d655726f73a03d4d20c28e49e6b8f",
-      "byte_length": 986
+      "sha256": "083220375ac73b20e197f5b6efd267f7f071471af3bfc67c41b802394b4f2a2a",
+      "byte_length": 886
     },
     {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/asset.json",
@@ -590,8 +580,8 @@
     },
     {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/collision/collision.json",
@@ -599,19 +589,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/preview/Animalia - Wild Boar young.png",
       "sha256": "45f13bdda51e40e3f0b1584cfa846e6f55681d399affdcc53e41a29cc82dd84c",
       "byte_length": 232475
-    },
-    {
-      "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.animalia-wild-boar-young/0.1.0/provenance.json",
@@ -630,8 +615,8 @@
     },
     {
       "path": "subjects/animals/animal.animals-rat/0.1.0/assemblies/default.json",
-      "sha256": "5ace5c8f6a2df78b0b3f30bbd6ed96dbff4be40bddc576f9b1ea7695078022e3",
-      "byte_length": 895
+      "sha256": "345371f36b22d90a2e7f717c4acf0f2b23d63fccd68161b9f01e387170d8ae1e",
+      "byte_length": 808
     },
     {
       "path": "subjects/animals/animal.animals-rat/0.1.0/asset.json",
@@ -655,8 +640,8 @@
     },
     {
       "path": "subjects/animals/animal.animals-rat/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.animals-rat/0.1.0/collision/collision.json",
@@ -664,19 +649,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.animals-rat/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.animals-rat/0.1.0/preview/Animals Rat.jpg",
       "sha256": "6210d4fd47178943dbaa4abca0193968f4ad03322f15df60f1da6e45f1655100",
       "byte_length": 568290
-    },
-    {
-      "path": "subjects/animals/animal.animals-rat/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.animals-rat/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.animals-rat/0.1.0/provenance.json",
@@ -695,8 +675,8 @@
     },
     {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/assemblies/default.json",
-      "sha256": "c6a87e41a9cb2e48f617aead703c76e1af123f03cd7a38baf2863f4cdd078aee",
-      "byte_length": 979
+      "sha256": "c702e3f7b79883f8c36ef4d95f5adfb30eefb6fb4591be3a3b4e1eb2b182deac",
+      "byte_length": 880
     },
     {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/asset.json",
@@ -720,8 +700,8 @@
     },
     {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/collision/collision.json",
@@ -729,19 +709,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/preview/AnimX Advanced Cats 427.jpg",
       "sha256": "46e5bb1c0bd35ff6cee150f26bead16ba25b4e3088af640d3b927efe0673ec11",
       "byte_length": 14311
-    },
-    {
-      "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.animx-advanced-cats-427/0.1.0/provenance.json",
@@ -760,8 +735,8 @@
     },
     {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/assemblies/default.json",
-      "sha256": "7e680cd0a232da73ab1b609ffe40a3fa0ab073deb5daf52bb603d3041008a80d",
-      "byte_length": 972
+      "sha256": "1bc3fda759bec83f093a252b08b4e0e746967e024e03f8e92d182eabb7833116",
+      "byte_length": 874
     },
     {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/asset.json",
@@ -785,8 +760,8 @@
     },
     {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/collision/collision.json",
@@ -794,19 +769,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.crab-animated-creature/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/preview/Crab - Animated Creature.png",
       "sha256": "bb2d17279e8d158be1b09b48d5ec2bcb5293470fb553837835c586fa4a92e3bb",
       "byte_length": 1101527
-    },
-    {
-      "path": "subjects/animals/animal.crab-animated-creature/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.crab-animated-creature/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.crab-animated-creature/0.1.0/provenance.json",
@@ -825,8 +795,8 @@
     },
     {
       "path": "subjects/animals/animal.crocodile/0.1.0/assemblies/default.json",
-      "sha256": "99c3214284d56be9ad0d344d4e848a5809651d9240f1d7ca9aedcbe694b06c80",
-      "byte_length": 881
+      "sha256": "545ef971dea53c03ea0f312c601bb39335da4dbf5e14706bc4e4e3ee884e61c0",
+      "byte_length": 796
     },
     {
       "path": "subjects/animals/animal.crocodile/0.1.0/asset.json",
@@ -850,8 +820,8 @@
     },
     {
       "path": "subjects/animals/animal.crocodile/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.crocodile/0.1.0/collision/collision.json",
@@ -859,19 +829,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.crocodile/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.crocodile/0.1.0/preview/CROCODILE.png",
       "sha256": "e219801aadd93c86b57cbc230a6a3c296c736d9f16cca990d65d599cdd750e47",
       "byte_length": 89886
-    },
-    {
-      "path": "subjects/animals/animal.crocodile/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.crocodile/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.crocodile/0.1.0/provenance.json",
@@ -890,8 +855,8 @@
     },
     {
       "path": "subjects/animals/animal.elephant/0.1.0/assemblies/default.json",
-      "sha256": "4a365a45848aee537c200777b1c9635367855109f34ffbca808c79b3eaaf794d",
-      "byte_length": 874
+      "sha256": "06e4a39160ec6763cbf4770607ae2c996217739f191954e8e97f37fbf223fbf0",
+      "byte_length": 790
     },
     {
       "path": "subjects/animals/animal.elephant/0.1.0/asset.json",
@@ -915,8 +880,8 @@
     },
     {
       "path": "subjects/animals/animal.elephant/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.elephant/0.1.0/collision/collision.json",
@@ -924,19 +889,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.elephant/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.elephant/0.1.0/preview/ELEPHANT.png",
       "sha256": "70b7c5aace2d069336e5e768459ec53b6b574970feb87787eee64afef5599ce2",
       "byte_length": 880899
-    },
-    {
-      "path": "subjects/animals/animal.elephant/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.elephant/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.elephant/0.1.0/provenance.json",
@@ -955,8 +915,8 @@
     },
     {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/assemblies/default.json",
-      "sha256": "891ac8557304f184056c63febfb093b6e9b282dc2f12b3faecbb15f78b72d49b",
-      "byte_length": 916
+      "sha256": "e96f998cdd973e1cc6afbcc0939fa4fcc9bdae4701f6e377354c73a6d3052232",
+      "byte_length": 826
     },
     {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/asset.json",
@@ -980,8 +940,8 @@
     },
     {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/collision/collision.json",
@@ -989,19 +949,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.giant-scorpion/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/preview/Giant Scorpion.jpg",
       "sha256": "8024090ef50c50a88108e81157843133d2d7d4fa0f439e212be178dcc638c1e1",
       "byte_length": 7904
-    },
-    {
-      "path": "subjects/animals/animal.giant-scorpion/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.giant-scorpion/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.giant-scorpion/0.1.0/provenance.json",
@@ -1020,8 +975,8 @@
     },
     {
       "path": "subjects/animals/animal.giant-viper/0.1.0/assemblies/default.json",
-      "sha256": "32f7ef5b461a595685ee64612312a95e215cd0dd53dad7e4f135d210b8751189",
-      "byte_length": 895
+      "sha256": "29bc6d274f82124f72032397aca6fb91a60df43949b457fcda3211ddd056cf3b",
+      "byte_length": 808
     },
     {
       "path": "subjects/animals/animal.giant-viper/0.1.0/asset.json",
@@ -1045,8 +1000,8 @@
     },
     {
       "path": "subjects/animals/animal.giant-viper/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.giant-viper/0.1.0/collision/collision.json",
@@ -1054,19 +1009,14 @@
       "byte_length": 75
     },
     {
+      "path": "subjects/animals/animal.giant-viper/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
+    },
+    {
       "path": "subjects/animals/animal.giant-viper/0.1.0/preview/Giant Viper.png",
       "sha256": "113d441dea7cf52577e734733d7ee716ee3fb4692eed4d056f9fe49560cb67ed",
       "byte_length": 162271
-    },
-    {
-      "path": "subjects/animals/animal.giant-viper/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.giant-viper/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.giant-viper/0.1.0/provenance.json",
@@ -1085,8 +1035,8 @@
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/assemblies/default.json",
-      "sha256": "556dbd4c7ff3ee899bb8ae41dbc0d489ff79fa94fabd7b127527f62c4bdaf533",
-      "byte_length": 967
+      "sha256": "e9f80b8329f591715a40edb14ab23674b4e1dc75c83c60ea8e24453503f46a9d",
+      "byte_length": 880
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/asset.json",
@@ -1110,13 +1060,18 @@
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/animals/animal.harpy-eagle/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/model/HarpyEagleModelLowPoly.FBX",
@@ -1132,16 +1087,6 @@
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/preview/thumbnail.webp",
       "sha256": "2356f63d0bc5d69bac268225e4a52287f88317296463b6366e7cf98f9e1c54fa",
       "byte_length": 3906
-    },
-    {
-      "path": "subjects/animals/animal.harpy-eagle/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.harpy-eagle/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/animal.harpy-eagle/0.1.0/provenance.json",
@@ -1160,8 +1105,8 @@
     },
     {
       "path": "subjects/animals/animal.megalodon/0.1.0/assemblies/default.json",
-      "sha256": "79e5540af3741793d3537be5a7bd74fbdc0aa519edcc49bee187a631b57f59ba",
-      "byte_length": 881
+      "sha256": "db314d871fbde01823cb95e401fe7db37b0a4f20c9bb9099ebbd4d162eafb252",
+      "byte_length": 796
     },
     {
       "path": "subjects/animals/animal.megalodon/0.1.0/asset.json",
@@ -1185,8 +1130,8 @@
     },
     {
       "path": "subjects/animals/animal.megalodon/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.megalodon/0.1.0/collision/collision.json",
@@ -1194,12 +1139,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/animals/animal.megalodon/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.megalodon/0.1.0/profiles/locomotion.json",
+      "path": "subjects/animals/animal.megalodon/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -1220,8 +1160,8 @@
     },
     {
       "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/assemblies/default.json",
-      "sha256": "ef6e011ae8644f67ddc9ab2dd7b345737f0ecaae3d8baae5315d7ddcf083ab38",
-      "byte_length": 979
+      "sha256": "03a3b79c727a6e6013b8457eda16f967012ca45c5c58b7d3c18e69510adc3618",
+      "byte_length": 880
     },
     {
       "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/asset.json",
@@ -1245,8 +1185,8 @@
     },
     {
       "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/collision/collision.json",
@@ -1254,12 +1194,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/profiles/locomotion.json",
+      "path": "subjects/animals/animal.tyannosaurus-rex-sue-rd/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -1280,8 +1215,8 @@
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/assemblies/default.json",
-      "sha256": "5f3df9760d66f8016df5015614851a9f469e1c23213235c911beb65cb3fa10e5",
-      "byte_length": 923
+      "sha256": "e935c283b8a136720923e275d6f1a4b15509fe457cef706ef6406b16938f7202",
+      "byte_length": 840
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/asset.json",
@@ -1310,13 +1245,18 @@
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/capabilities.json",
-      "sha256": "41d40ff09fc0e608b7215e5cce6b690f4a745ba9d829d1eb1a35788c19af6b6e",
-      "byte_length": 843
+      "sha256": "dfa9019b4a7c91c2dcb3706bf256ecb5a131b4d17413e4a907ed29d0e8b31840",
+      "byte_length": 762
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/collision/collision.json",
       "sha256": "1fad5866ea1cfc7dbcd5c2e599e99636801a6acb26f4457236cf0502fea0666f",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/animals/creature.horse/0.1.0/facts/physical.json",
+      "sha256": "f180f2d2e02d9e4526319a46e0dda51814d6a13e95f5ca0a645e6a875754c06c",
+      "byte_length": 556
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/model/horse.glb",
@@ -1327,16 +1267,6 @@
       "path": "subjects/animals/creature.horse/0.1.0/preview/thumbnail.webp",
       "sha256": "445ed21419427284b05577d01f2b70f4a381e7b3a62e1b3656411d65548af3ee",
       "byte_length": 12962
-    },
-    {
-      "path": "subjects/animals/creature.horse/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/creature.horse/0.1.0/profiles/locomotion.json",
-      "sha256": "f180f2d2e02d9e4526319a46e0dda51814d6a13e95f5ca0a645e6a875754c06c",
-      "byte_length": 556
     },
     {
       "path": "subjects/animals/creature.horse/0.1.0/provenance.json",
@@ -1355,8 +1285,8 @@
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/assemblies/default.json",
-      "sha256": "5daecd54d272727f5c84b5c48505981ada153aff8250aeae8e6681192d6ba917",
-      "byte_length": 1110
+      "sha256": "f90ad568fb0c69afaecb0c9e19a896c614d28160a39aa83baa4ce34de2079d0b",
+      "byte_length": 1005
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/asset.json",
@@ -1385,13 +1315,18 @@
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/capabilities.json",
-      "sha256": "0c46f1de6a065c6314d8747235c65cd8571c6828fd14fadd72f5b3b694a6314b",
-      "byte_length": 1024
+      "sha256": "8c596dbd5162e86c6bd6536051bfcd7218d5122957b64835af549e0e2a1be84e",
+      "byte_length": 921
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/facts/physical.json",
+      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
+      "byte_length": 215
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/model/quadruped-animal.glb",
@@ -1402,16 +1337,6 @@
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/preview/thumbnail.webp",
       "sha256": "0c263d97114d3982cb310c88e6af6cc755e2b391be7af8f0f01e21ab1530b74f",
       "byte_length": 7486
-    },
-    {
-      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/locomotion.json",
-      "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
-      "byte_length": 215
     },
     {
       "path": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/provenance.json",
@@ -1675,8 +1600,8 @@
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/assemblies/default.json",
-      "sha256": "69c3fef819ae355e1f13edcc51f10860f901262dcc0c1ecf865286d791efede2",
-      "byte_length": 1013
+      "sha256": "ce5262b28749f6c80658b7f446c9f65acd6eda5f834021b39c21369ca19f121a",
+      "byte_length": 918
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/asset.json",
@@ -1705,13 +1630,18 @@
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/capabilities.json",
-      "sha256": "8d4e0c05850716edcf2a612b94cb72ec12adb4784611a37b4ee3fbb092e33102",
-      "byte_length": 637
+      "sha256": "63557eda53ddeb7524ff1f6140f87640d61d1ea229f5933718821c36f3b220f1",
+      "byte_length": 544
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/facts/physical.json",
+      "sha256": "18ab074427d27df5104a23005013f741cd6b6fa721f9911219b46d0175a63ccc",
+      "byte_length": 390
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/model/model.glb",
@@ -1722,16 +1652,6 @@
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/preview/thumbnail.webp",
       "sha256": "110f72e579cba2bb49ac766c4fe5da8ae528eda5248db74cc0b5af1cf090ca6c",
       "byte_length": 6718
-    },
-    {
-      "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/profiles/locomotion.json",
-      "sha256": "5d4807c73a5e76a306882acc92cd5d5df3e69db6b63db7dc313b3fb353075995",
-      "byte_length": 401
     },
     {
       "path": "subjects/characters/humanoid.uefn-mannequin/0.1.0/provenance.json",
@@ -1890,8 +1810,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/assemblies/default.json",
-      "sha256": "44e9007a6b8a050ddad8d7bfd45f3a8e4155e1bab166b0ef6fa4235b8e25b37c",
-      "byte_length": 1020
+      "sha256": "d37422098e24d4a1f5230787ddfb586e205101c52d8807ea7d6d811a676306b5",
+      "byte_length": 924
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/asset.json",
@@ -1920,13 +1840,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/capabilities.json",
-      "sha256": "1ad683c0548114d1dc1839aad796f6b84c08b686160bf9ac22ae54f5e8227c8b",
-      "byte_length": 779
+      "sha256": "e32bb6a5722a16341770ee73f3cb6182cc7474011f52bf6c6d82f9f84a409403",
+      "byte_length": 685
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/collision/collision.json",
       "sha256": "1ae70c6cef61eac4ac11e166c2683df50c7f1eb8024e1f60e5d0eff77ae79717",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/facts/physical.json",
+      "sha256": "08c8c84d587819f0df21167b7bd1c0b4c299fb449548146637951cdb68163c74",
+      "byte_length": 563
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/model/dragon.glb",
@@ -1937,16 +1862,6 @@
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/preview/thumbnail.webp",
       "sha256": "45a6b69390005bdb4fff9c0b2becbdb1a3c2349b34b894b4c94f56e11af6dfb9",
       "byte_length": 13864
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/locomotion.json",
-      "sha256": "08c8c84d587819f0df21167b7bd1c0b4c299fb449548146637951cdb68163c74",
-      "byte_length": 563
     },
     {
       "path": "subjects/fantastical/creature.dragon-evolved/0.1.0/provenance.json",
@@ -1965,8 +1880,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/assemblies/default.json",
-      "sha256": "e63076596e523519d3cb1ea583be295f9699d0f8e9cb8d1f75bb077b68420709",
-      "byte_length": 988
+      "sha256": "dce33cbc9276f99c3390f21b74e46c5bf3e8706e79ad40442a595976dbd028f1",
+      "byte_length": 896
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/asset.json",
@@ -1995,13 +1910,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/capabilities.json",
-      "sha256": "d7a2c88c4ad76bacc6c9c70ca6ec646d4447d7933862cfcab7a731c92654c6f7",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/collision/collision.json",
       "sha256": "a0f4d20a9a6db4c431f7baa5e1432ec396780bc4a938178e61d461a8e9c63db3",
       "byte_length": 334
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d01/0.1.0/facts/physical.json",
+      "sha256": "deb60e1813c385fb172de5ed4cf2726c3340d2515a0cc136dcf0fcc473602ead",
+      "byte_length": 4964
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/model/dragon.glb",
@@ -2017,16 +1937,6 @@
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/preview/thumbnail.webp",
       "sha256": "7a272acc7ea618018b2daccdaf2d9eceab638e88e78a91a50e7d0c745570b485",
       "byte_length": 13518
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d01/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d01/0.1.0/profiles/locomotion.json",
-      "sha256": "deb60e1813c385fb172de5ed4cf2726c3340d2515a0cc136dcf0fcc473602ead",
-      "byte_length": 4964
     },
     {
       "path": "subjects/fantastical/creature.dragon.d01/0.1.0/provenance.json",
@@ -2050,8 +1960,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/assemblies/default.json",
-      "sha256": "1882d1ac1ae6e296f8dc34878bd13a077aa6eba14c4cf710ce24c224ca6ffaf2",
-      "byte_length": 985
+      "sha256": "9f79a6806d94c3158edd71a35cd96a5eb85f1e6de62f2d670248df527a7d70df",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/asset.json",
@@ -2080,13 +1990,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/capabilities.json",
-      "sha256": "b68d3b6f2b797d118da9e5042028ab96fa6e2d6aa75edd5d13bcf6c8cd1df356",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/collision/collision.json",
       "sha256": "d9da0811399c201797afe39a39726f44f716848dcf525aad33096177c9d7d9b8",
       "byte_length": 288
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d02/0.1.0/facts/physical.json",
+      "sha256": "6083e41d488a5322ebaba3d3f59217d51c88469864d0a585e2f06c991d871f9b",
+      "byte_length": 4979
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/model/D02.glb",
@@ -2102,16 +2017,6 @@
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/preview/thumbnail.webp",
       "sha256": "7b049402e7eddfff03e06900d9f1477c90e7857758d60b2f7dc954031410cacf",
       "byte_length": 16074
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d02/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d02/0.1.0/profiles/locomotion.json",
-      "sha256": "6083e41d488a5322ebaba3d3f59217d51c88469864d0a585e2f06c991d871f9b",
-      "byte_length": 4979
     },
     {
       "path": "subjects/fantastical/creature.dragon.d02/0.1.0/provenance.json",
@@ -2130,8 +2035,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/assemblies/default.json",
-      "sha256": "f9c195517849f45415a2a01aa764edd7aafbf5c853440ee2cd45c161b1d74f52",
-      "byte_length": 985
+      "sha256": "6f6eb06ef702ea1db8559005a1a45ea3536dfead67e9b8e88832dfd890e3daf2",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/asset.json",
@@ -2160,13 +2065,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/capabilities.json",
-      "sha256": "0e1431b53604d0724423b737aaa9f97992b026d64322ceb8b9c4cf6391056b05",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/collision/collision.json",
       "sha256": "aaa10abc1f8d1196ccfcf54640df50f5629ae0f8527ae5023626113110c95078",
       "byte_length": 290
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d03/0.1.0/facts/physical.json",
+      "sha256": "e5c1ff01c0157bc018de5d5491089b83f86604be88179f4a25f74de8969971be",
+      "byte_length": 4970
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/model/D03.glb",
@@ -2182,16 +2092,6 @@
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/preview/thumbnail.webp",
       "sha256": "873c8ee5dff0b4851505e2deae625abfe363fe19751c456ad6240596c11118bf",
       "byte_length": 14186
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d03/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d03/0.1.0/profiles/locomotion.json",
-      "sha256": "e5c1ff01c0157bc018de5d5491089b83f86604be88179f4a25f74de8969971be",
-      "byte_length": 4970
     },
     {
       "path": "subjects/fantastical/creature.dragon.d03/0.1.0/provenance.json",
@@ -2210,8 +2110,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/assemblies/default.json",
-      "sha256": "5e0b9e2b48e432d5115e4cd1ba84d229cd95e218164a9a84a195075c19622e33",
-      "byte_length": 985
+      "sha256": "624604b5caa901e24983f70976ebf524710319000e0549665fac9742189d6f37",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/asset.json",
@@ -2240,13 +2140,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/capabilities.json",
-      "sha256": "b03d8498fe30271a40dd23a997b6f672af0f125772b11df88630a7983c558f2b",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/collision/collision.json",
       "sha256": "d63b96cdba145f5af54eab8a40aa65df05fe71b0a5dea08480d77718fb41b45a",
       "byte_length": 284
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d04/0.1.0/facts/physical.json",
+      "sha256": "1a0a6590492c280242ae2681335c57fafc9e3c85ef944d6ee1d34a546b33c94e",
+      "byte_length": 4966
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/model/D04.glb",
@@ -2262,16 +2167,6 @@
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/preview/thumbnail.webp",
       "sha256": "452fcb7fba898e90fb35b46f27174712873457a583020fd4014fcf85d3779dde",
       "byte_length": 17816
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d04/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d04/0.1.0/profiles/locomotion.json",
-      "sha256": "1a0a6590492c280242ae2681335c57fafc9e3c85ef944d6ee1d34a546b33c94e",
-      "byte_length": 4966
     },
     {
       "path": "subjects/fantastical/creature.dragon.d04/0.1.0/provenance.json",
@@ -2290,8 +2185,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/assemblies/default.json",
-      "sha256": "124a8239944753d4478b3a7061153ad0f988d515064b2f13b032864d95d45c01",
-      "byte_length": 985
+      "sha256": "5325a43e977cdd481a806d5fe1b48f13b90e033a1ea268b8dbdaee7dadca9951",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/asset.json",
@@ -2320,13 +2215,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/capabilities.json",
-      "sha256": "c9037f9da201c71b958b93dbc6b4c4d6d71e18e51696a2745d4ee99050835df2",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/collision/collision.json",
       "sha256": "509dd5e1fa4de4d5d55a68bf47c9a7d6abb9582863c1dd1ca1d38ecdd11e4491",
       "byte_length": 311
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d05/0.1.0/facts/physical.json",
+      "sha256": "d7dd9ffa5be5626b03a31ce0d4823142d745182d6e0681fb9023497198b89b20",
+      "byte_length": 4988
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/model/D05.glb",
@@ -2342,16 +2242,6 @@
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/preview/thumbnail.webp",
       "sha256": "6bb726b486632cc086eed89e7d2339ff51d56cbf7b17a91fd8f06d94412a9eb1",
       "byte_length": 18220
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d05/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d05/0.1.0/profiles/locomotion.json",
-      "sha256": "27b2380b113efdd9610adb126564e40c9b3137f26b44e6e9b332cbd745eccb03",
-      "byte_length": 4989
     },
     {
       "path": "subjects/fantastical/creature.dragon.d05/0.1.0/provenance.json",
@@ -2370,8 +2260,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/assemblies/default.json",
-      "sha256": "ab7e610fb574e570e66e39c385188a5663e504a385f29ac476a9362c10486331",
-      "byte_length": 985
+      "sha256": "13d87884f42e58d5b0663b23497d63b118a56569791341b390a2198fec9eece2",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/asset.json",
@@ -2400,13 +2290,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/capabilities.json",
-      "sha256": "ef040d76dc4f69d2e19d8513fe34eb14bb6f5006caa7c43ed0276e1aff7df576",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/collision/collision.json",
       "sha256": "3bd303a0978dcba0fd066f3929f9821bb1b5fb3d8c628512149798c771ed08e7",
       "byte_length": 299
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d06/0.1.0/facts/physical.json",
+      "sha256": "c49400fd0c5b861fe941b55d627be9eb1386053a4ac62b66fc12696be814be44",
+      "byte_length": 4970
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/model/D06.glb",
@@ -2422,16 +2317,6 @@
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/preview/thumbnail.webp",
       "sha256": "04e6bcb88e42834be19208101829f253822c68f197f255a35ce9826cd43ee4f3",
       "byte_length": 18410
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d06/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d06/0.1.0/profiles/locomotion.json",
-      "sha256": "c49400fd0c5b861fe941b55d627be9eb1386053a4ac62b66fc12696be814be44",
-      "byte_length": 4970
     },
     {
       "path": "subjects/fantastical/creature.dragon.d06/0.1.0/provenance.json",
@@ -2450,8 +2335,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/assemblies/default.json",
-      "sha256": "b63e6dda90406651dcb7b7a7f60afd1a19ad371a376c6cc38665ef4eaf589418",
-      "byte_length": 985
+      "sha256": "a9acf69f914e55306c7cdbefaed617400244497acf387b8411065afafbd15cce",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/asset.json",
@@ -2480,13 +2365,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/capabilities.json",
-      "sha256": "c68fe560b9a4dadf8e4a6c84d62211eab2a2f1c6d4ad9d7efef3b1dbd07ef0f3",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/collision/collision.json",
       "sha256": "4b681865cb048fe0b34f77df36698fcdb91357c7f4b08833ed0c0f7ded6dec76",
       "byte_length": 284
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d07/0.1.0/facts/physical.json",
+      "sha256": "a70e8bb3842e240552eb561b0e2e03d2a583b51f065dfa21ed212665eabd35d5",
+      "byte_length": 4966
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/model/D07.glb",
@@ -2502,16 +2392,6 @@
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/preview/thumbnail.webp",
       "sha256": "f8bdfebda1f1fa494b305b229c810bad60737cd2548d4b8ee4dfd2fe54b4b0e6",
       "byte_length": 21872
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d07/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d07/0.1.0/profiles/locomotion.json",
-      "sha256": "a70e8bb3842e240552eb561b0e2e03d2a583b51f065dfa21ed212665eabd35d5",
-      "byte_length": 4966
     },
     {
       "path": "subjects/fantastical/creature.dragon.d07/0.1.0/provenance.json",
@@ -2530,8 +2410,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/assemblies/default.json",
-      "sha256": "a432999c444af3e8d21a1fba868af994e5ece848e1083480def988ffd6a9f750",
-      "byte_length": 985
+      "sha256": "23907cbac4abd071155e520e73c1383d1430ba7610714a12f82fbbc86bdbbcce",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/asset.json",
@@ -2560,13 +2440,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/capabilities.json",
-      "sha256": "474987cb16df80fa0ec0b3b74f32580f15fe17a728ce9aebfbfdab86748fa57b",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/collision/collision.json",
       "sha256": "0d5a29e33997379dcc74f4aeebba59f743224dab5c9e31d073adb358d0165088",
       "byte_length": 297
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/facts/physical.json",
+      "sha256": "72c0863b06112941cceaff143f1ecf3e923422773474f84785ab995253edc28c",
+      "byte_length": 4986
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/model/D08.glb",
@@ -2582,16 +2467,6 @@
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/preview/thumbnail.webp",
       "sha256": "754bff981a232298d09a6da1c6e15c30f43b45f7e06704fb89847f402f546596",
       "byte_length": 10600
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d08/0.1.0/profiles/locomotion.json",
-      "sha256": "72c0863b06112941cceaff143f1ecf3e923422773474f84785ab995253edc28c",
-      "byte_length": 4986
     },
     {
       "path": "subjects/fantastical/creature.dragon.d08/0.1.0/provenance.json",
@@ -2610,8 +2485,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/assemblies/default.json",
-      "sha256": "ce1f844f3e0ceeae239c7bb878ed52ab6750df4d13a10b89e2992ee47c0e2cb9",
-      "byte_length": 985
+      "sha256": "d71d9fbec0e60ecf1cc7ec5a780f9348e054b89c19d80d2b4c7b895d8274277d",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/asset.json",
@@ -2640,13 +2515,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/capabilities.json",
-      "sha256": "1276950bc85574368f293c2db088ffb73bfdb741c6470235d6eac3e078343e80",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/collision/collision.json",
       "sha256": "fd4047892c137f196f7d9a3ea783c2b0e8dda8411427006dd1ed83fb5a3aa088",
       "byte_length": 310
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d09/0.1.0/facts/physical.json",
+      "sha256": "175159aade4517a0b2edbbbc533e0ffea6cf5be0ee26dba38ab6cd694f2afe63",
+      "byte_length": 5011
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/model/D09.glb",
@@ -2662,16 +2542,6 @@
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/preview/thumbnail.webp",
       "sha256": "a92fa94d4b0479dc32c8724f9ec4d56a66b9d7cb476fa2d96b3b68f80eb7d54e",
       "byte_length": 20508
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d09/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d09/0.1.0/profiles/locomotion.json",
-      "sha256": "175159aade4517a0b2edbbbc533e0ffea6cf5be0ee26dba38ab6cd694f2afe63",
-      "byte_length": 5011
     },
     {
       "path": "subjects/fantastical/creature.dragon.d09/0.1.0/provenance.json",
@@ -2690,8 +2560,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/assemblies/default.json",
-      "sha256": "c916f7b8a6567a5f9c728e89e7024cc99be53832f60f6a4bff424e75acfbdecd",
-      "byte_length": 985
+      "sha256": "e8badbc6c37888225a3693aa333c19852ba6839654e402651760b16e20b5f7dc",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/asset.json",
@@ -2720,13 +2590,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/capabilities.json",
-      "sha256": "008cf347bd7ae97ca58452531418fd2f1306777d8f0d1c3ffc798f1c641e9f7b",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/collision/collision.json",
       "sha256": "2017f7d9b63502b27f08470403a2cf3c2bc60cccc284e8f6b185d069d87049b5",
       "byte_length": 273
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d10/0.1.0/facts/physical.json",
+      "sha256": "e68d0b684f408f88c4dc9a8d22ef9917d702955857e96d778780ec423e843ab5",
+      "byte_length": 4956
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/model/D10.glb",
@@ -2742,16 +2617,6 @@
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/preview/thumbnail.webp",
       "sha256": "6c9e6e9799fb0bfa867e3e640a4abaef4690b214c2f90a374ffd782e2c93728d",
       "byte_length": 11698
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d10/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d10/0.1.0/profiles/locomotion.json",
-      "sha256": "e68d0b684f408f88c4dc9a8d22ef9917d702955857e96d778780ec423e843ab5",
-      "byte_length": 4956
     },
     {
       "path": "subjects/fantastical/creature.dragon.d10/0.1.0/provenance.json",
@@ -2770,8 +2635,8 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/assemblies/default.json",
-      "sha256": "1c071b4435de38f19746e7d09b661046f320457d2a77cae0ca54bf3153698b35",
-      "byte_length": 985
+      "sha256": "f44990b46d4e6acf22a18b855c4d0a36bfea17c12d3e3a712a4019a56f946327",
+      "byte_length": 893
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/asset.json",
@@ -2800,13 +2665,18 @@
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/capabilities.json",
-      "sha256": "910eaa94024ea4c4adaed0d23b11d3057b8fc55da100ddda957321982383fad6",
-      "byte_length": 1048
+      "sha256": "5dd86ed0ca014e20fd4636add518d06c15c736494b01c5eb46965892bc7d3e1f",
+      "byte_length": 958
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/collision/collision.json",
       "sha256": "ae80860c49bfc674208e76082c5d60c2691d8996747ab0938174493611fc4862",
       "byte_length": 299
+    },
+    {
+      "path": "subjects/fantastical/creature.dragon.d11/0.1.0/facts/physical.json",
+      "sha256": "ac8f5f61ca463c0121988d3ba3d9f7506a6c920ff16bb9362c21f877739e3929",
+      "byte_length": 4980
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/model/D11.glb",
@@ -2822,16 +2692,6 @@
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/preview/thumbnail.webp",
       "sha256": "fec285aa0ec6609fc7fec8e681e8266da3490612c3f974673cb5b993b8395885",
       "byte_length": 18558
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d11/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/creature.dragon.d11/0.1.0/profiles/locomotion.json",
-      "sha256": "ac8f5f61ca463c0121988d3ba3d9f7506a6c920ff16bb9362c21f877739e3929",
-      "byte_length": 4980
     },
     {
       "path": "subjects/fantastical/creature.dragon.d11/0.1.0/provenance.json",
@@ -2850,8 +2710,8 @@
     },
     {
       "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/assemblies/default.json",
-      "sha256": "b473d7508b7ea30201dd2b1079dfecdbab5bb3f5cca4ce69480c2c4252e6f0f3",
-      "byte_length": 992
+      "sha256": "89510227c8fc1ef48f789326e15d2a0dbf3c5ef3bcf56804b006ae287e2549bc",
+      "byte_length": 890
     },
     {
       "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/asset.json",
@@ -2875,8 +2735,8 @@
     },
     {
       "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/collision/collision.json",
@@ -2884,12 +2744,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/profiles/locomotion.json",
+      "path": "subjects/fantastical/fantastical.slime-placeholder/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -2910,8 +2765,8 @@
     },
     {
       "path": "subjects/objects/object.ball-placeholder/0.1.0/assemblies/default.json",
-      "sha256": "dda562b2debfec16fc95fa5bbd0c430c3e809566c0a643e8ebc954caaf59d88b",
-      "byte_length": 930
+      "sha256": "b929c4192985924cd3db35578ffa049d22b7ec088677ada69c165ed7eafb400d",
+      "byte_length": 838
     },
     {
       "path": "subjects/objects/object.ball-placeholder/0.1.0/asset.json",
@@ -2935,8 +2790,8 @@
     },
     {
       "path": "subjects/objects/object.ball-placeholder/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/objects/object.ball-placeholder/0.1.0/collision/collision.json",
@@ -2944,12 +2799,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/objects/object.ball-placeholder/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/objects/object.ball-placeholder/0.1.0/profiles/locomotion.json",
+      "path": "subjects/objects/object.ball-placeholder/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -2970,8 +2820,8 @@
     },
     {
       "path": "subjects/robots/robot.dog-placeholder/0.1.0/assemblies/default.json",
-      "sha256": "2beb7be6f4ed9c24f8dd6e576b45529e2436903b00a779236e74d2f62691dfbb",
-      "byte_length": 911
+      "sha256": "daac3ce3fdc56a5fa11847ae5af8ecac3981223ed5cff4508dbd4ff01321bc25",
+      "byte_length": 822
     },
     {
       "path": "subjects/robots/robot.dog-placeholder/0.1.0/asset.json",
@@ -2995,8 +2845,8 @@
     },
     {
       "path": "subjects/robots/robot.dog-placeholder/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/robots/robot.dog-placeholder/0.1.0/collision/collision.json",
@@ -3004,12 +2854,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/robots/robot.dog-placeholder/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/robots/robot.dog-placeholder/0.1.0/profiles/locomotion.json",
+      "path": "subjects/robots/robot.dog-placeholder/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -3030,8 +2875,8 @@
     },
     {
       "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/assemblies/default.json",
-      "sha256": "6265a74ed2d7c4578a687cd96dc45eb128222cd4c9f24ec0da074017c4a525da",
-      "byte_length": 946
+      "sha256": "8327b3403b5cd4688c51ac640cde6a269fa133b2e4fa0c5ec155d0d1afd1e6d8",
+      "byte_length": 852
     },
     {
       "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/asset.json",
@@ -3055,8 +2900,8 @@
     },
     {
       "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/capabilities.json",
-      "sha256": "fcdd375e3d141f92d9940215f53bf673178fac8c1773d366aa163f86101a8f78",
-      "byte_length": 273
+      "sha256": "1ae4ae951997649c3a1e5780c2535bac2a188ce881016a5de6f6aec7ac4d60c6",
+      "byte_length": 252
     },
     {
       "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/collision/collision.json",
@@ -3064,12 +2909,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/profiles/locomotion.json",
+      "path": "subjects/robots/robot.humanoid-placeholder/0.1.0/facts/physical.json",
       "sha256": "fbd7b8c146500b829f5a5b3eb65ef8be348afa9f93092b2c6d90794836420b01",
       "byte_length": 215
     },
@@ -3090,8 +2930,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/assemblies/default.json",
-      "sha256": "3c1e2e1199181c25bb5bda04bfc08da0b6807f57b297a58de3b5274c20289ecd",
-      "byte_length": 903
+      "sha256": "459e4df61a20b363dc4d4c5275d6fd5a02ba90c8c7c67da732e6c0399f7dbb92",
+      "byte_length": 891
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/asset.json",
@@ -3120,13 +2960,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/capabilities.json",
-      "sha256": "b503257e6c743d2d069b1a6976f7aa080df5e4ebc0d0c4be9e4c7a5279fff79c",
-      "byte_length": 911
+      "sha256": "d59d2e01ffbf8a0f9a50f61eedcf072b10975819177487be50b2b211cba8555e",
+      "byte_length": 832
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/collision/collision.json",
       "sha256": "a0fd198cef7b3e44e9b781c5106a3d2ad40308a8ce507db00cc4ed953ce90649",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.atv/0.1.0/facts/model.json",
+      "sha256": "cad54bf749620b8c599d4708c2277aecca77022f674b5a9114d1a1ef15294d69",
+      "byte_length": 202
+    },
+    {
+      "path": "subjects/vehicles/vehicle.atv/0.1.0/facts/physical.json",
+      "sha256": "7cbf4ba4acdf4bf5058920ccadb2d213a6a9d1fc97d0d64513170093a5167dbc",
+      "byte_length": 1460
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/model/atv.glb",
@@ -3137,21 +2987,6 @@
       "path": "subjects/vehicles/vehicle.atv/0.1.0/preview/thumbnail.webp",
       "sha256": "065d49d79b66a62d54b1095d26447c470e9ca69fb5455db3d41d0011141a4099",
       "byte_length": 20386
-    },
-    {
-      "path": "subjects/vehicles/vehicle.atv/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.atv/0.1.0/profiles/locomotion.json",
-      "sha256": "7cbf4ba4acdf4bf5058920ccadb2d213a6a9d1fc97d0d64513170093a5167dbc",
-      "byte_length": 1460
-    },
-    {
-      "path": "subjects/vehicles/vehicle.atv/0.1.0/profiles/model.json",
-      "sha256": "cad54bf749620b8c599d4708c2277aecca77022f674b5a9114d1a1ef15294d69",
-      "byte_length": 202
     },
     {
       "path": "subjects/vehicles/vehicle.atv/0.1.0/provenance.json",
@@ -3170,8 +3005,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/assemblies/default.json",
-      "sha256": "23b81f7d4d850b77b8d26bbcfaec1da07d5e52d36fabbfc54b2a8b261cbd270e",
-      "byte_length": 937
+      "sha256": "b1b7731ca02d14b8ef49aee51d9210b4df3ae091ecfd79e7549bcc7fdb8a453e",
+      "byte_length": 852
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/asset.json",
@@ -3195,13 +3030,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/capabilities.json",
-      "sha256": "b425b8d8550baa271a81937b1548e95a1695b9cc02b2b6bab9af0c0a61b82efe",
-      "byte_length": 658
+      "sha256": "023f1ddebbd231e62b273b1be65c1a0b06084be3ff52692d6a7da00a46ccad8f",
+      "byte_length": 575
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.balloon/0.1.0/facts/physical.json",
+      "sha256": "768954f576387b59b454931f5807ba18094f6612d6a135bc96780eb5fa860207",
+      "byte_length": 555
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/model/model.glb",
@@ -3212,16 +3052,6 @@
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/preview/thumbnail.webp",
       "sha256": "6acf655d4de5328607941767f99bd2596798fe5b5c34a70ba1b5967b16ef70b9",
       "byte_length": 8342
-    },
-    {
-      "path": "subjects/vehicles/vehicle.balloon/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.balloon/0.1.0/profiles/locomotion.json",
-      "sha256": "768954f576387b59b454931f5807ba18094f6612d6a135bc96780eb5fa860207",
-      "byte_length": 555
     },
     {
       "path": "subjects/vehicles/vehicle.balloon/0.1.0/provenance.json",
@@ -3240,8 +3070,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/assemblies/default.json",
-      "sha256": "e7d8deaa709fa21e38ae9f598c6a1ab5473be9fb43fbb87e582e3e3102cf7729",
-      "byte_length": 912
+      "sha256": "4259bb2be9685a3f2dee5f7d61292f468636535737102569d2fc783b1aad95ad",
+      "byte_length": 830
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/asset.json",
@@ -3270,13 +3100,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/capabilities.json",
-      "sha256": "3ec9950768567dc0be1c37a22b2844c9737f02614e0eca53cc956b64230cfeb0",
-      "byte_length": 634
+      "sha256": "406754d44adf13d1cb4e79e2da1774c429aad81ae94d91b76bab7cad2fc1fc77",
+      "byte_length": 554
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/collision/collision.json",
       "sha256": "8e91253e5d2d1a3abc9cb270b94d46c96c5443bcc76e835ac4f250eecfdd44f5",
       "byte_length": 244
+    },
+    {
+      "path": "subjects/vehicles/vehicle.boat/0.1.0/facts/physical.json",
+      "sha256": "b37ea62f6d85cea856e7d26f53b6d4a0ee91a4bd60d636f9465acf82ddcfb37a",
+      "byte_length": 557
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/model/boat.glb",
@@ -3287,16 +3122,6 @@
       "path": "subjects/vehicles/vehicle.boat/0.1.0/preview/thumbnail.webp",
       "sha256": "3eda30d0e2d836e57e22f8dbb1e372f64a30e09546280e9def1d8771ce2bf498",
       "byte_length": 8016
-    },
-    {
-      "path": "subjects/vehicles/vehicle.boat/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.boat/0.1.0/profiles/locomotion.json",
-      "sha256": "b37ea62f6d85cea856e7d26f53b6d4a0ee91a4bd60d636f9465acf82ddcfb37a",
-      "byte_length": 557
     },
     {
       "path": "subjects/vehicles/vehicle.boat/0.1.0/provenance.json",
@@ -3315,8 +3140,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/assemblies/default.json",
-      "sha256": "bf9ce20df7c1b7a4ac4b5fa7f8fc45eb7eb69ca242361f924f92f104d795a966",
-      "byte_length": 903
+      "sha256": "a932d531a3c2bb439abefa9cfbc8736dcd231dc216c582088d0493f909a0653d",
+      "byte_length": 822
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/asset.json",
@@ -3345,13 +3170,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/capabilities.json",
-      "sha256": "02e173b13628f1821d3a26d03faa7b2578ed2c1e406c33c2764f4833bb5d54c8",
-      "byte_length": 854
+      "sha256": "fc7b90e829ac3d17b934363b00847e64a0908c56f45a609f46800752a46e8164",
+      "byte_length": 775
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/collision/collision.json",
       "sha256": "5a1d8994424ff289558a86ee043cfbd6647625fffe2fbe9780e75f038878382c",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.bus/0.1.0/facts/physical.json",
+      "sha256": "94843b599ccf470caf89c3575830911f75ce90631c7db32a701efe1dc6130e3e",
+      "byte_length": 1484
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/model/bus.glb",
@@ -3362,16 +3192,6 @@
       "path": "subjects/vehicles/vehicle.bus/0.1.0/preview/thumbnail.webp",
       "sha256": "6c8ef9fed63bdc8393cad1208025edf19748220158873368a7e3ec69b4129804",
       "byte_length": 15876
-    },
-    {
-      "path": "subjects/vehicles/vehicle.bus/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.bus/0.1.0/profiles/locomotion.json",
-      "sha256": "94843b599ccf470caf89c3575830911f75ce90631c7db32a701efe1dc6130e3e",
-      "byte_length": 1484
     },
     {
       "path": "subjects/vehicles/vehicle.bus/0.1.0/provenance.json",
@@ -3390,8 +3210,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/assemblies/default.json",
-      "sha256": "2ca5778e004ed052be13d467e168cc7bc1aa0a402980427899da342ece82c8e9",
-      "byte_length": 921
+      "sha256": "bcc720b7a08af56142fc49d3571933cdfcd01761726e64464f3308793be60a36",
+      "byte_length": 838
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/asset.json",
@@ -3420,13 +3240,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/capabilities.json",
-      "sha256": "94ca80c45991a493d3365681ff7401d2cb4dc0a308b917e1972a780e57f241cd",
-      "byte_length": 892
+      "sha256": "1d01594c345979ac95d7469e938cd967e85bf27c2ca177aa55f30e0dcf860a74",
+      "byte_length": 811
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/collision/collision.json",
       "sha256": "0b2125bf23cdad39a5a42acc5555ac9d45e5811662d604caba6d099088880054",
       "byte_length": 242
+    },
+    {
+      "path": "subjects/vehicles/vehicle.canoe/0.1.0/facts/physical.json",
+      "sha256": "7a6e985a40acae702b3a64c41af5ad71a031e5d67dc132919d75ecef3214fa15",
+      "byte_length": 658
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/model/canoe.glb",
@@ -3437,16 +3262,6 @@
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/preview/thumbnail.webp",
       "sha256": "a138395cfbab28f6ca8bcd6322396f5c265ed3d77a571b6fc72ca826ec451d55",
       "byte_length": 9622
-    },
-    {
-      "path": "subjects/vehicles/vehicle.canoe/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.canoe/0.1.0/profiles/locomotion.json",
-      "sha256": "7a6e985a40acae702b3a64c41af5ad71a031e5d67dc132919d75ecef3214fa15",
-      "byte_length": 658
     },
     {
       "path": "subjects/vehicles/vehicle.canoe/0.1.0/provenance.json",
@@ -3465,8 +3280,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/assemblies/default.json",
-      "sha256": "34487799c526ab2638decb31b4fe0915c782c50646bedffd2665d9e45ff1f891",
-      "byte_length": 948
+      "sha256": "043a385e6daee1f6d8e911bb5b3d9525e4947978333887ade7981ff14887d220",
+      "byte_length": 862
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/asset.json",
@@ -3495,13 +3310,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/capabilities.json",
-      "sha256": "2b8b9b42d40c171934bd0580b0082f73973e7c4c32fca525d02b176aab8ffe92",
-      "byte_length": 641
+      "sha256": "17394e9f1371073b6c67d057cd208303036ea3c3fae9248227ee2e3c6ecd9b79",
+      "byte_length": 557
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/collision/collision.json",
       "sha256": "41d8a2adff95ce610c645cae24741e7b7e7d5d9cc5962e00341dfe5a2c511ca3",
       "byte_length": 242
+    },
+    {
+      "path": "subjects/vehicles/vehicle.carriage/0.1.0/facts/physical.json",
+      "sha256": "2a42d4c26a888a214fd264335f277dee89cdf0b283315e89c2c1732f807cc04c",
+      "byte_length": 567
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/model/carriage.glb",
@@ -3512,16 +3332,6 @@
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/preview/thumbnail.webp",
       "sha256": "e8db888d9792792ba5bfc5f927dd8970aac89e5c426f09b83fedc797fb6dc994",
       "byte_length": 12946
-    },
-    {
-      "path": "subjects/vehicles/vehicle.carriage/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.carriage/0.1.0/profiles/locomotion.json",
-      "sha256": "2a42d4c26a888a214fd264335f277dee89cdf0b283315e89c2c1732f807cc04c",
-      "byte_length": 567
     },
     {
       "path": "subjects/vehicles/vehicle.carriage/0.1.0/provenance.json",
@@ -3540,8 +3350,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/assemblies/default.json",
-      "sha256": "e5c07f5de8b542ebf6e62629793374a9985eb98e7fb654563e1d46d24ff3df05",
-      "byte_length": 930
+      "sha256": "4d49714934edb94856e0ecea04a73e36df3601137224e8dc5e12014794667f01",
+      "byte_length": 846
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/asset.json",
@@ -3570,13 +3380,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/capabilities.json",
-      "sha256": "c74585dc5700e515d738f8f794fbf201e0ab1699adbf955e3f6b348f832b598a",
-      "byte_length": 614
+      "sha256": "9f0439f05c67a2671bcc4f2a0e8e55be8d58cdacf3bc24a6f77537ba2101ada5",
+      "byte_length": 532
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/collision/collision.json",
       "sha256": "90c606891a9ce1995abd3d5551babace135a53fcb55ef94cf39de2e683514280",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/vehicles/vehicle.glider/0.1.0/facts/physical.json",
+      "sha256": "527c5941f3d19c36c779651b17839924a0adc78b23c80e5cdbe6b24229be5d0f",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/model/glider.glb",
@@ -3587,16 +3402,6 @@
       "path": "subjects/vehicles/vehicle.glider/0.1.0/preview/thumbnail.webp",
       "sha256": "c346dd1c91e0f9ecb7d112c862e1ed316fda36b604f860d9db3e885b043946ca",
       "byte_length": 4198
-    },
-    {
-      "path": "subjects/vehicles/vehicle.glider/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.glider/0.1.0/profiles/locomotion.json",
-      "sha256": "527c5941f3d19c36c779651b17839924a0adc78b23c80e5cdbe6b24229be5d0f",
-      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.glider/0.1.0/provenance.json",
@@ -3615,8 +3420,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/assemblies/default.json",
-      "sha256": "af49b7564cc23f315a76583f8009490339020a8baceec5e8b16750a77de74e66",
-      "byte_length": 961
+      "sha256": "ec75b090d062674fffbb1ae9a2ec441a22c5817d1a29323415dd40742d3769b9",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/asset.json",
@@ -3640,13 +3445,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/capabilities.json",
-      "sha256": "35b0b233adf80db82bc7a24df95c5585dcac982aaffbe1784d63c2cf322ce9df",
-      "byte_length": 644
+      "sha256": "b4466f65402d13a8c98010530ec8bb8f7115da0a6c86ed61064aa57c24f7fe62",
+      "byte_length": 558
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.0/facts/physical.json",
+      "sha256": "c2dce2fe77b6cb96d8eeb3ffa4f8fbfbe490e89758541ae22e6df3e1a5852aaa",
+      "byte_length": 566
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/model/model.glb",
@@ -3657,16 +3467,6 @@
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/preview/thumbnail.webp",
       "sha256": "5d0133948ce9775c645df7f0992bad77a6069da059aba5570d5ad112141aecf0",
       "byte_length": 12062
-    },
-    {
-      "path": "subjects/vehicles/vehicle.helicopter/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.helicopter/0.1.0/profiles/locomotion.json",
-      "sha256": "c2dce2fe77b6cb96d8eeb3ffa4f8fbfbe490e89758541ae22e6df3e1a5852aaa",
-      "byte_length": 566
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.0/provenance.json",
@@ -3685,8 +3485,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.1/assemblies/default.json",
-      "sha256": "91cbf68d00df5f98f95819ed2a4b65504adec7ffe3ea75e89937d0bd8388befb",
-      "byte_length": 961
+      "sha256": "492d0cb3372aebd78760e1e4717eb008e7aed4f3f538f84890e44633e9ee9133",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.1/asset.json",
@@ -3715,8 +3515,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.1/capabilities.json",
-      "sha256": "3736d5e864454bfe2d2671efa3206ecd6d4f91e46a953c03c2950da52091c2a3",
-      "byte_length": 847
+      "sha256": "2160c179d8018d70fd003470cdc2c12844972bdfacccb736a0f327df81c8e44e",
+      "byte_length": 761
     },
     {
       "path": "subjects/vehicles/vehicle.helicopter/0.1.1/collision/collision.json",
@@ -3724,12 +3524,7 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/locomotion.json",
+      "path": "subjects/vehicles/vehicle.helicopter/0.1.1/facts/physical.json",
       "sha256": "c2dce2fe77b6cb96d8eeb3ffa4f8fbfbe490e89758541ae22e6df3e1a5852aaa",
       "byte_length": 566
     },
@@ -3750,8 +3545,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/assemblies/default.json",
-      "sha256": "f49ab23183c825f7f71fcb48d0ccd8ef6a067cc5ac2b8d5ba50def1b4ad9ec94",
-      "byte_length": 961
+      "sha256": "bb31cced5fc433559a2109fbaece3a7c78cef52953130dae5f44ed3f22f5de99",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/asset.json",
@@ -3780,13 +3575,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/capabilities.json",
-      "sha256": "0e3d7b50a0110510d2fa47317a4077d06baed379854f697e5faf1e30e85b7882",
-      "byte_length": 622
+      "sha256": "da331ee2f4e8003a8908b96d6bb5736a46d8c524cc940c1f59692e9c151c1781",
+      "byte_length": 536
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/collision/collision.json",
       "sha256": "3ab4ab1b5f31e33e9fbb9040e45aef2cd51babe72500da644209528c66be729f",
       "byte_length": 244
+    },
+    {
+      "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/facts/physical.json",
+      "sha256": "ae8669011d8e22aba226c869a651014503d4ff795a52f013feb16e11f97eb053",
+      "byte_length": 568
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/model/hover.glb",
@@ -3797,16 +3597,6 @@
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/preview/thumbnail.webp",
       "sha256": "97ffe6de48dd6ac70829cd456be978b6530b8f0ffe9441a8ca2671921efb9adc",
       "byte_length": 10284
-    },
-    {
-      "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/profiles/locomotion.json",
-      "sha256": "ae8669011d8e22aba226c869a651014503d4ff795a52f013feb16e11f97eb053",
-      "byte_length": 568
     },
     {
       "path": "subjects/vehicles/vehicle.hovercraft/0.1.0/provenance.json",
@@ -3825,8 +3615,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/assemblies/default.json",
-      "sha256": "8a3ae252b2debf34cab36485abf2c17a63b88b20024843b77eff353002aed667",
-      "byte_length": 930
+      "sha256": "881b67828b4bc30f9055f033b3d6a336de75663423a935f02ae398674fed53ad",
+      "byte_length": 918
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/asset.json",
@@ -3855,13 +3645,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/capabilities.json",
-      "sha256": "14bcd709bfe133b01192d99c5a1f0bae5f869150f16c9103341214c47859b232",
-      "byte_length": 825
+      "sha256": "27137f66ed4fd32437555d68cdc1aa8208a12b9b30262559e662b3fcfb8974ab",
+      "byte_length": 743
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/collision/collision.json",
       "sha256": "d0b592eefd14a390658a1b1ded55282b03db321b68d89388592230b9bd53eecb",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0/facts/model.json",
+      "sha256": "20f7aff01d92a244d74650a84b9986051d7539ce6483b138bbdeb8f32b21571f",
+      "byte_length": 217
+    },
+    {
+      "path": "subjects/vehicles/vehicle.jetski/0.1.0/facts/physical.json",
+      "sha256": "b8da457d140647c0278067bed61d52d2063bcb009a8a3ad23a2e3a28f514aade",
+      "byte_length": 660
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/model/jetski.glb",
@@ -3872,21 +3672,6 @@
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/preview/thumbnail.webp",
       "sha256": "df3060f0103de679418ba81cf8ed59e5497634fcaa342068e20bc72e6870abd0",
       "byte_length": 8664
-    },
-    {
-      "path": "subjects/vehicles/vehicle.jetski/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.jetski/0.1.0/profiles/locomotion.json",
-      "sha256": "b8da457d140647c0278067bed61d52d2063bcb009a8a3ad23a2e3a28f514aade",
-      "byte_length": 660
-    },
-    {
-      "path": "subjects/vehicles/vehicle.jetski/0.1.0/profiles/model.json",
-      "sha256": "20f7aff01d92a244d74650a84b9986051d7539ce6483b138bbdeb8f32b21571f",
-      "byte_length": 217
     },
     {
       "path": "subjects/vehicles/vehicle.jetski/0.1.0/provenance.json",
@@ -3905,8 +3690,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/assemblies/default.json",
-      "sha256": "b0e6a1701db303871b2fca9d9dece59c6b1a18552b36197d8e2b39c8e7d77119",
-      "byte_length": 913
+      "sha256": "c8b49df90f1f5791a655c123df4f5ff3185e5bfb7062dc8aae9c8423fead9618",
+      "byte_length": 901
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/asset.json",
@@ -3930,13 +3715,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/capabilities.json",
-      "sha256": "2ddf87e20e3660adacf44c28a7ccf09b85a794a95be88411af4b35ded58eafbc",
-      "byte_length": 664
+      "sha256": "dec91f0246d137c942b05658750426a583ce770e1e9ce1f6f4978f673d7827c6",
+      "byte_length": 584
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.0/facts/model.json",
+      "sha256": "aac750dd548ab15a34f71b3a83befc593c7fe23893c7524c791adac663e2e772",
+      "byte_length": 164
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kart/0.1.0/facts/physical.json",
+      "sha256": "a32e51188119333c312cb918f2b5d984a684564f850c1099b6b7528e54c03bc3",
+      "byte_length": 1222
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/model/model.glb",
@@ -3947,21 +3742,6 @@
       "path": "subjects/vehicles/vehicle.kart/0.1.0/preview/thumbnail.webp",
       "sha256": "734c96e5505f9ae67fc9cdf37f376d4d194396fbfabf3ff18feca46d4991d2b0",
       "byte_length": 15404
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kart/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kart/0.1.0/profiles/locomotion.json",
-      "sha256": "a32e51188119333c312cb918f2b5d984a684564f850c1099b6b7528e54c03bc3",
-      "byte_length": 1222
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kart/0.1.0/profiles/model.json",
-      "sha256": "aac750dd548ab15a34f71b3a83befc593c7fe23893c7524c791adac663e2e772",
-      "byte_length": 164
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.0/provenance.json",
@@ -3980,8 +3760,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.1/assemblies/default.json",
-      "sha256": "2798f88573e7c60a177f742600e182700a9a89fadf9efcdf02fd3fd457a540ee",
-      "byte_length": 913
+      "sha256": "e390d188e5d77effd833a2b0ed4e621ebf3c2e3809a3dde8ff3a5885c6fa9e7c",
+      "byte_length": 901
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.1/asset.json",
@@ -4005,8 +3785,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.1/capabilities.json",
-      "sha256": "80164133e2c5c2678c1e82b824b95d07c1b0e30e6f32dec9877813e3f585cf8d",
-      "byte_length": 664
+      "sha256": "dec91f0246d137c942b05658750426a583ce770e1e9ce1f6f4978f673d7827c6",
+      "byte_length": 584
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.1/collision/collision.json",
@@ -4014,24 +3794,19 @@
       "byte_length": 75
     },
     {
-      "path": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
-      "sha256": "24c0f1eb46826d64e64f96e03aa8393f7e0b0d17e017444da1d6f8f2fa71b7a3",
-      "byte_length": 85148
+      "path": "subjects/vehicles/vehicle.kart/0.1.1/facts/model.json",
+      "sha256": "07323acd76c37d7eb47682abbb81abf1cb2ff2831de2d3a1bf2d9de7c43d575b",
+      "byte_length": 164
     },
     {
-      "path": "subjects/vehicles/vehicle.kart/0.1.1/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kart/0.1.1/profiles/locomotion.json",
+      "path": "subjects/vehicles/vehicle.kart/0.1.1/facts/physical.json",
       "sha256": "366df2806deb6c1d12c9a3884da885ecaa55df776e75a645a157743bf7467d9c",
       "byte_length": 4416
     },
     {
-      "path": "subjects/vehicles/vehicle.kart/0.1.1/profiles/model.json",
-      "sha256": "07323acd76c37d7eb47682abbb81abf1cb2ff2831de2d3a1bf2d9de7c43d575b",
-      "byte_length": 164
+      "path": "subjects/vehicles/vehicle.kart/0.1.1/model/model.glb",
+      "sha256": "24c0f1eb46826d64e64f96e03aa8393f7e0b0d17e017444da1d6f8f2fa71b7a3",
+      "byte_length": 85148
     },
     {
       "path": "subjects/vehicles/vehicle.kart/0.1.1/provenance.json",
@@ -4050,8 +3825,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/assemblies/default.json",
-      "sha256": "e5892fccf43c39e43d3730a02f64ae0e527c0527b48670096e673072d51382de",
-      "byte_length": 921
+      "sha256": "09b8341e6104c78bb6cae36c46777f8c4e1bac7bdb434dd0505970f37de07f86",
+      "byte_length": 838
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/asset.json",
@@ -4080,13 +3855,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/capabilities.json",
-      "sha256": "9f342360705f3facfe84b80218a768975e30fbf9b26d1a44f1b970079369498f",
-      "byte_length": 845
+      "sha256": "bb0c99bd1ca1c38d90a43b63fe2c4c4aa54b9bf550a18497448965fbdf869f34",
+      "byte_length": 764
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/collision/collision.json",
       "sha256": "20b4019c498f6a8edadb8432f5022a9c1732fe3b4fab40a5bd701250b637fcfd",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.kayak/0.1.0/facts/physical.json",
+      "sha256": "3636f4e4f4a58dfc12212c43cd2f2b6ead2d067fc0e7f5c991469e00f3d3e32e",
+      "byte_length": 663
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/model/kayak.glb",
@@ -4097,16 +3877,6 @@
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/preview/thumbnail.webp",
       "sha256": "dce84e96803122f5e668a469ab75aeb1612ab5a142a9a062c1140cb7c3f2da42",
       "byte_length": 8478
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kayak/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.kayak/0.1.0/profiles/locomotion.json",
-      "sha256": "3636f4e4f4a58dfc12212c43cd2f2b6ead2d067fc0e7f5c991469e00f3d3e32e",
-      "byte_length": 663
     },
     {
       "path": "subjects/vehicles/vehicle.kayak/0.1.0/provenance.json",
@@ -4125,8 +3895,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/assemblies/default.json",
-      "sha256": "b0cecb84d4135bf32b3d38106d4e464f6ba729a71c43806630f750603f154995",
-      "byte_length": 960
+      "sha256": "93000b8cbdac9c1fbea584da0f152084b1473a26590d00f83f6e8f8c90367da6",
+      "byte_length": 948
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/asset.json",
@@ -4155,13 +3925,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/capabilities.json",
-      "sha256": "8415218f8486aac89a1cd58e0ed2a7573f988670eee25f7cadfe238a94b45dcc",
-      "byte_length": 636
+      "sha256": "bd96cd597e276750a00b5bb55a6d9ccb7766e71d07394b1ce99edb2781b74d5c",
+      "byte_length": 550
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/collision/collision.json",
       "sha256": "6ed0e424855fd12803ff279ce4feb22b662af3f838f7ab203a7430af407c4144",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/facts/model.json",
+      "sha256": "eca8a4e0bcbddbc6d9a2afd1231ca7d062923f3120516c1c0dbb7456e7d47780",
+      "byte_length": 165
+    },
+    {
+      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/facts/physical.json",
+      "sha256": "beb68c880d9e323d6194b3fd6d2d04b1358100e570dd3d33385393b5a6b19866",
+      "byte_length": 992
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/model/bike.glb",
@@ -4172,21 +3952,6 @@
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/preview/thumbnail.webp",
       "sha256": "a97dbca23f2462cc88cf0934df69a4a149e1bc9fdac56900feda043f8c5f8363",
       "byte_length": 9602
-    },
-    {
-      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/profiles/locomotion.json",
-      "sha256": "beb68c880d9e323d6194b3fd6d2d04b1358100e570dd3d33385393b5a6b19866",
-      "byte_length": 992
-    },
-    {
-      "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/profiles/model.json",
-      "sha256": "eca8a4e0bcbddbc6d9a2afd1231ca7d062923f3120516c1c0dbb7456e7d47780",
-      "byte_length": 165
     },
     {
       "path": "subjects/vehicles/vehicle.motorcycle/0.1.0/provenance.json",
@@ -4205,8 +3970,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/assemblies/default.json",
-      "sha256": "70ae4071c9778e46ca46907ae495a6d9aa59c628e7be79f6f76758aaa6569491",
-      "byte_length": 961
+      "sha256": "8788843ef893e90b7c9788450a2fe4296525bc87d885b6d71cbf7660adac265f",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/asset.json",
@@ -4230,13 +3995,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/capabilities.json",
-      "sha256": "93c795ba260ac645379e165e93cd4049888e18fb8c912e6659c3be2fde0670b1",
-      "byte_length": 644
+      "sha256": "b4466f65402d13a8c98010530ec8bb8f7115da0a6c86ed61064aa57c24f7fe62",
+      "byte_length": 558
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.multirotor/0.1.0/facts/physical.json",
+      "sha256": "b54fff4fbd685132a69234715bc25be94e616f6bbff66db58decc7d2b8ccd48d",
+      "byte_length": 569
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/model/model.glb",
@@ -4247,16 +4017,6 @@
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/preview/thumbnail.webp",
       "sha256": "9a93c6a5057675b68dd31f43bdc8ebda01c6b0c9b79945983d601e8ae163c6d2",
       "byte_length": 16436
-    },
-    {
-      "path": "subjects/vehicles/vehicle.multirotor/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.multirotor/0.1.0/profiles/locomotion.json",
-      "sha256": "b54fff4fbd685132a69234715bc25be94e616f6bbff66db58decc7d2b8ccd48d",
-      "byte_length": 569
     },
     {
       "path": "subjects/vehicles/vehicle.multirotor/0.1.0/provenance.json",
@@ -4275,8 +4035,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/assemblies/default.json",
-      "sha256": "d08055a8da5402e2aaa2780107154c35207f1b11280194a9bd293e711f21b86f",
-      "byte_length": 1059
+      "sha256": "35346b6e441a1d40c0b29f89ef2ee010b2786bb1421938a16553227130475ee0",
+      "byte_length": 960
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/asset.json",
@@ -4305,13 +4065,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/capabilities.json",
-      "sha256": "054ff7aae89b65f896c5bd322456369333810087d22a605d6baf0be5ae6dd4bc",
-      "byte_length": 852
+      "sha256": "cd17c57ec52ecc78092a038a0da3c35539812c1ba82d42e4a8beb5f945ef7d33",
+      "byte_length": 755
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/collision/collision.json",
       "sha256": "4eabae8ad229af32dd1f0f53d1eb2baaad228c99a427166e7e9425b153e10749",
       "byte_length": 244
+    },
+    {
+      "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/facts/physical.json",
+      "sha256": "a46d5ba5fdd02fa53a45db34dd34c5c5e292bf125a81b4b6af62f71c0005fad1",
+      "byte_length": 725
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/model/observation-sub.glb",
@@ -4322,16 +4087,6 @@
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/preview/thumbnail.webp",
       "sha256": "40fa0a2b87ee94bc1e14d4ce5fc15b4d1a26d1c53237cf79b2fe4cfa328c065e",
       "byte_length": 19282
-    },
-    {
-      "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/profiles/locomotion.json",
-      "sha256": "a46d5ba5fdd02fa53a45db34dd34c5c5e292bf125a81b4b6af62f71c0005fad1",
-      "byte_length": 725
     },
     {
       "path": "subjects/vehicles/vehicle.observation-submarine/0.1.0/provenance.json",
@@ -4350,8 +4105,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/assemblies/default.json",
-      "sha256": "ed008260139c96cb38e774dc8e54e65293cd85034ccf7ca8a6fc7e586b504b13",
-      "byte_length": 961
+      "sha256": "7c4abdced9b4db7f16f7a04e9b7ae3827e3defdafb8ca61032643ecba0906cca",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/asset.json",
@@ -4375,13 +4130,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/capabilities.json",
-      "sha256": "26f5dd0f157ca44d39d37554cf7ae2713dfc5a1f5445036049add021a580d157",
-      "byte_length": 648
+      "sha256": "62600f4c9822672ecd82a2989ce6c06928d86e3617c2bdc2c3e45b528071ac29",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.paraglider/0.1.0/facts/physical.json",
+      "sha256": "28e7ea91232ae71b5f92eb94d207a1fde3ab51ad76b53921821864f748e75eb3",
+      "byte_length": 550
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/model/model.glb",
@@ -4392,16 +4152,6 @@
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/preview/thumbnail.webp",
       "sha256": "427578a619697154c205ffbda7f4fb4ea8ca48741c640bb5f99800938931dfb1",
       "byte_length": 4278
-    },
-    {
-      "path": "subjects/vehicles/vehicle.paraglider/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.paraglider/0.1.0/profiles/locomotion.json",
-      "sha256": "28e7ea91232ae71b5f92eb94d207a1fde3ab51ad76b53921821864f748e75eb3",
-      "byte_length": 550
     },
     {
       "path": "subjects/vehicles/vehicle.paraglider/0.1.0/provenance.json",
@@ -4420,8 +4170,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/assemblies/default.json",
-      "sha256": "4cae3f0d2728c0da9627c6cc227077cf4bd362e2c6fdaa65075e509204059870",
-      "byte_length": 975
+      "sha256": "18c6b6077944ea1dab92c6bcd196a581dcf956dd6732f1e6aa33186de17e7a23",
+      "byte_length": 886
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/asset.json",
@@ -4450,13 +4200,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/capabilities.json",
-      "sha256": "01a80585b6845b3abec389acb93ff1668b7375467e00d581f7abbea61a099077",
-      "byte_length": 641
+      "sha256": "406754d44adf13d1cb4e79e2da1774c429aad81ae94d91b76bab7cad2fc1fc77",
+      "byte_length": 554
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/collision/collision.json",
       "sha256": "2f6c2f5d22ab0b1929d6a0b5e4949da9e520aaec35595d23f1da88164ed5f88c",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/facts/physical.json",
+      "sha256": "13afaf4aa749b2a9d04f2ba2e56cc3fc5e104a2bb0da66db07fc2b4a08476fa3",
+      "byte_length": 598
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/model/patrol-boat.glb",
@@ -4467,16 +4222,6 @@
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/preview/thumbnail.webp",
       "sha256": "c2e0f89179209a04ecb0664b2a070b43a412a8b68e35c8a034c7cec0fadede97",
       "byte_length": 10196
-    },
-    {
-      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/profiles/locomotion.json",
-      "sha256": "13afaf4aa749b2a9d04f2ba2e56cc3fc5e104a2bb0da66db07fc2b4a08476fa3",
-      "byte_length": 598
     },
     {
       "path": "subjects/vehicles/vehicle.patrol-boat/0.1.0/provenance.json",
@@ -4495,8 +4240,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/assemblies/default.json",
-      "sha256": "197221bac86b90f23f0853276fa2d0d0c780c9b16de9a2b0302e00ae2b98810b",
-      "byte_length": 921
+      "sha256": "78f1b0d765bc29c2ce12ca5fc518fdf43955dcdd942ab31290845a9924297beb",
+      "byte_length": 838
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/asset.json",
@@ -4525,13 +4270,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/capabilities.json",
-      "sha256": "15978f26270bf4c7f2841a582ce255f92eff0161b84dfb5bf5df8373d1cab343",
-      "byte_length": 615
+      "sha256": "bf6339909409370d838b4ff6c7e7b999e86a13ce4d5ee10b9481f080d7d3ca7e",
+      "byte_length": 534
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/collision/collision.json",
       "sha256": "540c19eee969b5a41c1676336593af2e18756e383528f92ce38f2f73451768c6",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.plane/0.1.0/facts/physical.json",
+      "sha256": "ac4794ddfe69b9c1d2d53cb39b4fb64d82d6876e6ecf9bda4fd8f07fe822f372",
+      "byte_length": 555
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/model/plane.glb",
@@ -4542,16 +4292,6 @@
       "path": "subjects/vehicles/vehicle.plane/0.1.0/preview/thumbnail.webp",
       "sha256": "8598dd1335fc711b44a6110e0cd678f93ee90d2471109491bb01bb2045374af0",
       "byte_length": 9424
-    },
-    {
-      "path": "subjects/vehicles/vehicle.plane/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.plane/0.1.0/profiles/locomotion.json",
-      "sha256": "ac4794ddfe69b9c1d2d53cb39b4fb64d82d6876e6ecf9bda4fd8f07fe822f372",
-      "byte_length": 555
     },
     {
       "path": "subjects/vehicles/vehicle.plane/0.1.0/provenance.json",
@@ -4570,8 +4310,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/assemblies/default.json",
-      "sha256": "aedc9eee91a50e4d2b507a379373294b933888988f2a886eeaadea6ead1262df",
-      "byte_length": 977
+      "sha256": "f925d6c9567ff9939445cf14862ec5977e6531c9c7bd25e141d4388e90a39b37",
+      "byte_length": 887
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/asset.json",
@@ -4595,13 +4335,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/capabilities.json",
-      "sha256": "c9225bbd7eb922ddcb3a9224223456e43ba06b460e9ead0b5bc30b9133fe1d6c",
-      "byte_length": 652
+      "sha256": "e8ee53922cd8ca5aec86064dfa25f6169b2548397a5ba3ca47c0d7b78f7668d0",
+      "byte_length": 564
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/facts/physical.json",
+      "sha256": "f6635e656ab1496901b797cbd2f40446448a2992a28157d515e1848ce3963fe7",
+      "byte_length": 570
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/model/model.glb",
@@ -4612,16 +4357,6 @@
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/preview/thumbnail.webp",
       "sha256": "54d093b07f43a8f6571784a0ddd8a8775758f9805171ed310bc85f5339a39d4e",
       "byte_length": 9738
-    },
-    {
-      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/profiles/locomotion.json",
-      "sha256": "f6635e656ab1496901b797cbd2f40446448a2992a28157d515e1848ce3963fe7",
-      "byte_length": 570
     },
     {
       "path": "subjects/vehicles/vehicle.pusher-plane/0.1.0/provenance.json",
@@ -4640,8 +4375,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/assemblies/default.json",
-      "sha256": "4976aac02172f4c2e1bb154a63bc4a2cb4c6d5ae03b461932f337703ba8704ce",
-      "byte_length": 921
+      "sha256": "4a2bb2d9240d961b59706c93473b6f2b62ef7ddc1690fe280902b33f34ad0c9a",
+      "byte_length": 909
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/asset.json",
@@ -4670,13 +4405,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/capabilities.json",
-      "sha256": "088cb2446d5465eaa3e6e13957848e3b9224dd1511363eeb564abd0aa88740e7",
-      "byte_length": 635
+      "sha256": "fa8bfc4dfc1d350a0e76df44cd51120ec88c4255e0203b5551f29cb3d1df8db8",
+      "byte_length": 554
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/collision/collision.json",
       "sha256": "82b50603f5655451d78f033fcb3498c1929c09ab05ab11315dba7b97fee63ab5",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.racer/0.1.0/facts/model.json",
+      "sha256": "b566d200e4f993473b45e124dde9691d6b44cdabac1f6b90db1005632eae3760",
+      "byte_length": 160
+    },
+    {
+      "path": "subjects/vehicles/vehicle.racer/0.1.0/facts/physical.json",
+      "sha256": "39e1933655ffbe6d0832fe13892a2bb9cec35e1b62cb10bf2e4048215ac0e3ff",
+      "byte_length": 1422
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/model/racer.glb",
@@ -4687,21 +4432,6 @@
       "path": "subjects/vehicles/vehicle.racer/0.1.0/preview/thumbnail.webp",
       "sha256": "f868abdb17da9b1ed240bd840fc79056eb2525bf99225b87a3b3a5b8b6647bfe",
       "byte_length": 18374
-    },
-    {
-      "path": "subjects/vehicles/vehicle.racer/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.racer/0.1.0/profiles/locomotion.json",
-      "sha256": "39e1933655ffbe6d0832fe13892a2bb9cec35e1b62cb10bf2e4048215ac0e3ff",
-      "byte_length": 1422
-    },
-    {
-      "path": "subjects/vehicles/vehicle.racer/0.1.0/profiles/model.json",
-      "sha256": "b566d200e4f993473b45e124dde9691d6b44cdabac1f6b90db1005632eae3760",
-      "byte_length": 160
     },
     {
       "path": "subjects/vehicles/vehicle.racer/0.1.0/provenance.json",
@@ -4720,8 +4450,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/assemblies/default.json",
-      "sha256": "01aecee6a3b07006b224f13a18844d3e853332d96e8b4c94852e5aff14f9faa0",
-      "byte_length": 912
+      "sha256": "45a483da86bef19ebc2ada9f5e87ebc04f059eb4ded6681f0504ddc364adab28",
+      "byte_length": 900
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/asset.json",
@@ -4750,13 +4480,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/capabilities.json",
-      "sha256": "384b1839e1077442b540ae48a9636fb0098d157f0d65e1ac5aa77fa47c83931e",
-      "byte_length": 940
+      "sha256": "69ec868871d7cf32e9e7f8b0e8e82910f2090369e135b826e43e81001720f959",
+      "byte_length": 860
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/collision/collision.json",
       "sha256": "4951e5a92c858444ff2de4e66c43ae22fabae5ec85603e107cd9e16b6a76875e",
       "byte_length": 242
+    },
+    {
+      "path": "subjects/vehicles/vehicle.raft/0.1.0/facts/model.json",
+      "sha256": "fbdacf4e6a8826bbfec2fa77f9d9b7f3140a5a17da37db8a059a952bc389bf03",
+      "byte_length": 228
+    },
+    {
+      "path": "subjects/vehicles/vehicle.raft/0.1.0/facts/physical.json",
+      "sha256": "4e31069ea46cd4503e2bd7b14379535ac9e639a38e918a077fe629ffc7029842",
+      "byte_length": 663
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/model/raft.glb",
@@ -4767,21 +4507,6 @@
       "path": "subjects/vehicles/vehicle.raft/0.1.0/preview/thumbnail.webp",
       "sha256": "18dcb64d199cd0769f69235c8977c667369f5ff5f8c25d9dcb7e174de014f288",
       "byte_length": 8362
-    },
-    {
-      "path": "subjects/vehicles/vehicle.raft/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.raft/0.1.0/profiles/locomotion.json",
-      "sha256": "4e31069ea46cd4503e2bd7b14379535ac9e639a38e918a077fe629ffc7029842",
-      "byte_length": 663
-    },
-    {
-      "path": "subjects/vehicles/vehicle.raft/0.1.0/profiles/model.json",
-      "sha256": "fbdacf4e6a8826bbfec2fa77f9d9b7f3140a5a17da37db8a059a952bc389bf03",
-      "byte_length": 228
     },
     {
       "path": "subjects/vehicles/vehicle.raft/0.1.0/provenance.json",
@@ -4800,8 +4525,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/assemblies/default.json",
-      "sha256": "2c42cdc8e022a03d4c50168533dbacfa6af8e12fc000a75e38bd21ecf10f81ee",
-      "byte_length": 1024
+      "sha256": "f16a841d0dff6a25c261245dd64d4909cfd8f1298b210efb59a7c3315ac31dd5",
+      "byte_length": 929
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/asset.json",
@@ -4830,13 +4555,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/capabilities.json",
-      "sha256": "b3bafa2eb80823743570c5eff8cdbac116ff3d9d4926e788d03ea31c650d3cd6",
-      "byte_length": 629
+      "sha256": "da331ee2f4e8003a8908b96d6bb5736a46d8c524cc940c1f59692e9c151c1781",
+      "byte_length": 536
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/collision/collision.json",
       "sha256": "cdebc52b4d84b89de1c5617266d46601a93c037e04208605336e5fe06ad7741e",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/facts/physical.json",
+      "sha256": "2baf3756d6228a20477514bb1b115a2545dfb56e76564a288beb3fb291e63239",
+      "byte_length": 609
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/model/rescue-hover.glb",
@@ -4847,16 +4577,6 @@
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/preview/thumbnail.webp",
       "sha256": "1e0831c2733060b6f1357db3940717be339849ca36cfeec8be1bb8edeca029f8",
       "byte_length": 11702
-    },
-    {
-      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/profiles/locomotion.json",
-      "sha256": "2baf3756d6228a20477514bb1b115a2545dfb56e76564a288beb3fb291e63239",
-      "byte_length": 609
     },
     {
       "path": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/provenance.json",
@@ -4875,8 +4595,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/assemblies/default.json",
-      "sha256": "66dda469cea3c010c82529ba0d9c9be452302d144649ae6eb6bee3cd8d10957e",
-      "byte_length": 921
+      "sha256": "e1e8564c701088da5dfcb033a18b1708ce9db09e113eac8ac913fc7f9a7ee338",
+      "byte_length": 909
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/asset.json",
@@ -4905,13 +4625,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/capabilities.json",
-      "sha256": "4fe54b71418b58df782457f0e64b6173e1ea9df1aad6d9bf8c32d40abb242bb3",
-      "byte_length": 635
+      "sha256": "fa8bfc4dfc1d350a0e76df44cd51120ec88c4255e0203b5551f29cb3d1df8db8",
+      "byte_length": 554
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/collision/collision.json",
       "sha256": "ce2c2657f645802372e52c22a16d8e119eb09a2da988a6c20c8e75f02aaa77ed",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.rover/0.1.0/facts/model.json",
+      "sha256": "a7001015e9efb8ee3b39e7be84e1db575cc7d57eee46352d625cbb421b51dfb7",
+      "byte_length": 160
+    },
+    {
+      "path": "subjects/vehicles/vehicle.rover/0.1.0/facts/physical.json",
+      "sha256": "28dc012c62b3b88d01b88f51b0a0dd84f27a1cb4f0a29306d7ee347b57a3b72e",
+      "byte_length": 3243
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/model/rover.glb",
@@ -4922,21 +4652,6 @@
       "path": "subjects/vehicles/vehicle.rover/0.1.0/preview/thumbnail.webp",
       "sha256": "f4d3aeec759c8620b922bb569d538c9fa3cf0dcc8ca3f34e14310b0633e87a13",
       "byte_length": 17316
-    },
-    {
-      "path": "subjects/vehicles/vehicle.rover/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.rover/0.1.0/profiles/locomotion.json",
-      "sha256": "28dc012c62b3b88d01b88f51b0a0dd84f27a1cb4f0a29306d7ee347b57a3b72e",
-      "byte_length": 3243
-    },
-    {
-      "path": "subjects/vehicles/vehicle.rover/0.1.0/profiles/model.json",
-      "sha256": "a7001015e9efb8ee3b39e7be84e1db575cc7d57eee46352d625cbb421b51dfb7",
-      "byte_length": 160
     },
     {
       "path": "subjects/vehicles/vehicle.rover/0.1.0/provenance.json",
@@ -4955,8 +4670,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/assemblies/default.json",
-      "sha256": "641fd65579afb62f84e6725ad7770848c978f653999931e5b511d7f9fe7d32da",
-      "byte_length": 961
+      "sha256": "3c9d4032cddbb97252d0f722957c70a9d6cb223d11cb70cc4900c5f47172a9f8",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/asset.json",
@@ -4985,13 +4700,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/capabilities.json",
-      "sha256": "f9fa6da67e5723d1c14200b4011fac41f075ee4a66586a0842a57e5a15799a8e",
-      "byte_length": 637
+      "sha256": "21f99a5a187c4e1d39dd1e9427fbd083cf4feb14609daea7df4ff7475815922a",
+      "byte_length": 551
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/collision/collision.json",
       "sha256": "f4f885e73a44ac195cc5a8f5c144a4f0ef6db8f9dc801ce6537223ee10104d16",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/vehicles/vehicle.skateboard/0.1.0/facts/physical.json",
+      "sha256": "6078f16ddc6326412376f170b12988e885752f81e3c3b6d1d91dde009c869184",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/model/slide.glb",
@@ -5002,16 +4722,6 @@
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/preview/thumbnail.webp",
       "sha256": "38af63271ec45e03de3c0b7024e198d64c36719d344cad6c588e623ef8837c1f",
       "byte_length": 7534
-    },
-    {
-      "path": "subjects/vehicles/vehicle.skateboard/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.skateboard/0.1.0/profiles/locomotion.json",
-      "sha256": "6078f16ddc6326412376f170b12988e885752f81e3c3b6d1d91dde009c869184",
-      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.skateboard/0.1.0/provenance.json",
@@ -5030,8 +4740,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/assemblies/default.json",
-      "sha256": "fe181d6b2029f357252ed7c9a26322fec21e913bd3667881aac38b95cc8060ea",
-      "byte_length": 903
+      "sha256": "74074896f0c57a6d4a5f4cd197bcc132c16c95d1ef5e5deffc682af7627961cb",
+      "byte_length": 822
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/asset.json",
@@ -5060,13 +4770,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/capabilities.json",
-      "sha256": "1d8b1684ce0a588900c53c7684e3f65e71622e902590128898ac6eb9d4c2a40f",
-      "byte_length": 844
+      "sha256": "628d04e38b967736c4bc19b6751fbabbca558a82b3e3e2aee1aaa1afba455d03",
+      "byte_length": 765
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/collision/collision.json",
       "sha256": "3af64d71abcc09a62c53935a637a5566f48cb659baec3849475cff1f51016386",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.ski/0.1.0/facts/physical.json",
+      "sha256": "0dae4bf2cd59e39aef54b6ed78127e0d0abc35c7e8e8df63f33104e0b0e2a342",
+      "byte_length": 553
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/model/ski.glb",
@@ -5077,16 +4792,6 @@
       "path": "subjects/vehicles/vehicle.ski/0.1.0/preview/thumbnail.webp",
       "sha256": "c11d7681536142d0c29ef954cfb1b3b509e315abbee4bf7a60d78aa22bb73e8e",
       "byte_length": 10914
-    },
-    {
-      "path": "subjects/vehicles/vehicle.ski/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.ski/0.1.0/profiles/locomotion.json",
-      "sha256": "0dae4bf2cd59e39aef54b6ed78127e0d0abc35c7e8e8df63f33104e0b0e2a342",
-      "byte_length": 553
     },
     {
       "path": "subjects/vehicles/vehicle.ski/0.1.0/provenance.json",
@@ -5105,8 +4810,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/assemblies/default.json",
-      "sha256": "325de4f62a930148e7160fe86aee1ae78c940bcf96c36ef43294f5cff52e133f",
-      "byte_length": 912
+      "sha256": "742c85af87dab035a82f04e320b9fc2c74dca89ac63d86b1508f5baabaceb981",
+      "byte_length": 830
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/asset.json",
@@ -5135,13 +4840,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/capabilities.json",
-      "sha256": "c7ec132f7732088bf2557584487ac8f8d883d6454047be81f6e48ef0fd8c5b15",
-      "byte_length": 788
+      "sha256": "7114cc3b2a597de7ab73777e63852d1968ffd93731095e9ae59f8a5b00bf9e01",
+      "byte_length": 708
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/collision/collision.json",
       "sha256": "c4aa91f36fd614374989ea1b4497a3375d7923aca6239c98312afbce8fcc61be",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.sled/0.1.0/facts/physical.json",
+      "sha256": "a4d33f76dca4b2ab5e9e2ed936a996776d2bb0a0e658c3b4b3654a799024fa55",
+      "byte_length": 560
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/model/sled.glb",
@@ -5152,16 +4862,6 @@
       "path": "subjects/vehicles/vehicle.sled/0.1.0/preview/thumbnail.webp",
       "sha256": "cbdc6ad3f40826dcab7e6b6d8a3fb408622721c607129001108d25ddba7e6f3d",
       "byte_length": 14018
-    },
-    {
-      "path": "subjects/vehicles/vehicle.sled/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.sled/0.1.0/profiles/locomotion.json",
-      "sha256": "a4d33f76dca4b2ab5e9e2ed936a996776d2bb0a0e658c3b4b3654a799024fa55",
-      "byte_length": 560
     },
     {
       "path": "subjects/vehicles/vehicle.sled/0.1.0/provenance.json",
@@ -5180,8 +4880,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/assemblies/default.json",
-      "sha256": "f03ceaa856a182a8596feb19b4881fed248de15f8748909a65b3ab7ef79a08ab",
-      "byte_length": 961
+      "sha256": "85a11741a7374f745ea3dc645ebda9496f66288bdfd1fac5632284c978edd930",
+      "byte_length": 873
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/asset.json",
@@ -5210,13 +4910,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/capabilities.json",
-      "sha256": "17be247e5d0805be89cfa8e74e7576f47ead0aa10478d19eb178d4d13b14f191",
-      "byte_length": 613
+      "sha256": "6025c1a8ac1cda702238c279c5712ca1f4863a9c9d2dd263d5d1ce0e47fee482",
+      "byte_length": 527
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/collision/collision.json",
       "sha256": "db11e9c5a81b7e40c40dadc0b280546705692ca25c21ff78dbd9e18f1b7f9f54",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/facts/physical.json",
+      "sha256": "d092903f98d69929280250a5762bb5063141ba35dac2d879cd55b4dd8f9e780c",
+      "byte_length": 618
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/model/space.glb",
@@ -5227,16 +4932,6 @@
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/preview/thumbnail.webp",
       "sha256": "302974adaea932c67cf88f623c16073319dd080da259a3d4a183dd85ae1de80e",
       "byte_length": 12122
-    },
-    {
-      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/profiles/locomotion.json",
-      "sha256": "d092903f98d69929280250a5762bb5063141ba35dac2d879cd55b4dd8f9e780c",
-      "byte_length": 618
     },
     {
       "path": "subjects/vehicles/vehicle.spacecraft/0.1.0/provenance.json",
@@ -5255,8 +4950,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/assemblies/default.json",
-      "sha256": "09a267b1ef9dda4477481579de78ffd0055b50898c37482e369aba337d995067",
-      "byte_length": 951
+      "sha256": "a5b9b7a7675f3657f81911dd233a7d4b48a1b95c30b5bcc78363b275556c8d2e",
+      "byte_length": 864
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/asset.json",
@@ -5285,13 +4980,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/capabilities.json",
-      "sha256": "1c7ce342eb5a60b7e8259f7cf37724c517ea11487eeb25a0ff40788990562704",
-      "byte_length": 620
+      "sha256": "326f0c66dbc2d185f9f363947352abd7a01f83047fb7296549e7421492025e8f",
+      "byte_length": 535
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/collision/collision.json",
       "sha256": "77b81ba4d7bdd171069c57652fde36da5b7a12b22d0c5d9e197161f96164cbb1",
       "byte_length": 241
+    },
+    {
+      "path": "subjects/vehicles/vehicle.submarine/0.1.0/facts/physical.json",
+      "sha256": "cabfd5098e4a428da999652ca6f7a21e7067fa604afaed68986fbe7b4f26e7f9",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/model/sub.glb",
@@ -5302,16 +5002,6 @@
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/preview/thumbnail.webp",
       "sha256": "df41cea0927c713e2e0159dca5fb3895425fc556107e4e43931e4e75a7c7d2d1",
       "byte_length": 9882
-    },
-    {
-      "path": "subjects/vehicles/vehicle.submarine/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.submarine/0.1.0/profiles/locomotion.json",
-      "sha256": "cabfd5098e4a428da999652ca6f7a21e7067fa604afaed68986fbe7b4f26e7f9",
-      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.submarine/0.1.0/provenance.json",
@@ -5330,8 +5020,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/assemblies/default.json",
-      "sha256": "5b39dc61d8754caceb2743f33681901f6276e223f8d16a2301ea6675d9b47ab7",
-      "byte_length": 945
+      "sha256": "592ed92b03ab5584d0dbeb463a74bddbdc4317dd466f6c58d385a18a2dfa24fa",
+      "byte_length": 933
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/asset.json",
@@ -5355,13 +5045,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/capabilities.json",
-      "sha256": "82e1c1c6fab316f714bcb58139a6143fda13c58a3d326cc6b6e584f33ce95a49",
-      "byte_length": 668
+      "sha256": "dec91f0246d137c942b05658750426a583ce770e1e9ce1f6f4978f673d7827c6",
+      "byte_length": 584
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0/facts/model.json",
+      "sha256": "dcf256382740da03d26373ce6db894d15528cd657df2fef16579982facbb157b",
+      "byte_length": 163
+    },
+    {
+      "path": "subjects/vehicles/vehicle.supercar/0.1.0/facts/physical.json",
+      "sha256": "14af3ab46258c657f6088b046f66bb140481e748d9f05ba715a506479343ce55",
+      "byte_length": 1206
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/model/model.glb",
@@ -5372,21 +5072,6 @@
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/preview/thumbnail.webp",
       "sha256": "a5ba85e2261f58ecccea3b10b45ccc5e5486c2daa689c6f9651ee0b5522974b0",
       "byte_length": 16618
-    },
-    {
-      "path": "subjects/vehicles/vehicle.supercar/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.supercar/0.1.0/profiles/locomotion.json",
-      "sha256": "14af3ab46258c657f6088b046f66bb140481e748d9f05ba715a506479343ce55",
-      "byte_length": 1206
-    },
-    {
-      "path": "subjects/vehicles/vehicle.supercar/0.1.0/profiles/model.json",
-      "sha256": "dcf256382740da03d26373ce6db894d15528cd657df2fef16579982facbb157b",
-      "byte_length": 163
     },
     {
       "path": "subjects/vehicles/vehicle.supercar/0.1.0/provenance.json",
@@ -5405,8 +5090,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/assemblies/default.json",
-      "sha256": "2f6f3787e3dfe7f1b3c3e3b99052dc9cda50e4399ca327d9eaa2274b2587d6a9",
-      "byte_length": 1024
+      "sha256": "a26524ddc74c60733578d18b51b2efc0e1d6664340c040d31d10b8ec160ee5a5",
+      "byte_length": 929
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/asset.json",
@@ -5435,13 +5120,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/capabilities.json",
-      "sha256": "cda4089534f2c896f9e0b30a0a7181ca294e11f911b230622bededbc425d8e6e",
-      "byte_length": 620
+      "sha256": "6025c1a8ac1cda702238c279c5712ca1f4863a9c9d2dd263d5d1ce0e47fee482",
+      "byte_length": 527
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/collision/collision.json",
       "sha256": "9ffd94718c68aa05a18d3e6776f751ed8950a10c842628cfea62544cf57d2570",
       "byte_length": 242
+    },
+    {
+      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/facts/physical.json",
+      "sha256": "61fe1ea70a3b0cf3f28be4c5d3a1710bdf13b916f9aeb676459dbd54c2740b2b",
+      "byte_length": 622
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/model/survey-space.glb",
@@ -5452,16 +5142,6 @@
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/preview/thumbnail.webp",
       "sha256": "441de78758b6c7fe4aca13de62d4902042dade8dc745a72cc67cbad7d08b31d1",
       "byte_length": 11102
-    },
-    {
-      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/profiles/locomotion.json",
-      "sha256": "61fe1ea70a3b0cf3f28be4c5d3a1710bdf13b916f9aeb676459dbd54c2740b2b",
-      "byte_length": 622
     },
     {
       "path": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/provenance.json",
@@ -5480,8 +5160,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/assemblies/default.json",
-      "sha256": "d5a8af6e6a69307b60e2c29f4046dd513ecb2d81ddc9ed28063c9dc4d3bac05b",
-      "byte_length": 912
+      "sha256": "0196fa3082f39e0749f2d67a68c0eeee6dfcc5110050e3e866cbc4931eb83868",
+      "byte_length": 900
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/asset.json",
@@ -5510,13 +5190,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/capabilities.json",
-      "sha256": "77031ee1f5948e2a14daf77d5c3b943956236cb33d3c70b4bdb8941d12a7919c",
-      "byte_length": 878
+      "sha256": "58e539965e595265385e368506f3c4ba877c62e35a744d6463384d97083d4802",
+      "byte_length": 798
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/collision/collision.json",
       "sha256": "4d5de8d0e213b7e2a6a09f8ebdbbf12c0df83b7ade88d048be9cb5966094491d",
       "byte_length": 244
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tank/0.1.0/facts/model.json",
+      "sha256": "a60649b6c3b77015413609d0e686ab63e59a28bf2f20e136fd53fb9f477ebe5a",
+      "byte_length": 231
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tank/0.1.0/facts/physical.json",
+      "sha256": "1a012f6747248124d8fe9390d0131e1dfe0b0db5f211d972ccc206e8c879c253",
+      "byte_length": 556
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/model/tank.glb",
@@ -5527,21 +5217,6 @@
       "path": "subjects/vehicles/vehicle.tank/0.1.0/preview/thumbnail.webp",
       "sha256": "0dfca3db3d44f1e82b4f707833c3269b4d1ebf285c91991f35e201735c5cdbc6",
       "byte_length": 14156
-    },
-    {
-      "path": "subjects/vehicles/vehicle.tank/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.tank/0.1.0/profiles/locomotion.json",
-      "sha256": "1a012f6747248124d8fe9390d0131e1dfe0b0db5f211d972ccc206e8c879c253",
-      "byte_length": 556
-    },
-    {
-      "path": "subjects/vehicles/vehicle.tank/0.1.0/profiles/model.json",
-      "sha256": "a60649b6c3b77015413609d0e686ab63e59a28bf2f20e136fd53fb9f477ebe5a",
-      "byte_length": 231
     },
     {
       "path": "subjects/vehicles/vehicle.tank/0.1.0/provenance.json",
@@ -5560,8 +5235,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/assemblies/default.json",
-      "sha256": "0715611644b581fa2e834b13a4325b6a49d73b910b983be5824d21bac82b930a",
-      "byte_length": 953
+      "sha256": "4bc5ad4518d17813c9a93328093a262647b7e80b28ba1cfdabaeb4ddc4073ec5",
+      "byte_length": 866
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/asset.json",
@@ -5585,13 +5260,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/capabilities.json",
-      "sha256": "571e79b8e42329c8a5591bfa14523530a326216aeeafe195e28d46a71fb7687e",
-      "byte_length": 643
+      "sha256": "b4466f65402d13a8c98010530ec8bb8f7115da0a6c86ed61064aa57c24f7fe62",
+      "byte_length": 558
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/facts/physical.json",
+      "sha256": "4dbb97bec1bdedcbb92a2495d393c116b34bd1d573367fe943fe980fc7a121cb",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/model/model.glb",
@@ -5602,16 +5282,6 @@
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/preview/thumbnail.webp",
       "sha256": "a0d1b7d7fa341ad41f3518b83095d06cb091d34018288923ba10dd3e97986077",
       "byte_length": 10138
-    },
-    {
-      "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/profiles/locomotion.json",
-      "sha256": "4dbb97bec1bdedcbb92a2495d393c116b34bd1d573367fe943fe980fc7a121cb",
-      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.tiltrotor/0.1.0/provenance.json",
@@ -5630,8 +5300,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/assemblies/default.json",
-      "sha256": "45fce01b491b8d4e3136bc24570dd95b799197e277e7afc66c9175dbc187d2c5",
-      "byte_length": 1032
+      "sha256": "e80a7f1de21c1cfff515eaa06e6931e36dc18f59e86ef07572eeeef33f65b8da",
+      "byte_length": 1020
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/asset.json",
@@ -5660,13 +5330,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/capabilities.json",
-      "sha256": "b9b5114a1e75ab95319c36593cf2ab4fdd2a955ca1a717ace8d668b9e9e172da",
-      "byte_length": 644
+      "sha256": "bd96cd597e276750a00b5bb55a6d9ccb7766e71d07394b1ce99edb2781b74d5c",
+      "byte_length": 550
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/collision/collision.json",
       "sha256": "6ed0e424855fd12803ff279ce4feb22b662af3f838f7ab203a7430af407c4144",
       "byte_length": 243
+    },
+    {
+      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/facts/model.json",
+      "sha256": "eca8a4e0bcbddbc6d9a2afd1231ca7d062923f3120516c1c0dbb7456e7d47780",
+      "byte_length": 165
+    },
+    {
+      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/facts/physical.json",
+      "sha256": "70f4e169ae40fc3e0b86ed813275a8bfd5c6ca66e92dbaed0d79e7bc636432fb",
+      "byte_length": 1039
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/model/touring-bike.glb",
@@ -5677,21 +5357,6 @@
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/preview/thumbnail.webp",
       "sha256": "026cc2740f87a6ca48124283c8ee2ddb012fc57836609478972205f97869d629",
       "byte_length": 10416
-    },
-    {
-      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/profiles/locomotion.json",
-      "sha256": "70f4e169ae40fc3e0b86ed813275a8bfd5c6ca66e92dbaed0d79e7bc636432fb",
-      "byte_length": 1039
-    },
-    {
-      "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/profiles/model.json",
-      "sha256": "eca8a4e0bcbddbc6d9a2afd1231ca7d062923f3120516c1c0dbb7456e7d47780",
-      "byte_length": 165
     },
     {
       "path": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/provenance.json",
@@ -5710,8 +5375,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/assemblies/default.json",
-      "sha256": "2cc8933abd6d8eb6e59a9860bbff60e579c84c49b32d7f274926ffb5447c407c",
-      "byte_length": 975
+      "sha256": "b56dd976835be845bec7a5cf791dbfd241f91dae24392bf0e336f1eb9fd7fb76",
+      "byte_length": 963
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/asset.json",
@@ -5740,13 +5405,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/capabilities.json",
-      "sha256": "e4297ffd9bfc94c57574e7b6d7076e36a8bb29ba9705919d97a9f258f72257ee",
-      "byte_length": 641
+      "sha256": "fa8bfc4dfc1d350a0e76df44cd51120ec88c4255e0203b5551f29cb3d1df8db8",
+      "byte_length": 554
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/collision/collision.json",
       "sha256": "24919f4a6e73e7343202a5b8b4a1bf1fbcb4814867c478f860615a65ad81b82a",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/facts/model.json",
+      "sha256": "a7001015e9efb8ee3b39e7be84e1db575cc7d57eee46352d625cbb421b51dfb7",
+      "byte_length": 160
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/facts/physical.json",
+      "sha256": "fd291ab721a4b401041430c5e4b495616a4b8a0ed51d0502beed59a7d7d9ba5b",
+      "byte_length": 3511
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/model/trail-rover.glb",
@@ -5757,21 +5432,6 @@
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/preview/thumbnail.webp",
       "sha256": "3fa0a5180f11db252d4cce51b267a2dcd30d10e36c5524261f3edfa19dcd59a3",
       "byte_length": 16248
-    },
-    {
-      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/profiles/locomotion.json",
-      "sha256": "fd291ab721a4b401041430c5e4b495616a4b8a0ed51d0502beed59a7d7d9ba5b",
-      "byte_length": 3511
-    },
-    {
-      "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/profiles/model.json",
-      "sha256": "a7001015e9efb8ee3b39e7be84e1db575cc7d57eee46352d625cbb421b51dfb7",
-      "byte_length": 160
     },
     {
       "path": "subjects/vehicles/vehicle.trail-rover/0.1.0/provenance.json",
@@ -5790,8 +5450,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/assemblies/default.json",
-      "sha256": "3714b8534410b7a93ec4d4fc015fb0e37f8822230c49d2a18bc84dfd6d6d0eea",
-      "byte_length": 993
+      "sha256": "9971f483fc4f61bf5d5d11f9e8339f7b30a25a156518cff4ed97b7390d06b2a7",
+      "byte_length": 902
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/asset.json",
@@ -5820,13 +5480,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/capabilities.json",
-      "sha256": "40701dfcf1c8f55235f765400d8695d9b0101662bd30f1b6e77752decbf52200",
-      "byte_length": 623
+      "sha256": "bf6339909409370d838b4ff6c7e7b999e86a13ce4d5ee10b9481f080d7d3ca7e",
+      "byte_length": 534
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/collision/collision.json",
       "sha256": "98bd5639b609252df09af1e43e456b6d0b51c10f561d5d4a742fcc9ab906245f",
       "byte_length": 242
+    },
+    {
+      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/facts/physical.json",
+      "sha256": "af213d1b6630bdfb86a9000eade748308853f0b48074329642b9e0a8e666f461",
+      "byte_length": 601
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/model/trainer-plane.glb",
@@ -5837,16 +5502,6 @@
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/preview/thumbnail.webp",
       "sha256": "d7c58f07b1ceb96e9113d93b7709532d64d06a428ba053be5e3f0ec42740e707",
       "byte_length": 9556
-    },
-    {
-      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/profiles/locomotion.json",
-      "sha256": "af213d1b6630bdfb86a9000eade748308853f0b48074329642b9e0a8e666f461",
-      "byte_length": 601
     },
     {
       "path": "subjects/vehicles/vehicle.trainer-plane/0.1.0/provenance.json",
@@ -5865,8 +5520,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/assemblies/default.json",
-      "sha256": "06b7c7d96cb97010967378e21badf01a2b1fa3e9669c7846bd7767cd68bc4174",
-      "byte_length": 948
+      "sha256": "934b1ad397904e91bd10e0ee689f4c2bff3ff728faa10d41585112282b329f20",
+      "byte_length": 936
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/asset.json",
@@ -5895,13 +5550,23 @@
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/capabilities.json",
-      "sha256": "4fbd7c5a7392855fa8beaa892888d1f8c27cc225f1109a2af0ca545478508a92",
-      "byte_length": 835
+      "sha256": "09fc98c4c718ee8d0c55c0824c5071c4bf8017c4b3bd4b1aa5766bb511734604",
+      "byte_length": 751
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/collision/collision.json",
       "sha256": "8dca333b496b44288e2058e8d36b1d299e100de4fb1be5bb945d8e250b2aac30",
       "byte_length": 245
+    },
+    {
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/facts/model.json",
+      "sha256": "6609bb1a8d642c80ee4241547f5298ed48d0bdbe96252d11b5fdde289aee212c",
+      "byte_length": 129
+    },
+    {
+      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/facts/physical.json",
+      "sha256": "0af9414a2ead8104fac7b79ae9bbfae9fff47d2b11c491ad85c8e8fc40d36937",
+      "byte_length": 565
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/model/unicycle.glb",
@@ -5912,21 +5577,6 @@
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/preview/thumbnail.webp",
       "sha256": "ceaa916dd3040379ce108730f1bf9cd873c541b3d2a993b221ab5f34e3ef2c00",
       "byte_length": 13214
-    },
-    {
-      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/locomotion.json",
-      "sha256": "0af9414a2ead8104fac7b79ae9bbfae9fff47d2b11c491ad85c8e8fc40d36937",
-      "byte_length": 565
-    },
-    {
-      "path": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/model.json",
-      "sha256": "6609bb1a8d642c80ee4241547f5298ed48d0bdbe96252d11b5fdde289aee212c",
-      "byte_length": 129
     },
     {
       "path": "subjects/vehicles/vehicle.unicycle/0.1.0/provenance.json",
@@ -5945,8 +5595,8 @@
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/assemblies/default.json",
-      "sha256": "503a9e0b9549e85e746368f2980aff3f7321c61ff6f0ead71871dded41867941",
-      "byte_length": 945
+      "sha256": "9c7eca2c053148de222194f6930b7fbb567613bdd1b285be3b0fbc9c0d671fdf",
+      "byte_length": 859
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/asset.json",
@@ -5970,13 +5620,18 @@
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/capabilities.json",
-      "sha256": "a7b414686c7aee025a2e5b21f920b08fb73af00f4df3cbd036c49be42ca21782",
-      "byte_length": 646
+      "sha256": "62600f4c9822672ecd82a2989ce6c06928d86e3617c2bdc2c3e45b528071ac29",
+      "byte_length": 562
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/collision/collision.json",
       "sha256": "065ea8b3c9685be6b1fda8316cba943669fc626645725a8697403ffe64267cb4",
       "byte_length": 75
+    },
+    {
+      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/facts/physical.json",
+      "sha256": "a0fe574638285cc0ac274650fca72500fd0016383bbd5c3204f15784af4ef9a5",
+      "byte_length": 553
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/model/model.glb",
@@ -5987,16 +5642,6 @@
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/preview/thumbnail.webp",
       "sha256": "4fcfd0a3d5ab7b3903db63f2ebb2536633a90cab028677dc908fa320fe898432",
       "byte_length": 12188
-    },
-    {
-      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/profiles/camera.json",
-      "sha256": "8dbdb22d414588e3a4726a10e261f3b6029bc15d429cf0afe8dfa048e8503a68",
-      "byte_length": 183
-    },
-    {
-      "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/profiles/locomotion.json",
-      "sha256": "a0fe574638285cc0ac274650fca72500fd0016383bbd5c3204f15784af4ef9a5",
-      "byte_length": 553
     },
     {
       "path": "subjects/vehicles/vehicle.wingsuit/0.1.0/provenance.json",

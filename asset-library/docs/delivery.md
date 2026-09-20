@@ -14,7 +14,7 @@
 
 ## 权威与交付边界
 
-资产的可编辑权威来源只有 `subjects / shared / assemblies`。骨架与蒙皮留在模型中，语义映射位于 bindings，控制参数位于 profiles。SDK 提供执行算法，模块描述只声明宿主接口。
+资产的可编辑权威来源只有 `subjects / shared / assemblies`。骨架与蒙皮留在模型中，语义映射位于 bindings，物理事实位于 facts/physical.json，操控参数位于引擎 preset-content/config/presets。SDK 提供执行算法，模块描述只声明宿主接口。
 
 `catalog / dist` 和仓库 `packages/preset-content/config/generated` 是生成快照。Host 默认读取仓库内库，也支持 `ASSET_LIBRARY_ROOT` 外部目录及 `ASSET_LIBRARY_URL` HTTP 来源，无旧资产回退。远程同步构造器在使用前需 `await prepareAssetLibrary(root)`。
 

@@ -38,8 +38,8 @@ function addSubject(f,id,version,dependencies=[],{extra=false,incompatible=false
   }:{})});
   write(path.join(base,'bindings/rig.json'),{});
   write(path.join(base,'bindings/actions.json'),{slots:id===human?Object.fromEntries(['idle','walk','run','jump'].map(name=>[name,{clipName:name}])):{}});
-  write(path.join(base,'bindings/sockets.json'),{sockets:[]});
-  write(path.join(base,'collision/collision.json'),{shapes:[]});
+  write(path.join(base,'bindings/sockets.json'),{schema_version:'1.0',sockets:[]});
+  write(path.join(base,'collision/collision.json'),{schema_version:'1.0',shapes:[],verification:'not_run'});
   const assembly=read(path.join(base,'assemblies/default.json'));
   assembly.bindings={rig:relative+'/bindings/rig.json',animations:relative+'/bindings/actions.json',sockets:relative+'/bindings/sockets.json'};
   write(path.join(base,'assemblies/default.json'),assembly);

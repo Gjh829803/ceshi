@@ -386,6 +386,9 @@ importers:
       '@worldkit/three':
         specifier: workspace:*
         version: link:../three-world
+      ajv:
+        specifier: 8.17.1
+        version: 8.17.1
       three:
         specifier: 0.185.1
         version: 0.185.1

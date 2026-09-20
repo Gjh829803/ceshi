@@ -10,7 +10,7 @@ Playground 顶部选择“飞龙 · 空中训练场”，或打开
 [D01](../asset-library/subjects/fantastical/creature.dragon.d01/0.1.0/asset.json)，模型在主体的 model/，骨架与动作保存在 GLB，火焰图集在 shared/materials/。
 [锁文件](../asset-library/dist/assembly.lock.json)记录所有文件的 SHA-256 与字节数；旧提取清单只在 migrations 与 shared/source_documents 中作来源证据，不参与加载。H01 参考骑手保留在 D01 的 source/rider.glb。
 
-各变体的 profiles/locomotion.json、profiles/camera.json 和 bindings/sockets.json 保存专属标定；
+各变体的 facts/physical.json 和 bindings/sockets.json 保存模型事实与挂点；相机标定由引擎 preset-content/config/presets 提供；
 [dragon-variants.ts](../packages/preset-content/src/creatures/dragon-variants.ts)读取由同一库生成的消费快照。
 修改主体后执行 `pnpm content:sync`；不得手改 package 的 config/generated，也不得只换模型而沿用另一变体的尺寸。
 顶部飞龙选择器以 `?dragon=D02#/scenes/flying-creature-training` 形式重新载入所选变体。未骑乘人物的位置在通过 SDK 起点检查后保留。

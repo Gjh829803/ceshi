@@ -2,6 +2,16 @@ import Ajv from '../../tools/vendor/ajv.cjs';
 import {schemas,assertSafePath,assertContractVersion,protocolError} from './index.mjs';
 const ajv=new Ajv({allErrors:true,strict:false});ajv.addSchema(schemas);
 const validators=new Map();
+/** New authoring and publication require exact runtime evidence; v1 readers keep opaque metadata. */
+export function assertValidationEvidence(asset,validation){
+ assertValid('RuntimeValidation',validation);
+ for(const evidence of validation.evidence){
+  if(typeof evidence==='string')continue; // File references document format/visual checks only.
+  if(evidence.asset_id!==asset.asset_id||evidence.version!==asset.version)
+   throw protocolError('ASSET_VALIDATION_IDENTITY_MISMATCH');
+ }
+ return validation;
+}
 export function assertValid(name,value){
  if(!Object.hasOwn(schemas.$defs,name))throw protocolError('ASSET_CONTRACT_UNKNOWN_TYPE',name);
  let validate=validators.get(name);

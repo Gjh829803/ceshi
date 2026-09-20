@@ -11,7 +11,7 @@
 - `asset.json`：身份、分类、形态、尺寸与生命周期。
 - `capabilities.json`：运动、控制、交互能力及各自成熟度。
 - `resources.json`：模型、动画、贴图的路径、SHA-256 与字节数；骨架与蒙皮保留在 GLB 中。
-- `bindings/`、`profiles/`：骨骼语义、动作槽、挂点与模型物理事实；相机、操控手感在引擎 `packages/preset-content/config/presets/`。
+- 可选 `bindings/`、`facts/`：实际骨骼语义、动作槽、挂点与模型物理事实；相机、操控手感在引擎 `packages/preset-content/config/presets/`。
 - `assemblies/default.json`：接入入口、资源引用与控制权归属。
 - `provenance.json`、`validation/latest.json`：来源、转换与授权事实，以及各类验证证据。
 

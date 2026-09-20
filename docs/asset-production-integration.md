@@ -114,7 +114,7 @@ packages/creator-host/docs/agent/
 
 | 注册内容 | 放在哪里 | Agent 如何获取 |
 | --- | --- | --- |
-| 资产及能力信息 | [subjects/](../asset-library/subjects/) 下的 asset.json、capabilities.json、resources.json、bindings/whitebox.json 和 profiles：稳定 ID、真实资源、能力、绑定和限制；`pnpm content:sync` 生成 Host 目录和 package 配置快照 | `assets_search` 查找，`assets_describe` 读取详情 |
+| 资产及能力信息 | [subjects/](../asset-library/subjects/) 下的 asset.json、capabilities.json、resources.json、bindings/whitebox.json 和 facts：稳定 ID、真实资源、能力、绑定和限制；`pnpm content:sync` 生成 Host 目录和 package 配置快照 | `assets_search` 查找，`assets_describe` 读取详情 |
 | 可用权限 | [asset-policy.json](../packages/creator-host/config/asset-policy.json) 的 `allowedAssetIds`，保留默认主体和现有策略 | 进入白名单后，才会出现在上述工具中；Agent 再用项目 `project.json.assetIds` 选择要打包的资产 |
 | 分类阅读入口 | [Agent 资产索引](../packages/creator-host/docs/agent/assets/README.md) 及人、动物、载具、场景对象子目录；新增子页时接入 [agent-docs.ts](../packages/creator-host/src/discovery/agent-docs.ts) 的路径和父子导航 | `creator_get_authoring_schema({document:...})` 按层读取，页面再链接具体资产与能力 topic |
 | 能力接口与说明 | SDK 对应实现、[SDK 指南](../packages/three-world/README.md) 的 topic，以及 [authoring-schema.ts](../packages/creator-host/src/discovery/authoring-schema.ts) / [creator-discovery.ts](../packages/creator-host/src/discovery/creator-discovery.ts) 的主题分派 | `creator_get_authoring_schema` 默认读取简短 guide，按需用 `sections` 获取 contracts、commands、humanoid 等接口 |

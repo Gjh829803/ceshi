@@ -54,11 +54,11 @@ test('module requirements are portable contracts and shared artifact metadata mu
 });
 test('non-Whitebox physical profiles and collision facts are portable, owned and immutable',async t=>{
  const f=fixture(t),base=path.join(f.root,'subjects/objects/object.a/1.0.0'),assembly=read(path.join(base,'assemblies/default.json'));
- assembly.profiles={control:'subjects/objects/object.a/1.0.0/profiles/locomotion.json'};write(path.join(base,'assemblies/default.json'),assembly);
- const profile={schema_version:'1.0',parameters:{seat:[0,1,0],radius:2},control_profile:{envelope:{kind:'capsule',radius:.3}},presentation:{id:'fixture',name:'Fixture',fields:['seat']}};
- const profilePath=path.join(base,'profiles/locomotion.json');write(profilePath,profile);const collision={schema_version:'1.0',shapes:[{kind:'box',halfExtents:[1,2,3],offset:[0,1,0]}],verification:'not_run'};write(path.join(base,'collision/collision.json'),collision);
+ assembly.facts={physical:'subjects/objects/object.a/1.0.0/facts/physical.json'};write(path.join(base,'assemblies/default.json'),assembly);
+ const profile={schema_version:'1.0',parameters:{seat:[0,1,0],radius:2},body:{envelope:{kind:'capsule',radius:.3,halfHeight:.5,offset:[0,0,0]}},presentation:{id:'fixture',name:'Fixture',fields:['seat']}};
+ const profilePath=path.join(base,'facts/physical.json');write(profilePath,profile);const collision={schema_version:'1.0',shapes:[{kind:'box',halfExtents:[1,2,3],offset:[0,1,0]}],verification:'not_run'};write(path.join(base,'collision/collision.json'),collision);
  await publishLibrary(f.root,{output:f.output});const manifest=new RegistryStore(f.output).describeAsset('object.a');
- assert.deepEqual(manifest.extensions,{});assert.deepEqual(manifest.sections.facts.content_profile.parameters.seat,[0,1,0]);assert.deepEqual(manifest.sections.facts.content_profile.control_profile,profile.control_profile);assert.deepEqual(manifest.sections.facts.collision,collision);
+ assert.deepEqual(manifest.extensions,{});assert.deepEqual(manifest.sections.facts.content_profile.parameters.seat,[0,1,0]);assert.deepEqual(manifest.sections.facts.content_profile.control_profile,profile.body);assert.deepEqual(manifest.sections.facts.collision,collision);
  profile.parameters.seat=[0,99,0];write(profilePath,profile);await assert.rejects(()=>publishLibrary(f.root,{output:f.output}),/IMMUTABLE_VERSION/);
- profile.parameters.speed=999;write(profilePath,profile);await assert.rejects(()=>publishLibrary(f.root,{output:path.join(f.root,'unsafe-tuning')}),/CONTENT_FIELD_OWNERSHIP/);
+ profile.parameters.speed=999;write(profilePath,profile);await assert.rejects(()=>publishLibrary(f.root,{output:path.join(f.root,'unsafe-tuning')}),/CONTENT_FACTS_INVALID/);
 });

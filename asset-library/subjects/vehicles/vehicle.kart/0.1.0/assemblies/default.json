@@ -11,10 +11,6 @@
     "animations": "subjects/vehicles/vehicle.kart/0.1.0/bindings/animation_map.json",
     "sockets": "subjects/vehicles/vehicle.kart/0.1.0/bindings/sockets.json"
   },
-  "profiles": {
-    "control": "subjects/vehicles/vehicle.kart/0.1.0/profiles/locomotion.json",
-    "camera": "subjects/vehicles/vehicle.kart/0.1.0/profiles/camera.json"
-  },
   "modules": [
     {
       "asset_id": "module.host.subject",
@@ -27,5 +23,9 @@
     "camera": "host.camera"
   },
   "stage": "assets_ready",
-  "runtime_ready": false
+  "runtime_ready": false,
+  "facts": {
+    "physical": "subjects/vehicles/vehicle.kart/0.1.0/facts/physical.json",
+    "model": "subjects/vehicles/vehicle.kart/0.1.0/facts/model.json"
+  }
 }

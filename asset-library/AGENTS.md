@@ -4,7 +4,7 @@
 
 1. subjects 元数据为权威来源；catalog 和 dist 自动生成。
 2. 文件夹确定归属，结构化字段确定分类，引用确定复用。
-3. 新主体必须有六类基础元数据、bindings、profiles、default assembly、README。
+3. 新主体必须有六类基础元数据和 README。default assembly 声明实际组件；bindings、facts、collision、modules 和 authority 按需要提供，不为静态模型创建空控制或相机配置。
 4. 使用 taxonomy 中的规范词，不把参数、依赖或运行实例状态塞进标签。形态相同不代表骨架兼容。
 5. 新内容默认留在主体中，只有真实复用或明确版本契约才进入 Shared。
 6. 所有可消费路径相对库根；禁止 ../、绝对盘符、符号链接逃出库。provenance 中历史源路径仅用于追溯。
@@ -12,4 +12,4 @@
 8. Placeholder 和 planned 能被搜索，但不能声称 runtime ready。不得由动画名字推断完整能力。
 9. 改动后运行 validate、build 与 tests/*.test.mjs；模型变更还运行 validate-formats 和实际看板抽检。仓库内协议和客户端固定副本必须通过 sync --check。
 10. 需要宿主 motor / animation / physics / camera 执行时声明依赖，不在资产库复制引擎。
-11. 相机/操控/手感可编辑参数属于引擎 preset-content/config；主体仅保存模型事实、内容绑定和外部合同引用。发布器不读取引擎仓库。
+11. 相机/操控/手感可编辑参数属于引擎 preset-content/config；主体通过 facts/physical.json 保存模型事实，通过 bindings 保存内容绑定；运行依赖由 assembly.modules 声明。发布器不读取引擎仓库。

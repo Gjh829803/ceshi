@@ -33,12 +33,7 @@
       ]
     },
     "runtime": {
-      "type": "string",
-      "enum": [
-        "not_run",
-        "failed",
-        "verified"
-      ]
+      "$ref": "urn:worldkit:asset-contracts:1.0.0#/$defs/RuntimeValidation/properties/runtime"
     },
     "checked_at": {
       "type": [
@@ -47,10 +42,7 @@
       ]
     },
     "evidence": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "$ref": "urn:worldkit:asset-contracts:1.0.0#/$defs/RuntimeValidation/properties/evidence"
     }
   },
   "required": [
@@ -62,5 +54,10 @@
     "checked_at",
     "evidence"
   ],
-  "additionalProperties": true
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "$ref": "urn:worldkit:asset-contracts:1.0.0#/$defs/RuntimeValidation"
+    }
+  ]
 }

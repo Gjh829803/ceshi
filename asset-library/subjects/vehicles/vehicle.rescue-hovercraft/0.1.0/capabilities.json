@@ -15,8 +15,7 @@
   "movement_transitions": [],
   "control": {
     "archetype": "directional",
-    "stage": "assets_ready",
-    "profile": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/profiles/locomotion.json"
+    "stage": "assets_ready"
   },
   "interactions": [],
   "limitations": [

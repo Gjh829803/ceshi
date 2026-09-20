@@ -7,6 +7,8 @@ handling and camera presets. Neither file stores measured model geometry.
 
 The canonical contract is `asset-library/schemas/content-parameters.schema.json`.
 `content-ownership.json` is its generated, package-local allowlist of content parameter paths.
+`content-parameters.schema.json` is the generated schema copy used to validate numbers,
+local XYZ vectors and dimensions before host composition. Both copies are generated together.
 `true` means the complete value belongs to content; an object splits a mixed field.
 Unknown content fields and any engine write to an owned content path are rejected.
 Composition merges only disjoint fields; it never silently overrides a value.
