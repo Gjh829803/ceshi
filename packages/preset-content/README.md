@@ -17,7 +17,7 @@ Playground and Creator. This package provides content, not another runtime owner
 - `config/integrations/`: exact subject-version bindings, selection and field ownership.
 - `config/`: consumer profile overrides, presentation defaults and scene placements.
 - `config/generated/`: deterministic compile-time snapshots from
-  content facts in `asset-library/subjects/**/profiles/`, subject bindings and engine presets. Run `pnpm content:sync`
+  content facts in `asset-library/subjects/**/facts/`, subject bindings and engine presets. Run `pnpm content:sync`
   to regenerate; `pnpm content:check` rejects stale snapshots. Do not edit these files.
 
 The asset library owns seats, envelopes, wheel geometry, collision and ground-contact

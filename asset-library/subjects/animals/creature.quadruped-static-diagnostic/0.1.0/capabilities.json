@@ -15,8 +15,7 @@
   "movement_transitions": [],
   "control": {
     "archetype": "directional",
-    "stage": "assets_ready",
-    "profile": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/locomotion.json"
+    "stage": "assets_ready"
   },
   "interactions": [],
   "limitations": [

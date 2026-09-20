@@ -15,8 +15,7 @@
   "movement_transitions": [],
   "control": {
     "archetype": "throttle_steer",
-    "stage": "assets_ready",
-    "profile": "subjects/vehicles/vehicle.rover/0.1.0/profiles/locomotion.json"
+    "stage": "assets_ready"
   },
   "interactions": [],
   "limitations": [

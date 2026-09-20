@@ -114,3 +114,14 @@ test('engine tuning changes runtime identity independently of content artifacts;
   context.supported_contracts[0].version='changed';
   assert.equal(runtimeAssetContext([rover.id]).supported_contracts[0].version,'1.0.0');
 });
+
+test('remote physical facts reject invalid numbers, vectors and collision dimensions before composition',()=>{
+ for(const patch of [{radius:'bad'},{radius:NaN},{radius:Infinity},{radius:-1},{seat:[0,undefined,0]},{seat:[0,1]},{envelope:{kind:'box',halfExtents:[1,0,1],offset:[0,0,0]}},{wheelPhysics:{radius:false}}]){
+  const facts=roverFacts();Object.assign(facts.parameters,patch);
+  assert.throws(()=>composeContentSpec(rover.id,facts),/CONTENT_FACTS_INVALID/,JSON.stringify(patch));
+  const entry=structuredClone(rover);Object.assign(entry.vehicle.spec,patch);
+  assert.throws(()=>composeAssetCatalog([entry]),/CONTENT_FACTS_INVALID/);
+ }
+ const signed=roverFacts();signed.parameters.seat=[-1,0,-3];signed.parameters.rearAxleZMeters=-2;
+ assert.deepEqual(composeContentSpec(rover.id,signed).seat,[-1,0,-3]);
+});

@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Physical facts document",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "parameters": {
+      "$ref": "urn:worldkit:content-parameters:1"
+    },
+    "body": {
+      "$ref": "urn:worldkit:content-parameters:1"
+    },
+    "presentation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ground",
+              "seat",
+              "collisionProbes",
+              "envelope"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "runtime_contract": {
+      "const": "external"
+    },
+    "runtime_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "runtime_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "runtime_id",
+          "contract"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "parameters"
+  ],
+  "additionalProperties": false
+}

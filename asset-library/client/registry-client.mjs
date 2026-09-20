@@ -6960,7 +6960,7 @@ var v1_schema_default = {
               type: "object"
             },
             validation: {
-              type: "object"
+              $ref: "#/$defs/RuntimeValidation"
             },
             assembly: {
               type: "object"
@@ -7773,6 +7773,159 @@ var v1_schema_default = {
         "scope_digest"
       ],
       additionalProperties: false
+    },
+    RuntimeEvidence: {
+      type: "object",
+      properties: {
+        asset_id: {
+          type: "string",
+          pattern: "^[a-z][a-z0-9._-]{0,127}$"
+        },
+        version: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        runtime_id: {
+          type: "string",
+          minLength: 1
+        },
+        runtime_version: {
+          type: "string",
+          minLength: 1
+        },
+        adapter_id: {
+          type: "string",
+          minLength: 1
+        },
+        adapter_version: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        preset_digest: {
+          type: "string",
+          pattern: "^[a-f0-9]{64}$"
+        },
+        overrides_digest: {
+          anyOf: [
+            {
+              type: "string",
+              pattern: "^[a-f0-9]{64}$"
+            },
+            {
+              type: "null"
+            }
+          ]
+        },
+        runtime_digest: {
+          type: "string",
+          pattern: "^[a-f0-9]{64}$"
+        },
+        preset_refs: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              preset_id: {
+                type: "string",
+                minLength: 1
+              },
+              version: {
+                type: "string",
+                pattern: "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+              },
+              digest: {
+                type: "string",
+                pattern: "^[a-f0-9]{64}$"
+              }
+            },
+            required: [
+              "preset_id",
+              "version",
+              "digest"
+            ],
+            additionalProperties: false
+          }
+        },
+        status: {
+          const: "verified"
+        },
+        evidence_id: {
+          type: "string",
+          minLength: 1
+        },
+        supported_contracts: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/Requirement"
+          }
+        }
+      },
+      required: [
+        "asset_id",
+        "version",
+        "status",
+        "evidence_id",
+        "runtime_id",
+        "runtime_version",
+        "runtime_digest",
+        "adapter_id",
+        "adapter_version",
+        "preset_digest",
+        "overrides_digest"
+      ],
+      additionalProperties: false
+    },
+    RuntimeValidation: {
+      type: "object",
+      properties: {
+        runtime: {
+          enum: [
+            "not_run",
+            "failed",
+            "verified",
+            "incompatible"
+          ]
+        },
+        evidence: {
+          type: "array",
+          items: {
+            anyOf: [
+              {
+                type: "string",
+                minLength: 1
+              },
+              {
+                $ref: "#/$defs/RuntimeEvidence"
+              }
+            ]
+          }
+        }
+      },
+      required: [
+        "runtime",
+        "evidence"
+      ],
+      allOf: [
+        {
+          if: {
+            properties: {
+              runtime: {
+                const: "verified"
+              }
+            }
+          },
+          then: {
+            properties: {
+              evidence: {
+                contains: {
+                  $ref: "#/$defs/RuntimeEvidence"
+                }
+              }
+            }
+          }
+        }
+      ],
+      additionalProperties: true
     }
   }
 };
@@ -7831,6 +7984,15 @@ var import_ajv = __toESM(require_ajv(), 1);
 var ajv = new import_ajv.default({ allErrors: true, strict: false });
 ajv.addSchema(v1_schema_default);
 var validators = /* @__PURE__ */ new Map();
+function assertValidationEvidence(asset, validation) {
+  assertValid("RuntimeValidation", validation);
+  for (const evidence of validation.evidence) {
+    if (typeof evidence === "string") continue;
+    if (evidence.asset_id !== asset.asset_id || evidence.version !== asset.version)
+      throw protocolError("ASSET_VALIDATION_IDENTITY_MISMATCH");
+  }
+  return validation;
+}
 function assertValid(name, value) {
   if (!Object.hasOwn(v1_schema_default.$defs, name)) throw protocolError("ASSET_CONTRACT_UNKNOWN_TYPE", name);
   let validate = validators.get(name);
@@ -7851,6 +8013,7 @@ function assertValid(name, value) {
     for (const item of value.items) if (item.preview !== null) artifact(item.preview);
   }
   if (name === "Manifest") {
+    assertValidationEvidence(value, value.sections.validation);
     const resources = /* @__PURE__ */ new Map();
     for (const r of value.resources) {
       artifact(r);

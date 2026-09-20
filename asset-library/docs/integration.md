@@ -76,3 +76,26 @@ Creator 当前每次会话从选定 snapshot 解析；写出的锁可用通用 C
 看板通过 Registry 分页、固定版本详情及已校验字节预览模型、骨骼、动作。它只依赖发布包，可与制作目录分离部署；相机/操控页显示引擎归属及未连接引擎提供器的状态，避免伪造远程预设数据。
 
 维护入口：pnpm content:sync/check 同步制作侧 Whitebox 适配和生成 preset；pnpm assets:publish/check 生成与校验发布链路；pnpm assets:serve 启动已经生成的 Registry 看板。生成目录、项目交付目录和缓存均不是第二个可编辑资产库。
+
+## 6. 制作契约与运行证据
+
+主体的 assembly 可省略 bindings、facts、modules 和 authority；声明的文件引用必须存在。
+新增静态模型仅保存实际资源，不默认依赖人物 motor 或相机。带骨骼或动画的模型在入库时
+创建对应绑定，动作语义、挂点和运行模块由后续明确接入。
+
+物理事实通过 `assembly.facts.physical` 指向 `facts/physical.json`；`parameters` 保存主体
+几何事实，人物身体事实使用 `body`，可选模型展示事实通过 `facts.model` 引用。
+[字段 Schema](../schemas/content-parameters.schema.json)声明米制长度、局部 XYZ 坐标、
+正尺寸与必要数组长度；[文档 Schema](../schemas/physical-facts.schema.json)检查容器字段。
+制作校验、发布和宿主合成都检查物理值；相机及操控参数仍在引擎。
+
+`validation.evidence` 中的字符串用于格式、视觉等报告引用；声明 `runtime: verified`
+必须附带结构化 RuntimeEvidence，包含资产 ID/版本、evidence_id、Runtime ID/版本/字节哈希、
+adapter ID/版本、preset_digest 和 overrides_digest（无覆盖时为 null）。记录必须属于
+当前资产版本。制作侧和 Registry 共用 `@worldkit/asset-contracts` 的 RuntimeValidation
+与 RuntimeEvidence 定义。兼容性只对身份完全匹配的运行上下文成立；仅有报告路径不代表兼容。
+
+本次制作目录改名不改变模型字节、资产版本和既有发布清单。Registry v1 的
+`sections.facts.content_profile` / `control_profile` 是已发布的传输字段，由发布器从新制作
+命名转换；它们不作为新的制作入口。空绑定若已进入历史发布清单仍予以保留，避免重写
+同版本身份；新入库资产按实际组件声明。运行证据或任何已发布内容发生变化时仍需新版本。

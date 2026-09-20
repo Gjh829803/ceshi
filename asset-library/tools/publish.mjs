@@ -6,21 +6,19 @@ import {canonicalJson,assertSafePath,protocolError} from '../client/contracts/in
 import {assertValid} from '../client/contracts/validate.mjs';
 import {buildWhiteboxCatalog} from './whitebox.mjs';
 import {publicationPath} from './publication-path.mjs';
-import Ajv from './vendor/ajv.cjs';
+import {readPhysicalFacts} from './content-facts.mjs';
 
 const lexical=(a,b)=>a<b?-1:a>b?1:0;
 const bytesOf=value=>Buffer.from(canonicalJson(value)+'\n');
 const fail=(code,message)=>{throw protocolError(code,message,409);};
 const mime={glb:'model/gltf-binary',gltf:'model/gltf+json',json:'application/json','three-clip-json':'application/json',webp:'image/webp',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',txt:'text/plain',fbx:'application/octet-stream'};
 const artifactOf=({resource_id,logical_paths,...artifact})=>artifact;
-const contentValidator=new Ajv({allErrors:true,strict:false}).compile(read(new URL('../schemas/content-parameters.schema.json',import.meta.url)));
 function physicalFacts(root,subject){
  const facts={scale:subject.asset.scale||{},inspection:subject.resources.inspection||{}};
- if(subject.assembly.profiles?.control){
-  const profile=read(inside(root,subject.assembly.profiles.control));
-  for(const value of [profile.parameters||{},profile.control_profile||{}])if(!contentValidator(value))fail('ASSET_CONTENT_FIELD_OWNERSHIP',subject.asset.asset_id);
-  if(profile.presentation&&Object.keys(profile.presentation).some(key=>!['id','name','fields'].includes(key)))fail('ASSET_CONTENT_FIELD_OWNERSHIP',subject.asset.asset_id);
-  facts.content_profile=clean({schema_version:profile.schema_version,parameters:profile.parameters||{},...(profile.control_profile?{control_profile:profile.control_profile}:{}),...(profile.presentation?{presentation:profile.presentation}:{})});
+ const profile=readPhysicalFacts(root,subject);
+ if(profile){
+  // Preserve the published v1 representation and immutable asset identities.
+  facts.content_profile=clean({schema_version:profile.schema_version,parameters:profile.parameters||{},...(profile.body?{control_profile:profile.body}:{}),...(profile.presentation?{presentation:profile.presentation}:{})});
  }
  const collisionPath=path.join(subject.base,'collision/collision.json');
  if(fs.existsSync(collisionPath)){

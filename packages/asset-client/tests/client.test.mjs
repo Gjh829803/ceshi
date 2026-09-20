@@ -31,7 +31,7 @@ async function fixture(t) {
     kind: 'asset-manifest', contract_version: '1.0.0', asset_id: id, version: '1.0.0', taxonomy_version: '1.0.0',
     display_name: id, description: '', group: 'props', placeholder: false, model_resource_id: resources[0].resource_id,
     preview_resource_id: resources.find(r => r.role === 'preview')?.resource_id ?? null, resources, dependencies, runtime_requirements: [],
-    sections: { asset: {}, capabilities: {}, bindings: {}, facts: {}, animations: [], provenance: {}, validation: {}, assembly: {} }, extensions: {},
+    sections: { asset: {}, capabilities: {}, bindings: {}, facts: {}, animations: [], provenance: {}, validation: {runtime:'not_run',evidence:[]}, assembly: {} }, extensions: {},
   });
   const manifests = [manifest('root', [resource(0, 'model'), resource(2, 'preview')], [{ asset_id: 'dep', version: '1.0.0' }]), manifest('dep', [resource(1, 'model')]), manifest('other', [resource(3, 'model')])];
   const raw = manifests.map(m => Buffer.from(canonicalJson(m) + '\n'));

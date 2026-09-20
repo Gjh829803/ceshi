@@ -65,7 +65,8 @@
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",
-    "three": "0.185.1"
+    "three": "0.185.1",
+    "ajv": "8.17.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

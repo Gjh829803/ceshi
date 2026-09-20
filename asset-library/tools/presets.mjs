@@ -12,6 +12,12 @@ export function syncContentOwnership(libraryRoot, packageRoot, check = false) {
     if (!fs.existsSync(destination) || fs.readFileSync(destination,'utf8')!==contents)
       throw Error(`PRESET_CONTENT_OWNERSHIP_OUT_OF_DATE: ${destination}`);
   } else write(destination,contents);
+  const schemaFile=path.join(packageRoot,'config/integrations/content-parameters.schema.json');
+  const schemaContents=JSON.stringify(read(inside(libraryRoot,'schemas/content-parameters.schema.json')),null,2)+'\n';
+  if(check){
+    if(!fs.existsSync(schemaFile)||fs.readFileSync(schemaFile,'utf8')!==schemaContents)
+      throw Error(`PRESET_CONTENT_SCHEMA_OUT_OF_DATE: ${schemaFile}`);
+  }else write(schemaFile,schemaContents);
   return destination;
 }
 
@@ -21,9 +27,14 @@ export function buildPresetContent(libraryRoot, authoring) {
   const manifest = authoring.selection;
   const subjects = {}, models = {}, cameras = {}, dragonCameras = {}, dragonSpecs = {}, dragons = [];
   const at = (subject, relative) => read(inside(libraryRoot, `${subject.path}/${relative}`));
+  const factsFor = (subject,kind='physical') => {
+    const file=at(subject,'assemblies/default.json').facts?.[kind];
+    if(!file)throw Error(`PRESET_FACTS_MISSING: ${subject.path}/${kind}`);
+    return read(inside(libraryRoot,file));
+  };
   const parametersFor = subject => {
     const asset=at(subject,'asset.json');
-    return authoring.composeContentSpec(asset.asset_id,{asset_version:asset.asset_version,parameters:at(subject,'profiles/locomotion.json').parameters});
+    return authoring.composeContentSpec(asset.asset_id,{asset_version:asset.asset_version,parameters:factsFor(subject).parameters});
   };
   const addCamera = (subject, id, output, flat) => {
     const presets = authoring.cameraPresets[at(subject,'asset.json').asset_id];
@@ -42,7 +53,7 @@ export function buildPresetContent(libraryRoot, authoring) {
       throw Error(`PRESET_SCENE_FIELDS: ${parameters.id}`);
     subjects[parameters.id] = parameters;
     if (subject.model) {
-      const model = at(subject, 'profiles/model.json');
+      const model = factsFor(subject,'model');
       models[parameters.id] = {};
       if (model.roadCushion) models[parameters.id].roadCushion = model.roadCushion;
       if (model.socket_ids) {
@@ -57,7 +68,7 @@ export function buildPresetContent(libraryRoot, authoring) {
     addCamera(subject, parameters.id, cameras, true);
   }
   for (const subject of manifest.dragon_variants) {
-    const {presentation} = at(subject, 'profiles/locomotion.json');
+    const {presentation} = factsFor(subject);
     const parameters = parametersFor(subject);
     const resources = at(subject, 'resources.json');
     if (!presentation?.id || !presentation.name || !resources.model)
@@ -78,7 +89,7 @@ export function buildPresetContent(libraryRoot, authoring) {
     addCamera(subject, variant.id, dragonCameras[variant.id], false);
   }
   const person = {path: manifest.person};
-  const personProfile = at(person, 'profiles/locomotion.json').control_profile;
+  const personProfile = factsFor(person).body;
   if (!personProfile?.envelope) throw Error('PRESET_PERSON_PROFILE_MISSING');
   addCamera(person, 'person', cameras, true);
   return {

@@ -4,8 +4,7 @@
   "movement_transitions": [],
   "control": {
     "archetype": "unknown",
-    "stage": "planned",
-    "profile": null
+    "stage": "planned"
   },
   "interactions": [],
   "limitations": [

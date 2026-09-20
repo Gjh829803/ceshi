@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import Ajv from 'ajv';
 
 const readConfig = name => JSON.parse(fs.readFileSync(new URL(`../../config/${name}`, import.meta.url), 'utf8'));
 const ownership = readConfig('integrations/content-ownership.json');
+const physicalValidator=new Ajv({allErrors:true,strict:false,strictNumbers:true});
+const validatePhysical=physicalValidator.compile(readConfig('integrations/content-parameters.schema.json'));
 const defaults = {presets:readConfig('presets/subjects.json'), integrations:readConfig('integrations/whitebox.json')};
 const selection = readConfig('integrations/subjects.json');
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -52,6 +55,8 @@ export function createContentAdapter(configuration) {
       throw Error('CONTENT_FACTS_ENVELOPE_INVALID');
     binding(assetId,contentFacts.asset_version);
     checkOwnership(contentFacts.parameters,ownership,'content');
+    if(!validatePhysical(contentFacts.parameters))
+      throw Error(`CONTENT_FACTS_INVALID: ${assetId}: ${physicalValidator.errorsText(validatePhysical.errors)}`);
     const preset=presets[assetId];
     if (!preset) throw Error(`CONTENT_PRESET_MISSING: ${assetId}`);
     if (preset.parameters.mode && (!contentFacts.parameters.seat || !contentFacts.parameters.envelope))

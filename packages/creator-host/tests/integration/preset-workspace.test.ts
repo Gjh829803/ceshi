@@ -16,7 +16,7 @@ describe('player workspace configuration',()=>{
   const bindings=JSON.parse(readFileSync(new URL('../../../../packages/preset-content/config/integrations/whitebox.json',import.meta.url),'utf8'));
   const authored=(id:string)=>{
    const version=bindings.assets['vehicle.'+id].asset_version;
-   const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/profiles/locomotion.json`,import.meta.url);
+   const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/facts/physical.json`,import.meta.url);
    const spec=composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters}) as Record<string,unknown>;
    for(const key of humanoid.controlKeys)delete spec[key];
    delete spec.aircraftFlight;delete spec.controlProfileId;
