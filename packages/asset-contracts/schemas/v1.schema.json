@@ -372,7 +372,8 @@
               "type": "object"
             },
             "validation": {
-              "$ref": "#/$defs/RuntimeValidation"
+              "type": "object",
+              "description": "Published v1 validation metadata. Producers validate RuntimeValidation separately; missing runtime evidence does not imply compatibility."
             },
             "assembly": {
               "type": "object"

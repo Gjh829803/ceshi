@@ -10,7 +10,7 @@ async function fixture(run:(root:string)=>Promise<void>){
   try{
     await mkdir(path.join(root,'asset-library/tools'),{recursive:true});
     for(const file of ['core.mjs','whitebox.mjs','content-facts.mjs'])await copyFile(path.join(library,'tools',file),path.join(root,'asset-library/tools',file));
-    for(const file of ['tools/vendor/ajv.cjs','schemas/content-parameters.schema.json','schemas/physical-facts.schema.json']){
+    for(const file of ['tools/vendor/ajv.cjs','schemas/content-parameters.schema.json','schemas/physical-facts.schema.json','schemas/model-facts.schema.json','schemas/sockets.schema.json','schemas/collision.schema.json']){
       const target=path.join(root,'asset-library',file);await mkdir(path.dirname(target),{recursive:true});await copyFile(path.join(library,file),target);
     }
     await cp(path.join(library,subject),path.join(root,'asset-library',subject),{recursive:true});

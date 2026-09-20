@@ -140,3 +140,25 @@ it('reads canonical numbered dragon specs as independent copies with explicit mi
  expect(readDragonSpec('D01')).toEqual(librarySpecs.D01);
  expect(()=>readDragonSpec('missing')).toThrow('Unknown dragon variant');
 });
+
+it('rejects invalid model geometry and socket references before writing preset snapshots',()=>{
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'preset-leaf-validation-'));
+ try{
+  const library=path.join(temporary,'library'),output=path.join(temporary,'package');
+  fs.cpSync(path.join(repositoryRoot,'asset-library/subjects'),path.join(library,'subjects'),{recursive:true,filter:source=>fs.statSync(source).isDirectory()||source.endsWith('.json')});
+  const authoring=presetAuthoringContext();
+  syncPresetContent(library,output,false,authoring);
+  const generated=fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8');
+  const file=path.join(library,'subjects/vehicles/vehicle.rover/0.1.0/facts/model.json');
+  const original=fs.readFileSync(file,'utf8'),model=JSON.parse(original);model.roadCushion.size=['bad',1,1];
+  fs.writeFileSync(file,JSON.stringify(model));
+  expect(()=>syncPresetContent(library,output,false,authoring)).toThrow(/ASSET_CONTENT_FACTS_INVALID/);
+  expect(fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8')).toBe(generated);
+  fs.writeFileSync(file,original);
+  const socketFile=path.join(library,'subjects/vehicles/vehicle.atv/0.1.0/bindings/sockets.json');
+  const sockets=JSON.parse(fs.readFileSync(socketFile,'utf8'));sockets.sockets.find((socket:{id:string})=>socket.id==='entry.left').positionMetersXYZ=[false,0,1];
+  fs.writeFileSync(socketFile,JSON.stringify(sockets));
+  expect(()=>syncPresetContent(library,output,false,authoring)).toThrow(/ASSET_CONTENT_FACTS_INVALID/);
+  expect(fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8')).toBe(generated);
+ }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+},15000);

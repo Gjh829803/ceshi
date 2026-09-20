@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {ROOT, collect, inside, latest, read, sha256, write} from './core.mjs';
-import {readPhysicalFacts} from './content-facts.mjs';
+import {readPhysicalFacts,readModelFacts,readSocketBindings,readCollisionFacts} from './content-facts.mjs';
 
 const libraryReadinessNote = '资源预览不等于控制器、碰撞或骑乘验证。';
 
@@ -47,9 +47,9 @@ export function buildWhiteboxCatalog(root = ROOT, {allVersions = false} = {}) {
     const bindings=subject.assembly.bindings??{};
     const rig = bindings.rig?read(inside(root, bindings.rig)):{};
     const actions = bindings.animations?read(inside(root, bindings.animations)).slots:{};
-    const sockets = bindings.sockets?read(inside(root, bindings.sockets)).sockets:[];
-    const collisionFile=path.join(subject.base,'collision/collision.json');
-    const collision = fs.existsSync(collisionFile)?read(collisionFile).shapes:[];
+    readModelFacts(root,subject);
+    const sockets = readSocketBindings(root,subject)?.sockets??[];
+    const collision = readCollisionFacts(root,subject)?.shapes??[];
     if (collision.length > 1) throw Error('WHITEBOX_MULTIPLE_COLLIDERS_UNSUPPORTED: ' + asset.asset_id);
     const entry = {id:asset.asset_id, contentVersion:asset.asset_version, displayName:asset.display_name, ...resource(model, 'subjects', resources.model_logical_path), ...binding,
       rootTransform:asset.scale.source_transform, actions,
@@ -70,7 +70,6 @@ export function buildWhiteboxCatalog(root = ROOT, {allVersions = false} = {}) {
       const profile = readPhysicalFacts(root,subject);
       if (!profile?.parameters) throw Error('WHITEBOX_PHYSICAL_FACTS_REQUIRED: ' + asset.asset_id);
       if (Object.keys(vehicle.spec || {}).length) throw Error('WHITEBOX_DUPLICATE_VEHICLE_PARAMETER: ' + asset.asset_id);
-      for (const key of Object.keys(vehicle.spec || {})) if (key in profile.parameters) throw Error('WHITEBOX_DUPLICATE_VEHICLE_PARAMETER: ' + asset.asset_id + '.' + key);
       entry.vehicle = {...vehicle, spec:{...vehicle.spec, ...profile.parameters}};
     }
     assets.push(entry);

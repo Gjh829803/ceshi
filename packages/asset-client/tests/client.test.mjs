@@ -22,7 +22,7 @@ const artifact = (bytes, role = 'runtime') => {
   return { artifact_id: `sha256:${sha256}`, sha256, byte_length: bytes.length, mime_type: 'model/gltf-binary', format: 'glb', role, storage_path: `artifacts/sha256/${sha256.slice(0, 2)}/${sha256}` };
 };
 
-async function fixture(t) {
+async function fixture(t, validation = {runtime:'not_run',evidence:[]}) {
   const root = await mkdtemp(path.join(tmpdir(), 'worldkit-assets-'));
   const payloads = [Buffer.from('selected root GLB'), Buffer.from('dependency GLB'), Buffer.from('preview GLB'), Buffer.from('unselected GLB')];
   const artifacts = payloads.map((bytes, i) => artifact(bytes, i === 2 ? 'preview' : 'runtime'));
@@ -31,7 +31,7 @@ async function fixture(t) {
     kind: 'asset-manifest', contract_version: '1.0.0', asset_id: id, version: '1.0.0', taxonomy_version: '1.0.0',
     display_name: id, description: '', group: 'props', placeholder: false, model_resource_id: resources[0].resource_id,
     preview_resource_id: resources.find(r => r.role === 'preview')?.resource_id ?? null, resources, dependencies, runtime_requirements: [],
-    sections: { asset: {}, capabilities: {}, bindings: {}, facts: {}, animations: [], provenance: {}, validation: {runtime:'not_run',evidence:[]}, assembly: {} }, extensions: {},
+    sections: { asset: {}, capabilities: {}, bindings: {}, facts: {}, animations: [], provenance: {}, validation, assembly: {} }, extensions: {},
   });
   const manifests = [manifest('root', [resource(0, 'model'), resource(2, 'preview')], [{ asset_id: 'dep', version: '1.0.0' }]), manifest('dep', [resource(1, 'model')]), manifest('other', [resource(3, 'model')])];
   const raw = manifests.map(m => Buffer.from(canonicalJson(m) + '\n'));
@@ -226,4 +226,25 @@ test('CLI search, describe, manifest resolve, online fetch and offline replay', 
   const requests = f.requests.length;
   assert.equal(Object.keys((await invoke(['fetch', '--lock', lockPath, '--cache', cacheRoot, '--offline'])).files).length, 2);
   assert.equal(f.requests.length, requests);
+});
+
+test('source and standalone clients preserve legacy v1 manifests through download and offline replay',async t=>{
+ const {RegistryClient:PortableClient}=await import('../../../asset-library/client/registry-client.mjs');
+ const {materializeAssets:portableMaterialize}=await import('../../../asset-library/client/materialize.mjs');
+ for(const validation of [{},{runtime:'unknown'},{runtime:'verified',evidence:['old-report.json']},{runtime:'verified',evidence:{}}]){
+  const f=await fixture(t,validation);
+  for(const [name,Client,materialize] of [['source',RegistryClient,materializeAssets],['standalone',PortableClient,portableMaterialize]]){
+   const client=new Client({registryUrl:f.base}),cacheRoot=path.join(f.root,name);
+   assert.deepEqual((await client.describeAsset('root')).sections.validation,validation);
+   const result=await materialize(f.lock,{client,cacheRoot});
+   assert.deepEqual(result.manifests[0].sections.validation,validation);
+   const requests=f.requests.length;
+   const offline=await materialize(f.lock,{cacheRoot,offline:true});
+   assert.equal(f.requests.length,requests,'offline replay must not refetch or reinterpret old metadata');
+   assert.deepEqual(offline.manifests[0].sections.validation,validation);
+   assert.deepEqual(await readFile(offline.files[f.artifacts[0].artifact_id]),f.payloads[0]);
+   const cached=path.join(cacheRoot,'manifests/sha256',f.refs[0].manifest_digest.slice(0,2),f.refs[0].manifest_digest);
+   assert.deepEqual(await readFile(cached),f.raw[0],'cached manifest bytes and digest remain unchanged');
+  }
+ }
 });

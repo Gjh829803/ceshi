@@ -19,7 +19,7 @@ export interface AssetManifest {
  model_resource_id:string|null;preview_resource_id:string|null;resources:Resource[];
  dependencies:AssetRef[];
  runtime_requirements:{contract_id:string;version:string}[];
- sections:{asset:Record<string,unknown>;capabilities:Record<string,unknown>;bindings:Record<string,unknown>;facts:Record<string,unknown>;animations:unknown[];provenance:Record<string,unknown>;validation:RuntimeValidation;assembly:Record<string,unknown>};
+ sections:{asset:Record<string,unknown>;capabilities:Record<string,unknown>;bindings:Record<string,unknown>;facts:Record<string,unknown>;animations:unknown[];provenance:Record<string,unknown>;validation:Record<string,unknown>;assembly:Record<string,unknown>};
  extensions:{whitebox?:Record<string,unknown>};
 }
 export interface RuntimeEvidence extends AssetRef {

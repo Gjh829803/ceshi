@@ -92,10 +92,27 @@ Creator 当前每次会话从选定 snapshot 解析；写出的锁可用通用 C
 `validation.evidence` 中的字符串用于格式、视觉等报告引用；声明 `runtime: verified`
 必须附带结构化 RuntimeEvidence，包含资产 ID/版本、evidence_id、Runtime ID/版本/字节哈希、
 adapter ID/版本、preset_digest 和 overrides_digest（无覆盖时为 null）。记录必须属于
-当前资产版本。制作侧和 Registry 共用 `@worldkit/asset-contracts` 的 RuntimeValidation
-与 RuntimeEvidence 定义。兼容性只对身份完全匹配的运行上下文成立；仅有报告路径不代表兼容。
+当前资产版本。新制作与发布共用 `@worldkit/asset-contracts` 的 RuntimeValidation；
+Registry 使用同一 RuntimeEvidence 定义检验运行证据。v1 读取端保留不透明的 validation
+对象，允许旧的空记录、unknown 状态或仅报告路径的清单继续下载与离线回放，不修改其
+字节或哈希。证据缺失、格式错误或身份不匹配时不授予兼容，返回 unknown；显式不兼容
+与缺少适配器仍单独报告。兼容性只对身份完全匹配的运行上下文成立。
 
 本次制作目录改名不改变模型字节、资产版本和既有发布清单。Registry v1 的
 `sections.facts.content_profile` / `control_profile` 是已发布的传输字段，由发布器从新制作
 命名转换；它们不作为新的制作入口。空绑定若已进入历史发布清单仍予以保留，避免重写
 同版本身份；新入库资产按实际组件声明。运行证据或任何已发布内容发生变化时仍需新版本。
+
+模型展示事实、挂点和碰撞体也通过同一制作读取入口校验：
+
+| 可选文件 | Schema 与检查 |
+| --- | --- |
+| `facts/model.json` | [模型事实](../schemas/model-facts.schema.json)：坐垫中心为局部米制 XYZ、尺寸为三个正数，socket_ids 不重复且引用实际声明的挂点 |
+| `bindings/sockets.json` | [挂点](../schemas/sockets.schema.json)：唯一 ID、可选节点名、三个有限数值组成的 positionMetersXYZ |
+| `collision/collision.json` | [碰撞体](../schemas/collision.schema.json)：当前接入的 box 使用正 halfExtents 和局部 offset，复用内容参数 Schema 的 box 定义 |
+
+制作校验、发布、Whitebox 目录生成和实际消费模型事实的 preset 生成器复用这些检查。
+未声明的组件仍可省略；已声明的引用缺失或字段错误会在生成产物前报错。未来接入新的
+碰撞形状时同步其真实消费者和 Schema，不仅新增标签。classification/morphology 描述
+内容，control.archetype 描述控制方式，bindings/whitebox.json 声明引擎适配；分类标签
+不会自动创建控制器或表示已验证运行能力。

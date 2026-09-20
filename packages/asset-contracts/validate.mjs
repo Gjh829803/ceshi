@@ -2,7 +2,7 @@ import Ajv from 'ajv';
 import {schemas,assertSafePath,assertContractVersion,protocolError} from './index.mjs';
 const ajv=new Ajv({allErrors:true,strict:false});ajv.addSchema(schemas);
 const validators=new Map();
-/** Authoring and published manifests use the same exact runtime evidence identity. */
+/** New authoring and publication require exact runtime evidence; v1 readers keep opaque metadata. */
 export function assertValidationEvidence(asset,validation){
  assertValid('RuntimeValidation',validation);
  for(const evidence of validation.evidence){
@@ -27,7 +27,6 @@ export function assertValid(name,value){
  if(name==='Summary'&&value.preview!==null)artifact(value.preview);
  if(name==='SearchResponse')for(const item of value.items)if(item.preview!==null)artifact(item.preview);
  if(name==='Manifest'){
-  assertValidationEvidence(value,value.sections.validation);
   const resources=new Map();for(const r of value.resources){artifact(r);if(resources.has(r.resource_id))throw protocolError('ASSET_CONTRACT_DUPLICATE_RESOURCE');resources.set(r.resource_id,r);}
   for(const key of ['model_resource_id','preview_resource_id'])if(value[key]!==null&&!resources.has(value[key]))throw protocolError('ASSET_CONTRACT_RESOURCE_MISSING',key);
  }

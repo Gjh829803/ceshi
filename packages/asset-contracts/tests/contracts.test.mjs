@@ -47,3 +47,16 @@ test('version selectors resolve caret zero-major ranges correctly and reject unk
  assert.equal(satisfiesVersion('0.0.2','^0.0.1'),false);assert.equal(satisfiesVersion('1.3.0','~1.2.0'),false);
  assert.throws(()=>assertContractVersion('2.0.0'),/CONTRACT_VERSION/);
 });
+
+test('published v1 metadata remains readable while new publication requires complete runtime evidence',async()=>{
+ const {assertValid,assertValidationEvidence}=await validator();
+ for(const validation of [{},{runtime:'unknown'},{runtime:'verified',evidence:['old-report.json']},{runtime:'verified',evidence:{report:'old-report.json'}}]){
+  const oldManifest={...manifest,sections:{...manifest.sections,validation}};
+  const before=JSON.stringify(oldManifest);
+  assert.equal(assertValid('Manifest',oldManifest),oldManifest);
+  assert.equal(JSON.stringify(oldManifest),before,'read validation must not rewrite pinned metadata');
+  assert.throws(()=>assertValidationEvidence(oldManifest,validation),/ASSET_CONTRACT_INVALID/);
+ }
+ const malformed={...manifest,sections:{...manifest.sections,validation:null}};
+ assert.throws(()=>assertValid('Manifest',malformed),/ASSET_CONTRACT_INVALID/);
+});

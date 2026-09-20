@@ -3,10 +3,10 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {ROOT,collect,read,sha256,inside,walk} from './core.mjs';
 import {canonicalJson,assertSafePath,protocolError} from '../client/contracts/index.mjs';
-import {assertValid} from '../client/contracts/validate.mjs';
+import {assertValid,assertValidationEvidence} from '../client/contracts/validate.mjs';
 import {buildWhiteboxCatalog} from './whitebox.mjs';
 import {publicationPath} from './publication-path.mjs';
-import {readPhysicalFacts} from './content-facts.mjs';
+import {readPhysicalFacts,readModelFacts,readSocketBindings,readCollisionFacts} from './content-facts.mjs';
 
 const lexical=(a,b)=>a<b?-1:a>b?1:0;
 const bytesOf=value=>Buffer.from(canonicalJson(value)+'\n');
@@ -20,10 +20,8 @@ function physicalFacts(root,subject){
   // Preserve the published v1 representation and immutable asset identities.
   facts.content_profile=clean({schema_version:profile.schema_version,parameters:profile.parameters||{},...(profile.body?{control_profile:profile.body}:{}),...(profile.presentation?{presentation:profile.presentation}:{})});
  }
- const collisionPath=path.join(subject.base,'collision/collision.json');
- if(fs.existsSync(collisionPath)){
-  const collision=read(collisionPath),physicalKeys=new Set(['kind','halfExtents','offset','radius','halfHeight','height','center','rotation','points','vertices','indices']);
-  if(!Array.isArray(collision.shapes)||collision.shapes.some(shape=>!shape||typeof shape!=='object'||Object.keys(shape).some(key=>!physicalKeys.has(key))))fail('ASSET_CONTENT_FIELD_OWNERSHIP',subject.asset.asset_id);
+ const collision=readCollisionFacts(root,subject);
+ if(collision){
   facts.collision=clean({schema_version:collision.schema_version,shapes:collision.shapes,verification:collision.verification});
  }
  return clean(facts);
@@ -59,6 +57,8 @@ async function buildPublication(root=ROOT,{output=path.join(root,'dist/published
  for(const s of collect(root)){
   const a=s.asset,key=a.asset_id+'@'+a.asset_version;if(identities.has(key))fail('ASSET_DUPLICATE_VERSION');identities.add(key);
   assertValid('AssetRef',{asset_id:a.asset_id,version:a.asset_version});
+  assertValidationEvidence({asset_id:a.asset_id,version:a.asset_version},s.validation);
+  readModelFacts(root,s);readSocketBindings(root,s);
   if(audience==='public'&&!(s.provenance.license?.redistribution==='allowed'&&s.provenance.license?.commercial_use==='allowed'))fail('ASSET_PUBLIC_RIGHTS_REQUIRED',a.asset_id);
   const resources=[],byPath=new Map(),aliases=new Set();
   for(const f of s.resources.files){

@@ -43,7 +43,7 @@ test('composite roles, transitive lock, version conflict and truthful compatibil
 test('resource policy scope retains denied hashes and permits shared resources',async t=>{
  const f=fixture(t);
  for(const id of ['object.a','object.b']){const base=path.join(f.root,'subjects/objects',id,'1.0.0'),assembly=read(path.join(base,'assemblies/default.json'));
-  write(path.join(base,'bindings/whitebox.json'),{schema_version:'1.0',integrationMetadata:{documentation:'assets/animals/flying-mounts.md'}});write(path.join(base,'bindings/rig.json'),{});write(path.join(base,'bindings/actions.json'),{slots:{}});write(path.join(base,'bindings/sockets.json'),{sockets:[]});write(path.join(base,'collision/collision.json'),{shapes:[]});
+  write(path.join(base,'bindings/whitebox.json'),{schema_version:'1.0',integrationMetadata:{documentation:'assets/animals/flying-mounts.md'}});write(path.join(base,'bindings/rig.json'),{});write(path.join(base,'bindings/actions.json'),{slots:{}});write(path.join(base,'bindings/sockets.json'),{schema_version:'1.0',sockets:[]});write(path.join(base,'collision/collision.json'),{schema_version:'1.0',shapes:[],verification:'not_run'});
   assembly.bindings={rig:`subjects/objects/${id}/1.0.0/bindings/rig.json`,animations:`subjects/objects/${id}/1.0.0/bindings/actions.json`,sockets:`subjects/objects/${id}/1.0.0/bindings/sockets.json`};write(path.join(base,'assemblies/default.json'),assembly);
  }
  const unique=Buffer.from('denied unique content'),resourcePath='shared/unique.glb';write(path.join(f.root,resourcePath),unique);
@@ -89,4 +89,36 @@ test('compatibility requires precise verified evidence and rejects stale preset 
  assert.equal(store.checkCompatibility(request).status,'compatible');assert.equal(store.searchAssets({}).items[0].readiness.runtime,'unknown');
  assert.equal(store.checkCompatibility({...request,runtime:{...runtime,preset_digest:'c'.repeat(64)}}).status,'unknown');
  assert.equal(store.checkCompatibility({...request,runtime:{...runtime,adapter_id:'other'}}).status,'unknown');
+});
+
+test('legacy v1 snapshots stay readable and materializable without treating incomplete proofs as compatible',async t=>{
+ const runtime={runtime_id:'test',runtime_version:'1',runtime_digest:'a'.repeat(64),adapter_id:'test',adapter_version:'1.0.0',preset_digest:'b'.repeat(64),overrides_digest:null,supported_contracts:[]};
+ const proof={status:'verified',asset_id:'object.a',version:'1.0.0',evidence_id:'old-evidence',...runtime};
+ const cases=[{},{runtime:'unknown'},{runtime:'verified',evidence:['old-report.json']},{runtime:'verified',evidence:null},{runtime:'verified',evidence:{}},{runtime:'verified',evidence:[{...proof,runtime_digest:'bad'}]},{runtime:'verified',evidence:[{...proof,asset_id:'object.b'}]}];
+ for(const validation of cases){
+  const f=fixture(t);const original=await publishLibrary(f.root,{output:f.output});
+  // Build a sealed historical fixture with the opaque metadata accepted by the old v1 publisher.
+  // Nothing is served until its manifest/index/snapshot hashes have been recomputed.
+  const index=read(path.join(f.output,original.index_path)),summary=index.assets.find(a=>a.asset_id==='object.a');
+  const file=path.join(f.output,summary.manifest_path),manifest=read(file);manifest.sections.validation=validation;
+  const bytes=Buffer.from(canonicalJson(manifest)+'\n');write(file,bytes);summary.manifest_digest=sha256(bytes);
+  const indexBytes=Buffer.from(canonicalJson(index)+'\n'),snapshot=sha256(indexBytes);
+  const descriptor={...original,snapshot_id:snapshot,index_path:`indexes/${snapshot}.json`,index_digest:snapshot};
+  fs.unlinkSync(path.join(f.output,'releases',original.snapshot_id,'registry.json'));
+  write(path.join(f.output,descriptor.index_path),indexBytes);write(path.join(f.output,'releases',snapshot,'registry.json'),descriptor);write(path.join(f.output,'registry.json'),descriptor);
+  const store=new RegistryStore(f.output),request={assets:[{asset_id:'object.a',version:'1.0.0'}],runtime};
+  assert.equal(store.checkCompatibility(request).status,'unknown');
+  assert.equal(store.searchAssets({runtime,runtime_ready:true}).items.length,0);
+  const url=await server(t,f.output),client=new RegistryClient({registryUrl:url});
+  assert.deepEqual((await client.describeAsset('object.a')).sections.validation,validation);
+  const lock=await client.resolveAssembly({...request,purpose:'runtime'});
+  assert.equal(lock.compatibility.status,'unknown');assert.equal(lock.assets[0].manifest_digest,summary.manifest_digest);
+  const cacheRoot=path.join(f.root,'cache');await materializeAssets(lock,{client,cacheRoot});
+  const replay=await materializeAssets(lock,{cacheRoot,offline:true});
+  assert.deepEqual(replay.manifests[0].sections.validation,validation);
+  assert.deepEqual(fs.readFileSync(file),bytes,'historical publication must not be rewritten');
+  // Read compatibility does not weaken the new authoring/publication contract.
+  write(path.join(f.root,'subjects/objects/object.a/1.0.0/validation/latest.json'),validation);
+  await assert.rejects(()=>publishLibrary(f.root,{output:path.join(f.root,'new-publication')}),/ASSET_CONTRACT_INVALID|ASSET_VALIDATION_IDENTITY_MISMATCH/);
+ }
 });

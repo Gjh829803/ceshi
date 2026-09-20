@@ -6,7 +6,7 @@ import {ROOT,read,write,sha256,inside,walk,collect,summary,search,slash,latest} 
 import {syncWhiteboxCatalog} from './whitebox.mjs';
 import {schemas} from '../client/contracts/index.mjs';
 import {assertValidationEvidence} from '../client/contracts/validate.mjs';
-import {readPhysicalFacts} from './content-facts.mjs';
+import {readPhysicalFacts,readModelFacts,readSocketBindings,readCollisionFacts} from './content-facts.mjs';
 const require=createRequire(import.meta.url);
 const Ajv=require('./vendor/ajv.cjs');
 const gltfValidator=require('./vendor/gltf-validator/index.js');
@@ -17,7 +17,7 @@ export function validate(root=ROOT,{hashes=true}={}){
   for(const s of subjects){
     const key=s.asset.asset_id+'@'+s.asset.asset_version;if(ids.has(key))errors.push('DUPLICATE_ID_VERSION '+key);ids.add(key);
     for(const [key,v]of Object.entries(validators))if(!v(s[key]))errors.push(s.asset.asset_id+' '+key+': '+ajv.errorsText(v.errors));
-    try{readPhysicalFacts(root,s);assertValidationEvidence({asset_id:s.asset.asset_id,version:s.asset.asset_version},s.validation);}catch(e){errors.push(key+' '+e.message);}
+    try{readPhysicalFacts(root,s);readModelFacts(root,s);readSocketBindings(root,s);readCollisionFacts(root,s);assertValidationEvidence({asset_id:s.asset.asset_id,version:s.asset.asset_version},s.validation);}catch(e){errors.push(key+' '+e.message);}
     if(s.asset.placeholder&&s.asset.lifecycle!=='placeholder')errors.push('PLACEHOLDER_STATUS '+key);
     if(s.asset.placeholder&&(s.validation.runtime==='verified'||s.assembly.runtime_ready))errors.push('FALSE_PLACEHOLDER_RUNTIME '+key);
     if(s.assembly.subject.asset_id!==s.asset.asset_id||s.assembly.subject.version!==s.asset.asset_version)errors.push('ASSEMBLY_SUBJECT_MISMATCH '+key);

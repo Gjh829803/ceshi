@@ -72,7 +72,7 @@ test('subject metadata, bindings and logical resource aliases regenerate both ad
     value.scale.source_transform.scaleXYZ = [2, 2, 2];
   });
   edit(path.join(base, 'bindings/animation_map.json'), value => { value.slots.test = {clipName:'Idle', loop:true}; });
-  edit(path.join(base, 'bindings/sockets.json'), value => { value.sockets = [{id:'test', position:[0, 2, 0]}]; });
+  edit(path.join(base, 'bindings/sockets.json'), value => { value.sockets = [{id:'test', positionMetersXYZ:[0, 2, 0]}]; });
   edit(path.join(base, 'facts/physical.json'), value => { value.parameters.seat = [0, 2.7, 0]; });
   edit(path.join(base, 'collision/collision.json'), value => { value.shapes = [{kind:'box', halfExtents:[2, 3, 4], offset:[0, 3, 0]}]; });
   edit(path.join(base, 'capabilities.json'), value => { value.limitations.push('Test host condition'); });

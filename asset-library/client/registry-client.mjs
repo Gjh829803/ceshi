@@ -6960,7 +6960,8 @@ var v1_schema_default = {
               type: "object"
             },
             validation: {
-              $ref: "#/$defs/RuntimeValidation"
+              type: "object",
+              description: "Published v1 validation metadata. Producers validate RuntimeValidation separately; missing runtime evidence does not imply compatibility."
             },
             assembly: {
               type: "object"
@@ -7984,15 +7985,6 @@ var import_ajv = __toESM(require_ajv(), 1);
 var ajv = new import_ajv.default({ allErrors: true, strict: false });
 ajv.addSchema(v1_schema_default);
 var validators = /* @__PURE__ */ new Map();
-function assertValidationEvidence(asset, validation) {
-  assertValid("RuntimeValidation", validation);
-  for (const evidence of validation.evidence) {
-    if (typeof evidence === "string") continue;
-    if (evidence.asset_id !== asset.asset_id || evidence.version !== asset.version)
-      throw protocolError("ASSET_VALIDATION_IDENTITY_MISMATCH");
-  }
-  return validation;
-}
 function assertValid(name, value) {
   if (!Object.hasOwn(v1_schema_default.$defs, name)) throw protocolError("ASSET_CONTRACT_UNKNOWN_TYPE", name);
   let validate = validators.get(name);
@@ -8013,7 +8005,6 @@ function assertValid(name, value) {
     for (const item of value.items) if (item.preview !== null) artifact(item.preview);
   }
   if (name === "Manifest") {
-    assertValidationEvidence(value, value.sections.validation);
     const resources = /* @__PURE__ */ new Map();
     for (const r of value.resources) {
       artifact(r);

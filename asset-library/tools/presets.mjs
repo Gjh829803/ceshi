@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {inside, read, write} from './core.mjs';
+import {readPhysicalFacts,readModelFacts,readSocketBindings} from './content-facts.mjs';
 
 /** Derive the engine adapter's bundled ownership contract from the library schema. */
 export function syncContentOwnership(libraryRoot, packageRoot, check = false) {
@@ -27,10 +28,11 @@ export function buildPresetContent(libraryRoot, authoring) {
   const manifest = authoring.selection;
   const subjects = {}, models = {}, cameras = {}, dragonCameras = {}, dragonSpecs = {}, dragons = [];
   const at = (subject, relative) => read(inside(libraryRoot, `${subject.path}/${relative}`));
+  const descriptor = subject => ({asset:at(subject,'asset.json'),assembly:at(subject,'assemblies/default.json'),base:inside(libraryRoot,subject.path)});
   const factsFor = (subject,kind='physical') => {
-    const file=at(subject,'assemblies/default.json').facts?.[kind];
-    if(!file)throw Error(`PRESET_FACTS_MISSING: ${subject.path}/${kind}`);
-    return read(inside(libraryRoot,file));
+    const facts=kind==='model'?readModelFacts(libraryRoot,descriptor(subject)):readPhysicalFacts(libraryRoot,descriptor(subject));
+    if(!facts)throw Error(`PRESET_FACTS_MISSING: ${subject.path}/${kind}`);
+    return facts;
   };
   const parametersFor = subject => {
     const asset=at(subject,'asset.json');
@@ -57,7 +59,7 @@ export function buildPresetContent(libraryRoot, authoring) {
       models[parameters.id] = {};
       if (model.roadCushion) models[parameters.id].roadCushion = model.roadCushion;
       if (model.socket_ids) {
-        const sockets = at(subject, 'bindings/sockets.json').sockets;
+        const sockets = readSocketBindings(libraryRoot,descriptor(subject))?.sockets??[];
         models[parameters.id].sockets = Object.fromEntries(model.socket_ids.map(id => {
           const socket = sockets.find(socket => socket.id === id);
           if (!socket?.positionMetersXYZ) throw Error(`PRESET_SOCKET_MISSING: ${parameters.id}/${id}`);

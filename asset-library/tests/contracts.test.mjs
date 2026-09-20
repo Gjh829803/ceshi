@@ -127,3 +127,27 @@ test('animated model ingestion preserves actual rig and clips without declaring 
  assert.ok(manifest.sections.bindings.rig.bones.length>0);assert.deepEqual(manifest.runtime_requirements,[]);
  assert.equal(manifest.sections.validation.runtime,'not_run');
 });
+
+test('model facts, sockets and collision are validated before catalog generation or publication',async t=>{
+ const f=subjectFixture(t,ROOT,'vehicle.atv');
+ const cases=[
+  ['facts/model.json',m=>{m.roadCushion={center:[0,0,0],size:['bad',1,1]};},/ASSET_CONTENT_FACTS_INVALID/],
+  ['facts/model.json',m=>{m.roadCushion={center:[0,0,0],size:[1,-1,1]};},/ASSET_CONTENT_FACTS_INVALID/],
+  ['facts/model.json',m=>{m.socket_ids=['missing.socket'];},/ASSET_MODEL_SOCKET_MISSING/],
+  ['bindings/sockets.json',s=>{s.sockets[0].positionMetersXYZ=[false,1,2];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['bindings/sockets.json',s=>{s.sockets[0].positionMetersXYZ=[1,2];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['bindings/sockets.json',s=>{s.sockets.push({...s.sockets[0],positionMetersXYZ:[1,2,3]});},/ASSET_SOCKET_ID_DUPLICATE/],
+  ['collision/collision.json',c=>{c.shapes=[{kind:'box',halfExtents:[-1,1,1],offset:[0,0,0]}];},/ASSET_CONTENT_FACTS_INVALID/],
+  ['collision/collision.json',c=>{c.shapes=[{kind:'box',halfExtents:[1,1,1],offset:[false,0,0]}];},/ASSET_CONTENT_FACTS_INVALID/],
+ ];
+ assert.equal(validate(f.root).passed,true);
+ for(const [relative,mutate,error] of cases){
+  const file=path.join(f.base,relative),original=read(file),invalid=structuredClone(original);mutate(invalid);write(file,invalid);
+  assert.equal(validate(f.root).passed,false,relative);
+  assert.throws(()=>buildWhiteboxCatalog(f.root),error);
+  await assert.rejects(()=>publishLibrary(f.root,{output:f.output}),error);
+  assert.equal(fs.existsSync(path.join(f.output,'registry.json')),false);
+  write(file,original);
+ }
+ assert.equal(validate(f.root).passed,true);await publishLibrary(f.root,{output:f.output});
+});
