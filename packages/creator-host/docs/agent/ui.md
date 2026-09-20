@@ -217,6 +217,12 @@ capture transaction and on runtime samples. It must not mutate or advance the
 world. Named actions are validated against the catalog and execute on the producer.
 World state, collision and gameplay remain authoritative there.
 
+For keyboard hints, derive the rows from `world.getControlHints()` inside
+`readUiState` and render those rows in the React HUD. Do not copy key labels from
+`spec.hint`, a screenshot, or a handwritten `innerHTML` string. The returned
+`controls` and `system` rows already reflect rebinding, mounted vehicle context,
+camera view availability, and disabled actions.
+
 ## Local play and capture
 
 Projects declaring `project.ui` automatically get the same React UI when opened

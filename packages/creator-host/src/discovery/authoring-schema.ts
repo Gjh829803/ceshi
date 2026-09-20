@@ -16,17 +16,17 @@ export interface WorldObservation {
  reset():void|Promise<void>;
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
- 'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','registerEntityLifecycle','getEntityState','start','stop','reset','dispose'],
- programming: ['getKeyBindings','createPresentation','onUpdate','onReset','onDispose','registerEntityLifecycle','start','stop','reset','dispose'],
- quality: ['getKeyBindings','getEntityState','describe','snapshot','setCaptureTargets','onRuntimeSample'],
+ 'getting-started': ['scene','camera','cameraMode','getKeyBindings','setKeyBindings','getControlHints','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','registerEntityLifecycle','getEntityState','start','stop','reset','dispose'],
+ programming: ['getKeyBindings','getControlHints','createPresentation','onUpdate','onReset','onDispose','registerEntityLifecycle','start','stop','reset','dispose'],
+ quality: ['getKeyBindings','getControlHints','getEntityState','describe','snapshot','setCaptureTargets','onRuntimeSample'],
  boundaries: ['getEntityState','describe','snapshot'],
- 'nonhuman-subject': ['scene','camera','cameraMode','assets','getKeyBindings','setKeyBindings','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','registerEntityLifecycle','getEntityState','describe','snapshot','start','stop','reset','dispose'],
+ 'nonhuman-subject': ['scene','camera','cameraMode','assets','getKeyBindings','setKeyBindings','getControlHints','createPresentation','addEntity','addCharacter','registerMovement','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','useAuthoredCamera','setCaptureTargets','onUpdate','onReset','onDispose','registerEntityLifecycle','getEntityState','describe','snapshot','start','stop','reset','dispose'],
  assets: ['registerEntityLifecycle','assets','addCharacter','registerPrototype','runTask','start'],
  control: ['getKeyBindings','setKeyBindings','state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate','onReset','onDispose','registerEntityLifecycle'],
  presentation: ['shadowSettings','configureShadowLight','createPresentation','state','execute','getEntityState','reset'],
- humanoid:['addCharacter','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
- 'mounted-interaction':['inspectVehicles','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
+ humanoid:['addCharacter','setControlledEntity','setCameraFollow','setCameraView','setCameraOrbit','resumeCameraViewSelection','inspectCamera','getControlHints','setAutonomy','inspectVehicles','humanoid','assets','execute','snapshot','describe','createPresentation','setCaptureTargets','start','stop','reset'],
+ 'mounted-interaction':['inspectVehicles','getControlHints','humanoid','assets','execute','snapshot','setCaptureTargets','start','stop','reset'],
  'character-actions':['addEntity','registerPrototype','humanoid','assets','execute','operations','snapshot','getEntityState','createPresentation','setCaptureTargets','start','stop','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */

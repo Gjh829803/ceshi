@@ -49,10 +49,12 @@ fixed-wing binding. A balloon-shaped mesh does not become a steerable balloon;
 the runtime balloon subtype uses Q/E heat/vent and drifts with the declared
 airflow. Do not promise controls from the mesh, asset name or an old `spec.hint`.
 
-For a custom HUD, read `world.getKeyBindings()`, the mounted vehicle's
-`mode`/`aircraftSubtype`, and `humanoid.activeControlActions(...)`; render only
-actions active for that exact runtime context. `spec.hint` is descriptive
-legacy metadata, not the authoritative keyboard contract.
+For a custom HUD, read `world.getControlHints()` and render its `controls` and
+`system` rows. The SDK derives those rows from effective bindings, the mounted
+vehicle's exact runtime context, and the active camera document; empty or
+disabled bindings are omitted. Re-read the result after `setKeyBindings`,
+boarding, leaving a vehicle, or changing the camera document. `spec.hint` is
+descriptive legacy metadata, not the authoritative keyboard contract.
 
 creator_get_examples({topic:'custom-vehicle',variant:'car'}) or variant:'motorcycle' / variant:'plane'
 shows how to prepare the instance's object/spec for the vehicles option at world

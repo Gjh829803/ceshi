@@ -23,7 +23,6 @@ import { readMapHash, writeMapHash } from "./map-route";
 import { preparePlaygroundRendering } from "./render-warmup";
 import "./styles.css";
 
-import { controlsFor, controlSummaryFor, systemControlsFor } from "@worldkit/preset-content/ui/shortcuts";
 import { renderAssetThumbnails } from "@worldkit/preset-content/ui/thumbnails";
 import { mountInspector } from "./inspector";
 import { SPECS as PRESET_SPECS, vehicleControlFamily } from "@worldkit/preset-content/config";
@@ -1239,6 +1238,7 @@ function updateUI(force = false) {
     recoveryTarget = v ?? (nearest >= 0 ? sim.vehicles[nearest] : undefined),
     recoveryDynamics = recoveryTarget ? runtime.snapshot().vehicleDynamics.find(dynamics => dynamics.instanceId === recoveryTarget.spec.id) : undefined,
     speed = v ? v.velocity.length() : Math.hypot(p.velocity.x, p.velocity.z);
+  let visibleControls: [string,string][] = [];
   spacePanel.update(v?humanoid.spaceTelemetry(v):null);
   const drive=v&&v.motion.family!=='space'?humanoid.vehicleDriveTelemetry(v):null;
   shell.update({recoverable:!!recoveryDynamics?.recoveryAvailable,drivetrain:drive?{...drive,speed:Math.round(speed*3.6),throttle:Math.round(drive.effort*100)}:null});
@@ -1263,7 +1263,9 @@ function updateUI(force = false) {
     );
     setText("activeName", v?.spec.name ?? "人物动作训练");
 
-    const controls=controlsFor(controlSubject,bindings);
+    const controlHints=sdk.getControlHints();
+    const controls=controlHints.controls;
+    visibleControls=controls;
     const actionLabels=new Set([humanoid.INPUT_BINDINGS.roll.label,humanoid.INPUT_BINDINGS.interact.label,humanoid.INPUT_BINDINGS.putDown.label]);
     const vehicleLabels=new Set([humanoid.INPUT_BINDINGS.summonDragon.label]);
     shell.update({controls,controlGroups:v ? [{title:controlSubject?.groundLocomotion?"翼装步行":"载具操作",rows:controls}] : [
@@ -1273,7 +1275,7 @@ function updateUI(force = false) {
     ]});
     setText("shortcutSubject", controlSubject?.groundLocomotion?"翼装步行":v ? "载具操作" : "人物操作");
     const systemKeys: [string, string][] = [
-      ...systemControlsFor(v?.spec, bindings, !!sdk.inspectCamera().document?.input?.cycleViewIds?.length),
+      ...controlHints.system,
       ...(import.meta.env.DEV ? [["F8", "开始录制 / 停止并保存"] as [string,string]] : []),
     ];
     shell.update({ system: systemKeys, activeId: v?.spec.id ?? "person" });
@@ -1337,7 +1339,7 @@ function updateUI(force = false) {
         : v.spec.mode === "glider" && !v.launched
           ? `${key('forward')} 从高台释放，开始滑翔 · ${key('forward')} / ${key('backward')} 空速配平`
           : v.spec.mode === "plane"
-            ? controlSummaryFor(controlSubject!, bindings)
+            ? visibleControls.slice(0, 4).map(([hintKey,hintLabel])=>`${hintKey} ${hintLabel}`).join(' · ')
             : `${key('interact')} ${speed > 5 ? "减速至 18 km/h 以下可离开" : "离开 " + v.spec.name}`,
     );
   else

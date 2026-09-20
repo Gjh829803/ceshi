@@ -19,6 +19,7 @@ import { isHumanoidCommand,type HumanoidCommand } from './humanoid-runtime/runti
 import { inspectVehicle,type VehicleInspectionQuery } from './humanoid-runtime/vehicle-inspection';
 import { MAXIMUM_EPISODE_START_ALIGNMENT_METERS } from './physics.js';
 import { ThreePresentation } from './presentation.js';
+import {controlsFor,systemControlsFor} from './humanoid-runtime/control-hints';
 import { applyDirectionalShadows,applyRendererShadows } from './shadows';
 
 type Registration = {
@@ -137,7 +138,20 @@ export class ThreeWorld implements API.World {
   if(this.renderer)this.renderer.shadowMap.needsUpdate=true;
  }
  getKeyBindings(){return this.engine.keyboard.getKeyBindings();}
- setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void{this.alive();this.engine.keyboard.setKeyBindings(overrides);}
+ setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void{this.alive();this.engine.keyboard.setKeyBindings(overrides);this.touch();}
+ getControlHints():{controls:[string,string][];system:[string,string][]}{
+  this.alive();
+  const runtime=this.engine.controlledHumanoid;
+  if(!runtime)return {controls:[],system:[]};
+  const actor=runtime.simulation.controlledActor,vehicle=actor.vehicle;
+  const subject=vehicle?{...vehicle.spec,groundLocomotion:actor.wingsuitGroundControl}:undefined;
+  const bindings={...this.getKeyBindings()};
+  if(!runtime.simulation.vehicles.some(v=>v.spec.mode==='dragon'))bindings.summonDragon=[];
+  const camera=this.inspectCamera();
+  if(camera.mode==='authored')for(const action of ['cameraLeft','cameraRight','cameraUp','cameraDown','cameraToggle'] as const)bindings[action]=[];
+  const canCycleView=new Set(camera.document?.input?.cycleViewIds??[]).size>1;
+  return {controls:controlsFor(subject,bindings),system:systemControlsFor(subject,bindings,canCycleView)};
+ }
  get cameraMode():API.CameraState['mode']{return this.engine.cameraMode;}
  get isRunning():boolean{return this.engine.isRunning;}
  get simulationTick():number{return this.engine.simulationTick;}

@@ -466,6 +466,8 @@ export interface World {
  readonly state:StateStore;
  readonly operations:Operations;
  getKeyBindings():import('./humanoid-runtime/input').KeyBindings;
+ /** Current native humanoid/vehicle keyboard hints. Empty bindings are omitted; reads do not step the world. */
+ getControlHints():{controls:[string,string][];system:[string,string][]};
  setKeyBindings(overrides:Partial<import('./humanoid-runtime/input').KeyBindings>):void;
  /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
  createPresentation(options?:PresentationOptions):WorldPresentation;

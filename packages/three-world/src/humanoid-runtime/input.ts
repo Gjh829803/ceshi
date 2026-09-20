@@ -22,14 +22,20 @@ export function createKeyBindings(overrides:Partial<KeyBindings>={},base:KeyBind
 }
 export const keyLabel=(code:string):string=>({ArrowLeft:'←',ArrowRight:'→',ArrowUp:'↑',ArrowDown:'↓',ControlLeft:'Ctrl',ControlRight:'Ctrl',ShiftLeft:'Shift',ShiftRight:'Shift',AltLeft:'Alt',AltRight:'Alt'} as Record<string,string>)[code]??code.replace(/^Key|^Digit/,'');
 export const bindingLabel=(action:ControlAction,bindings:KeyBindings=DEFAULT_KEY_BINDINGS):string=>[...new Set(bindings[action].map(keyLabel))].join(' / ')||'动作菜单';
-export function controlHints(bindings:KeyBindings=DEFAULT_KEY_BINDINGS):[string,string][]{return [
-  [['forward','left','backward','right'].map(action=>bindingLabel(action as ControlAction,bindings)).join(''),'移动'],
-  [bindingLabel('sprint',bindings),'冲刺 / 加速'],[bindingLabel('jump',bindings),INPUT_BINDINGS.jump.label],
-  [bindingLabel('slow',bindings),'按住 + 移动：慢走（不蹲伏）'],
-  [bindingLabel('crouch',bindings),INPUT_BINDINGS.crouch.label],
-  [`${bindingLabel('sprint',bindings)} + ${bindingLabel('crouch',bindings)}`,'滑铲（需助跑）'],
-  ...(['prone','roll','interact','summonDragon'] as const).map(action=>[bindingLabel(action,bindings),INPUT_BINDINGS[action].label] as [string,string]),
-];}
+export function controlHints(bindings:KeyBindings=DEFAULT_KEY_BINDINGS):[string,string][]{
+  const rows:[string,string][]=[];
+  const add=(action:ControlAction,label=INPUT_BINDINGS[action].label)=>{
+    if(bindings[action].length)rows.push([bindingLabel(action,bindings),label]);
+  };
+  const movement=['forward','left','backward','right'] as const;
+  if(movement.every(action=>bindings[action].length===1))rows.push([movement.map(action=>bindingLabel(action,bindings)).join(''),'移动']);
+  else movement.forEach(action=>add(action));
+  add('sprint');add('jump');add('slow','按住 + 移动：慢走（不蹲伏）');add('crouch');
+  if(bindings.sprint.length&&bindings.crouch.length)rows.push([`${bindingLabel('sprint',bindings)} + ${bindingLabel('crouch',bindings)}`,'滑铲（需助跑）']);
+  (['prone','roll','interact','summonDragon'] as const).forEach(action=>add(action));
+  add('putDown','放下物件');add('swimStyle','切换泳姿');
+  return rows;
+}
 /** Humanoid input fields with their default UI labels. Chords resolve at the new key press. */
 export const HUMANOID_BINDINGS = {
   toggleCrouch:{code:DEFAULT_KEY_BINDINGS.crouch[0]!,key:bindingLabel('crouch'),label:'蹲伏 / 站立'},

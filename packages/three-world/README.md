@@ -844,7 +844,12 @@ mount handoffs, follow the [camera setup guide](../creator-host/docs/agent/progr
 HUD hints and recording admission derive from `humanoid.INPUT_BINDINGS`.
 `world.getKeyBindings()` reads the effective bindings; `world.setKeyBindings({
 roll:['KeyR']})` rebinds semantic actions and rejects same-context duplicate/invalid codes.
-`humanoid.controlHints(bindings)` formats current labels. Esc belongs to the
+`humanoid.controlHints(bindings)` formats current labels. `world.getControlHints()`
+returns the active UI rows as `{controls, system}` using the same effective
+bindings and mounted vehicle context; render those rows instead of duplicating
+keyboard labels in HUD markup. Re-read them after `setKeyBindings`, boarding,
+leaving a vehicle, or changing the camera document. Empty bindings are omitted.
+Esc belongs to the
 application menu; reset also remains available through menus/buttons. Use semantic
 inputs/commands for Agent actions; key remapping need not change a plan.
 Presentation UI focus releases held gameplay keys. Programmatic

@@ -16,6 +16,7 @@ export * from '../config/control';
 export type * from './environment/types';
 export { vehicleBody } from './environment/queries';
 export * from './input';
+export * from './control-hints';
 export type { HumanoidController } from './humanoid/controller';
 export { SWIM_ROOT_DEPTH } from './humanoid/water-physics';
 export type { SkillRequest } from './humanoid/action-schema';

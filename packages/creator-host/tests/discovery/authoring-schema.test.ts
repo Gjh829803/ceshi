@@ -57,6 +57,7 @@ it('keeps quality inspection contracts tied to current source declarations',()=>
  const actual=members(original),published=members(selected);
  for(const name of ['getEntityState','describe','snapshot','setCaptureTargets'])expect(published.get(name)).toBe(actual.get(name));
  expect(published.get('getKeyBindings')).toBe(actual.get('getKeyBindings')?.replace("import('./humanoid-runtime/input')", "import('@worldkit/three').humanoid"));
+ expect(published.get('getControlHints')).toBe(actual.get('getControlHints'));
  expect(published.has('registerMovement')).toBe(false);
 });
 

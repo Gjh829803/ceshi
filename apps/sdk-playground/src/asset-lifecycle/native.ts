@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import {createHumanoidWorld,humanoid,type ThreeWorld,type WorldCommand} from '@worldkit/three';
 import {buildWorld} from '@worldkit/preset-content/world';
-import {controlsFor} from '@worldkit/preset-content/ui/shortcuts';
 import {updateVehicleWheels} from '@worldkit/preset-content/vehicle-animation';
 import {updateSpaceExhaust} from '@worldkit/preset-content/space-model';
 import {choices,instanceId,loadVehicle,map,vehicleBinding,type LoadedVehicle} from './native-vehicles';
@@ -38,7 +37,7 @@ function refresh(){
  const record=records.get(selectedId),sim=world.humanoid!.simulation,dragon=sim.vehicles.find(v=>v.spec.id===selectedId)?.motion.flyingCreature;
  button('summon').hidden=!dragon;document.getElementById('dragon-state')!.hidden=!dragon;
  if(dragon){const riding=sim.controlledActor.vehicle?.spec.id===selectedId,calling=dragon.summon?.phase==='flying'||dragon.summon?.phase==='landing';button('summon').disabled=creating||calling||!!sim.controlledActor.vehicle||sim.controlledActor.transition>0||!vehicle?.isActive||!player.isActive;button('enter').disabled=creating||dragon.groundPhase!=='grounded';text('dragon-state',riding?(dragon.groundPhase==='grounded'?`已骑乘：登乘完成后按 ${humanoid.bindingLabel('ascend',world.getKeyBindings())} 起飞，按 ${humanoid.bindingLabel('interact',world.getKeyBindings())} 下龙。`:'飞行／起降中：按 F 请求着陆，落稳后再按 F 下龙。'):calling?dragon.summon!.message:dragon.groundPhase==='grounded'?`飞龙已落稳：定位到鞍侧后骑乘；登乘完成后按 ${humanoid.bindingLabel('ascend',world.getKeyBindings())} 起飞。`:dragon.summon?.phase==='blocked'?dragon.summon.message:'飞龙在空中：先定位到附近地面、站稳，再点击召唤落地。');}
- text('control-hint',record?controlsFor(record.spec,world.getKeyBindings()).map(([key,action])=>`${key}：${action}`).join(' · '):'选择型号并创建，然后定位、上车。');
+ text('control-hint',record?humanoid.controlsFor(record.spec,world.getKeyBindings()).map(([key,action])=>`${key}：${action}`).join(' · '):'选择型号并创建，然后定位、上车。');
  text('group-state',vehicle?`${record?.choice.name??selectedId}：${vehicle.isActive?'运行':'停用'} · 速度 ${Math.hypot(...vehicle.motion!.velocityWorldMetersPerSecondXYZ).toFixed(2)} m/s · 人物 ${player.isActive?'运行':'停用'}`:'所选载具已销毁／移除，人物可继续步行。');
  text('peer-state',peer?`对照人物 ${peer.isActive?'运行':'停用'} · 动作时间 ${peer.animation?.timeSeconds.toFixed(2)??'—'} s`:'对照人物已销毁／移除，可重新创建。');
  text('world-state',`世界步数 ${state.simulationTick} · 场景载具 ${rows.length} · 错误 ${state.errors.length}`);
