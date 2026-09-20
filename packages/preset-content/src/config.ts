@@ -1,20 +1,23 @@
-import type { humanoid } from '@worldkit/three';
+import type {humanoid} from '@worldkit/three';
 import {readSubjectSpec, SUBJECT_IDS} from './assets/subject-data';
+
 export type Mode = humanoid.VehicleSpec['mode'];
 export type VehicleArchetype = humanoid.VehicleSpec['archetype'];
 export type CollisionEnvelope = humanoid.VehicleSpec['envelope'];
 export type VehicleSpec = humanoid.VehicleSpec;
+
 /** Specialized controller families share movement modes but have distinct tuning. */
 export function vehicleControlFamily(spec: Pick<VehicleSpec, 'mode' | 'archetype' | 'flyingCreature' | 'aircraftSubtype'> | undefined): string {
-  if(spec?.flyingCreature)return 'flying-creature';
-  if(spec?.aircraftSubtype==='glider')return 'glider';
+  if (spec?.flyingCreature) return 'flying-creature';
+  if (spec?.aircraftSubtype === 'glider') return 'glider';
   const archetype = spec?.archetype;
   return archetype && ['unicycle', 'raft', 'jetski', 'atv'].includes(archetype)
     ? archetype : spec?.mode ?? 'character';
 }
-/** Generated library tuning, combined with local calibration scene placements. */
+
+/** Generated asset facts combined with the independently owned control profile. */
 export const SPECS: VehicleSpec[] = SUBJECT_IDS.map(readSubjectSpec);
-export const START: [number,number,number] = [-24,0,55];
+export const START: [number, number, number] = [-24, 0, 55];
 export const WORLD_LIMIT = 490;
 export const WATER = -2;
 export const DEPTH = -44;

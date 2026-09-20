@@ -129,8 +129,8 @@ readEditableProfile(runtime, {
 - 带实例 ID 的 profile 使用资产 + 实例的独立内存及本地存储范围；即使 `instanceId` 恰好等于 `assetId` 也不会退化为资产级范围。
 - 3C 面板的“保存”保存当前实例配置。
 - 3C 面板的“重置”只恢复当前实例的默认值。
-- `profiles.json` 可以同时保存资产级 profile 和实例级 profile。
-- 旧版没有 `instanceId` 的 profile 仍然可以正常读取。
+- v3 `profiles.json` 可以同时保存项目资产级覆盖和实例级覆盖；共享资产默认值不复制进项目文件。
+- 旧版 v2 浏览器 profile 保持原字节但不会自动读取；需要交付时，显式按 v3 控制 profile 审查并导出。
 
 交付前仍需显式导出 `profiles.json`；浏览器 localStorage 只是 Playground 的本地调试覆盖，不会自动成为项目交付文件。
 
@@ -148,8 +148,9 @@ readEditableProfile(runtime, {
 
 ## 7. 实现位置与验证
 
-- Profile 数据结构与存储：[profiles.ts](../packages/preset-content/src/profiles/profiles.ts)
-- Profile 应用与读取：[profile-runtime.ts](../packages/preset-content/src/profiles/profile-runtime.ts)
+- Profile 数据结构与本地调试存储：[profiles.ts](../packages/preset-content/src/control/profiles.ts)
+- 项目/实例/debug 覆盖解析：[resolve.ts](../packages/preset-content/src/control/resolve.ts)
+- Profile 应用与读取：[profile-runtime.ts](../packages/preset-content/src/control/profile-runtime.ts)
 - 3C 面板自动绑定：[main.ts](../apps/sdk-playground/src/main.ts)
 - 多实例隔离回归：[aircraft.test.ts](../packages/three-world/src/humanoid-runtime/aircraft.test.ts)
 

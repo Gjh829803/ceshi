@@ -24,10 +24,11 @@ runtime configuration layer or an authoring path for current library calibration
 It distinguishes conversion from visual retuning. The original source bytes live
 under `scripts/migrations/fixtures`; browser data was not inspected or migrated.
 
-Profiles now use version 2 and contain controls and envelopes only. Browser keys
-use `worldkit.asset-profile.v2.<id>`. Existing `worldkit.humanoid.profile.<id>` values
-remain untouched; explicit `migrateLegacyAssetProfile` exports controls/envelopes
-and preserves original bytes and inactive camera data for separate migration.
+Control profiles now use version 3 and contain controls only; collision envelopes
+remain on their vehicle or character specs. Browser debug keys use
+`worldkit.control-profile.v3.<id>` and are read only with `debugProfiles=1`.
+Existing `worldkit.asset-profile.v2.<id>` and `worldkit.humanoid.profile.<id>` values
+remain untouched and inactive; no browser value is silently promoted into a project.
 
 Current camera behavior combines these saved values with the SDK's calibrated
 strategies and native subject anchors. Native swimming and driver-eye fallbacks,

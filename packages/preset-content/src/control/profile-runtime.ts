@@ -1,0 +1,54 @@
+import { humanoid } from '@worldkit/three';
+import { assetIdForPreset } from '../assets/catalog';
+import { SPECS } from '../config';
+type Runtime=humanoid.HumanoidRuntime;
+
+import { parseControlProfile, type ControlProfile } from './profiles';
+
+function matchesProfileAsset(assetId: string, vehicle: ReturnType<Runtime['snapshot']>['vehicles'][number]): boolean {
+  const spec = SPECS.find(candidate => candidate.id === assetId);
+  return vehicle.assetId===assetId
+    || !!spec && vehicle.assetId===assetIdForPreset(spec)
+    || vehicle.assetId===`vehicle.${assetId}`
+    || vehicle.assetId===`creature.${assetId}`
+    || assetId==='dragon'&&vehicle.assetId.startsWith('creature.dragon');
+}
+
+function targetInstances(runtime: Runtime, profile: ControlProfile): string[] {
+  const vehicles=runtime.snapshot().vehicles;
+  if(profile.instanceId!==undefined){
+    const vehicle=vehicles.find(vehicle=>vehicle.instanceId===profile.instanceId);
+    if(!vehicle)throw new Error(`profile instance not found: ${profile.instanceId}`);
+    if(!matchesProfileAsset(profile.assetId,vehicle))throw new Error(`profile instance asset mismatch: ${profile.instanceId}`);
+    return [profile.instanceId];
+  }
+  const targets=vehicles.filter(vehicle=>matchesProfileAsset(profile.assetId,vehicle)).map(vehicle=>vehicle.instanceId);
+  if(!targets.length)throw new Error(`profile asset not present: ${profile.assetId}`);
+  return targets;
+}
+
+export function applyControlProfile(runtime: Runtime, profile: ControlProfile) {
+  const parsed = parseControlProfile(profile);
+  if(parsed.assetId==='person'){runtime.applyProfile({character:parsed.control});return;}
+  const targets=targetInstances(runtime,parsed),vehicles=Object.fromEntries(targets.map(instanceId=>[instanceId,{...parsed.control}]));
+  const aircraftFlight=parsed.aircraftFlight;
+  if(aircraftFlight===undefined){runtime.applyProfile({vehicles});return;}
+  const aircraftByInstance:Record<string,humanoid.AircraftFlightTuning>={};
+  for(const instanceId of targets)aircraftByInstance[instanceId]=aircraftFlight;
+  runtime.applyProfile({vehicles,aircraftFlight:aircraftByInstance});
+}
+/** Read controls from their SDK owner; cameras and collision envelopes have separate owners. */
+export function readEditableControlProfile(runtime: Runtime, profile: ControlProfile): ControlProfile {
+  const parsed = parseControlProfile(profile),effective=runtime.exportProfile();
+  if(parsed.assetId==='person')parsed.control=humanoid.parseMovementSettings(effective.character??{},parsed.control);
+  else {
+    const target=targetInstances(runtime,parsed)[0]!;
+    const control=effective.vehicles?.[target]??{};
+    parsed.control=humanoid.parseMovementSettings(control,parsed.control);
+    const aircraftFlight=effective.aircraftFlight?.[target];
+    if(aircraftFlight)parsed.aircraftFlight={...humanoid.DEFAULT_AIRCRAFT_FLIGHT,...aircraftFlight};
+  }
+  return parsed;
+}
+/** @deprecated Use readEditableControlProfile. */
+export const readEditableProfile = readEditableControlProfile;

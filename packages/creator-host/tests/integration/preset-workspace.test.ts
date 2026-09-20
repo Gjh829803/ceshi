@@ -17,7 +17,10 @@ describe('player workspace configuration',()=>{
   const authored=(id:string)=>{
    const version=bindings.assets['vehicle.'+id].asset_version;
    const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/profiles/locomotion.json`,import.meta.url);
-   return composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters});
+   const spec=composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters}) as Record<string,unknown>;
+   for(const key of humanoid.controlKeys)delete spec[key];
+   delete spec.aircraftFlight;delete spec.controlProfileId;
+   return spec;
   };
   vi.resetModules();
   vi.doMock('@worldkit/three',async()=>{
@@ -36,8 +39,15 @@ describe('player workspace configuration',()=>{
    const rover=specs.find(s=>s.id==='rover')!.wheelPhysics!;
    const supercar=specs.find(s=>s.id==='supercar')!.wheelPhysics!;
    for(const id of ['rover','supercar','kart']){
-    const {spawn,yaw,color,...parameters}=specs.find(s=>s.id===id)!;
+    const spec=structuredClone(specs.find(s=>s.id===id)!) as unknown as Record<string,unknown>;
+    for(const key of humanoid.controlKeys)delete spec[key];
+    delete spec.aircraftFlight;delete spec.controlProfileId;
+    const {spawn,yaw,color,...parameters}=spec;
     expect(parameters).toEqual(authored(id));
+    const profile=getDefaultProfile(id)!;
+    expect(profile.profileId).toBe(`preset.${id}`);
+    const resolvedSpec=humanoid.createVehicle(specs.find(s=>s.id===id)!).spec;
+    expect(profile.control).toEqual(humanoid.readMovementSettings(resolvedSpec));
    }
    expect(rover.mass).not.toBe(changedDefaults.mass);
    expect(rover.powertrain!.idleRpm).not.toBe(changedDefaults.powertrain.idleRpm);

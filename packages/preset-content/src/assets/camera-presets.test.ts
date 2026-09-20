@@ -78,10 +78,11 @@ function canonical(value:unknown):unknown{
 function fingerprint(value:unknown){return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');}
 it('preserves merged dev handling, variant, seating and camera calibration',()=>{
  // dev f6000cdc/d84a9641 calibration plus 8b6854ea kart seat and compound chassis.
- expect(fingerprint(SPECS)).toBe('393e17923862f59334cbca97205fdbdf9b4c7dec1aa8b36edbbb113ecd8a9fb4');
+ // Control settings now enter through the shared profile adapter, including its stable profile id.
+ expect(fingerprint(SPECS)).toBe('b1ccde69dda68c7b861255edb4792379a028a9f2b8c4c7867c998031c9eb848f');
  expect(fingerprint(DRAGON_VARIANTS)).toBe('efb0be7ca627d8d61fead83ca73bfb45acad424757b7954476639b98489d33a4');
  expect(fingerprint(ROAD_CUSHIONS)).toBe('c6d31c87e47751d852360b73f30cd906f9a895291714f4ead60076ee913028de');
- expect(fingerprint(DEFAULT_PROFILES)).toBe('2e2444c4e71fab99c952a3d78a9464bd25222fde9db9aea9423e2c26b1b0570f');
+ expect(fingerprint(DEFAULT_PROFILES)).toBe('5d518395534295eac4b4319c7d00a8d1a5bf9568145cc23f293fbe89dddbaea8');
  expect(fingerprint(presets)).toBe('3970adaec5213432352e1365a00c6cfe1e7e80fb2098560297d36e7f41796a5f');
  expect(fingerprint(variantPresets)).toBe('9f0294e0545a6be58daa0593b1c5080e3aed417e87c00e2f589285fe7f7fe34b');
  expect(fingerprint({atv:ATV_SOCKETS,jetski:JETSKI_SOCKETS,raft:RAFT_SOCKETS,tank:TANK_SOCKETS,unicycle:UNICYCLE_SOCKETS})).toBe('3fc1ace9243c024cc7930772a9eabae76c1680a672f9f3dc143d8bbcea90de8c');

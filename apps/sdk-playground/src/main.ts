@@ -35,16 +35,16 @@ import {
 import { GRAND_PRIX } from "@worldkit/preset-content/environment/grand-prix";
 import {
   applyControlProfile,
-  readEditableProfile,
 } from "@worldkit/preset-content/platform/profile-runtime";
 import {
-  getDefaultProfile as getPresetDefaultProfile,
-  loadAssetProfile,
-  saveAssetProfile,
-  clearAssetProfile,
-  parseAssetProfile,
-  type AssetProfile,
+  getDefaultControlProfile as getPresetDefaultControlProfile,
+  loadDebugControlProfile,
+  saveDebugControlProfile,
+  clearDebugControlProfile,
+  parseControlProfile,
+  type ControlProfile,
 } from "@worldkit/preset-content/platform/profiles";
+import { parseRuntimeControlOverride, RuntimeControlOverrideStore } from "@worldkit/preset-content/platform/runtime-control-overrides";
 import { buildVehicle, labelSprite, type VehicleVisual } from "@worldkit/preset-content/models";
 import { FrameRateMeter } from "@worldkit/preset-content/fps";
 import {
@@ -58,9 +58,8 @@ import {
 } from "@worldkit/preset-content/platform/catalog";
 import { mountAssetLibrary } from "./library";
 import {
-  profileForTarget,
   profileScopeKey,
-  restoreProjectProfiles,
+  resolveProfileViews,
   scopeProfile,
   type ProfileTarget,
 } from "./profile-scopes";
@@ -124,10 +123,10 @@ const camera = new T.PerspectiveCamera(
 const dragonVariant=readDragonVariant(location.search);
 shell.update({dragonId:dragonVariant.id});
 const SPECS=PRESET_SPECS.map(spec=>spec.id==='dragon'?{...spec,...readDragonSpec(dragonVariant.id),id:'dragon',name:dragonVariant.name,spawn:[80,40,35] as [number,number,number]}:spec);
-function getDefaultProfile(id:string):AssetProfile|undefined{
-  const profile=getPresetDefaultProfile(id);if(!profile||id!=='dragon')return profile;
+function getDefaultProfile(id:string):ControlProfile|undefined{
+  const profile=getPresetDefaultControlProfile(id);if(!profile||id!=='dragon')return profile;
   const spec=SPECS.find(value=>value.id===id)!;
-  return {...profile,control:humanoid.readMovementSettings(humanoid.createVehicle(spec).spec),envelope:structuredClone(spec.envelope)};
+  return {...profile,control:humanoid.readMovementSettings(humanoid.createVehicle(spec).spec)};
 }
 const nativeDragon=new humanoid.FlyingCreatureVisual();
 const visuals:VehicleVisual[] = SPECS.map(spec=>{
@@ -234,7 +233,9 @@ const session = {
     try {
       sdk.configureShadowLight(visual.sun);
       npcLab?.beforeMapChange();
+      runtimeControlOverrides.clear();
       runtime.switchMap(next);
+      applyAllScopedProfiles();
     } catch (error) {
       // Preparation failures keep the previous map. Cleanup failures after adoption must keep its new visuals.
       if (runtime.environment === previousEnvironment) {
@@ -262,6 +263,7 @@ const session = {
     void npcLab?.setMap(next.id);
   },
   dispose() {
+    runtimeControlOverrides.clear();
     world.dispose();
     sdk.dispose();
   },
@@ -271,9 +273,15 @@ const sdkPresentation = sdk.createPresentation({
 });
 shell.attachViewport(sdkPresentation);
 const profileDefaults = ["person", ...SPECS.map((s) => s.id)].map((id) => getDefaultProfile(id)!);
-const projectProfiles = (effectiveProfiles as { profiles: unknown[] }).profiles.map((profile) => parseAssetProfile(profile));
-const profiles = restoreProjectProfiles(profileDefaults, projectProfiles);
-const exportedProfiles = new Map([...profiles].map(([scope, profile]) => [scope, JSON.stringify(profile)]));
+const sharedProfiles = new Map(profileDefaults.map((profile) => [profile.assetId, profile]));
+const projectProfiles = new Map(
+  (effectiveProfiles as { profiles: unknown[] }).profiles
+    .map((profile) => parseControlProfile(profile))
+    .map((profile) => [profileScopeKey(profile), profile]),
+);
+const debugProfiles = new Map<string, ControlProfile>();
+const runtimeControlOverrides = new RuntimeControlOverrideStore();
+const exportedProfiles = new Map([...projectProfiles].map(([scope, profile]) => [scope, JSON.stringify(profile)]));
 const localProfileOverridesEnabled =
   new URLSearchParams(location.search).get("debugProfiles") === "1" &&
   (location.hostname === "127.0.0.1" || location.hostname === "localhost");
@@ -295,19 +303,53 @@ function profileTargetForVehicle(): ProfileTarget {
     instanceId: vehicle.spec.id,
   };
 }
-function profileForScopedTarget(target: ProfileTarget): AssetProfile {
-  const profile = profileForTarget(profiles, target);
-  if (!profile) throw new Error(`profile not found: ${target.assetId}`);
-  return profile;
+function profileLayersForScopedTarget(target: ProfileTarget) {
+  const shared = sharedProfiles.get(target.assetId);
+  if (!shared) throw new Error(`profile not found: ${target.assetId}`);
+  return {
+    shared,
+    projectAsset: projectProfiles.get(target.assetId),
+    projectInstance: target.instanceId === undefined ? undefined : projectProfiles.get(profileScopeKey(target)),
+    debugAsset: debugProfiles.get(target.assetId),
+    debugInstance: target.instanceId === undefined ? undefined : debugProfiles.get(profileScopeKey(target)),
+  };
 }
-function setScopedProfile(profile: AssetProfile): void {
-  profiles.set(profileScopeKey(profile), profile);
+function resolveProfileViewsForScopedTarget(target: ProfileTarget) {
+  return resolveProfileViews(profileLayersForScopedTarget(target), runtimeControlOverrides.values());
+}
+function editableProfileForScopedTarget(target: ProfileTarget): ControlProfile {
+  return resolveProfileViewsForScopedTarget(target).editable.profile;
+}
+function effectiveProfileForScopedTarget(target: ProfileTarget): ControlProfile {
+  return resolveProfileViewsForScopedTarget(target).effective.profile;
+}
+function allProfileTargets(): ProfileTarget[] {
+  return [{ assetId: "person" }, ...runtime.snapshot().vehicles.map(({ assetId, instanceId }) => ({
+    assetId: profileAssetIdForIdentity({ assetId, instanceId }), instanceId,
+  }) satisfies ProfileTarget)];
+}
+function applyAllScopedProfiles(): void {
+  for (const target of allProfileTargets()) applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
+}
+function setScopedProfile(profile: ControlProfile): void {
+  projectProfiles.set(profileScopeKey(profile), profile);
+}
+function clearScopedProfile(target: ProfileTarget): void {
+  projectProfiles.delete(profileScopeKey(target));
+}
+function setDebugScopedProfile(profile: ControlProfile): void {
+  debugProfiles.set(profileScopeKey(profile), profile);
+}
+function projectProfilesDirty(): boolean {
+  return projectProfiles.size !== exportedProfiles.size || [...projectProfiles].some(
+    ([id, profile]) => JSON.stringify(profile) !== exportedProfiles.get(id),
+  );
 }
 if (localProfileOverridesEnabled) for (const id of ["person", ...SPECS.map((s) => s.id)]) {
   // Local overrides are visibly marked and never silently included in a delivery.
   try {
-    const saved = loadAssetProfile(localStorage, id);
-    if (saved) setScopedProfile(saved);
+    const saved = loadDebugControlProfile(localStorage, id);
+    if (saved) setDebugScopedProfile(saved);
   } catch {}
 }
 // Restore every present instance override, not only the vehicle currently selected
@@ -315,11 +357,11 @@ if (localProfileOverridesEnabled) for (const id of ["person", ...SPECS.map((s) =
 if (localProfileOverridesEnabled) for (const identity of runtime.snapshot().vehicles) {
   const target: ProfileTarget = { assetId: profileAssetIdForIdentity(identity), instanceId: identity.instanceId };
   try {
-    const saved = loadAssetProfile(localStorage, target.assetId, target.instanceId);
-    if (saved) setScopedProfile(saved);
+    const saved = loadDebugControlProfile(localStorage, target.assetId, target.instanceId);
+    if (saved) setDebugScopedProfile(saved);
   } catch {/* A stale developer override must not block Playground startup. */}
 }
-for (const profile of profiles.values()) applyControlProfile(runtime, profile);
+applyAllScopedProfiles();
 const pageLifetime = new AbortController();
 const pageEventOptions = {signal: pageLifetime.signal};
 const pressed = new Set<string>();
@@ -487,6 +529,7 @@ function selectAsset(id: string) {
       toast(sim.controlledActor.message);
     }
     library.setActive(libraryAssetId(sim.controlledActor.vehicle?.spec.id ?? "person"));
+    if (!panelOpen) sdkPresentation.focus();
     return;
   }
   const v = sim.vehicles.find((v) => v.spec.id === id);
@@ -533,9 +576,7 @@ function setCameraView(viewId: string) {
   sdk.setCameraView(viewId);
   if (paused) renderPausedState();
   shell.update({
-    configurationDirty: [...profiles].some(
-      ([id, p]) => JSON.stringify(p) !== exportedProfiles.get(id),
-    ),
+    configurationDirty: projectProfilesDirty(),
   });
   setText(
     "cameraButton",
@@ -617,7 +658,9 @@ function selectDragonVariant(id:string,enterTraining=false){
 }
 shell.on('dragonSelect',id=>{if(id)selectDragonVariant(id);});
 shell.on("resetButton", async () => {
+  runtimeControlOverrides.clear();
   await sdk.reset();
+  applyAllScopedProfiles();
   getCameraEditor().state.invalidate();
   await npcLab?.whenReady();
   if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
@@ -793,27 +836,27 @@ const workbench = mountWorkbench(document.body, {
   getProfile: (id) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    return readEditableProfile(runtime, profileForScopedTarget(target));
+    return editableProfileForScopedTarget(target);
   },
   applyProfile: (value) => {
     const target = profileTargetForVehicle();
-    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
-    applyControlProfile(runtime, profile);
+    const profile = scopeProfile(parseControlProfile(value, target.assetId), target);
     setScopedProfile(profile);
+    applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
 
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
     const target = profileTargetForVehicle();
-    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
+    saveDebugControlProfile(localStorage, scopeProfile(parseControlProfile(profile, target.assetId), target));
   },
   resetProfile: (id) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    clearAssetProfile(localStorage, target.assetId, target.instanceId);
-    const profile = scopeProfile(getDefaultProfile(target.assetId)!, target);
-    setScopedProfile(profile);
-    applyControlProfile(runtime, profile);
+    clearDebugControlProfile(localStorage, target.assetId, target.instanceId);
+    debugProfiles.delete(profileScopeKey(target));
+    clearScopedProfile(target);
+    applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
 
     if (paused) renderPausedState();
   },
@@ -877,33 +920,28 @@ const inspector = mountInspector(el("inspectorHost"), {
   getProfile: (id) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    return readEditableProfile(runtime, profileForScopedTarget(target));
+    return editableProfileForScopedTarget(target);
   },
   applyProfile: (value, tab) => {
     const target = profileTargetForVehicle();
-    const profile = scopeProfile(parseAssetProfile(value, target.assetId), target);
-    if (tab === "movement") applyControlProfile(runtime, profile);
-
+    const profile = scopeProfile(parseControlProfile(value, target.assetId), target);
     setScopedProfile(profile);
+    if (tab === "movement") applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
     if (paused) renderPausedState();
   },
   saveProfile: (profile) => {
     const target = profileTargetForVehicle();
-    saveAssetProfile(localStorage, scopeProfile(parseAssetProfile(profile, target.assetId), target));
+    saveDebugControlProfile(localStorage, scopeProfile(parseControlProfile(profile, target.assetId), target));
   },
   resetProfile: (id, tab) => {
     const target = profileTargetForVehicle();
     if (id !== target.assetId) throw new Error(`profile target mismatch: ${id}`);
-    clearAssetProfile(localStorage, target.assetId, target.instanceId);
-    const profile = scopeProfile(structuredClone(profileForScopedTarget(target)), target),
-      defaults = getDefaultProfile(target.assetId)!;
+    clearDebugControlProfile(localStorage, target.assetId, target.instanceId);
+    debugProfiles.delete(profileScopeKey(target));
     if (tab === "movement") {
-      profile.control = defaults.control;
-      if (defaults.aircraftFlight) profile.aircraftFlight = defaults.aircraftFlight;
-      else delete profile.aircraftFlight;
-      applyControlProfile(runtime, profile);
+      clearScopedProfile(target);
+      applyControlProfile(runtime, scopeProfile(effectiveProfileForScopedTarget(target), target));
     }
-    setScopedProfile(profile);
     if (paused) renderPausedState();
   },
   getMovement: movementState,
@@ -1396,9 +1434,7 @@ function updateUI(force = false) {
   );
   shell.update({ mapId: session.map.id });
   shell.update({
-    configurationDirty: [...profiles].some(
-      ([id, p]) => JSON.stringify(p) !== exportedProfiles.get(id),
-    ),
+    configurationDirty: projectProfilesDirty(),
   });
   setText(
     "cameraButton",
@@ -1579,7 +1615,7 @@ function ensureThumbnails() {
 }
 if (library.isOpen()) ensureThumbnails();
 shell.on("exportProfiles", () => {
-  const value = { schemaVersion: 2, profiles: [...profiles.values()] };
+  const value = { schemaVersion: 3, profiles: [...projectProfiles.values()] };
   const uri = URL.createObjectURL(
     new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }),
   );
@@ -1609,6 +1645,22 @@ const debugControls = import.meta.env.DEV ? createDebugControls({
 const labAPI = {
   ...(debugControls ? { debug: debugControls } : {}),
   inspectCamera:()=>inspectDebugCamera(sdk),
+  inspectControlProfile: () => {
+    const target = profileTargetForVehicle(), resolved = resolveProfileViewsForScopedTarget(target).effective;
+    return { target, profile: resolved.profile, sources: resolved.sources };
+  },
+  setRuntimeControlOverride: (value: unknown) => {
+    const override = parseRuntimeControlOverride(value);
+    runtimeControlOverrides.set(override);
+    applyAllScopedProfiles();
+    return { override, active: runtimeControlOverrides.values() };
+  },
+  clearRuntimeControlOverrides: (assetId?: string, instanceId?: string) => {
+    if (assetId === undefined) runtimeControlOverrides.clear();
+    else runtimeControlOverrides.clearTarget(assetId, instanceId);
+    applyAllScopedProfiles();
+    return runtimeControlOverrides.values();
+  },
   inspectAircraftActions: () => ({
     vehicleId: sim.controlledActor.vehicle?.motion.aircraft ? sim.controlledActor.vehicle.spec.id : null,
     actions: runtime.inspectAircraftActions(),
@@ -1681,7 +1733,9 @@ const labAPI = {
     return labAPI.getState();
   },
   reset: async () => {
+    runtimeControlOverrides.clear();
     await sdk.reset();
+    applyAllScopedProfiles();
   getCameraEditor().state.invalidate();
     await npcLab?.whenReady();
     if(session.map.id===DRAGON_TRAINING.id)prepareSelection(session.map.id,'dragon-air','dragon');
