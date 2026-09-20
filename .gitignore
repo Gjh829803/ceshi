@@ -33,3 +33,8 @@ apps/playground/public/scene-plans/*/
 sites/world-sdk-blueprint/.next/
 sites/world-sdk-blueprint/.vinext/
 sites/world-sdk-blueprint/.wrangler/
+
+# Next.js build outputs
+**/.next/
+**/tsconfig.tsbuildinfo
+apps/asset-platform/next-env.d.ts

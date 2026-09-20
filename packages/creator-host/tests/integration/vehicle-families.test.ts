@@ -6,7 +6,7 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 // Headless physical integration evidence, not rendered Creator self-check or Episode
 // video acceptance. Starts use the native physical placement helper; subsequent motion
 // uses only the SDK fixed input path, with no renderer or campus imports.
-const catalog = JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json', import.meta.url), 'utf8'));
+const catalog = JSON.parse(readFileSync(new URL('@worldkit/asset-library/catalog', import.meta.url), 'utf8'));
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 catalog.assets=composeAssetCatalog(catalog.assets);
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])

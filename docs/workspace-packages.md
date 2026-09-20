@@ -17,6 +17,8 @@ there are no separate development and production copies of the runtime.
 | `packages/stream-protocol` · `@worldkit/stream-protocol` | Shared session/media/UI/input wire contracts |
 | `packages/stream-player` · `@worldkit/stream-player` | Shared Web video and DOM UI player, input collection |
 | `packages/stream-host` · `@worldkit/stream-host` | CLI sessions, Chromium producers, media/control transport |
+| `asset-library` · `@worldkit/asset-library` | Asset authoring, publication and public Registry server export |
+| `apps/asset-platform` · `@worldkit/asset-platform` | Worldkit Atlas: independently deployable Next.js asset platform |
 | `apps/stream-web` · `@worldkit/stream-web` | Local development preview using the shared player |
 | `apps/sdk-playground` · `@worldkit/sdk-playground` | SDK development, inspection and interactive calibration |
 | `apps/creator-cloud` · `@worldkit/creator-cloud` | Creator admission, cloud tasks, immutable runtime packaging, recovery and evaluation publication |
@@ -60,6 +62,10 @@ consumption; those edges are test-only. Production capsule projection omits them
 Repository integration scripts exercise whole workflows without reversing the
 production dependency graph. Assets and deployment resources keep explicit
 repository locations because their identities and consumers span components.
+
+Atlas → asset-library on the server, asset-client and asset-contracts in the browser.
+Its Next.js deployment serves a separately mounted published directory and does not
+depend on Creator, Episode or Playground. See [deployment](../apps/asset-platform/README.md).
 
 ## Non-production Web UI
 

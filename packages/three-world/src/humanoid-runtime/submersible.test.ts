@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {getMap} from '@worldkit/preset-content/environment/maps';
 import {readFile} from 'node:fs/promises';

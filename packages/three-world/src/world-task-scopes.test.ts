@@ -7,7 +7,7 @@ import * as assetModule from './assets';
 import type {WorldAssets} from './assets-library';
 import type {AssetDefinition,AssetInstance as RawAsset} from './engine-contracts';
 import type {EnvironmentDefinition} from './humanoid-runtime/environment/types';
-import catalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import catalog from '@worldkit/asset-library/catalog';
 
 // Public-world regressions: preserve cancellation timing and real asset ownership.
 describe('task scopes: stop',()=>{

@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../../test-asset-library';
+import {testAssetResourceUrl} from '../../asset-library.test-support';
 import {readFile} from 'node:fs/promises';
 import {afterEach,beforeAll,expect,it} from 'vitest';
 import {Vector3} from 'three';

@@ -7,7 +7,7 @@ import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter'
 const catalog = JSON.parse(
   readFileSync(
     new URL(
-      "../../../../asset-library/dist/whitebox/asset-catalog.json",
+      "@worldkit/asset-library/catalog",
       import.meta.url,
     ),
     "utf8",

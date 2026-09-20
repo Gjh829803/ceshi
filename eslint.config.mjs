@@ -8,7 +8,7 @@ const browserFiles = ['apps/creator-evaluation-site/**/*.{js,mjs}', 'packages/ep
 export default defineConfig([
   {
     ignores: [
-      '**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.three-creator/**',
+      '**/.next/**', '**/node_modules/**', '**/dist/**', '**/coverage/**', '**/.three-creator/**',
       '**/.worktrees/**', '**/.codex-tmp/**', '**/.playwright-cli/**',
       '.superpowers/**',
       '**/agent-home/**', '**/agent-tmp/**', '**/.agent-home/**', '**/.agent-tmp/**',

@@ -4,6 +4,8 @@ import path from "node:path";
 import ts from "typescript";
 
 export const RETAINED_PACKAGES = new Map([
+  ["apps/asset-platform/package.json", "@worldkit/asset-platform"],
+  ["asset-library/package.json", "@worldkit/asset-library"],
   ["apps/stream-web/package.json", "@worldkit/stream-web"],
   ["packages/world-ui/package.json", "@worldkit/world-ui"],
   ["packages/stream-protocol/package.json", "@worldkit/stream-protocol"],
@@ -40,7 +42,7 @@ export function checkThreeWorkspaceFiles(
 ): readonly ThreeWorkspaceViolation[] {
   const violations: ThreeWorkspaceViolation[] = [];
   const manifests = Object.entries(files).filter(([name]) =>
-    name === "package.json" || /^(?:packages|apps)\/[^/]+\/package\.json$/.test(name));
+    name === "package.json" || name === "asset-library/package.json" || /^(?:packages|apps)\/[^/]+\/package\.json$/.test(name));
   const names = new Set<string>();
   for (const [name, source] of manifests) {
     const manifest = JSON.parse(source) as { name?: string };
@@ -69,7 +71,7 @@ export function checkThreeWorkspaceFiles(
     }
   }
   for (const [name, source] of Object.entries(files)) {
-    if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|shared|scripts|deploy)\//.test(name)) continue;
+    if (!SOURCE_FILE.test(name) || !/^(?:packages|apps|asset-library|shared|scripts|deploy)\//.test(name)) continue;
     if (!POSSIBLE_RETIRED_SPECIFIER.test(source)) continue;
     const syntax = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true,
       name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
@@ -102,7 +104,7 @@ export async function scanThreeWorkspace(repositoryRoot: string): Promise<readon
       throw error;
     }
     for (const entry of entries) {
-      if (["node_modules", "dist", "coverage", "artifacts", ".git"].includes(entry.name)) continue;
+      if (["node_modules", "dist", "coverage", "artifacts", ".git", ".next", "vendor"].includes(entry.name)) continue;
       const name = path.posix.join(directory, entry.name);
       if (entry.isDirectory()) await visit(name);
       else if (entry.isFile() && (SOURCE_FILE.test(name) || entry.name === "package.json")) {
@@ -110,6 +112,6 @@ export async function scanThreeWorkspace(repositoryRoot: string): Promise<readon
       }
     }
   }
-  for (const directory of ["packages", "apps", "shared", "scripts", "deploy"]) await visit(directory);
+  for (const directory of ["packages", "apps", "asset-library", "shared", "scripts", "deploy"]) await visit(directory);
   return checkThreeWorkspaceFiles(files);
 }

@@ -4,16 +4,16 @@
 
 ## 1. 发布与部署边界
 
-仓库根执行 `pnpm assets:publish`，会同步协议和客户端固定副本，生成 `asset-library/dist/published/`。独立资产目录内可执行：
+仓库根执行 `pnpm assets:publish`，会同步协议和客户端固定副本，生成 `asset-library/dist/published/`。以下两步均在仓库根执行：
 
 ```sh
-node tools/serve.mjs --publish --prepare-only
-node tools/serve.mjs --root dist/published --port 3188
+pnpm assets:publish
+pnpm dev:assets
 ```
 
-看板地址为 `http://127.0.0.1:3188/viewer/`。`start-dashboard.cmd` 包含生成发布包和启动服务。
+平台地址为 `http://127.0.0.1:3188/`，应用与部署说明见 [Worldkit Atlas](../../apps/asset-platform/README.md)。`start-dashboard.cmd` 包含生成发布包和启动服务。
 
-`dist/published` 是部署输入：`registry.json` 为当前入口；`releases/<snapshot>/registry.json` 固定历史入口；`manifests` 保存精确版本元数据；`indexes` 为可替换的检索存储；`artifacts/sha256` 为去重字节；`viewer/client` 为预览页面。不要上传整个制作目录。source、intake、migrations、原始本地路径不作为文件公开提供。
+`dist/published` 是部署输入：`registry.json` 为当前入口；`releases/<snapshot>/registry.json` 固定历史入口；`manifests` 保存精确版本元数据；`indexes` 为可替换的检索存储；`artifacts/sha256` 为去重字节；Web 应用由 Next.js 独立构建，不再复制 viewer/client 静态页面。不要上传整个制作目录。source、intake、migrations、原始本地路径不作为文件公开提供。
 
 同一 ID/version 的元数据、内容事实或引用协议发生变化时，发布器拒绝覆盖；应创建新版本。先写完不可变对象，再更新当前入口。默认 audience=internal；公开发布必须符合资源中的明确再分发记录。当前只完成本地发布与服务，没有上传云端。
 
@@ -75,7 +75,7 @@ Creator 当前每次会话从选定 snapshot 解析；写出的锁可用通用 C
 
 看板通过 Registry 分页、固定版本详情及已校验字节预览模型、骨骼、动作。它只依赖发布包，可与制作目录分离部署；相机/操控页显示引擎归属及未连接引擎提供器的状态，避免伪造远程预设数据。
 
-维护入口：pnpm content:sync/check 同步制作侧 Whitebox 适配和生成 preset；pnpm assets:publish/check 生成与校验发布链路；pnpm assets:serve 启动已经生成的 Registry 看板。生成目录、项目交付目录和缓存均不是第二个可编辑资产库。
+维护入口：pnpm content:sync/check 同步制作侧 Whitebox 适配和生成 preset；pnpm assets:publish/check 生成与校验发布链路；pnpm dev:assets 启动读取发布数据的 Next.js 平台。生成目录、项目交付目录和缓存均不是第二个可编辑资产库。
 
 ## 6. 制作契约与运行证据
 

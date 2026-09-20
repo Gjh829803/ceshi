@@ -8,8 +8,8 @@ import {executeThreeCreatorTool} from '../../src/tools/tool-dispatch.js';
 import {compileWorldUi} from '../../src/compiler/world-ui.js';
 import {readExampleFiles} from '../../src/discovery/example-files.js';
 import {readAgentDocument,documentNavigation} from '../../src/discovery/agent-docs.js';
-import {publishLibrary} from '../../../../asset-library/tools/publish.mjs';
-import {createServer} from '../../../../asset-library/tools/serve.mjs';
+import {publishLibrary} from '@worldkit/asset-library/testing/publish';
+import {createServer} from '@worldkit/asset-library/testing/serve';
 import {prepareAssetLibrary} from '../../src/assets/library-source.mjs';
 
 test('UI compiler delivers isolated factory, catalog types and hashed assets; rejects foreign imports',async()=>{
