@@ -33,8 +33,8 @@ test('publisher can request all explicit content versions while authoring adapte
   const {root,base}=fixture(t),next=path.join(path.dirname(base),'0.2.0');
   fs.cpSync(base,next,{recursive:true});
   edit(path.join(next,'asset.json'),asset=>{asset.asset_version='0.2.0';asset.default_assembly=asset.default_assembly.replace('/0.1.0/','/0.2.0/');});
-  edit(path.join(next,'assemblies/default.json'),assembly=>{assembly.subject.version='0.2.0';assembly.profiles.control=assembly.profiles.control.replace('/0.1.0/','/0.2.0/');});
-  edit(path.join(next,'profiles/locomotion.json'),profile=>{profile.parameters.seat=[0,2.9,0];});
+  edit(path.join(next,'assemblies/default.json'),assembly=>{assembly.subject.version='0.2.0';assembly.facts.physical=assembly.facts.physical.replace('/0.1.0/','/0.2.0/');});
+  edit(path.join(next,'facts/physical.json'),profile=>{profile.parameters.seat=[0,2.9,0];});
   const latest=buildWhiteboxCatalog(root).assets;
   assert.equal(latest.length,1);assert.equal(latest[0].contentVersion,'0.2.0');
   const all=buildWhiteboxCatalog(root,{allVersions:true}).assets;
@@ -72,8 +72,8 @@ test('subject metadata, bindings and logical resource aliases regenerate both ad
     value.scale.source_transform.scaleXYZ = [2, 2, 2];
   });
   edit(path.join(base, 'bindings/animation_map.json'), value => { value.slots.test = {clipName:'Idle', loop:true}; });
-  edit(path.join(base, 'bindings/sockets.json'), value => { value.sockets = [{id:'test', position:[0, 2, 0]}]; });
-  edit(path.join(base, 'profiles/locomotion.json'), value => { value.parameters.seat = [0, 2.7, 0]; });
+  edit(path.join(base, 'bindings/sockets.json'), value => { value.sockets = [{id:'test', positionMetersXYZ:[0, 2, 0]}]; });
+  edit(path.join(base, 'facts/physical.json'), value => { value.parameters.seat = [0, 2.7, 0]; });
   edit(path.join(base, 'collision/collision.json'), value => { value.shapes = [{kind:'box', halfExtents:[2, 3, 4], offset:[0, 3, 0]}]; });
   edit(path.join(base, 'capabilities.json'), value => { value.limitations.push('Test host condition'); });
   edit(path.join(base, 'resources.json'), value => { value.files.find(f => f.logical_paths?.length).logical_paths.push('test/model.glb'); });
@@ -98,9 +98,9 @@ test('subject metadata, bindings and logical resource aliases regenerate both ad
 
 test('content publication rejects engine tuning and camera configuration', t => {
   const {root,base}=fixture(t);
-  edit(path.join(base,'profiles/locomotion.json'),value=>{value.parameters.speed=77;});
-  assert.throws(()=>buildWhiteboxCatalog(root),/WHITEBOX_CONTENT_FIELDS/);
-  edit(path.join(base,'profiles/locomotion.json'),value=>{delete value.parameters.speed;});
+  edit(path.join(base,'facts/physical.json'),value=>{value.parameters.speed=77;});
+  assert.throws(()=>buildWhiteboxCatalog(root),/ASSET_CONTENT_FACTS_INVALID/);
+  edit(path.join(base,'facts/physical.json'),value=>{delete value.parameters.speed;});
   edit(path.join(base,'bindings/whitebox.json'),value=>{value.integrationMetadata={cameraPresetReferences:[]};});
   assert.throws(()=>buildWhiteboxCatalog(root),/WHITEBOX_ENGINE_CAMERA_REFERENCE/);
 });

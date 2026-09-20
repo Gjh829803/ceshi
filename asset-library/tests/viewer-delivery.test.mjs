@@ -5,15 +5,13 @@ import path from 'node:path';
 import {fixture} from '../tools/publication-fixture.mjs';
 import {publishLibrary} from '../tools/publish.mjs';
 import {ROOT} from '../tools/core.mjs';
-import {createServer,copyViewer} from '../tools/serve.mjs';
+import {createServer} from '../tools/serve.mjs';
 import {AssetLibrary} from '../client/asset-library.mjs';
 import {materializeAssets} from '../client/materialize.mjs';
 
 test('standalone facade consumes paginated published Registry without source access',async t=>{
   const f=fixture(t);for(let i=0;i<22;i++)f.add('object.extra-'+i);
-  await publishLibrary(f.root,{output:f.output});const files=copyViewer(ROOT,f.output);
-  assert.ok(files.every(file=>/^(viewer|client)\//.test(file.path)));
-  assert.ok(files.some(file=>file.path==='viewer/vendor/three/examples/jsm/loaders/FBXLoader.js'));
+  await publishLibrary(f.root,{output:f.output});
   fs.renameSync(path.join(f.root,'subjects'),path.join(f.root,'removed-subjects'));fs.renameSync(path.join(f.root,'shared'),path.join(f.root,'removed-shared'));
   const server=createServer(f.output);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
   const base=`http://127.0.0.1:${server.address().port}/`,requests=[];
@@ -26,12 +24,7 @@ test('standalone facade consumes paginated published Registry without source acc
   const materialized=await materializeAssets(lock,{client:library.client,cacheRoot:path.join(f.root,'cache')});
   assert.equal(Object.keys(materialized.files).length,1);
   const bytes=await library.bytes(manifest.resources[0]);assert.equal(new TextDecoder().decode(bytes),'tiny model bytes');
-  for(const route of ['viewer/index.html','viewer/app.mjs','viewer/style.css','viewer/vendor/three/build/three.module.js','client/asset-library.mjs','client/registry-client.mjs'])assert.equal((await fetch(base+route)).status,200,route);
-  for(const route of ['subjects/object.a/asset.json','shared/model.glb','intake/private.fbx','catalog/index.json','tools/core.mjs','client/materialize.mjs','client/viewer-files.json'])assert.equal((await fetch(base+route)).status,404,route);
-  assert.equal((await fetch(base,{redirect:'manual'})).headers.get('location'),'/viewer/index.html');
-  assert.match(await(await fetch(base+'viewer/index.html')).text(),/loadMore/);
-  assert.match(await(await fetch(base+'viewer/app.mjs')).text(),/artifact\.format==='fbx'/);
-  fs.appendFileSync(path.join(f.output,'viewer/app.mjs'),'\n// corrupted');assert.equal((await fetch(base+'viewer/app.mjs')).status,500);
+  for(const route of ['viewer/index.html','viewer/app.mjs','client/asset-library.mjs','subjects/object.a/asset.json','shared/model.glb','intake/private.fbx','catalog/index.json','tools/core.mjs','client/materialize.mjs','client/viewer-files.json'])assert.equal((await fetch(base+route)).status,404,route);
 });
 
 test('editable libraries are not accepted as serving roots',t=>{

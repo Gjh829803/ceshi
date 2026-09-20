@@ -1,5 +1,5 @@
 import {fileURLToPath} from 'node:url';
-import catalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import catalog from '@worldkit/asset-library/catalog';
 import {readCatalogResource} from '../../src/assets/asset-resources.js';
 
 /** Real hashed source clips, independent of their physical placement in the library. */

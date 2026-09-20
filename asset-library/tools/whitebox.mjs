@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {createRequire} from 'node:module';
 import {ROOT, collect, inside, latest, read, sha256, write} from './core.mjs';
-
-const Ajv = createRequire(import.meta.url)('./vendor/ajv.cjs');
-const validator = new Ajv({allErrors:true,strict:false});
-const contentParameters = validator.compile(read(new URL('../schemas/content-parameters.schema.json',import.meta.url)));
+import {readPhysicalFacts,readModelFacts,readSocketBindings,readCollisionFacts} from './content-facts.mjs';
 
 const libraryReadinessNote = '资源预览不等于控制器、碰撞或骑乘验证。';
 
@@ -48,10 +44,12 @@ export function buildWhiteboxCatalog(root = ROOT, {allVersions = false} = {}) {
     if (binding.integrationMetadata?.cameraPresetReferences) throw Error('WHITEBOX_ENGINE_CAMERA_REFERENCE: ' + asset.asset_id);
     const model = resources.files.find(f => f.path === resources.model);
     if (!model) throw Error('WHITEBOX_MODEL_UNREGISTERED: ' + asset.asset_id);
-    const rig = read(inside(root, subject.assembly.bindings.rig));
-    const actions = read(inside(root, subject.assembly.bindings.animations)).slots;
-    const sockets = read(inside(root, subject.assembly.bindings.sockets)).sockets;
-    const collision = read(path.join(subject.base, 'collision/collision.json')).shapes;
+    const bindings=subject.assembly.bindings??{};
+    const rig = bindings.rig?read(inside(root, bindings.rig)):{};
+    const actions = bindings.animations?read(inside(root, bindings.animations)).slots:{};
+    readModelFacts(root,subject);
+    const sockets = readSocketBindings(root,subject)?.sockets??[];
+    const collision = readCollisionFacts(root,subject)?.shapes??[];
     if (collision.length > 1) throw Error('WHITEBOX_MULTIPLE_COLLIDERS_UNSUPPORTED: ' + asset.asset_id);
     const entry = {id:asset.asset_id, contentVersion:asset.asset_version, displayName:asset.display_name, ...resource(model, 'subjects', resources.model_logical_path), ...binding,
       rootTransform:asset.scale.source_transform, actions,
@@ -69,10 +67,9 @@ export function buildWhiteboxCatalog(root = ROOT, {allVersions = false} = {}) {
     if (sockets.length || empty_fields.includes('sockets')) entry.sockets = sockets;
     if (collision.length) entry.collision = collision[0];
     if (vehicle) {
-      const profile = read(inside(root, subject.assembly.profiles.control));
-      if (!contentParameters(profile.parameters)) throw Error('WHITEBOX_CONTENT_FIELDS: ' + asset.asset_id + ': ' + validator.errorsText(contentParameters.errors));
+      const profile = readPhysicalFacts(root,subject);
+      if (!profile?.parameters) throw Error('WHITEBOX_PHYSICAL_FACTS_REQUIRED: ' + asset.asset_id);
       if (Object.keys(vehicle.spec || {}).length) throw Error('WHITEBOX_DUPLICATE_VEHICLE_PARAMETER: ' + asset.asset_id);
-      for (const key of Object.keys(vehicle.spec || {})) if (key in profile.parameters) throw Error('WHITEBOX_DUPLICATE_VEHICLE_PARAMETER: ' + asset.asset_id + '.' + key);
       entry.vehicle = {...vehicle, spec:{...vehicle.spec, ...profile.parameters}};
     }
     assets.push(entry);

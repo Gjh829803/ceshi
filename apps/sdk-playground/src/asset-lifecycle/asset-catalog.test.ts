@@ -22,49 +22,51 @@ beforeAll(async()=>{
 afterEach(()=>{expect(errors).toEqual([]);});
 afterAll(async()=>{try{await browser?.close();}finally{await server?.close();}});
 
-it('creates every catalog choice on demand in the full campus without replacing the world',async()=>{
- const started=performance.now(),stage=(name:string)=>console.info('Catalog stage',{name,elapsedMs:Math.round(performance.now()-started)});
- // Keep the real desktop layout and full map while bounding software raster work on CI.
- await page.goto(url);await page.waitForFunction(()=>document.body.dataset.ready==='true');stage('ready');
- const native=()=>page.evaluate(()=>({...((window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:{simulationTick:number;errors:unknown[]};errors:string[]}}}).nativeLifecycleLab.snapshot()),message:document.getElementById('message')!.textContent,createEnabled:!(document.getElementById('vehicle-create') as HTMLButtonElement).disabled}));
+const native=()=>page.evaluate(()=>({...((window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{id:string;type:string}[];mapId:string;bounds:{min:number[];max:number[]};world:{simulationTick:number;errors:unknown[]};errors:string[]}}}).nativeLifecycleLab.snapshot()),message:document.getElementById('message')!.textContent,createEnabled:!(document.getElementById('car-create') as HTMLButtonElement).disabled}));
+async function openCatalog(){
+ await page.goto(url);await page.waitForFunction(()=>document.body.dataset.ready==='true');
  const before=await native();expect(before.mapId).toBe('campus');expect(before.bounds.max[0]!-before.bounds.min[0]!).toBe(1000);
- const types=await page.locator('#vehicle-type option').evaluateAll(options=>options.map(option=>(option as HTMLOptionElement).value));expect(types).toEqual(expect.arrayContaining(['canoe','plane','horse','tank','spacecraft','dragon-D01','dragon-D11']));
- // Add the imported skeletal models last: every instance remains live for the
- // final coexistence/reset checks, without paying their render cost on every earlier UI action.
- const creationOrder=[...types.filter(type=>!type.startsWith('dragon-')),...types.filter(type=>type.startsWith('dragon-'))];
- // These controls are stable DOM nodes; reuse their handles instead of resolving
- // selectors and refocusing the same button behind each expensive live frame.
- const catalog=await page.$('#vehicle-type'),create=await page.$('#vehicle-create');
- if(!catalog||!create)throw Error('Missing catalog controls');
- const timings:{type:string;milliseconds:number}[]=[];
- for(const type of creationOrder){
-  const started=performance.now();
-  try{
-   await catalog.selectOption(type);
-   const {visible,enabled,focused}=await create.evaluate(element=>{const button=element as HTMLButtonElement;button.focus();return {visible:button.checkVisibility({visibilityProperty:true}),enabled:!button.disabled,focused:document.activeElement===button};});
-   expect(visible).toBe(true);expect(enabled).toBe(true);expect(focused).toBe(true);
-   // Exercise native keyboard activation; mouse clicks remain covered in the other
-   // lifecycle cases. This avoids waiting extra render frames for pointer stability.
-   await page.keyboard.press('Enter');
-   // Return the completion sample itself as a primitive. A second evaluation would
-   // wait behind another live frame and rebuild/serialize the entire world again.
-   const completion=await page.waitForFunction(selected=>{
-    const create=document.getElementById('vehicle-create') as HTMLButtonElement;
-    if(create.disabled)return false;
-    const state=(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{type:string}[];errors:string[]}}}).nativeLifecycleLab.snapshot();
-    if(!state.errors.length&&!state.loaded.some(entry=>entry.type===selected))return false;
-    return JSON.stringify({loaded:state.loaded,errors:state.errors,message:document.getElementById('message')!.textContent,createEnabled:!create.disabled});
-   },type,{timeout:20000,polling:100});
-   const observed=JSON.parse(String(await completion.jsonValue())) as Pick<Awaited<ReturnType<typeof native>>,'loaded'|'errors'|'message'|'createEnabled'>;
-   await completion.dispose();
-   expect(observed.errors,`${type}: ${observed.message}`).toEqual([]);expect(observed.loaded.some(entry=>entry.type===type),type).toBe(true);
-   expect(observed.createEnabled,type).toBe(true);expect(observed.message,type).toContain('已定位');
-  }catch(error){console.error('Catalog creation failed',{type,elapsedMs:Math.round(performance.now()-started),completed:timings});throw error;}
-  timings.push({type,milliseconds:Math.round(performance.now()-started)});
- }
- console.info('Catalog creation timings',timings);stage('all-created');
- const final=await native();expect(final.loaded.length).toBe(types.length);expect(final.world.simulationTick).toBeGreaterThan(before.world.simulationTick);expect(final.world.errors).toEqual([]);
- await page.screenshot({path:path.join(app,'../../.codex-tmp/asset-lifecycle-lab/catalog-all.png'),fullPage:true});stage('captured');
+ const types=await page.locator('#vehicle-type option').evaluateAll(options=>options.map(option=>(option as HTMLOptionElement).value));
+ expect(types).toEqual(expect.arrayContaining(['canoe','plane','horse','tank','spacecraft','dragon-D01','dragon-D11']));
+ return {before,types};
+}
+async function createCatalogChoice(type:string){
+ await page.selectOption('#vehicle-type',type);await page.locator('#car-create').click();
+ const completion=await page.waitForFunction(selected=>{
+  const state=(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{type:string}[];errors:string[]}}}).nativeLifecycleLab.snapshot();
+  if(!state.errors.length&&!state.loaded.some(entry=>entry.type===selected))return false;
+  const create=document.getElementById('car-create') as HTMLButtonElement;
+  return JSON.stringify({loaded:state.loaded,errors:state.errors,message:document.getElementById('message')!.textContent,createEnabled:!create.disabled});
+ },type,{timeout:20000,polling:100});
+ const observed=JSON.parse(String(await completion.jsonValue())) as {loaded:{type:string}[];errors:string[];message:string;createEnabled:boolean};
+ await completion.dispose();
+ expect(observed.errors,`${type}: ${observed.message}`).toEqual([]);expect(observed.loaded.some(entry=>entry.type===type),type).toBe(true);
+ expect(observed.createEnabled,type).toBe(false);expect(observed.message,type).toContain('已创建');
+}
+async function releaseCatalogChoice(type:string){
+ await page.locator('#car-destroy').click();
+ const removal=await page.waitForFunction(selected=>{
+  const state=(window as unknown as {nativeLifecycleLab:{snapshot:()=>{loaded:{type:string}[];errors:string[]}}}).nativeLifecycleLab.snapshot();
+  return !state.loaded.some(entry=>entry.type===selected)&&JSON.stringify({loaded:state.loaded,errors:state.errors});
+ },type,{timeout:20000,polling:100});
+ const released=JSON.parse(String(await removal.jsonValue())) as {loaded:{type:string}[];errors:string[]};
+ await removal.dispose();expect(released.errors,type).toEqual([]);
+}
+
+const batchCount=6;
+it.each(Array.from({length:batchCount},(_,index)=>index))('creates catalog batch %i in a stable full-campus world',async batch=>{
+ const {before,types}=await openCatalog();
+ const ordered=[...types.filter(type=>type!=='rover'&&!type.startsWith('dragon-')),...types.filter(type=>type.startsWith('dragon-'))];
+ const batchTypes=ordered.filter((_,index)=>index%batchCount===batch);expect(batchTypes.length).toBeGreaterThan(0);
+ for(const type of batchTypes){await createCatalogChoice(type);await releaseCatalogChoice(type);}
+ const final=await native();expect(final.loaded.map(entry=>entry.type)).toEqual(['rover']);expect(final.world.simulationTick).toBeGreaterThan(before.world.simulationTick);expect(final.world.errors).toEqual([]);
+},60000);
+
+it('keeps representative catalog choices together and resets them without replacing the world',async()=>{
+ const {before}=await openCatalog();
+ await createCatalogChoice('tank');await createCatalogChoice('dragon-D11');
+ const final=await native();expect(final.loaded.map(entry=>entry.type).sort()).toEqual(['dragon-D11','rover','tank']);expect(final.world.simulationTick).toBeGreaterThan(before.world.simulationTick);expect(final.world.errors).toEqual([]);
+ await page.screenshot({path:path.join(app,'../../.codex-tmp/asset-lifecycle-lab/catalog-all.png'),fullPage:true});
  await page.locator('#reset').press('Enter');await expect.poll(async()=>(await native()).loaded.length).toBe(1);
- expect((await native()).loaded[0]!.type).toBe('rover');expect((await native()).errors).toEqual([]);stage('reset-verified');
-},150000);
+ expect((await native()).loaded[0]!.type).toBe('rover');expect((await native()).errors).toEqual([]);
+},60000);

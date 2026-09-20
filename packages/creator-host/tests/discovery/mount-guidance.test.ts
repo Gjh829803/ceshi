@@ -5,7 +5,7 @@ import {afterEach,expect,it} from 'vitest';
 import {ThreeCreatorTools} from '../../src/tools/tools';
 import {executeThreeCreatorTool} from '../../src/cli/mcp';
 import {createAssetPolicySnapshot,assetPolicyHash} from '../../src/assets/asset-policy.mjs';
-import contentCatalog from '../../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import Ajv from 'ajv';

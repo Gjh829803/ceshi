@@ -7,14 +7,17 @@ Playground and Creator. This package provides content, not another runtime owner
   shared mechanical animation and model construction stay in `src/vehicles/`.
 - `src/creatures/` and `src/humanoid/`: supplied creature and humanoid bindings.
 - `src/environment/`: calibration scenes, spatial definitions and scenario preparation.
-- `src/profiles/`: typed profile parsing and application.
+- `src/control/`: shared static handling defaults, typed control profiles, source-aware
+  resolution and application. `src/control/defaults/` splits shared defaults into ground,
+  water, aircraft and creature domains; `src/profiles/` and `shared-defaults.ts` are
+  compatibility re-exports and do not own data.
 - `src/assets/`: asset catalog and resource access; `src/ui/`: shared presentation helpers.
 - `src/config.ts`, `src/models.ts`, `src/world.ts`: shared definitions and content assembly.
 - `config/presets/`: engine handling, powertrain, input hints and camera defaults.
 - `config/integrations/`: exact subject-version bindings, selection and field ownership.
 - `config/`: consumer profile overrides, presentation defaults and scene placements.
 - `config/generated/`: deterministic compile-time snapshots from
-  content facts in `asset-library/subjects/**/profiles/`, subject bindings and engine presets. Run `pnpm content:sync`
+  content facts in `asset-library/subjects/**/facts/`, subject bindings and engine presets. Run `pnpm content:sync`
   to regenerate; `pnpm content:check` rejects stale snapshots. Do not edit these files.
 
 The asset library owns seats, envelopes, wheel geometry, collision and ground-contact

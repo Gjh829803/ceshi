@@ -3,8 +3,8 @@ import test from 'node:test';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {buildWhiteboxCatalog} from '../../../../asset-library/tools/whitebox.mjs';
-import {buildPresetContent,syncContentOwnership} from '../../../../asset-library/tools/presets.mjs';
+import {buildWhiteboxCatalog} from '@worldkit/asset-library/testing/whitebox';
+import {buildPresetContent,syncContentOwnership} from '@worldkit/asset-library/testing/presets';
 import {composeAssetCatalog,composeContentSpec,createContentAdapter,presetAuthoringContext,runtimeAssetContext} from './host-adapter.mjs';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -113,4 +113,15 @@ test('engine tuning changes runtime identity independently of content artifacts;
   assert.deepEqual(context.supported_contracts,[{contract_id:'module.host.subject',version:'1.0.0'}]);
   context.supported_contracts[0].version='changed';
   assert.equal(runtimeAssetContext([rover.id]).supported_contracts[0].version,'1.0.0');
+});
+
+test('remote physical facts reject invalid numbers, vectors and collision dimensions before composition',()=>{
+ for(const patch of [{radius:'bad'},{radius:NaN},{radius:Infinity},{radius:-1},{seat:[0,undefined,0]},{seat:[0,1]},{envelope:{kind:'box',halfExtents:[1,0,1],offset:[0,0,0]}},{wheelPhysics:{radius:false}}]){
+  const facts=roverFacts();Object.assign(facts.parameters,patch);
+  assert.throws(()=>composeContentSpec(rover.id,facts),/CONTENT_FACTS_INVALID/,JSON.stringify(patch));
+  const entry=structuredClone(rover);Object.assign(entry.vehicle.spec,patch);
+  assert.throws(()=>composeAssetCatalog([entry]),/CONTENT_FACTS_INVALID/);
+ }
+ const signed=roverFacts();signed.parameters.seat=[-1,0,-3];signed.parameters.rearAxleZMeters=-2;
+ assert.deepEqual(composeContentSpec(rover.id,signed).seat,[-1,0,-3]);
 });

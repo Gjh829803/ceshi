@@ -15,8 +15,7 @@
   "movement_transitions": [],
   "control": {
     "archetype": "rotorcraft",
-    "stage": "assets_ready",
-    "profile": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/locomotion.json"
+    "stage": "assets_ready"
   },
   "interactions": [],
   "limitations": [

@@ -6,7 +6,7 @@ const hash='a'.repeat(64);
 const artifact={artifact_id:'sha256:'+hash,sha256:hash,byte_length:12,mime_type:'model/gltf-binary',format:'glb',role:'runtime',storage_path:'artifacts/sha256/aa/'+hash};
 const resource={...artifact,resource_id:'model',logical_paths:['models/horse.glb','legacy/creatures/horse/model.glb']};
 const summary={asset_id:'creature.horse',version:'1.0.0',manifest_digest:hash,manifest_path:'manifests/creature.horse/1.0.0/manifest.json',display_name:'Horse',description:'',group:'creature',placeholder:false,preview:null,morphology:['quadruped'],movement:['walk'],capabilities:['be_ridden'],readiness:{previewable:false,runtime:'unknown'},requirements:[],stage:'production',license_status:'approved',license_id:'CC0-1.0'};
-const manifest={kind:'asset-manifest',contract_version:'1.0.0',asset_id:'creature.horse',version:'1.0.0',taxonomy_version:'1.0.0',display_name:'Horse',description:'',group:'creature',placeholder:false,model_resource_id:'model',preview_resource_id:null,resources:[resource],dependencies:[],runtime_requirements:[],sections:{asset:{},capabilities:{},bindings:{},facts:{},animations:[],provenance:{},validation:{},assembly:{}},extensions:{}};
+const manifest={kind:'asset-manifest',contract_version:'1.0.0',asset_id:'creature.horse',version:'1.0.0',taxonomy_version:'1.0.0',display_name:'Horse',description:'',group:'creature',placeholder:false,model_resource_id:'model',preview_resource_id:null,resources:[resource],dependencies:[],runtime_requirements:[],sections:{asset:{},capabilities:{},bindings:{},facts:{},animations:[],provenance:{},validation:{runtime:'not_run',evidence:[]},assembly:{}},extensions:{}};
 test('canonical JSON gives one identity despite object insertion order and rejects nonfinite values',async()=>{
  const {canonicalJson}=await api();
  assert.equal(canonicalJson({z:1,a:{b:2,a:3}}),canonicalJson({a:{a:3,b:2},z:1}));
@@ -46,4 +46,17 @@ test('version selectors resolve caret zero-major ranges correctly and reject unk
  assert.equal(satisfiesVersion('0.1.9','^0.1.0'),true);assert.equal(satisfiesVersion('0.2.0','^0.1.0'),false);
  assert.equal(satisfiesVersion('0.0.2','^0.0.1'),false);assert.equal(satisfiesVersion('1.3.0','~1.2.0'),false);
  assert.throws(()=>assertContractVersion('2.0.0'),/CONTRACT_VERSION/);
+});
+
+test('published v1 metadata remains readable while new publication requires complete runtime evidence',async()=>{
+ const {assertValid,assertValidationEvidence}=await validator();
+ for(const validation of [{},{runtime:'unknown'},{runtime:'verified',evidence:['old-report.json']},{runtime:'verified',evidence:{report:'old-report.json'}}]){
+  const oldManifest={...manifest,sections:{...manifest.sections,validation}};
+  const before=JSON.stringify(oldManifest);
+  assert.equal(assertValid('Manifest',oldManifest),oldManifest);
+  assert.equal(JSON.stringify(oldManifest),before,'read validation must not rewrite pinned metadata');
+  assert.throws(()=>assertValidationEvidence(oldManifest,validation),/ASSET_CONTRACT_INVALID/);
+ }
+ const malformed={...manifest,sections:{...manifest.sections,validation:null}};
+ assert.throws(()=>assertValid('Manifest',malformed),/ASSET_CONTRACT_INVALID/);
 });

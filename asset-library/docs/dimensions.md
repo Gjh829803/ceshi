@@ -16,11 +16,13 @@
 | degrees_of_freedom | path_1d / surface_2d / planar_2d_yaw / full_3d | 决定控制接口范围 |
 | gaits | walk / trot / run / gallop 等 | 步态不是独立运动环境 |
 | movement_transitions | from / to / transition / stage | 会飞与会走不能证明能起飞和落地 |
-| control | archetype + profile + stage | 速度、转向、加速度放 profile，算法由宿主实现 |
+| control | archetype + stage | 速度、转向、加速度及算法由宿主提供，不引用物理事实冒充操控配置 |
 | interactions | action + contract + stage | 需明确角色、锚点、控制权和退出恢复 |
 | capability stage | planned / assets_ready / integrated / verified / deprecated | verified 需要环境、版本和案例证据 |
 | resources | path / hash / byte_length / format / role | 文件在库内；骨骼和蒙皮可留 GLB；逻辑拆分不强制拆文件 |
-| bindings | 语义骨骼映射、动作映射、挂点 | 保留真实名称，未知不猜 |
+| bindings | 语义骨骼映射、动作映射、挂点 | 保留真实名称，未知不猜；挂点 ID 唯一，positionMetersXYZ 为局部米制 XYZ |
+| facts/model.json | 坐垫几何与模型使用的 socket_ids | 尺寸为正，引用必须存在；由模型事实 Schema 校验 |
+| collision/collision.json | 显式碰撞几何 | 当前 box 形状复用内容参数 Schema，halfExtents 为正 |
 | provenance | 来源、转换、许可及用途权利 | 未知授权保持 unknown |
 | validation | structure / format / visual / runtime | 各层验证相互独立 |
 

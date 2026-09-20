@@ -11,6 +11,22 @@ const manifestRef=a=>({...refOf(a),manifest_digest:a.manifest_digest,manifest_pa
 const artifactOf=({resource_id,logical_paths,...a})=>a;
 const error=(code,status=400)=>{throw protocolError(code,code,status);};
 const digestPattern=/^[a-f0-9]{64}$/;
+/** Reading old v1 metadata never upgrades an incomplete or malformed proof to verified. */
+function matchingRuntimeEvidence(manifest,runtime){
+ const validation=manifest.sections.validation;
+ if(validation.runtime!=='verified'||!Array.isArray(validation.evidence))return undefined;
+ return validation.evidence.find(evidence=>{
+  try{assertValid('RuntimeEvidence',evidence);}catch(error){
+   if(error.code==='ASSET_CONTRACT_INVALID')return false;
+   throw error;
+  }
+  return evidence.asset_id===manifest.asset_id&&evidence.version===manifest.version&&
+   evidence.runtime_id===runtime.runtime_id&&evidence.runtime_version===runtime.runtime_version&&
+   evidence.runtime_digest===runtime.runtime_digest&&evidence.adapter_id===runtime.adapter_id&&
+   evidence.adapter_version===runtime.adapter_version&&evidence.preset_digest===runtime.preset_digest&&
+   evidence.overrides_digest===runtime.overrides_digest;
+ });
+}
 /** Published-only registry. No dependency on editable library descriptors or binaries. */
 export class RegistryStore{
  constructor(root,{artifactBaseUrl}={}){this.root=path.resolve(root);this.artifactBaseUrl=artifactBaseUrl;}
@@ -48,7 +64,7 @@ export class RegistryStore{
   for(const ref of request.assets){const summary=this.select(index,ref.asset_id,ref.version),m=this.manifest(summary),runtime=request.runtime;let status='unknown';
    if(m.sections.validation.runtime==='incompatible'){status='incompatible';reasons.push({code:'CONTENT_INCOMPATIBLE',message:'Content explicitly marked incompatible',asset_id:m.asset_id});}
    else if(runtime&&m.runtime_requirements.some(r=>!runtime.supported_contracts.some(s=>s.contract_id===r.contract_id&&s.version===r.version))){status='adapter_required';reasons.push({code:'CONTRACT_UNSUPPORTED',message:'Required content contract is not supported by this adapter',asset_id:m.asset_id});}
-   else if(runtime&&!m.placeholder&&m.sections.validation.runtime==='verified'){const e=(m.sections.validation.evidence||[]).find(e=>e&&typeof e==='object'&&e.status==='verified'&&e.asset_id===m.asset_id&&e.version===m.version&&e.runtime_id===runtime.runtime_id&&e.runtime_version===runtime.runtime_version&&e.runtime_digest===runtime.runtime_digest&&digestPattern.test(e.runtime_digest)&&e.adapter_id===runtime.adapter_id&&e.adapter_version===runtime.adapter_version&&e.preset_digest===runtime.preset_digest&&e.overrides_digest===runtime.overrides_digest&&typeof e.evidence_id==='string'&&e.evidence_id);
+   else if(runtime&&!m.placeholder){const e=matchingRuntimeEvidence(m,runtime);
     if(e){status='compatible';evidence.push({asset_id:m.asset_id,version:m.version,manifest_digest:summary.manifest_digest,evidence_id:e.evidence_id,runtime_digest:e.runtime_digest,adapter_version:e.adapter_version,preset_digest:e.preset_digest});}
    }
    if(status==='unknown')reasons.push({code:'RUNTIME_EVIDENCE_MISSING',message:'No matching content, runtime, adapter and preset validation evidence',asset_id:m.asset_id});states.push(status);

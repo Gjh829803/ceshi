@@ -17,7 +17,7 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { humanoid } from "@worldkit/three";
 import type {
-  AssetProfile,
+  ControlProfile,
   ControlTuning,
 } from "@worldkit/preset-content/platform/profiles";
 import { Button } from "./components/ui/button";
@@ -77,9 +77,9 @@ export type InspectorOptions = {
   cameraEditor?():CameraEditorBinding;
   getAssetId(): string;
   getSubject(): InspectorSubject;
-  getProfile(id: string): AssetProfile;
-  applyProfile(profile: AssetProfile, tab: InspectorTab): void;
-  saveProfile(profile: AssetProfile): void;
+  getProfile(id: string): ControlProfile;
+  applyProfile(profile: ControlProfile, tab: InspectorTab): void;
+  saveProfile(profile: ControlProfile): void;
   resetProfile(id: string, tab: InspectorTab): void;
   getMovement(): InspectorMovement;
   getCamera(): InspectorCamera;
@@ -92,7 +92,7 @@ type NumericFieldKey = string;
 type Snapshot = {
   assetId: string;
   subject: InspectorSubject;
-  profile: AssetProfile;
+  profile: ControlProfile;
   movement: InspectorMovement;
   camera: InspectorCamera;
   telemetry: InspectorTelemetry;

@@ -1,4 +1,5 @@
-import type {humanoid} from '@worldkit/three';
+import {humanoid} from '@worldkit/three';
+import {getSharedAircraftFlightDefaults, getSharedControlDefaults} from '../control/defaults';
 import subjects from '../../config/generated/subjects.json';
 import modelRecords from '../../config/generated/models.json';
 import placements from '../../config/scene-placements.json';
@@ -18,8 +19,15 @@ export function readSubjectSpec(id: string): humanoid.VehicleSpec {
   const parameters = (subjects as unknown as Record<string, humanoid.VehicleSpec>)[id];
   const placement = (placements as unknown as Record<string, Placement>)[id];
   if (!parameters || !placement) throw new Error(`Unknown preset subject: ${id}`);
+  const assetFacts = structuredClone(parameters) as unknown as Record<string, unknown>;
+  for (const key of humanoid.controlKeys) delete assetFacts[key];
+  delete assetFacts.aircraftFlight;
+  const control = getSharedControlDefaults(id);
+  if (!control) throw new Error(`Missing control profile defaults: ${id}`);
   const {dockingPorts, ...scene} = structuredClone(placement);
-  const spec = {...structuredClone(parameters), ...scene};
+  const spec = {...assetFacts, ...scene, ...control, controlProfileId: `preset.${id}`} as humanoid.VehicleSpec;
+  const aircraftFlight = getSharedAircraftFlightDefaults(id);
+  if (aircraftFlight) spec.aircraftFlight = aircraftFlight;
   if (dockingPorts && spec.spaceFlight) spec.spaceFlight.dockingPorts = dockingPorts;
   return spec;
 }

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-18T08:15:03.334Z",
+  "generated_at": "2026-09-20T07:09:27.489Z",
   "stats": {
     "subjects": 69,
     "models": 54,
@@ -59,8 +59,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -128,8 +127,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -199,8 +197,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -268,8 +265,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -337,8 +333,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -404,8 +399,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -473,8 +467,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -542,8 +535,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -609,8 +601,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -678,8 +669,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -748,8 +738,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -817,8 +806,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -884,8 +872,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -980,8 +967,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon-evolved/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1078,8 +1064,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d01/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1176,8 +1161,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d02/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1274,8 +1258,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d03/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1372,8 +1355,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d04/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1470,8 +1452,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d05/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1568,8 +1549,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d06/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1666,8 +1646,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d07/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1764,8 +1743,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d08/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1862,8 +1840,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d09/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -1960,8 +1937,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d10/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2058,8 +2034,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/fantastical/creature.dragon.d11/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2155,8 +2130,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/animals/creature.horse/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2252,8 +2226,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/animals/creature.quadruped-static-diagnostic/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2319,8 +2292,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -2414,8 +2386,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/characters/humanoid.uefn-mannequin/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2481,8 +2452,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -2548,8 +2518,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -2615,8 +2584,7 @@
       "movement_modes": [],
       "control": {
         "archetype": "unknown",
-        "stage": "planned",
-        "profile": null
+        "stage": "planned"
       },
       "interactions": [],
       "readiness": {
@@ -2708,8 +2676,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.atv/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2786,8 +2753,7 @@
       ],
       "control": {
         "archetype": "target_position",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.balloon/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2878,8 +2844,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.boat/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -2973,8 +2938,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.bus/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3068,8 +3032,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.canoe/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3163,8 +3126,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.carriage/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3258,8 +3220,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.glider/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3361,8 +3322,7 @@
       ],
       "control": {
         "archetype": "rotorcraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.helicopter/0.1.1/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3453,8 +3413,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.hovercraft/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3548,8 +3507,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.jetski/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3626,8 +3584,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.kart/0.1.1/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3715,8 +3672,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.kayak/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3810,8 +3766,7 @@
       ],
       "control": {
         "archetype": "bike_balance",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.motorcycle/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3888,8 +3843,7 @@
       ],
       "control": {
         "archetype": "rotorcraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.multirotor/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -3980,8 +3934,7 @@
       ],
       "control": {
         "archetype": "marine_3d",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.observation-submarine/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4058,8 +4011,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.paraglider/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4150,8 +4102,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.patrol-boat/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4245,8 +4196,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.plane/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4323,8 +4273,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.pusher-plane/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4415,8 +4364,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.racer/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4510,8 +4458,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.raft/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4605,8 +4552,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.rescue-hovercraft/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4700,8 +4646,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.rover/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4795,8 +4740,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.skateboard/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4890,8 +4834,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.ski/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -4985,8 +4928,7 @@
       ],
       "control": {
         "archetype": "directional",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.sled/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5080,8 +5022,7 @@
       ],
       "control": {
         "archetype": "space_6dof",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.spacecraft/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5175,8 +5116,7 @@
       ],
       "control": {
         "archetype": "marine_3d",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.submarine/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5253,8 +5193,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.supercar/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5345,8 +5284,7 @@
       ],
       "control": {
         "archetype": "space_6dof",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.survey-spacecraft/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5440,8 +5378,7 @@
       ],
       "control": {
         "archetype": "differential_drive",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.tank/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5518,8 +5455,7 @@
       ],
       "control": {
         "archetype": "rotorcraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.tiltrotor/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5610,8 +5546,7 @@
       ],
       "control": {
         "archetype": "bike_balance",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.touring-motorcycle/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5705,8 +5640,7 @@
       ],
       "control": {
         "archetype": "throttle_steer",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.trail-rover/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5800,8 +5734,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.trainer-plane/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5895,8 +5828,7 @@
       ],
       "control": {
         "archetype": "bike_balance",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.unicycle/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {
@@ -5973,8 +5905,7 @@
       ],
       "control": {
         "archetype": "aircraft",
-        "stage": "assets_ready",
-        "profile": "subjects/vehicles/vehicle.wingsuit/0.1.0/profiles/locomotion.json"
+        "stage": "assets_ready"
       },
       "interactions": [],
       "readiness": {

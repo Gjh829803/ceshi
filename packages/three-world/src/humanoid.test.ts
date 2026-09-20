@@ -3,7 +3,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {fixtureTextureLoader} from './humanoid-runtime/textured-glb-fixture';
-import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import {createHumanoidWorld,type HumanoidAssetDefinition} from './humanoid';

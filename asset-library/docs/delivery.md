@@ -14,7 +14,7 @@
 
 ## 权威与交付边界
 
-资产的可编辑权威来源只有 `subjects / shared / assemblies`。骨架与蒙皮留在模型中，语义映射位于 bindings，控制参数位于 profiles。SDK 提供执行算法，模块描述只声明宿主接口。
+资产的可编辑权威来源只有 `subjects / shared / assemblies`。骨架与蒙皮留在模型中，语义映射位于 bindings，物理事实位于 facts/physical.json，操控参数位于引擎 preset-content/config/presets。SDK 提供执行算法，模块描述只声明宿主接口。
 
 `catalog / dist` 和仓库 `packages/preset-content/config/generated` 是生成快照。Host 默认读取仓库内库，也支持 `ASSET_LIBRARY_ROOT` 外部目录及 `ASSET_LIBRARY_URL` HTTP 来源，无旧资产回退。远程同步构造器在使用前需 `await prepareAssetLibrary(root)`。
 
@@ -30,6 +30,6 @@ FBX 样本尚未规范化，部分蒙皮权重会触发浏览器加载器提示�
 
 ## 操作与基线
 
-在资产库内运行 `node tools/serve.mjs` 打开独立看板；新增或更新资源遵循[入库流程](../CONTRIBUTING.md)。库内运行 validate、validate-formats、build 和合同测试；Whitebox 仓库根运行 `pnpm content:sync`、`pnpm content:check` 同步并核对消费快照。
+在仓库根运行 `pnpm dev:assets` 打开 [Worldkit Atlas](../../apps/asset-platform/README.md)；新增或更新资源遵循[入库流程](../CONTRIBUTING.md)。库内运行 validate、validate-formats、build 和合同测试；Whitebox 仓库根运行 `pnpm content:sync`、`pnpm content:check` 同步并核对消费快照。
 
 资源原始快照基于提交 `514fd6ba261f079620c47c49228c70d70f6e8cb1`。当前隔离分支的集成起点为 `63b289d541e2aa89b64dd8cfa044657e2f4dc5d1`。这两个提交分别描述资源来源和集成基线，不应改写为同一个身份。

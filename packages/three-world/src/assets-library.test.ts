@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3, type DataTexture, type SkinnedMesh } from 'three';
-import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { WorldAssets } from './assets-library.js';

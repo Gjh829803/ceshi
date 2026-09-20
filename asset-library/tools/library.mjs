@@ -4,23 +4,27 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {ROOT,read,write,sha256,inside,walk,collect,summary,search,slash,latest} from './core.mjs';
 import {syncWhiteboxCatalog} from './whitebox.mjs';
+import {schemas} from '../client/contracts/index.mjs';
+import {assertValidationEvidence} from '../client/contracts/validate.mjs';
+import {readPhysicalFacts,readModelFacts,readSocketBindings,readCollisionFacts} from './content-facts.mjs';
 const require=createRequire(import.meta.url);
 const Ajv=require('./vendor/ajv.cjs');
 const gltfValidator=require('./vendor/gltf-validator/index.js');
 const schemaNames={asset:'subject',capabilities:'capabilities',resources:'resources',provenance:'provenance',assembly:'assembly',validation:'validation'};
 export function validate(root=ROOT,{hashes=true}={}){
-  const ajv=new Ajv({allErrors:true,strict:false});const validators=Object.fromEntries(Object.entries(schemaNames).map(([k,v])=>[k,ajv.compile(read(path.join(root,'schemas/'+v+'.schema.json')))]));
+  const ajv=new Ajv({allErrors:true,strict:false});ajv.addSchema(schemas);const validators=Object.fromEntries(Object.entries(schemaNames).map(([k,v])=>[k,ajv.compile(read(path.join(root,'schemas/'+v+'.schema.json')))]));
   const subjects=collect(root),errors=[],ids=new Set(),checked=new Set();
   for(const s of subjects){
     const key=s.asset.asset_id+'@'+s.asset.asset_version;if(ids.has(key))errors.push('DUPLICATE_ID_VERSION '+key);ids.add(key);
     for(const [key,v]of Object.entries(validators))if(!v(s[key]))errors.push(s.asset.asset_id+' '+key+': '+ajv.errorsText(v.errors));
+    try{readPhysicalFacts(root,s);readModelFacts(root,s);readSocketBindings(root,s);readCollisionFacts(root,s);assertValidationEvidence({asset_id:s.asset.asset_id,version:s.asset.asset_version},s.validation);}catch(e){errors.push(key+' '+e.message);}
     if(s.asset.placeholder&&s.asset.lifecycle!=='placeholder')errors.push('PLACEHOLDER_STATUS '+key);
     if(s.asset.placeholder&&(s.validation.runtime==='verified'||s.assembly.runtime_ready))errors.push('FALSE_PLACEHOLDER_RUNTIME '+key);
     if(s.assembly.subject.asset_id!==s.asset.asset_id||s.assembly.subject.version!==s.asset.asset_version)errors.push('ASSEMBLY_SUBJECT_MISMATCH '+key);
     const resourcePaths=new Set(s.resources.files.map(f=>f.path));
     for(const p of [s.resources.model,s.resources.preview,...s.resources.animations.map(a=>a.resource)].filter(Boolean))if(!resourcePaths.has(p))errors.push('UNREGISTERED_RESOURCE '+p);
-    for(const p of [s.asset.default_assembly,...Object.values(s.assembly.bindings),...Object.values(s.assembly.profiles)].filter(Boolean))try{if(!fs.existsSync(inside(root,p)))errors.push('MISSING_REFERENCE '+p);}catch(e){errors.push(e.message);}
-    for(const mod of s.assembly.modules){const matches=walk(path.join(root,'shared/module_descriptors')).filter(p=>p.endsWith('.json')).map(read).filter(d=>d.asset_id===mod.asset_id&&d.version===mod.version);if(matches.length!==1)errors.push('MODULE_DESCRIPTOR_MISSING '+mod.asset_id);}
+    for(const p of [s.asset.default_assembly,...Object.values(s.assembly.bindings??{}),...Object.values(s.assembly.facts??{})].filter(Boolean))try{if(!fs.existsSync(inside(root,p)))errors.push('MISSING_REFERENCE '+p);}catch(e){errors.push(e.message);}
+    for(const mod of s.assembly.modules??[]){const matches=walk(path.join(root,'shared/module_descriptors')).filter(p=>p.endsWith('.json')).map(read).filter(d=>d.asset_id===mod.asset_id&&d.version===mod.version);if(matches.length!==1)errors.push('MODULE_DESCRIPTOR_MISSING '+mod.asset_id);}
     for(const f of s.resources.files)try{const p=inside(root,f.path);if(!fs.existsSync(p))errors.push('FILE_MISSING '+f.path);else if(hashes&&!checked.has(f.path)){const b=fs.readFileSync(p);if(b.length!==f.byte_length||sha256(b)!==f.sha256)errors.push('HASH_MISMATCH '+f.path);checked.add(f.path);}}catch(e){errors.push(e.message);}
     if(s.resources.inspection?.external_uris.length)errors.push('EXTERNAL_GLB_DEPENDENCY '+s.asset.asset_id);
     if(s.validation.runtime==='verified'&&!s.validation.evidence.length)errors.push('RUNTIME_EVIDENCE_MISSING '+key);

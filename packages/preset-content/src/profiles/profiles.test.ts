@@ -1,9 +1,10 @@
 import {describe,expect,it,vi} from 'vitest';
 import {clearAssetProfile,getDefaultProfile,loadAssetProfile,parseAssetProfile,saveAssetProfile} from './profiles';
+import {applyControlProfile} from './profile-runtime';
 import {humanoid} from '@worldkit/three';
 import {SPECS} from '../config';
 import {assetIdForPreset} from '../assets/catalog';
-import {applyControlProfile,readEditableProfile} from './profile-runtime';
+import {readEditableProfile} from './profile-runtime';
 
 describe('profile runtime asset identities',()=>{
  const vehicles=SPECS.map(spec=>({instanceId:`instance-${spec.id}`,assetId:assetIdForPreset(spec)}));

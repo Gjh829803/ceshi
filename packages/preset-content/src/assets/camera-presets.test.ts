@@ -67,7 +67,7 @@ import {JETSKI_SOCKETS} from '../vehicles/jetski/spec';
 import {RAFT_SOCKETS} from '../vehicles/raft/spec';
 import {TANK_SOCKETS} from '../vehicles/tank/spec';
 import {UNICYCLE_SOCKETS} from '../vehicles/unicycle/spec';
-import {syncPresetContent} from '../../../../asset-library/tools/presets.mjs';
+import {syncPresetContent} from '@worldkit/asset-library/testing/presets';
 import {presetAuthoringContext,createContentAdapter} from './host-adapter.mjs';
 const repositoryRoot=fileURLToPath(new URL('../../../../',import.meta.url));
 function canonical(value:unknown):unknown{
@@ -78,10 +78,11 @@ function canonical(value:unknown):unknown{
 function fingerprint(value:unknown){return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');}
 it('preserves merged dev handling, variant, seating and camera calibration',()=>{
  // dev f6000cdc/d84a9641 calibration plus 8b6854ea kart seat and compound chassis.
- expect(fingerprint(SPECS)).toBe('393e17923862f59334cbca97205fdbdf9b4c7dec1aa8b36edbbb113ecd8a9fb4');
+ // Control settings now enter through the shared profile adapter, including its stable profile id.
+ expect(fingerprint(SPECS)).toBe('b1ccde69dda68c7b861255edb4792379a028a9f2b8c4c7867c998031c9eb848f');
  expect(fingerprint(DRAGON_VARIANTS)).toBe('efb0be7ca627d8d61fead83ca73bfb45acad424757b7954476639b98489d33a4');
  expect(fingerprint(ROAD_CUSHIONS)).toBe('c6d31c87e47751d852360b73f30cd906f9a895291714f4ead60076ee913028de');
- expect(fingerprint(DEFAULT_PROFILES)).toBe('2e2444c4e71fab99c952a3d78a9464bd25222fde9db9aea9423e2c26b1b0570f');
+ expect(fingerprint(DEFAULT_PROFILES)).toBe('5d518395534295eac4b4319c7d00a8d1a5bf9568145cc23f293fbe89dddbaea8');
  expect(fingerprint(presets)).toBe('3970adaec5213432352e1365a00c6cfe1e7e80fb2098560297d36e7f41796a5f');
  expect(fingerprint(variantPresets)).toBe('9f0294e0545a6be58daa0593b1c5080e3aed417e87c00e2f589285fe7f7fe34b');
  expect(fingerprint({atv:ATV_SOCKETS,jetski:JETSKI_SOCKETS,raft:RAFT_SOCKETS,tank:TANK_SOCKETS,unicycle:UNICYCLE_SOCKETS})).toBe('3fc1ace9243c024cc7930772a9eabae76c1680a672f9f3dc143d8bbcea90de8c');
@@ -97,23 +98,23 @@ it('composes independent engine tuning and content geometry without changing con
   const originalContext=createContentAdapter(engine).runtimeAssetContext(['vehicle.atv']);
   syncPresetContent(library,output,false,presetAuthoringContext(engine));
   expect(()=>syncPresetContent(library,output,true,presetAuthoringContext(engine))).not.toThrow();
-  const subject=path.join(library,'subjects/vehicles/vehicle.atv/0.1.0/profiles');
-  const contentBefore=fs.readFileSync(path.join(subject,'locomotion.json'),'utf8');
+  const subject=path.join(library,'subjects/vehicles/vehicle.atv/0.1.0/facts');
+  const contentBefore=fs.readFileSync(path.join(subject,'physical.json'),'utf8');
   const resourceBefore=fs.readFileSync(path.join(subject,'../resources.json'),'utf8');
   engine.presets['vehicle.atv'].parameters.speed=17.25;
   engine.presets['vehicle.atv'].camera['atv.third-person'].values.position.distanceMeters=19;
   expect(createContentAdapter(engine).runtimeAssetContext(['vehicle.atv']).preset_digest).not.toBe(originalContext.preset_digest);
-  expect(fs.readFileSync(path.join(subject,'locomotion.json'),'utf8')).toBe(contentBefore);
+  expect(fs.readFileSync(path.join(subject,'physical.json'),'utf8')).toBe(contentBefore);
   expect(fs.readFileSync(path.join(subject,'../resources.json'),'utf8')).toBe(resourceBefore);
-  const locomotion=JSON.parse(fs.readFileSync(path.join(subject,'locomotion.json'),'utf8'));
-  locomotion.parameters.wheelPhysics.radius=.777;
-  locomotion.parameters.seat=[0,3,0];
-  fs.writeFileSync(path.join(subject,'locomotion.json'),JSON.stringify(locomotion));
+  const physical=JSON.parse(fs.readFileSync(path.join(subject,'physical.json'),'utf8'));
+  physical.parameters.wheelPhysics.radius=.777;
+  physical.parameters.seat=[0,3,0];
+  fs.writeFileSync(path.join(subject,'physical.json'),JSON.stringify(physical));
   const socketFile=path.join(subject,'../bindings/sockets.json');
   const sockets=JSON.parse(fs.readFileSync(socketFile,'utf8'));
   sockets.sockets.find((socket:{id:string})=>socket.id==='entry.left').positionMetersXYZ=[2,3,4];
   fs.writeFileSync(socketFile,JSON.stringify(sockets));
-  const dragonFile=path.join(library,'subjects/fantastical/creature.dragon.d02/0.1.0/profiles/locomotion.json');
+  const dragonFile=path.join(library,'subjects/fantastical/creature.dragon.d02/0.1.0/facts/physical.json');
   const dragon=JSON.parse(fs.readFileSync(dragonFile,'utf8'));
   dragon.parameters.seat=[0,4,0];
   engine.presets['creature.dragon.d02'].parameters.speed=27;
@@ -128,7 +129,7 @@ it('composes independent engine tuning and content geometry without changing con
   expect(JSON.parse(fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8')).atv.sockets['entry.left']).toEqual([2,3,4]);
   expect(JSON.parse(fs.readFileSync(path.join(output,'config/generated/dragon-variants.json'),'utf8'))[1].seat).toEqual([0,4,0]);
   expect(JSON.parse(fs.readFileSync(path.join(output,'config/generated/dragon-specs.json'),'utf8')).D02.speed).toBe(27);
-  fs.rmSync(path.join(subject,'locomotion.json'));
+  fs.rmSync(path.join(subject,'physical.json'));
   expect(()=>syncPresetContent(library,output,false,presetAuthoringContext(engine))).toThrow();
  }finally{fs.rmSync(temporary,{recursive:true,force:true});}
 },15000);
@@ -139,3 +140,25 @@ it('reads canonical numbered dragon specs as independent copies with explicit mi
  expect(readDragonSpec('D01')).toEqual(librarySpecs.D01);
  expect(()=>readDragonSpec('missing')).toThrow('Unknown dragon variant');
 });
+
+it('rejects invalid model geometry and socket references before writing preset snapshots',()=>{
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'preset-leaf-validation-'));
+ try{
+  const library=path.join(temporary,'library'),output=path.join(temporary,'package');
+  fs.cpSync(path.join(repositoryRoot,'asset-library/subjects'),path.join(library,'subjects'),{recursive:true,filter:source=>fs.statSync(source).isDirectory()||source.endsWith('.json')});
+  const authoring=presetAuthoringContext();
+  syncPresetContent(library,output,false,authoring);
+  const generated=fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8');
+  const file=path.join(library,'subjects/vehicles/vehicle.rover/0.1.0/facts/model.json');
+  const original=fs.readFileSync(file,'utf8'),model=JSON.parse(original);model.roadCushion.size=['bad',1,1];
+  fs.writeFileSync(file,JSON.stringify(model));
+  expect(()=>syncPresetContent(library,output,false,authoring)).toThrow(/ASSET_CONTENT_FACTS_INVALID/);
+  expect(fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8')).toBe(generated);
+  fs.writeFileSync(file,original);
+  const socketFile=path.join(library,'subjects/vehicles/vehicle.atv/0.1.0/bindings/sockets.json');
+  const sockets=JSON.parse(fs.readFileSync(socketFile,'utf8'));sockets.sockets.find((socket:{id:string})=>socket.id==='entry.left').positionMetersXYZ=[false,0,1];
+  fs.writeFileSync(socketFile,JSON.stringify(sockets));
+  expect(()=>syncPresetContent(library,output,false,authoring)).toThrow(/ASSET_CONTENT_FACTS_INVALID/);
+  expect(fs.readFileSync(path.join(output,'config/generated/models.json'),'utf8')).toBe(generated);
+ }finally{fs.rmSync(temporary,{recursive:true,force:true});}
+},15000);

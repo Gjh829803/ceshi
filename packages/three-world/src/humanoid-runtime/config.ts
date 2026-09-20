@@ -22,6 +22,8 @@ export interface VehicleSpec extends Partial<ExtendedControl> {
   flyingCreatureCollision?:readonly {id:string;center:readonly [number,number,number];radius:number}[];
   /** Configuration identity. Asset/instance IDs are separate from driving modes. */
   id: string; name: string; en: string;
+  /** Optional content-owned static control profile reference. The SDK does not resolve it. */
+  controlProfileId?: string;
   /** Driving family and map-region permission key. paddled_boat covers kayak, canoe and raft.
    * submarine is underwater movement; spacecraft is zero-gravity six-axis movement.
    * skateboard is the vehicle; slide is a separate humanoid action. */

@@ -47,27 +47,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "rig",
-        "animations",
-        "sockets"
-      ],
-      "additionalProperties": false
-    },
-    "profiles": {
-      "type": "object",
-      "properties": {
-        "control": {
-          "type": "string"
-        },
-        "camera": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "control",
-        "camera"
-      ],
       "additionalProperties": false
     },
     "modules": {
@@ -104,11 +83,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "root_transform",
-        "animation",
-        "camera"
-      ],
       "additionalProperties": false
     },
     "stage": {
@@ -123,6 +97,20 @@
     },
     "runtime_ready": {
       "type": "boolean"
+    },
+    "facts": {
+      "type": "object",
+      "properties": {
+        "physical": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
@@ -130,10 +118,6 @@
     "assembly_id",
     "subject",
     "model",
-    "bindings",
-    "profiles",
-    "modules",
-    "authority",
     "stage",
     "runtime_ready"
   ],

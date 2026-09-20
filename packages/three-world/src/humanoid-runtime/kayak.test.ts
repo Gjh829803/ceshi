@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import {contactColliderVolume} from '../physics-box';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import {RAFT_SPEC} from '@worldkit/preset-content/raft';

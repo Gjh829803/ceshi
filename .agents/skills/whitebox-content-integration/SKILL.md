@@ -39,7 +39,7 @@ NPC 不创建独立物理、动画调度或相机循环。实际入口见 SDK `h
 
 | 内容 | 主要修改位置 | 检查消费者 |
 | --- | --- | --- |
-| 模型及资源元数据 | `asset-library/subjects/<分类>/<ID>/<版本>/` 的 asset/capabilities/resources、bindings/whitebox.json 与 profiles | asset loader、Creator assets_search/assets_describe、编译后 asset-definitions |
+| 模型及资源元数据 | `asset-library/subjects/<分类>/<ID>/<版本>/` 的 asset/capabilities/resources、bindings/whitebox.json 与 facts | asset loader、Creator assets_search/assets_describe、编译后 asset-definitions |
 | Source101 动画/绑定 | `humanoid-runtime/humanoid/source-character.ts`、`catalog.ts`、`action-schema.ts` 与实际 source manifest/clip | Character 单个 mixer、动作资格和终态；按实际绑定支持变体 |
 | 可执行动作 | 当前 action-system/controller、capabilities、World execute/operations | 键盘、Creator command schema、Episode action-controller |
 | 操控与几何约定 | SDK `config/`、所属 motion-family、`road-vehicle.ts`/`aircraft-spec.ts` | Playground resolved 配置、自绘示例、真实碰撞与机械动画 |

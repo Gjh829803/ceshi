@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import { encode as encodePng } from 'fast-png';
 import { ClampToEdgeWrapping, DataTexture, LinearFilter, Mesh, MeshStandardMaterial, NearestFilter, NoColorSpace, SRGBColorSpace } from 'three';
-import contentCatalog from '../../../asset-library/dist/whitebox/asset-catalog.json';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
 const catalog={...contentCatalog,assets:composeAssetCatalog(contentCatalog.assets)};
 import { loadAsset, cloneAsset } from './assets';

@@ -1,3 +1,4 @@
+import catalog from '@worldkit/asset-library/catalog';
 import {describe,it,expect,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {Group,PerspectiveCamera,Quaternion,Scene,Vector3} from 'three';
@@ -16,8 +17,11 @@ describe('player workspace configuration',()=>{
   const bindings=JSON.parse(readFileSync(new URL('../../../../packages/preset-content/config/integrations/whitebox.json',import.meta.url),'utf8'));
   const authored=(id:string)=>{
    const version=bindings.assets['vehicle.'+id].asset_version;
-   const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/profiles/locomotion.json`,import.meta.url);
-   return composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters});
+   const source=new URL(`../../../../asset-library/subjects/vehicles/vehicle.${id}/${version}/facts/physical.json`,import.meta.url);
+   const spec=composeContentSpec('vehicle.'+id,{asset_version:version,parameters:JSON.parse(readFileSync(source,'utf8')).parameters}) as Record<string,unknown>;
+   for(const key of humanoid.controlKeys)delete spec[key];
+   delete spec.aircraftFlight;delete spec.controlProfileId;
+   return spec;
   };
   vi.resetModules();
   vi.doMock('@worldkit/three',async()=>{
@@ -36,8 +40,15 @@ describe('player workspace configuration',()=>{
    const rover=specs.find(s=>s.id==='rover')!.wheelPhysics!;
    const supercar=specs.find(s=>s.id==='supercar')!.wheelPhysics!;
    for(const id of ['rover','supercar','kart']){
-    const {spawn,yaw,color,...parameters}=specs.find(s=>s.id===id)!;
+    const spec=structuredClone(specs.find(s=>s.id===id)!) as unknown as Record<string,unknown>;
+    for(const key of humanoid.controlKeys)delete spec[key];
+    delete spec.aircraftFlight;delete spec.controlProfileId;
+    const {spawn,yaw,color,...parameters}=spec;
     expect(parameters).toEqual(authored(id));
+    const profile=getDefaultProfile(id)!;
+    expect(profile.profileId).toBe(`preset.${id}`);
+    const resolvedSpec=humanoid.createVehicle(specs.find(s=>s.id===id)!).spec;
+    expect(profile.control).toEqual(humanoid.readMovementSettings(resolvedSpec));
    }
    expect(rover.mass).not.toBe(changedDefaults.mass);
    expect(rover.powertrain!.idleRpm).not.toBe(changedDefaults.powertrain.idleRpm);
@@ -48,7 +59,6 @@ describe('player workspace configuration',()=>{
  });
 
  it('exports the explicit bus brake profile without replacing it with family defaults',()=>{
-  const catalog=JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json',import.meta.url),'utf8'));
   const exported=composeAssetCatalog(catalog.assets).find((asset:{id:string})=>asset.id==='vehicle.bus')!.vehicle!.spec;
   const profile=getDefaultProfile('bus')!;
   expect(exported.brakeDamping).toBeGreaterThan(0);

@@ -209,18 +209,11 @@
             "verified",
             "deprecated"
           ]
-        },
-        "profile": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
         "archetype",
-        "stage",
-        "profile"
+        "stage"
       ],
       "additionalProperties": false
     },

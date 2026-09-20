@@ -15,8 +15,8 @@ import { humanoid } from "@worldkit/three";
 import { SPECS, vehicleControlFamily, type VehicleSpec } from "@worldkit/preset-content/config";
 import { MAPS } from "@worldkit/preset-content/environment/maps";
 import {
-  parseAssetProfile,
-  type AssetProfile,
+  parseControlProfile,
+  type ControlProfile,
 } from "@worldkit/preset-content/platform/profiles";
 import "./styles/workbench.css";
 import { Button } from "./components/ui/button";
@@ -32,9 +32,9 @@ interface WorkbenchOptions {
   onPrepare(mapId: string, regionId: string, assetId: string): void;
   getMapId(): string;
   getAssetId(): string;
-  getProfile(id: string): AssetProfile;
-  applyProfile(profile: AssetProfile): void;
-  saveProfile(profile: AssetProfile): void;
+  getProfile(id: string): ControlProfile;
+  applyProfile(profile: ControlProfile): void;
+  saveProfile(profile: ControlProfile): void;
   resetProfile(id: string): void;
   getState(): Record<string, unknown>;
   togglePause(): void;
@@ -306,7 +306,7 @@ function CameraEditor({
         ? Number(value)
         : NaN;
     }
-    return parseAssetProfile(next, assetId);
+    return parseControlProfile(next, assetId);
   };
   return (
     <>
@@ -391,7 +391,7 @@ function CameraEditor({
             {
               assetId: current.assetId,
               version: current.version,
-              envelope: current.envelope,
+              envelope: (o.specs ?? SPECS).find((spec) => spec.id === assetId)?.envelope,
             },
             null,
             2,

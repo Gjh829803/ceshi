@@ -101,6 +101,7 @@ async function readPackage(root: string): Promise<WorkspacePackage | undefined> 
 async function workspacePackages(repositoryRoot: string): Promise<readonly WorkspacePackage[]> {
   const roots = [
     repositoryRoot,
+    path.join(repositoryRoot, "asset-library"),
     ...await directories(path.join(repositoryRoot, "packages")),
     ...await directories(path.join(repositoryRoot, "apps")),
   ];
@@ -113,7 +114,7 @@ async function sourceFiles(root: string): Promise<readonly string[]> {
   const result: string[] = [];
   async function visit(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (["node_modules", ".git", "dist", "coverage", "artifacts"].includes(entry.name)) continue;
+      if (["node_modules", ".next", ".git", "dist", "coverage", "artifacts"].includes(entry.name)) continue;
       // This repository-owned temporary root holds copied SDK capsules and local
       // experiments. It is outside pnpm's packages/* and apps/* workspaces and
       // must not inherit the root package's dependency ownership. Keep this exact
@@ -236,7 +237,7 @@ export async function scanWorkspaceBoundaries(
         ));
         continue;
       }
-      if (!isTest && (subpath === "./testing" || TEST_FILE.test(exportTarget))) {
+      if (!isTest && (subpath === "./testing" || subpath.startsWith("./testing/") || TEST_FILE.test(exportTarget))) {
         violations.push(violation(
           "WORKSPACE_PRODUCTION_TEST_EXPORT",
           importer,

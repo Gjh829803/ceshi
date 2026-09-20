@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import contentCatalog from '@worldkit/asset-library/catalog';
 import { describe, expect, it } from 'vitest';
 import { Group, PerspectiveCamera } from 'three';
 import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, type VehicleSpec } from '@worldkit/three';
@@ -6,9 +6,9 @@ import { createWorld, humanoid, type EpisodeStart, type EnvironmentDefinition, t
 // Headless physical integration evidence, not rendered Creator self-check or Episode
 // video acceptance. Starts use the native physical placement helper; subsequent motion
 // uses only the SDK fixed input path, with no renderer or campus imports.
-const catalog = JSON.parse(readFileSync(new URL('../../../../asset-library/dist/whitebox/asset-catalog.json', import.meta.url), 'utf8'));
+
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
-catalog.assets=composeAssetCatalog(catalog.assets);
+const catalog = {assets: composeAssetCatalog(contentCatalog.assets)};
 const assets = (catalog.assets as { id: string; vehicle?: { spec?: VehicleSpec } }[])
   .filter((asset): asset is { id: string; vehicle: { spec: VehicleSpec } } => !!asset.vehicle?.spec);
 const families = ['paddled_boat', 'tank', 'wheeled', 'motorcycle', 'unicycle', 'skateboard', 'bus', 'sled', 'ski', 'hover', 'boat', 'submarine', 'glider', 'plane', 'spacecraft', 'mount', 'carriage', 'dragon'] as const;

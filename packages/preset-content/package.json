@@ -31,8 +31,10 @@
     "./kayak-model": "./src/vehicles/kayak/model.ts",
     "./models": "./src/models.ts",
     "./platform/catalog": "./src/assets/catalog.ts",
-    "./platform/profile-runtime": "./src/profiles/profile-runtime.ts",
-    "./platform/profiles": "./src/profiles/profiles.ts",
+    "./platform/control-resolution": "./src/control/resolve.ts",
+    "./platform/runtime-control-overrides": "./src/control/runtime-overrides.ts",
+    "./platform/profile-runtime": "./src/control/profile-runtime.ts",
+    "./platform/profiles": "./src/control/profiles.ts",
     "./platform/scenarios": "./src/environment/scenarios.ts",
     "./presentation.json": "./config/presentation.json",
     "./profiles.json": "./config/profiles.json",
@@ -63,7 +65,8 @@
   },
   "dependencies": {
     "@worldkit/three": "workspace:*",
-    "three": "0.185.1"
+    "three": "0.185.1",
+    "ajv": "8.17.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -72,6 +75,7 @@
     "typescript": "^5.9.2",
     "@types/node": "^24.3.0",
     "@types/three": "0.185.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@worldkit/asset-library": "workspace:*"
   }
 }

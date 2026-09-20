@@ -1,4 +1,4 @@
-import {testAssetResourceUrl} from '../test-asset-library';
+import {testAssetResourceUrl} from '../asset-library.test-support';
 import {parseFixtureGlb} from './textured-glb-fixture';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Group, SkinnedMesh, Vector3 } from 'three';
