@@ -1,18 +1,9 @@
-import { readFileSync } from "node:fs";
+import catalog from "@worldkit/asset-library/catalog";
 import { Group, PerspectiveCamera } from "three";
 import { createWorld, type ThreeWorld } from "../world";
 import type { EnvironmentDefinition } from "./environment/types";
 import type { VehicleSpec } from "./config";
 import {composeAssetCatalog} from '@worldkit/preset-content/assets/host-adapter';
-const catalog = JSON.parse(
-  readFileSync(
-    new URL(
-      "@worldkit/asset-library/catalog",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-);
 const source = composeAssetCatalog(catalog.assets).find(
   (entry: { id: string }) => entry.id === "creature.horse",
 )!.vehicle!.spec as VehicleSpec;
